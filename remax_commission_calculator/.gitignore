@@ -1,0 +1,18 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Local SQLite databases
+*.db
+
+# Local data and generated exports
+*.json
+*.csv
+*.xlsx
+
+# Excel temporary lock files
+~$*
+
+# Environment variables
+.env

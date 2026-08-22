@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RE/MAX Commission Calculator{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-content">
+            <a href="{{ url_for('dashboard') }}" class="site-brand">
+                <span class="site-brand-mark">R</span>
+                <span class="site-title">RE/MAX Commission Calculator</span>
+            </a>
+
+            <nav class="main-nav" aria-label="Main navigation">
+                <a
+                    href="{{ url_for('dashboard') }}"
+                    class="nav-link{% if request.endpoint == 'dashboard' %} active{% endif %}"
+                >
+                    Dashboard
+                </a>
+                <a
+                    href="{{ url_for('agents_list') }}"
+                    class="nav-link{% if request.endpoint and request.endpoint.startswith('agents_') %} active{% endif %}"
+                >
+                    Agents
+                </a>
+                <a
+                    href="{{ url_for('properties_list') }}"
+                    class="nav-link{% if request.endpoint and request.endpoint.startswith('properties_') %} active{% endif %}"
+                >
+                    Properties
+                </a>
+                <a
+                    href="{{ url_for('operations_list') }}"
+                    class="nav-link{% if request.endpoint and request.endpoint.startswith('operations_') %} active{% endif %}"
+                >
+                    Operations
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-content">
+            <p>Commission Calculator &mdash; Web Dashboard</p>
+            <a href="{{ url_for('dashboard') }}" class="footer-link">Back to top</a>
+        </div>
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

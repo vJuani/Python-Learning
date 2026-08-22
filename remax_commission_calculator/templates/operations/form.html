@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}{{ form_title }} | RE/MAX Commission Calculator{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ form_title }}</h2>
+        <p>Complete the operation data and preview the commission calculation before saving.</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">Volver</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="panel">
+    <form
+        class="agent-form"
+        method="post"
+        action="{% if is_edit %}{{ url_for('operations_edit', operation_id=operation_id) }}{% else %}{{ url_for('operations_new') }}{% endif %}"
+    >
+        <div class="form-group">
+            <label for="operation_date">Operation Date</label>
+            <input
+                type="text"
+                id="operation_date"
+                name="operation_date"
+                class="form-input"
+                placeholder="dd/mm/yyyy"
+                value="{{ form_values.operation_date }}"
+                required
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="agent_id">Agent</label>
+            <select id="agent_id" name="agent_id" class="form-input" required>
+                <option value="">Select an agent</option>
+                {% for agent in agents %}
+                <option
+                    value="{{ agent.id }}"
+                    {% if form_values.agent_id|string == agent.id|string %}selected{% endif %}
+                >
+                    {{ agent.name }} ({{ agent.type }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="property_id">Property</label>
+            <select id="property_id" name="property_id" class="form-input" required>
+                <option value="">Select a property</option>
+                {% for property_data in properties %}
+                <option
+                    value="{{ property_data.id }}"
+                    {% if form_values.property_id|string == property_data.id|string %}selected{% endif %}
+                >
+                    {{ property_data.address }} ({{ property_data.jurisdiction }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="sale_price">Sale Price</label>
+            <input
+                type="number"
+                step="0.01"
+                min="0"
+                id="sale_price"
+                name="sale_price"
+                class="form-input"
+                value="{{ form_values.sale_price }}"
+                required
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="commission_rate">Commission Rate (%)</label>
+            <input
+                type="number"
+                step="0.01"
+                min="0"
+                id="commission_rate"
+                name="commission_rate"
+                class="form-input"
+                value="{{ form_values.commission_rate }}"
+                required
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="was_invoiced">Invoiced</label>
+            <select id="was_invoiced" name="was_invoiced" class="form-input" required>
+                <option value="no" {% if form_values.was_invoiced == "no" %}selected{% endif %}>No</option>
+                <option value="yes" {% if form_values.was_invoiced == "yes" %}selected{% endif %}>Yes</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="vat_amount">VAT Amount</label>
+            <input
+                type="number"
+                step="0.01"
+                min="0"
+                id="vat_amount"
+                name="vat_amount"
+                class="form-input"
+                value="{{ form_values.vat_amount }}"
+            >
+            <small class="field-help">Required when invoiced is Yes.</small>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" name="action" value="preview" class="btn btn-secondary">{{ preview_label }}</button>
+            <button type="submit" name="action" value="save" class="btn btn-primary">{{ submit_label }}</button>
+            <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">Volver</a>
+        </div>
+    </form>
+</section>
+
+{% if is_edit %}
+<section class="panel panel-danger">
+    <div class="panel-header">
+        <h3>Delete Operation</h3>
+    </div>
+
+    <p class="danger-text">
+        You are about to delete operation
+        <strong>{{ operation_id }}</strong>.
+    </p>
+
+    <form
+        class="delete-form"
+        method="post"
+        action="{{ url_for('operations_delete', operation_id=operation_id) }}"
+        onsubmit="return confirm('Are you sure you want to delete this operation?');"
+    >
+        <label class="checkbox-label">
+            <input type="checkbox" name="confirm_delete" value="yes">
+            I confirm I want to delete this operation
+        </label>
+
+        <button type="submit" class="btn btn-danger">Delete Operation</button>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

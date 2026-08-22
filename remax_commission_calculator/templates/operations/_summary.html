@@ -1,0 +1,82 @@
+<section class="summary-panel">
+    <div class="summary-grid">
+        <div class="summary-item">
+            <span class="summary-label">Operation ID</span>
+            <strong>{{ operation.id }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Date</span>
+            <strong>{{ operation.date }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Agent</span>
+            <strong>{{ operation.agent }} ({{ operation.agent_type }})</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Property</span>
+            <strong>{{ operation.property }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Property ID</span>
+            <strong>{{ operation.property_id }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Jurisdiction</span>
+            <strong>{{ operation.jurisdiction }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Invoiced</span>
+            <strong>{{ operation.was_invoiced }}</strong>
+        </div>
+    </div>
+
+    <hr class="summary-divider">
+
+    <div class="summary-grid">
+        <div class="summary-item">
+            <span class="summary-label">Sale Price</span>
+            <strong>USD {{ "%.2f"|format(operation.sale_price) }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Commission Rate</span>
+            <strong>{{ "%.2f"|format(operation.commission_rate) }}%</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Total Commission</span>
+            <strong>USD {{ "%.2f"|format(operation.total_commission) }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">ABAO</span>
+            <strong>USD {{ "%.2f"|format(operation.abao) }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Commission after ABAO</span>
+            <strong>USD {{ "%.2f"|format(operation.commission_after_abao) }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Martillero</span>
+            <strong>USD {{ "%.2f"|format(operation.martillero) }}</strong>
+        </div>
+    </div>
+
+    <hr class="summary-divider">
+
+    <div class="summary-grid">
+        <div class="summary-item">
+            <span class="summary-label">Agent Payment</span>
+            <strong>USD {{ "%.2f"|format(operation.agent_payment) }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Office Net Payment</span>
+            <strong>USD {{ "%.2f"|format(operation.office_payment) }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">VAT</span>
+            <strong>USD {{ "%.2f"|format(operation.vat_amount) }}</strong>
+        </div>
+        <div class="summary-item highlight">
+            <span class="summary-label">Office Total Managed</span>
+            <strong>USD {{ "%.2f"|format(operation.office_total) }}</strong>
+        </div>
+    </div>
+</section>

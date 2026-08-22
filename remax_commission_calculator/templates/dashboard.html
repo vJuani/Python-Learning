@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | RE/MAX Commission Calculator{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>Dashboard</h2>
+        <p>Resumen general de operaciones, agentes y comisiones.</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('agents_list') }}" class="btn btn-primary">View Agents</a>
+        <a href="{{ url_for('properties_list') }}" class="btn btn-primary">View Properties</a>
+        <a href="{{ url_for('operations_list') }}" class="btn btn-primary">View Operations</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Refresh</a>
+    </div>
+</section>
+
+<section class="stats-grid" aria-label="Summary cards">
+    <article class="stat-card">
+        <span class="stat-label">Operations</span>
+        <strong class="stat-value">{{ metrics.total_operations }}</strong>
+    </article>
+
+    <article class="stat-card">
+        <span class="stat-label">Agents</span>
+        <strong class="stat-value">{{ agent_count }}</strong>
+    </article>
+
+    <article class="stat-card">
+        <span class="stat-label">Properties</span>
+        <strong class="stat-value">{{ property_count }}</strong>
+    </article>
+
+    <article class="stat-card">
+        <span class="stat-label">Gross Commission</span>
+        <strong class="stat-value">USD {{ "%.2f"|format(metrics.gross_commission) }}</strong>
+    </article>
+
+    <article class="stat-card">
+        <span class="stat-label">Office Revenue</span>
+        <strong class="stat-value">USD {{ "%.2f"|format(metrics.office_revenue) }}</strong>
+    </article>
+
+    <article class="stat-card">
+        <span class="stat-label">Agent Payments</span>
+        <strong class="stat-value">USD {{ "%.2f"|format(metrics.agent_payments) }}</strong>
+    </article>
+
+    <article class="stat-card">
+        <span class="stat-label">Highest Commission</span>
+        <strong class="stat-value">USD {{ "%.2f"|format(metrics.highest_commission) }}</strong>
+    </article>
+
+    <article class="stat-card">
+        <span class="stat-label">Average Commission</span>
+        <strong class="stat-value">USD {{ "%.2f"|format(metrics.average_commission) }}</strong>
+    </article>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>Top Agents</h3>
+    </div>
+
+    {% if ranking %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Agent</th>
+                    <th>Total Commission</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for agent_name, commission in ranking %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ agent_name }}</td>
+                    <td>USD {{ "%.2f"|format(commission) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-message">No agent data available.</p>
+    {% endif %}
+</section>
+
+<section class="panel" id="agents">
+    <div class="panel-header">
+        <h3>Agents</h3>
+        <span class="badge">{{ agent_count }} total</span>
+    </div>
+
+    {% if agents %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for agent in agents %}
+                <tr>
+                    <td>{{ agent.id }}</td>
+                    <td>{{ agent.name }}</td>
+                    <td>
+                        <span class="type-tag">{{ agent.type }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-message">No agents found.</p>
+    {% endif %}
+</section>
+{% endblock %}

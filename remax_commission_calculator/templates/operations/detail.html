@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}{{ operation.id }} | RE/MAX Commission Calculator{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>Operation Detail</h2>
+        <p>Full commission breakdown for {{ operation.id }}.</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('operations_edit', operation_id=operation.db_id) }}" class="btn btn-primary">Editar</a>
+        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">Volver</a>
+    </div>
+</section>
+
+<section class="panel">
+    {% include "operations/_summary.html" %}
+</section>
+{% endblock %}

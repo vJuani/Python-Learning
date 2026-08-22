@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Agents | RE/MAX Commission Calculator{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>Agents</h2>
+        <p>Manage agents from the existing database.</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('agents_new') }}" class="btn btn-primary">Nuevo agente</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Volver</a>
+    </div>
+</section>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-messages">
+        {% for category, message in messages %}
+        <p class="flash-message flash-{{ category }}">{{ message }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+{% endwith %}
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>Search Agents</h3>
+        <span class="badge">{{ agent_count }} found</span>
+    </div>
+
+    <form class="search-form" method="get" action="{{ url_for('agents_list') }}">
+        <input
+            type="text"
+            name="q"
+            class="form-input"
+            placeholder="Search by ID or name"
+            value="{{ search_query }}"
+        >
+        <button type="submit" class="btn btn-primary">Search</button>
+
+        {% if search_query %}
+        <a href="{{ url_for('agents_list') }}" class="btn btn-secondary">Clear</a>
+        {% endif %}
+    </form>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>Agent List</h3>
+    </div>
+
+    {% if agents %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for agent in agents %}
+                <tr>
+                    <td>{{ agent.id }}</td>
+                    <td>{{ agent.name }}</td>
+                    <td>
+                        <span class="type-tag">{{ agent.type }}</span>
+                    </td>
+                    <td>
+                        <a
+                            href="{{ url_for('agents_edit', agent_id=agent.id) }}"
+                            class="btn btn-small btn-secondary"
+                        >
+                            Editar
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-message">No agents found.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Operations | RE/MAX Commission Calculator{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>Operations</h2>
+        <p>Commission operations stored in the existing database.</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('operations_new') }}" class="btn btn-primary">Nueva operación</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Volver</a>
+    </div>
+</section>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-messages">
+        {% for category, message in messages %}
+        <p class="flash-message flash-{{ category }}">{{ message }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+{% endwith %}
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>Search Operations</h3>
+        <span class="badge">{{ operation_count }} found</span>
+    </div>
+
+    <form class="search-form" method="get" action="{{ url_for('operations_list') }}">
+        <input
+            type="text"
+            name="q"
+            class="form-input"
+            placeholder="Search by ID, agent, property, date or price"
+            value="{{ search_query }}"
+        >
+        <button type="submit" class="btn btn-primary">Search</button>
+
+        {% if search_query %}
+        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">Clear</a>
+        {% endif %}
+    </form>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>Operation List</h3>
+    </div>
+
+    {% if operations %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Date</th>
+                    <th>Agent</th>
+                    <th>Property</th>
+                    <th>Sale Price</th>
+                    <th>Total Commission</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for operation in operations %}
+                <tr>
+                    <td>{{ operation.id }}</td>
+                    <td>{{ operation.date }}</td>
+                    <td>{{ operation.agent }}</td>
+                    <td>{{ operation.property }}</td>
+                    <td>USD {{ "%.2f"|format(operation.sale_price) }}</td>
+                    <td>USD {{ "%.2f"|format(operation.total_commission) }}</td>
+                    <td class="table-actions">
+                        <a
+                            href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
+                            class="btn btn-small btn-secondary"
+                        >
+                            Ver
+                        </a>
+                        <a
+                            href="{{ url_for('operations_edit', operation_id=operation.db_id) }}"
+                            class="btn btn-small btn-secondary"
+                        >
+                            Editar
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-message">No operations found.</p>
+    {% endif %}
+</section>
+{% endblock %}
