@@ -1,0 +1,38 @@
+ana.test@example.com	http://127.0.0.1:5000/verify-email/cbnvGxnCkTVmXfwL_OsYVP1ji67dS3WRrZmTUEP7UWk
+juaniachard01@gmail.com	http://127.0.0.1:5000/verify-email/slQzbTNArnXtkEAmo-dEx927Pt3U3rqMVEhvTmJnU2g
+verify.flow@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:
+
+785854
+
+Este código vence en 10 minutos y solo se puede usar una vez.
+
+verify.flow2@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  661962  Este código vence en 10 minutos y solo se puede usar una vez.
+verify.flow3@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  260893  Este código vence en 10 minutos y solo se puede usar una vez.
+verify.flow3@example.com	Tu usuario fue aprobado	Hola Vera,  Tu solicitud para acceder a Commission Calculator fue aprobada por tu inmobiliaria.  Ya podés iniciar sesión y comenzar a utilizar el sistema.  Iniciar sesión: http://127.0.0.1:5000/login
+verify.flow3@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  058367  Este código vence en 10 minutos y solo se puede usar una vez.
+verify.flow3@example.com	Tu usuario fue aprobado	Hola Vera,  Tu solicitud para acceder a Commission Calculator fue aprobada por tu inmobiliaria.  Ya podés iniciar sesión y comenzar a utilizar el sistema.  Iniciar sesión: http://127.0.0.1:5000/login
+reject.flow3@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  018226  Este código vence en 10 minutos y solo se puede usar una vez.
+reject.flow3@example.com	Tu solicitud de acceso fue rechazada	Hola Rej,  Tu solicitud para acceder a Commission Calculator fue rechazada por tu inmobiliaria.  Motivo: Documentacion incompleta
+attempts.flow3@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  025052  Este código vence en 10 minutos y solo se puede usar una vez.
+resend.flow3@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  386218  Este código vence en 10 minutos y solo se puede usar una vez.
+resend.flow3@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  476205  Este código vence en 10 minutos y solo se puede usar una vez.
+expire.flow3@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  435170  Este código vence en 10 minutos y solo se puede usar una vez.
+cool.flow3@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  921805  Este código vence en 10 minutos y solo se puede usar una vez.
+cross.a3@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  959496  Este código vence en 10 minutos y solo se puede usar una vez.
+cross.b3@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  852171  Este código vence en 10 minutos y solo se puede usar una vez.
+pending.login@example.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  511254  Este código vence en 10 minutos y solo se puede usar una vez.
+pending.login@example.com	Tu usuario fue aprobado	Hola Pend,  Tu solicitud para acceder a Commission Calculator fue aprobada por tu inmobiliaria.  Ya podés iniciar sesión y comenzar a utilizar el sistema.  Iniciar sesión: http://127.0.0.1:5000/login
+resend.flow3@example.com	Tu usuario fue aprobado	Hola Res,  Tu solicitud para acceder a Commission Calculator fue aprobada por tu inmobiliaria.  Ya podés iniciar sesión y comenzar a utilizar el sistema.  Iniciar sesión: http://127.0.0.1:5000/login
+juanignacioruiz2001@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  404503  Este código vence en 10 minutos y solo se puede usar una vez.
+juanignacioruiz2001@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  962362  Este código vence en 10 minutos y solo se puede usar una vez.
+juanignacioruiz2001@gmail.com	Tu usuario fue aprobado	Hola Helena,  Tu solicitud para acceder a Commission Calculator fue aprobada por tu inmobiliaria.  Ya podés iniciar sesión y comenzar a utilizar el sistema.  Iniciar sesión: http://127.0.0.1:5000/login
+juandatahouse@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  940988  Este código vence en 10 minutos y solo se puede usar una vez.
+juandatahouse@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  386308  Este código vence en 10 minutos y solo se puede usar una vez.
+juandatahouse@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  952940  Este código vence en 10 minutos y solo se puede usar una vez.
+juandatahouse@gmail.com	Tu solicitud de acceso fue rechazada	Hola Costa,  Tu solicitud para acceder a Commission Calculator fue rechazada por tu inmobiliaria.  Motivo: xq si
+juanignacioruiz2001@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  968019  Este código vence en 10 minutos y solo se puede usar una vez.
+juanignacioruiz2001@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  507738  Este código vence en 10 minutos y solo se puede usar una vez.
+juanignacioruiz2001@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  701267  Este código vence en 10 minutos y solo se puede usar una vez.
+juanignacioruiz2001@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  531644  Este código vence en 10 minutos y solo se puede usar una vez.
+juanignacioruiz2001@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  910675  Este código vence en 10 minutos y solo se puede usar una vez.
+juanignacioruiz2001@gmail.com	Tu código de verificación	Tu código de verificación de Commission Calculator es:  837769  Este código vence en 10 minutos y solo se puede usar una vez.

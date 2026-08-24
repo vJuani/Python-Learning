@@ -1,5 +1,7 @@
 import json
 
+from modules.cli_tenant import get_cli_organization_id
+
 from modules.database import (
     add_agent,
     add_operation,
@@ -24,11 +26,13 @@ def load_json(file_name):
 
 
 def migrate_agents():
+    organization_id = get_cli_organization_id()
+
     json_agents = load_json(
         "agents.json"
     )
 
-    database_agents = get_agents()
+    database_agents = get_agents(organization_id)
 
     existing_agents = {
         agent["name"].lower()
@@ -44,7 +48,8 @@ def migrate_agents():
         if name.lower() not in existing_agents:
             add_agent(
                 name,
-                agent_type
+                agent_type,
+                organization_id
             )
 
             existing_agents.add(
@@ -59,11 +64,15 @@ def migrate_agents():
 
 
 def migrate_properties():
+    organization_id = get_cli_organization_id()
+
     json_properties = load_json(
         "properties.json"
     )
 
-    database_properties = get_properties()
+    database_properties = get_properties(
+        organization_id
+    )
 
     existing_properties = {
         property_data["address"].lower()
@@ -87,7 +96,8 @@ def migrate_properties():
         ):
             add_property(
                 address,
-                jurisdiction
+                jurisdiction,
+                organization_id
             )
 
             existing_properties.add(
@@ -101,13 +111,19 @@ def migrate_properties():
     )
 
 def migrate_operations():
+    organization_id = get_cli_organization_id()
+
     json_operations = load_json(
         "commission.json"
     )
 
-    database_agents = get_agents()
-    database_properties = get_properties()
-    database_operations = get_operations()
+    database_agents = get_agents(organization_id)
+    database_properties = get_properties(
+        organization_id
+    )
+    database_operations = get_operations(
+        organization_id
+    )
 
     agents_by_name = {
         agent["name"].lower(): agent["id"]
@@ -181,7 +197,8 @@ def migrate_operations():
             operation["martillero"],
             operation["agent_payment"],
             operation["office_payment"],
-            operation["office_total"]
+            operation["office_total"],
+            organization_id
         )
 
         migrated += 1

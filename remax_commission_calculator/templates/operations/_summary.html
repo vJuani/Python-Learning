@@ -1,61 +1,39 @@
 <section class="summary-panel">
     <div class="summary-grid">
         <div class="summary-item">
-            <span class="summary-label">Operation ID</span>
+            <span class="summary-label">{{ t('operation_id') }}</span>
             <strong>{{ operation.id }}</strong>
         </div>
         <div class="summary-item">
-            <span class="summary-label">Date</span>
+            <span class="summary-label">{{ t('date') }}</span>
             <strong>{{ operation.date }}</strong>
         </div>
         <div class="summary-item">
-            <span class="summary-label">Agent</span>
-            <strong>{{ operation.agent }} ({{ operation.agent_type }})</strong>
+            <span class="summary-label">{{ t('agent') }}</span>
+            <strong>
+                {{ operation.agent }}
+                <span class="type-tag badge-{{ operation.agent_type|lower }}">{{ operation.agent_type }}</span>
+            </strong>
         </div>
         <div class="summary-item">
-            <span class="summary-label">Property</span>
+            <span class="summary-label">{{ t('property') }}</span>
             <strong>{{ operation.property }}</strong>
         </div>
         <div class="summary-item">
-            <span class="summary-label">Property ID</span>
+            <span class="summary-label">{{ t('property_id') }}</span>
             <strong>{{ operation.property_id }}</strong>
         </div>
         <div class="summary-item">
-            <span class="summary-label">Jurisdiction</span>
-            <strong>{{ operation.jurisdiction }}</strong>
+            <span class="summary-label">{{ t('jurisdiction') }}</span>
+            <strong>
+                <span class="type-tag badge-{{ operation.jurisdiction|lower }}">{{ operation.jurisdiction }}</span>
+            </strong>
         </div>
         <div class="summary-item">
-            <span class="summary-label">Invoiced</span>
-            <strong>{{ operation.was_invoiced }}</strong>
-        </div>
-    </div>
-
-    <hr class="summary-divider">
-
-    <div class="summary-grid">
-        <div class="summary-item">
-            <span class="summary-label">Sale Price</span>
-            <strong>USD {{ "%.2f"|format(operation.sale_price) }}</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">Commission Rate</span>
-            <strong>{{ "%.2f"|format(operation.commission_rate) }}%</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">Total Commission</span>
-            <strong>USD {{ "%.2f"|format(operation.total_commission) }}</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">ABAO</span>
-            <strong>USD {{ "%.2f"|format(operation.abao) }}</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">Commission after ABAO</span>
-            <strong>USD {{ "%.2f"|format(operation.commission_after_abao) }}</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">Martillero</span>
-            <strong>USD {{ "%.2f"|format(operation.martillero) }}</strong>
+            <span class="summary-label">{{ t('invoiced') }}</span>
+            <strong>
+                <span class="type-tag badge-{{ operation.was_invoiced }}">{{ t(operation.was_invoiced) }}</span>
+            </strong>
         </div>
     </div>
 
@@ -63,20 +41,63 @@
 
     <div class="summary-grid">
         <div class="summary-item">
-            <span class="summary-label">Agent Payment</span>
-            <strong>USD {{ "%.2f"|format(operation.agent_payment) }}</strong>
+            <span class="summary-label">{{ t('currency') }}</span>
+            <strong>{{ operation.currency }}</strong>
         </div>
         <div class="summary-item">
-            <span class="summary-label">Office Net Payment</span>
-            <strong>USD {{ "%.2f"|format(operation.office_payment) }}</strong>
+            <span class="summary-label">{{ t('original_amount') }}</span>
+            <strong class="money">{{ operation.original_amount|money(operation.currency) }}</strong>
+        </div>
+        {% if operation.currency == "ARS" %}
+        <div class="summary-item">
+            <span class="summary-label">{{ t('exchange_rate') }}</span>
+            <strong>{{ operation.exchange_rate|number(4) }}</strong>
+        </div>
+        {% endif %}
+        <div class="summary-item">
+            <span class="summary-label">{{ t('usd_equivalent') }}</span>
+            <strong class="money">{{ operation.sale_price|money }}</strong>
         </div>
         <div class="summary-item">
-            <span class="summary-label">VAT</span>
-            <strong>USD {{ "%.2f"|format(operation.vat_amount) }}</strong>
+            <span class="summary-label">{{ t('field_commission_rate') }}</span>
+            <strong>{{ operation.commission_rate|number }}%</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ t('total_commission') }}</span>
+            <strong class="money money-emphasis">{{ operation.total_commission|money }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ t('abao') }}</span>
+            <strong class="money">{{ operation.abao|money }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ t('commission_after_abao') }}</span>
+            <strong class="money">{{ operation.commission_after_abao|money }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ t('martillero') }}</span>
+            <strong class="money">{{ operation.martillero|money }}</strong>
+        </div>
+    </div>
+
+    <hr class="summary-divider">
+
+    <div class="summary-grid">
+        <div class="summary-item">
+            <span class="summary-label">{{ t('agent_payment') }}</span>
+            <strong class="money">{{ operation.agent_payment|money }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ t('office_net_payment') }}</span>
+            <strong class="money">{{ operation.office_payment|money }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ t('vat') }}</span>
+            <strong class="money">{{ operation.vat_amount|money }}</strong>
         </div>
         <div class="summary-item highlight">
-            <span class="summary-label">Office Total Managed</span>
-            <strong>USD {{ "%.2f"|format(operation.office_total) }}</strong>
+            <span class="summary-label">{{ t('office_total') }}</span>
+            <strong class="money money-emphasis">{{ operation.office_total|money }}</strong>
         </div>
     </div>
 </section>

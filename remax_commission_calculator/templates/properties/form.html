@@ -1,22 +1,23 @@
 {% extends "base.html" %}
 
-{% block title %}{{ form_title }} | RE/MAX Commission Calculator{% endblock %}
+{% block title %}{% if is_edit %}{{ t('edit_property_title') }}{% else %}{{ t('new_property_title') }}{% endif %} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>{{ form_title }}</h2>
+        <h2>{% if is_edit %}{{ t('edit_property_title') }}{% else %}{{ t('new_property_title') }}{% endif %}</h2>
         <p>
             {% if is_edit %}
-            Update property details or delete this property.
+            {{ t('edit_property_help') }}
             {% else %}
-            Create a new property in the database.
+            {{ t('new_property_help') }}
             {% endif %}
         </p>
     </div>
 
     <div class="page-actions">
-        <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">Volver</a>
+        <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
     </div>
 </section>
 
@@ -35,7 +36,7 @@
         action="{% if is_edit %}{{ url_for('properties_edit', property_id=property_data.id) }}{% else %}{{ url_for('properties_new') }}{% endif %}"
     >
         <div class="form-group">
-            <label for="address">Address</label>
+            <label for="address">{{ t('address') }}</label>
             <input
                 type="text"
                 id="address"
@@ -47,14 +48,14 @@
         </div>
 
         <div class="form-group">
-            <label for="jurisdiction">Jurisdiction</label>
+            <label for="jurisdiction">{{ t('jurisdiction') }}</label>
             <select
                 id="jurisdiction"
                 name="jurisdiction"
                 class="form-input"
                 required
             >
-                <option value="">Select a jurisdiction</option>
+                <option value="">{{ t('select_jurisdiction') }}</option>
                 {% for jurisdiction in jurisdictions %}
                 <option
                     value="{{ jurisdiction }}"
@@ -66,37 +67,62 @@
             </select>
         </div>
 
+        <div class="form-group">
+            <label for="agent_id">{{ t('agent') }}</label>
+            {% if lock_agent_selection %}
+            <input type="hidden" name="agent_id" value="{{ property_data.agent_id }}">
+            <select id="agent_id" class="form-input" disabled>
+            {% else %}
+            <select id="agent_id" name="agent_id" class="form-input" required>
+            {% endif %}
+                <option value="">{{ t('select_agent') }}</option>
+                {% for agent in agents %}
+                <option
+                    value="{{ agent.id }}"
+                    {% if property_data.agent_id|string == agent.id|string %}selected{% endif %}
+                >
+                    {{ agent.name }} ({{ agent.type }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
         <div class="form-actions">
-            <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
-            <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">Volver</a>
+            <button type="submit" class="btn btn-primary">
+                {% if is_edit %}{{ t('save_changes') }}{% else %}{{ t('create_property') }}{% endif %}
+            </button>
+            <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
         </div>
     </form>
 </section>
 
-{% if is_edit %}
+{% if is_edit and can_delete() %}
 <section class="panel panel-danger">
     <div class="panel-header">
-        <h3>Delete Property</h3>
+        <h3>{{ t('delete_property') }}</h3>
+        <span class="badge badge-no">{{ t('irreversible') }}</span>
     </div>
 
     <p class="danger-text">
-        You are about to delete
+        {{ t('delete_property_text') }}
         <strong>{{ property_data.address }}</strong>
-        ({{ property_data.jurisdiction }}).
+        <span class="type-tag badge-{{ property_data.jurisdiction|lower }}">{{ property_data.jurisdiction }}</span>.
+        {{ t('delete_cannot_undo') }}
     </p>
 
     <form
         class="delete-form"
         method="post"
         action="{{ url_for('properties_delete', property_id=property_data.id) }}"
-        onsubmit="return confirm('Are you sure you want to delete this property?');"
+        onsubmit="return confirm('{{ t('confirm_delete_property_js') }}');"
     >
         <label class="checkbox-label">
-            <input type="checkbox" name="confirm_delete" value="yes">
-            I confirm I want to delete this property
+            <input type="checkbox" name="confirm_delete" value="yes" required>
+            {{ t('confirm_delete_property_check') }}
         </label>
 
-        <button type="submit" class="btn btn-danger">Delete Property</button>
+        <button type="submit" class="btn btn-danger">{{ t('delete_property') }}</button>
     </form>
 </section>
 {% endif %}

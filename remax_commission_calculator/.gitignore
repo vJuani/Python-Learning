@@ -3,8 +3,24 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Environment variables
+.env
+.env.local
+
 # Local SQLite databases
 *.db
+*.db.bak.*
+
+# Uploaded organization assets (public logos under static)
+static/uploads/organizations/**/*
+!static/uploads/organizations/.gitkeep
+
+# Private operation documents (outside static/)
+uploads/
+!uploads/.gitkeep
+
+# Logs
+*.log
 
 # Local data and generated exports
 *.json
@@ -13,6 +29,3 @@ __pycache__/
 
 # Excel temporary lock files
 ~$*
-
-# Environment variables
-.env

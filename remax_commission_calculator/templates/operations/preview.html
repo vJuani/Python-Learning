@@ -1,22 +1,23 @@
 {% extends "base.html" %}
 
-{% block title %}Preview Operation | RE/MAX Commission Calculator{% endblock %}
+{% block title %}{{ t('preview_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>Commission Preview</h2>
-        <p>Review the calculation before saving it to the database.</p>
+        <h2>{{ t('preview_title') }}</h2>
+        <p>{{ t('preview_subtitle') }}</p>
     </div>
 
     <div class="page-actions">
-        <a href="{{ back_url }}" class="btn btn-secondary">Volver</a>
+        <a href="{{ back_url }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
 </section>
 
 <section class="panel">
     <div class="panel-header">
-        <h3>Calculation Summary</h3>
+        <h3>{{ t('calculation_summary') }}</h3>
+        <span class="badge">{{ t('preview') }}</span>
     </div>
 
     {% include "operations/_summary.html" %}
@@ -24,20 +25,22 @@
 
 <section class="panel">
     <form method="post" action="{{ save_url }}" class="form-actions">
-        <input type="hidden" name="agent_id" value="{{ parsed.agent_id }}">
-        <input type="hidden" name="property_id" value="{{ parsed.property_id }}">
-        <input type="hidden" name="sale_price" value="{{ parsed.sale_price }}">
-        <input type="hidden" name="commission_rate" value="{{ parsed.commission_rate }}">
-        <input type="hidden" name="was_invoiced" value="{{ parsed.was_invoiced }}">
-        <input type="hidden" name="vat_amount" value="{{ parsed.vat_amount }}">
-        <input type="hidden" name="operation_date" value="{{ parsed.operation_date }}">
+        <input type="hidden" name="agent_id" value="{{ form_values.agent_id }}">
+        <input type="hidden" name="property_id" value="{{ form_values.property_id }}">
+        <input type="hidden" name="currency" value="{{ form_values.currency }}">
+        <input type="hidden" name="original_amount" value="{{ form_values.original_amount }}">
+        <input type="hidden" name="exchange_rate" value="{{ form_values.exchange_rate }}">
+        <input type="hidden" name="commission_rate" value="{{ form_values.commission_rate }}">
+        <input type="hidden" name="was_invoiced" value="{{ form_values.was_invoiced }}">
+        <input type="hidden" name="vat_amount" value="{{ form_values.vat_amount }}">
+        <input type="hidden" name="operation_date" value="{{ form_values.operation_date }}">
         <input type="hidden" name="action" value="save">
 
         <button type="submit" class="btn btn-primary">
-            {% if is_edit %}Save Changes{% else %}Save Operation{% endif %}
+            {% if is_edit %}{{ t('save_changes') }}{% else %}{{ t('save_operation') }}{% endif %}
         </button>
-        <a href="{{ back_url }}" class="btn btn-secondary">Back to Form</a>
-        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">Volver</a>
+        <a href="{{ back_url }}" class="btn btn-secondary">{{ t('cancel') }}</a>
+        <a href="{{ url_for('operations_list') }}" class="btn btn-ghost">{{ t('back') }}</a>
     </form>
 </section>
 {% endblock %}

@@ -1,60 +1,247 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="{{ current_language }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}RE/MAX Commission Calculator{% endblock %}</title>
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem("cc-theme") === "dark") {
+                    document.documentElement.setAttribute("data-theme", "dark");
+                }
+            } catch (error) {
+                /* ignore */
+            }
+        }());
+    </script>
+    <title>{% block title %}{{ t('app_title') }}{% endblock %}</title>
+    <link
+        rel="icon"
+        type="image/png"
+        href="{{ url_for('static', filename='images/logo-icon.png') }}"
+    >
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% if organization_branding_css %}
+    <style>
+        :root {
+            --accent: {{ organization_branding_css.accent }};
+            --accent-hover: {{ organization_branding_css.accent_hover }};
+            --accent-soft: {{ organization_branding_css.accent_soft }};
+            --accent-ink: {{ organization_branding_css.accent_ink }};
+        }
+    </style>
+    {% endif %}
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <header class="site-header">
         <div class="container header-content">
-            <a href="{{ url_for('dashboard') }}" class="site-brand">
-                <span class="site-brand-mark">R</span>
-                <span class="site-title">RE/MAX Commission Calculator</span>
+            <a
+                href="{% if current_user or guest_access %}{{ url_for('dashboard') }}{% else %}{{ url_for('login') }}{% endif %}"
+                class="site-brand"
+            >
+                <span class="site-brand-logo-shell">
+                    <img
+                        src="{{ url_for('static', filename='images/logo-horizontal.png') }}"
+                        alt="{{ t('app_title') }}"
+                        class="site-brand-logo"
+                    >
+                </span>
+                {% if organization_display_name %}
+                <span class="site-title site-title-org">
+                    {{ organization_display_name }}
+                </span>
+                {% endif %}
             </a>
 
-            <nav class="main-nav" aria-label="Main navigation">
+            <div class="header-tools">
+                <button
+                    type="button"
+                    class="theme-toggle"
+                    id="theme-toggle"
+                    aria-label="{{ t('theme_toggle_dark') }}"
+                    data-label-dark="{{ t('theme_toggle_dark') }}"
+                    data-label-light="{{ t('theme_toggle_light') }}"
+                    title="{{ t('theme_toggle_dark') }}"
+                >
+                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path
+                            d="M21 14.5A8.5 8.5 0 0 1 9.5 3 6.5 6.5 0 1 0 21 14.5Z"
+                            stroke="currentColor"
+                            stroke-width="1.75"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.75" />
+                        <path
+                            d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+                            stroke="currentColor"
+                            stroke-width="1.75"
+                            stroke-linecap="round"
+                        />
+                    </svg>
+                </button>
+
+                <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
+                    <a
+                        href="{{ url_for('set_language', language='es') }}"
+                        class="lang-link{% if current_language == 'es' %} active{% endif %}"
+                    >
+                        {{ t('language_es') }}
+                    </a>
+                    <a
+                        href="{{ url_for('set_language', language='en') }}"
+                        class="lang-link{% if current_language == 'en' %} active{% endif %}"
+                    >
+                        {{ t('language_en') }}
+                    </a>
+                </div>
+            </div>
+
+            {% if current_user or guest_access %}
+            <button
+                type="button"
+                class="nav-toggle"
+                aria-expanded="false"
+                aria-controls="main-nav"
+                data-label-menu="{{ t('nav_menu') }}"
+                data-label-close="{{ t('nav_close') }}"
+            >
+                {{ t('nav_menu') }}
+            </button>
+
+            <nav id="main-nav" class="main-nav" aria-label="{{ t('nav_aria') }}">
+                <form class="nav-search-form" method="get" action="{{ url_for('search_results') }}">
+                    <input
+                        type="text"
+                        name="q"
+                        class="nav-search-input"
+                        placeholder="{{ t('nav_search_placeholder') }}"
+                        value="{{ request.args.get('q', '') }}"
+                        aria-label="{{ t('nav_search_aria') }}"
+                    >
+                    <button type="submit" class="btn btn-small btn-nav-search">{{ t('nav_search_button') }}</button>
+                </form>
+
                 <a
                     href="{{ url_for('dashboard') }}"
                     class="nav-link{% if request.endpoint == 'dashboard' %} active{% endif %}"
                 >
-                    Dashboard
+                    {{ t('nav_dashboard') }}
                 </a>
                 <a
                     href="{{ url_for('agents_list') }}"
                     class="nav-link{% if request.endpoint and request.endpoint.startswith('agents_') %} active{% endif %}"
                 >
-                    Agents
+                    {{ t('nav_agents') }}
                 </a>
                 <a
                     href="{{ url_for('properties_list') }}"
                     class="nav-link{% if request.endpoint and request.endpoint.startswith('properties_') %} active{% endif %}"
                 >
-                    Properties
+                    {{ t('nav_properties') }}
                 </a>
                 <a
                     href="{{ url_for('operations_list') }}"
                     class="nav-link{% if request.endpoint and request.endpoint.startswith('operations_') %} active{% endif %}"
                 >
-                    Operations
+                    {{ t('nav_operations') }}
                 </a>
+                <a
+                    href="{{ url_for('vat_calculator') }}"
+                    class="nav-link{% if request.endpoint == 'vat_calculator' %} active{% endif %}"
+                >
+                    {{ t('nav_vat_calculator') }}
+                </a>
+                <a
+                    href="{{ url_for('search_results') }}"
+                    class="nav-link{% if request.endpoint == 'search_results' %} active{% endif %}"
+                >
+                    {{ t('nav_search') }}
+                </a>
+
+                {% if can_manage_users() %}
+                <a
+                    href="{{ url_for('approvals_list') }}"
+                    class="nav-link nav-bell-link{% if request.endpoint and request.endpoint.startswith('approvals') %} active{% endif %}"
+                    aria-label="{{ t('nav_approvals') }}"
+                >
+                    🔔
+                    {% if pending_access_requests %}
+                    <span class="badge badge-pending">{{ pending_access_requests }}</span>
+                    {% endif %}
+                </a>
+                <a
+                    href="{{ url_for('users_list') }}"
+                    class="nav-link{% if request.endpoint and request.endpoint.startswith('users_') %} active{% endif %}"
+                >
+                    {{ t('nav_users') }}
+                </a>
+                <a
+                    href="{{ url_for('organization_settings') }}"
+                    class="nav-link{% if request.endpoint == 'organization_settings' %} active{% endif %}"
+                >
+                    {{ t('nav_organization_settings') }}
+                </a>
+                {% endif %}
+
+                {% if is_agent() %}
+                <a
+                    href="{{ url_for('notifications_list') }}"
+                    class="nav-link nav-bell-link{% if request.endpoint == 'notifications_list' %} active{% endif %}"
+                    aria-label="{{ t('nav_notifications') }}"
+                >
+                    🔔
+                    {% if unread_notifications %}
+                    <span class="badge badge-pending">{{ unread_notifications }}</span>
+                    {% endif %}
+                </a>
+                {% endif %}
+
+                <span class="nav-user" title="{{ t('logged_in_as') }}">
+                    {% if current_user %}
+                    <strong class="nav-user-name">{{ current_user.username }}</strong>
+                    <span class="nav-user-role">{{ t('role_' ~ current_user.role) }}</span>
+                    {% if current_user.agent_name %}
+                    <span class="nav-user-agent">{{ current_user.agent_name }}</span>
+                    {% endif %}
+                    {% else %}
+                    <strong class="nav-user-name">{{ t('role_guest') }}</strong>
+                    <span class="nav-user-role">{{ t('guest_read_only') }}</span>
+                    {% endif %}
+                </span>
+
+                <a href="{{ url_for('logout') }}" class="btn btn-small btn-secondary">{{ t('logout') }}</a>
             </nav>
+            {% elif request.endpoint not in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend') %}
+            <nav class="guest-nav" aria-label="{{ t('nav_aria') }}">
+                <a href="{{ url_for('login') }}" class="btn btn-small btn-primary">{{ t('login_button') }}</a>
+                <a href="{{ url_for('register') }}" class="btn btn-small btn-secondary">{{ t('register_button') }}</a>
+            </nav>
+            {% endif %}
         </div>
     </header>
 
     <main class="container main-content">
+        {% include "_flash_messages.html" %}
         {% block content %}{% endblock %}
     </main>
 
     <footer class="site-footer">
         <div class="container footer-content">
-            <p>Commission Calculator &mdash; Web Dashboard</p>
-            <a href="{{ url_for('dashboard') }}" class="footer-link">Back to top</a>
+            <div class="footer-brand">
+                <p>{{ t('app_footer') }}</p>
+                <p class="footer-slogan">{{ t('app_slogan') }}</p>
+            </div>
+            {% if current_user or guest_access %}
+            <a href="{{ url_for('dashboard') }}" class="footer-link">{{ t('back_home') }}</a>
+            {% endif %}
         </div>
     </footer>
 
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

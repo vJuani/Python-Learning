@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('error_500_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('error_500_title') }}</h2>
+        <p>{{ t('error_500_message') }}</p>
+    </div>
+
+    <div class="page-actions">
+        {% if current_user %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">{{ t('back_home') }}</a>
+        {% else %}
+        <a href="{{ url_for('login') }}" class="btn btn-primary">{{ t('login_button') }}</a>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

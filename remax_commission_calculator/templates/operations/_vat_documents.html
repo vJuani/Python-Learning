@@ -1,0 +1,76 @@
+{% if can_manage_vat_docs and operation is defined %}
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('vat_docs_title') }}</h3>
+    </div>
+    <p class="field-help">{{ t('vat_docs_help') }}</p>
+
+    {% for doc_type in vat_doc_types %}
+    {% set document = vat_documents_by_type.get(doc_type) %}
+    <div class="vat-doc-row">
+        <div class="vat-doc-meta">
+            <strong>
+                {% if doc_type == 'martillero_client' %}
+                {{ t('vat_docs_martillero_client') }}
+                {% else %}
+                {{ t('vat_docs_agent_client') }}
+                {% endif %}
+            </strong>
+            {% if document %}
+            <p class="field-help">
+                {{ document.original_filename }}
+            </p>
+            {% else %}
+            <p class="field-help">{{ t('vat_docs_none') }}</p>
+            {% endif %}
+        </div>
+
+        <div class="form-actions vat-doc-actions">
+            {% if document %}
+            <a
+                href="{{ url_for('vat_document_download', document_id=document.id) }}"
+                class="btn btn-secondary btn-small"
+                target="_blank"
+                rel="noopener"
+            >{{ t('vat_docs_view') }}</a>
+            <a
+                href="{{ url_for('vat_document_download', document_id=document.id, download=1) }}"
+                class="btn btn-ghost btn-small"
+            >{{ t('vat_docs_download') }}</a>
+            {% endif %}
+
+            <form
+                method="post"
+                action="{{ url_for('operations_vat_document_upload', operation_id=operation.db_id, doc_type=doc_type) }}"
+                enctype="multipart/form-data"
+                class="vat-doc-upload-form"
+            >
+                <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+                <label class="btn btn-small btn-primary vat-doc-file-label">
+                    {% if document %}{{ t('vat_docs_replace') }}{% else %}{{ t('vat_docs_attach') }}{% endif %}
+                    <input
+                        type="file"
+                        name="document"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                        required
+                        class="vat-doc-file-input"
+                        onchange="this.form.submit()"
+                    >
+                </label>
+            </form>
+
+            {% if document %}
+            <form
+                method="post"
+                action="{{ url_for('vat_document_delete', document_id=document.id) }}"
+                onsubmit="return confirm({{ t('vat_docs_confirm_delete')|tojson }});"
+            >
+                <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+                <button type="submit" class="btn btn-danger btn-small">{{ t('vat_docs_delete') }}</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</section>
+{% endif %}

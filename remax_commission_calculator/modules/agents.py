@@ -1,3 +1,5 @@
+from modules.cli_tenant import get_cli_organization_id
+
 from modules.database import (
     get_agents,
     add_agent as db_add_agent,
@@ -7,7 +9,9 @@ from modules.database import (
 
 
 def list_agents():
-    agents = get_agents()
+    agents = get_agents(
+        get_cli_organization_id()
+    )
 
     if len(agents) == 0:
         print("No agents found.")
@@ -95,7 +99,8 @@ def add_agent():
 
     db_add_agent(
         name,
-        agent_type
+        agent_type,
+        get_cli_organization_id()
     )
 
     print(
@@ -104,7 +109,9 @@ def add_agent():
 
 
 def edit_agent():
-    agents = get_agents()
+    organization_id = get_cli_organization_id()
+
+    agents = get_agents(organization_id)
 
     if len(agents) == 0:
         print("No agents found.")
@@ -162,7 +169,8 @@ def edit_agent():
     db_update_agent(
         agent["id"],
         agent["name"],
-        agent["type"]
+        agent["type"],
+        organization_id
     )
 
     print(
@@ -171,7 +179,9 @@ def edit_agent():
 
 
 def delete_agent():
-    agents = get_agents()
+    organization_id = get_cli_organization_id()
+
+    agents = get_agents(organization_id)
 
     if len(agents) == 0:
         print("No agents found.")
@@ -216,7 +226,8 @@ def delete_agent():
 
         if confirmation == "y":
             db_delete_agent(
-                agent["id"]
+                agent["id"],
+                organization_id
             )
 
             print(

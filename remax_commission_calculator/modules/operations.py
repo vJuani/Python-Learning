@@ -9,11 +9,17 @@ from modules.calculations import (
     calculate_total_commission
 )
 
+from modules.cli_tenant import get_cli_organization_id
+
 from modules.database import (
     add_operation,
     delete_operation,
+    filter_operations as db_filter_operations,
+    get_agent_record,
     get_agents,
+    get_operations,
     get_properties,
+    get_property_record,
     update_operation
 )
 
@@ -25,9 +31,19 @@ from modules.menus import (
 
 from modules.reports import show_result
 
+from modules.formatting import (
+    CURRENCIES,
+    convert_to_usd
+)
+
 from modules.validators import (
+    JURISDICTIONS,
+    date_to_sortable,
     get_float,
-    parse_positive_float
+    parse_optional_date,
+    parse_optional_positive_float,
+    parse_positive_float,
+    validate_date_format
 )
 
 
@@ -42,12 +58,18 @@ def calculate_operation_details(
     vat_amount=0,
     operation_date=None,
     operation_display_id=None,
-    property_display_id=None
+    property_display_id=None,
+    currency="USD",
+    original_amount=None,
+    exchange_rate=1
 ):
     if operation_date is None:
         operation_date = date.today().strftime(
             "%d/%m/%Y"
         )
+
+    if original_amount is None:
+        original_amount = sale_price
 
     total_commission = calculate_total_commission(
         sale_price,
@@ -108,7 +130,10 @@ def calculate_operation_details(
         "martillero": martillero,
         "agent_payment": agent_payment,
         "office_payment": office_payment,
-        "office_total": office_total
+        "office_total": office_total,
+        "currency": currency,
+        "original_amount": original_amount,
+        "exchange_rate": exchange_rate
     }
 
     if operation_display_id is not None:
@@ -122,20 +147,18 @@ def calculate_operation_details(
 
 def get_agent_and_property(
     agent_id,
-    property_id
+    property_id,
+    organization_id
 ):
-    agent = None
-    property_data = None
+    agent = get_agent_record(
+        agent_id,
+        organization_id
+    )
 
-    for item in get_agents():
-        if item["id"] == agent_id:
-            agent = item
-            break
-
-    for item in get_properties():
-        if item["id"] == property_id:
-            property_data = item
-            break
+    property_data = get_property_record(
+        property_id,
+        organization_id
+    )
 
     return agent, property_data
 
@@ -143,16 +166,21 @@ def get_agent_and_property(
 def build_operation_from_selection(
     agent_id,
     property_id,
+    organization_id,
     sale_price,
     commission_rate,
     was_invoiced,
     vat_amount=0,
     operation_date=None,
-    operation_display_id=None
+    operation_display_id=None,
+    currency="USD",
+    original_amount=None,
+    exchange_rate=1
 ):
     agent, property_data = get_agent_and_property(
         agent_id,
-        property_id
+        property_id,
+        organization_id
     )
 
     if agent is None:
@@ -164,6 +192,9 @@ def build_operation_from_selection(
         raise ValueError(
             "Selected property was not found."
         )
+
+    if original_amount is None:
+        original_amount = sale_price
 
     return calculate_operation_details(
         agent["name"],
@@ -178,18 +209,24 @@ def build_operation_from_selection(
         operation_display_id=operation_display_id,
         property_display_id=(
             f"PROP-{property_id:06d}"
-        )
+        ),
+        currency=currency,
+        original_amount=original_amount,
+        exchange_rate=exchange_rate
     )
 
 
 def validate_operation_inputs(
     agent_id,
     property_id,
-    sale_price,
+    organization_id,
+    original_amount,
     commission_rate,
     was_invoiced,
     vat_amount,
-    operation_date=None
+    operation_date=None,
+    currency="USD",
+    exchange_rate=""
 ):
     errors = []
     parsed = {}
@@ -220,30 +257,53 @@ def validate_operation_inputs(
                 "Invalid property selection."
             )
 
-    sale_price_value, sale_price_error = (
+    if currency not in CURRENCIES:
+        errors.append(
+            "Invalid currency. Use USD or ARS."
+        )
+    else:
+        parsed["currency"] = currency
+
+    original_value, original_error = (
         parse_positive_float(
-            sale_price
+            original_amount,
+            "Original amount"
         )
     )
 
-    if sale_price_error:
-        errors.append(
-            f"Sale price: {sale_price_error}"
-        )
+    if original_error:
+        errors.append(original_error)
     else:
-        parsed["sale_price"] = sale_price_value
+        parsed["original_amount"] = (
+            original_value
+        )
+
+    if currency == "USD":
+        parsed["exchange_rate"] = 1.0
+    elif currency == "ARS":
+        rate_value, rate_error = (
+            parse_positive_float(
+                exchange_rate,
+                "Exchange rate"
+            )
+        )
+
+        if rate_error:
+            errors.append(rate_error)
+        else:
+            parsed["exchange_rate"] = (
+                rate_value
+            )
 
     commission_rate_value, commission_rate_error = (
         parse_positive_float(
-            commission_rate
+            commission_rate,
+            "Commission rate"
         )
     )
 
     if commission_rate_error:
-        errors.append(
-            "Commission rate: "
-            f"{commission_rate_error}"
-        )
+        errors.append(commission_rate_error)
     else:
         parsed["commission_rate"] = (
             commission_rate_value
@@ -262,18 +322,19 @@ def validate_operation_inputs(
     if was_invoiced == "yes":
         vat_value, vat_error = (
             parse_positive_float(
-                vat_amount
+                vat_amount,
+                "VAT amount"
             )
         )
 
         if vat_error:
-            errors.append(
-                f"VAT amount: {vat_error}"
-            )
+            errors.append(vat_error)
         else:
-            parsed["vat_amount"] = vat_value
+            parsed["vat_amount_original"] = (
+                vat_value
+            )
     else:
-        parsed["vat_amount"] = 0
+        parsed["vat_amount_original"] = 0
 
     if operation_date is None:
         parsed["operation_date"] = (
@@ -282,24 +343,129 @@ def validate_operation_inputs(
             )
         )
     else:
-        operation_date = operation_date.strip()
-
-        if operation_date == "":
-            errors.append(
-                "Operation date cannot be empty."
+        validated_date, date_error = (
+            validate_date_format(
+                operation_date,
+                "Operation date"
             )
+        )
+
+        if date_error:
+            errors.append(date_error)
         else:
             parsed["operation_date"] = (
-                operation_date
+                validated_date
+            )
+
+    if (
+        "original_amount" in parsed
+        and "currency" in parsed
+        and "exchange_rate" in parsed
+        and "vat_amount_original" in parsed
+    ):
+        try:
+            parsed["sale_price"] = convert_to_usd(
+                parsed["original_amount"],
+                parsed["currency"],
+                parsed["exchange_rate"]
+            )
+            parsed["vat_amount"] = convert_to_usd(
+                parsed["vat_amount_original"],
+                parsed["currency"],
+                parsed["exchange_rate"]
+            )
+        except ValueError as error:
+            errors.append(str(error))
+
+    if (
+        "agent_id" in parsed
+        and "property_id" in parsed
+        and len(errors) == 0
+    ):
+        agent, property_data = get_agent_and_property(
+            parsed["agent_id"],
+            parsed["property_id"],
+            organization_id
+        )
+
+        if agent is None:
+            errors.append(
+                "Selected agent was not found."
+            )
+
+        if property_data is None:
+            errors.append(
+                "Selected property was not found."
             )
 
     return errors, parsed
 
 
+def prepare_operation_from_form(
+    form_values,
+    organization_id,
+    operation_display_id=None
+):
+    errors, parsed = validate_operation_inputs(
+        form_values.get("agent_id", ""),
+        form_values.get("property_id", ""),
+        organization_id,
+        form_values.get(
+            "original_amount",
+            form_values.get("sale_price", "")
+        ),
+        form_values.get("commission_rate", ""),
+        form_values.get("was_invoiced", "no"),
+        form_values.get("vat_amount", "0"),
+        form_values.get("operation_date", ""),
+        currency=form_values.get(
+            "currency",
+            "USD"
+        ),
+        exchange_rate=form_values.get(
+            "exchange_rate",
+            ""
+        )
+    )
+
+    if len(errors) > 0:
+        return errors, None, parsed
+
+    try:
+        operation = build_operation_from_selection(
+            parsed["agent_id"],
+            parsed["property_id"],
+            organization_id,
+            parsed["sale_price"],
+            parsed["commission_rate"],
+            parsed["was_invoiced"],
+            parsed["vat_amount"],
+            operation_date=parsed["operation_date"],
+            operation_display_id=operation_display_id,
+            currency=parsed["currency"],
+            original_amount=parsed[
+                "original_amount"
+            ],
+            exchange_rate=parsed[
+                "exchange_rate"
+            ]
+        )
+
+    except ValueError as error:
+        errors.append(str(error))
+        return errors, None, parsed
+
+    return errors, operation, parsed
+
+
 def save_calculated_operation(
     agent_id,
     property_id,
-    operation
+    organization_id,
+    operation,
+    status="approved",
+    created_by_user_id=None,
+    require_property_owner=False
 ):
     operation_id = add_operation(
         operation["date"],
@@ -315,7 +481,23 @@ def save_calculated_operation(
         operation["martillero"],
         operation["agent_payment"],
         operation["office_payment"],
-        operation["office_total"]
+        operation["office_total"],
+        organization_id,
+        currency=operation.get(
+            "currency",
+            "USD"
+        ),
+        original_amount=operation.get(
+            "original_amount",
+            operation["sale_price"]
+        ),
+        exchange_rate=operation.get(
+            "exchange_rate",
+            1
+        ),
+        status=status,
+        created_by_user_id=created_by_user_id,
+        require_property_owner=require_property_owner
     )
 
     operation["id"] = (
@@ -324,6 +506,7 @@ def save_calculated_operation(
     operation["property_id"] = (
         f"PROP-{property_id:06d}"
     )
+    operation["status"] = status
 
     return operation_id, operation
 
@@ -332,7 +515,11 @@ def update_calculated_operation(
     operation_id,
     agent_id,
     property_id,
-    operation
+    organization_id,
+    operation,
+    status=None,
+    rejection_reason=None,
+    require_property_owner=False
 ):
     update_operation(
         operation_id,
@@ -349,7 +536,23 @@ def update_calculated_operation(
         operation["martillero"],
         operation["agent_payment"],
         operation["office_payment"],
-        operation["office_total"]
+        operation["office_total"],
+        organization_id,
+        currency=operation.get(
+            "currency",
+            "USD"
+        ),
+        original_amount=operation.get(
+            "original_amount",
+            operation["sale_price"]
+        ),
+        exchange_rate=operation.get(
+            "exchange_rate",
+            1
+        ),
+        status=status,
+        rejection_reason=rejection_reason,
+        require_property_owner=require_property_owner
     )
 
     operation["id"] = (
@@ -359,19 +562,276 @@ def update_calculated_operation(
         f"PROP-{property_id:06d}"
     )
 
+    if status is not None:
+        operation["status"] = status
+
     return operation
 
 
 def remove_operation(
-    operation_id
+    operation_id,
+    organization_id
 ):
     delete_operation(
-        operation_id
+        operation_id,
+        organization_id
     )
 
 
+def parse_operation_id_filter(value):
+    value = value.strip()
+
+    if value == "":
+        return None, None
+
+    normalized = value.upper().replace(
+        "COM-",
+        ""
+    )
+
+    try:
+        return int(normalized), None
+
+    except ValueError:
+        return None, (
+            "Operation ID must be a number "
+            "or COM-000001 format."
+        )
+
+
+def validate_operation_filters(raw_filters):
+    errors = []
+    parsed = {
+        "operation_id": None,
+        "agent_name": None,
+        "property_address": None,
+        "min_amount": None,
+        "max_amount": None,
+        "date_from": None,
+        "date_to": None,
+        "was_invoiced": None,
+        "jurisdiction": None,
+        "status": None
+    }
+
+    operation_id, operation_id_error = (
+        parse_operation_id_filter(
+            raw_filters.get(
+                "operation_id",
+                ""
+            )
+        )
+    )
+
+    if operation_id_error:
+        errors.append(operation_id_error)
+    else:
+        parsed["operation_id"] = operation_id
+
+    agent_name = raw_filters.get(
+        "agent",
+        ""
+    ).strip()
+
+    if agent_name != "":
+        parsed["agent_name"] = agent_name
+
+    property_address = raw_filters.get(
+        "property",
+        ""
+    ).strip()
+
+    if property_address != "":
+        parsed["property_address"] = (
+            property_address
+        )
+
+    min_amount, min_amount_error = (
+        parse_optional_positive_float(
+            raw_filters.get("min_amount"),
+            "Minimum amount"
+        )
+    )
+
+    if min_amount_error:
+        errors.append(min_amount_error)
+    else:
+        parsed["min_amount"] = min_amount
+
+    max_amount, max_amount_error = (
+        parse_optional_positive_float(
+            raw_filters.get("max_amount"),
+            "Maximum amount"
+        )
+    )
+
+    if max_amount_error:
+        errors.append(max_amount_error)
+    else:
+        parsed["max_amount"] = max_amount
+
+    if (
+        parsed["min_amount"] is not None
+        and parsed["max_amount"] is not None
+        and parsed["min_amount"]
+        > parsed["max_amount"]
+    ):
+        errors.append(
+            "Minimum amount cannot be greater "
+            "than maximum amount."
+        )
+
+    date_from, date_from_error = (
+        parse_optional_date(
+            raw_filters.get("date_from"),
+            "Start date"
+        )
+    )
+
+    if date_from_error:
+        errors.append(date_from_error)
+    else:
+        parsed["date_from"] = date_from
+
+    date_to, date_to_error = (
+        parse_optional_date(
+            raw_filters.get("date_to"),
+            "End date"
+        )
+    )
+
+    if date_to_error:
+        errors.append(date_to_error)
+    else:
+        parsed["date_to"] = date_to
+
+    if (
+        parsed["date_from"] is not None
+        and parsed["date_to"] is not None
+        and date_to_sortable(
+            parsed["date_from"]
+        )
+        > date_to_sortable(
+            parsed["date_to"]
+        )
+    ):
+        errors.append(
+            "Start date cannot be after end date."
+        )
+
+    was_invoiced = raw_filters.get(
+        "was_invoiced",
+        ""
+    ).strip()
+
+    if was_invoiced != "":
+        if was_invoiced not in (
+            "yes",
+            "no"
+        ):
+            errors.append(
+                "Invalid invoiced option."
+            )
+        else:
+            parsed["was_invoiced"] = (
+                was_invoiced
+            )
+
+    jurisdiction = raw_filters.get(
+        "jurisdiction",
+        ""
+    ).strip()
+
+    if jurisdiction != "":
+        if jurisdiction not in JURISDICTIONS:
+            errors.append(
+                "You must select a valid jurisdiction."
+            )
+        else:
+            parsed["jurisdiction"] = jurisdiction
+
+    status = raw_filters.get(
+        "status",
+        ""
+    ).strip()
+
+    if status != "":
+        from modules.workflow import (
+            is_valid_status
+        )
+
+        if not is_valid_status(status):
+            errors.append(
+                "Invalid operation status."
+            )
+        else:
+            parsed["status"] = status
+
+    return errors, parsed
+
+
+def has_active_operation_filters(parsed):
+    return any(
+        value is not None
+        for value in parsed.values()
+    )
+
+
+def get_filtered_operations(
+    raw_filters,
+    organization_id,
+    agent_id=None
+):
+    errors, parsed = validate_operation_filters(
+        raw_filters
+    )
+
+    if len(errors) > 0:
+        return errors, []
+
+    if not has_active_operation_filters(parsed):
+        return [], db_filter_operations(
+            organization_id,
+            agent_id=agent_id
+        )
+
+    date_from = None
+    date_to = None
+
+    if parsed["date_from"] is not None:
+        date_from = date_to_sortable(
+            parsed["date_from"]
+        )
+
+    if parsed["date_to"] is not None:
+        date_to = date_to_sortable(
+            parsed["date_to"]
+        )
+
+    operations = db_filter_operations(
+        organization_id,
+        operation_id=parsed["operation_id"],
+        agent_name=parsed["agent_name"],
+        property_address=parsed[
+            "property_address"
+        ],
+        min_amount=parsed["min_amount"],
+        max_amount=parsed["max_amount"],
+        date_from=date_from,
+        date_to=date_to,
+        was_invoiced=parsed["was_invoiced"],
+        jurisdiction=parsed["jurisdiction"],
+        agent_id=agent_id,
+        status=parsed["status"]
+    )
+
+    return [], operations
+
+
 def new_calculation():
-    agents = get_agents()
+    organization_id = get_cli_organization_id()
+
+    agents = get_agents(organization_id)
 
     if len(agents) == 0:
         print(
@@ -380,7 +840,7 @@ def new_calculation():
         )
         return
 
-    properties = get_properties()
+    properties = get_properties(organization_id)
 
     if len(properties) == 0:
         print(
@@ -429,6 +889,7 @@ def new_calculation():
     operation = build_operation_from_selection(
         agent_id,
         property_id,
+        organization_id,
         sale_price,
         commission_rate,
         was_invoiced,
@@ -440,6 +901,7 @@ def new_calculation():
         save_calculated_operation(
             agent_id,
             property_id,
+            organization_id,
             operation
         )
     )

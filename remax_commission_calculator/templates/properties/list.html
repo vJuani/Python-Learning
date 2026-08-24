@@ -1,55 +1,131 @@
 {% extends "base.html" %}
 
-{% block title %}Properties | RE/MAX Commission Calculator{% endblock %}
+{% block title %}{{ t('properties_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>Properties</h2>
-        <p>Manage properties from the existing database.</p>
+        <h2>{{ t('properties_title') }}</h2>
+        <p>{{ t('properties_subtitle') }}</p>
     </div>
 
     <div class="page-actions">
-        <a href="{{ url_for('properties_new') }}" class="btn btn-primary">Nueva propiedad</a>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Volver</a>
+        {% if can_write() %}
+        <a href="{{ url_for('properties_new') }}" class="btn btn-primary">{{ t('new_property') }}</a>
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
 </section>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('advanced_filters') }}</h3>
+        <span class="badge">{{ property_count }} {{ t('found') }}</span>
+    </div>
+
+    {% if filter_errors %}
     <div class="flash-messages">
-        {% for category, message in messages %}
-        <p class="flash-message flash-{{ category }}">{{ message }}</p>
+        {% for error in filter_errors %}
+        <p class="flash-message flash-error">{{ error }}</p>
         {% endfor %}
     </div>
     {% endif %}
-{% endwith %}
 
-<section class="panel">
-    <div class="panel-header">
-        <h3>Search Properties</h3>
-        <span class="badge">{{ property_count }} found</span>
-    </div>
+    <form class="filter-form" method="get" action="{{ url_for('properties_list') }}">
+        <div class="filter-grid">
+            <div class="form-group">
+                <label for="property_id">{{ t('property_id') }}</label>
+                <input
+                    type="text"
+                    id="property_id"
+                    name="property_id"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_id_example') }}"
+                    value="{{ filters.property_id }}"
+                >
+            </div>
 
-    <form class="search-form" method="get" action="{{ url_for('properties_list') }}">
-        <input
-            type="text"
-            name="q"
-            class="form-input"
-            placeholder="Search by ID, address, jurisdiction, agent or price"
-            value="{{ search_query }}"
-        >
-        <button type="submit" class="btn btn-primary">Search</button>
+            <div class="form-group">
+                <label for="address">{{ t('address') }}</label>
+                <input
+                    type="text"
+                    id="address"
+                    name="address"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_address') }}"
+                    value="{{ filters.address }}"
+                >
+            </div>
 
-        {% if search_query %}
-        <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">Clear</a>
-        {% endif %}
+            <div class="form-group">
+                <label for="jurisdiction">{{ t('jurisdiction') }}</label>
+                <select id="jurisdiction" name="jurisdiction" class="form-input">
+                    <option value="">{{ t('all_jurisdictions') }}</option>
+                    {% for jurisdiction in jurisdictions %}
+                    <option
+                        value="{{ jurisdiction }}"
+                        {% if filters.jurisdiction == jurisdiction %}selected{% endif %}
+                    >
+                        {{ jurisdiction }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="agent">{{ t('related_agent') }}</label>
+                <input
+                    type="text"
+                    id="agent"
+                    name="agent"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_agent') }}"
+                    value="{{ filters.agent }}"
+                >
+                <small class="field-help">{{ t('related_agent_help') }}</small>
+            </div>
+
+            <div class="form-group">
+                <label for="min_price">{{ t('min_price') }}</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    id="min_price"
+                    name="min_price"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_amount') }}"
+                    value="{{ filters.min_price }}"
+                >
+                <small class="field-help">{{ t('uses_sale_price') }}</small>
+            </div>
+
+            <div class="form-group">
+                <label for="max_price">{{ t('max_price') }}</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    id="max_price"
+                    name="max_price"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_amount') }}"
+                    value="{{ filters.max_price }}"
+                >
+                <small class="field-help">{{ t('uses_sale_price') }}</small>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{{ t('filter') }}</button>
+            <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">{{ t('clear_filters') }}</a>
+        </div>
     </form>
 </section>
 
 <section class="panel">
     <div class="panel-header">
-        <h3>Property List</h3>
+        <h3>{{ t('property_list') }}</h3>
     </div>
 
     {% if properties %}
@@ -57,10 +133,11 @@
         <table>
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Address</th>
-                    <th>Jurisdiction</th>
-                    <th>Actions</th>
+                    <th>{{ t('id') }}</th>
+                    <th>{{ t('address') }}</th>
+                    <th>{{ t('jurisdiction') }}</th>
+                    <th>{{ t('status') }}</th>
+                    <th>{{ t('actions') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -69,15 +146,23 @@
                     <td>{{ property_data.id }}</td>
                     <td>{{ property_data.address }}</td>
                     <td>
-                        <span class="type-tag">{{ property_data.jurisdiction }}</span>
+                        <span class="type-tag badge-{{ property_data.jurisdiction|lower }}">{{ property_data.jurisdiction }}</span>
                     </td>
                     <td>
+                        <span class="badge badge-soft">{{ t('property_status_' ~ (property_data.status or 'approved')) }}</span>
+                        {% if property_data.status == 'rejected' and property_data.rejection_reason %}
+                        <small class="field-help">{{ property_data.rejection_reason }}</small>
+                        {% endif %}
+                    </td>
+                    <td class="table-actions">
+                        {% if can_write() %}
                         <a
                             href="{{ url_for('properties_edit', property_id=property_data.id) }}"
-                            class="btn btn-small btn-secondary"
+                            class="btn btn-small btn-edit"
                         >
-                            Editar
+                            {{ t('edit') }}
                         </a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -85,7 +170,26 @@
         </table>
     </div>
     {% else %}
-    <p class="empty-message">No properties found.</p>
+    <div class="empty-state">
+        <p class="empty-state-title">
+            {% if filter_errors %}
+            {{ t('fix_filter_values') }}
+            {% elif filters_active %}
+            {{ t('no_properties_match_filters') }}
+            {% else %}
+            {{ t('no_properties_found') }}
+            {% endif %}
+        </p>
+        <p class="empty-state-text">
+            {% if filter_errors %}
+            {{ t('correct_errors_retry') }}
+            {% elif filters_active %}
+            {{ t('adjust_filters') }}
+            {% elif can_write() %}
+            <a href="{{ url_for('properties_new') }}">{{ t('create_first_property') }}</a>
+            {% endif %}
+        </p>
+    </div>
     {% endif %}
 </section>
 {% endblock %}

@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('vat_calc_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('vat_calc_title') }}</h2>
+        <p>{{ t('vat_calc_subtitle') }}</p>
+    </div>
+</section>
+
+<div class="flash-messages">
+    <p class="flash-message flash-warning vat-calc-notice">
+        {{ t('vat_calc_auxiliary_notice') }}
+    </p>
+</div>
+
+{% if source_operation %}
+<p class="field-help">
+    {{ t('vat_calc_preloaded_from', id=source_operation.id) }}
+</p>
+{% endif %}
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<form
+    class="agent-form"
+    method="post"
+    action="{{ url_for('vat_calculator') }}"
+>
+    <input
+        type="hidden"
+        name="operation_id"
+        value="{{ form_values.operation_id }}"
+    >
+
+    <section class="panel">
+        <div class="panel-header">
+            <h3>{{ t('vat_calc_inputs_title') }}</h3>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="operation_amount">{{ t('vat_calc_operation_amount') }}</label>
+                <input
+                    type="text"
+                    inputmode="decimal"
+                    id="operation_amount"
+                    name="operation_amount"
+                    class="form-input"
+                    value="{{ form_values.operation_amount }}"
+                    required
+                >
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="buyer_rate">{{ t('vat_calc_buyer_rate') }}</label>
+                <input
+                    type="text"
+                    inputmode="decimal"
+                    id="buyer_rate"
+                    name="buyer_rate"
+                    class="form-input"
+                    value="{{ form_values.buyer_rate }}"
+                    required
+                >
+            </div>
+            <div class="form-group">
+                <label for="seller_rate">{{ t('vat_calc_seller_rate') }}</label>
+                <input
+                    type="text"
+                    inputmode="decimal"
+                    id="seller_rate"
+                    name="seller_rate"
+                    class="form-input"
+                    value="{{ form_values.seller_rate }}"
+                    required
+                >
+            </div>
+        </div>
+
+        <fieldset class="form-group">
+            <legend>{{ t('vat_calc_tip_label') }}</legend>
+            <label class="choice-row">
+                <input
+                    type="radio"
+                    name="tip"
+                    value="buyer"
+                    {% if form_values.tip == 'buyer' %}checked{% endif %}
+                >
+                {{ t('vat_calc_tip_buyer') }}
+            </label>
+            <label class="choice-row">
+                <input
+                    type="radio"
+                    name="tip"
+                    value="seller"
+                    {% if form_values.tip == 'seller' %}checked{% endif %}
+                >
+                {{ t('vat_calc_tip_seller') }}
+            </label>
+        </fieldset>
+
+        <fieldset class="form-group">
+            <legend>{{ t('vat_calc_mode_label') }}</legend>
+            <label class="choice-row">
+                <input
+                    type="radio"
+                    name="mode"
+                    value="minimum_vat"
+                    {% if form_values.mode == 'minimum_vat' %}checked{% endif %}
+                >
+                {{ t('vat_calc_mode_minimum') }}
+            </label>
+            <label class="choice-row">
+                <input
+                    type="radio"
+                    name="mode"
+                    value="commission_plus_vat"
+                    {% if form_values.mode == 'commission_plus_vat' %}checked{% endif %}
+                >
+                {{ t('vat_calc_mode_plus') }}
+            </label>
+        </fieldset>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{{ t('vat_calc_submit') }}</button>
+            <a
+                href="{% if form_values.operation_id %}{{ url_for('vat_calculator', operation_id=form_values.operation_id) }}{% else %}{{ url_for('vat_calculator') }}{% endif %}"
+                class="btn btn-ghost"
+            >{{ t('vat_calc_clear') }}</a>
+        </div>
+    </section>
+
+    {% if result %}
+    <section class="panel">
+        <div class="panel-header">
+            <h3>{{ t('vat_calc_results_title') }}</h3>
+        </div>
+
+        <div class="form-group">
+            <label for="vat_usd">{{ t('vat_calc_vat_to_charge') }}</label>
+            <div class="summary-item" style="margin-bottom: 0.75rem;">
+                <span class="summary-label">{{ t('vat_calc_vat_auto') }}</span>
+                <strong class="money">{{ result.vat_usd_auto|money }}</strong>
+            </div>
+            <input
+                type="text"
+                inputmode="decimal"
+                id="vat_usd"
+                name="vat_usd"
+                class="form-input"
+                value="{{ form_values.vat_usd }}"
+            >
+            <small class="field-help">{{ t('vat_calc_vat_edit_help') }}</small>
+        </div>
+
+        <div class="form-group">
+            <label for="exchange_rate">{{ t('vat_calc_exchange_rate') }}</label>
+            <input
+                type="text"
+                inputmode="decimal"
+                id="exchange_rate"
+                name="exchange_rate"
+                class="form-input"
+                value="{{ form_values.exchange_rate }}"
+            >
+            <small class="field-help">{{ t('vat_calc_exchange_rate_help') }}</small>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-secondary">{{ t('vat_calc_recalculate') }}</button>
+        </div>
+
+        {% if result.billing %}
+        <hr class="summary-divider">
+        <div class="summary-grid">
+            <div class="summary-item">
+                <span class="summary-label">{{ t('vat_calc_iva_ars') }}</span>
+                <strong class="money money-emphasis">
+                    {{ result.billing.iva_ars|money('ARS') }}
+                </strong>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">{{ t('vat_calc_martillero_client_invoice') }}</span>
+                <strong class="money">
+                    {{ result.billing.martillero_net|money('ARS') }}
+                    + {{ t('vat_calc_iva') }}
+                    {{ result.billing.iva_ars|money('ARS') }}
+                </strong>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">{{ t('vat_calc_agent_client_invoice') }}</span>
+                <strong class="money money-emphasis">
+                    {{ result.billing.agent_net|money('ARS') }}
+                </strong>
+            </div>
+        </div>
+        {% endif %}
+    </section>
+    {% else %}
+    <input type="hidden" name="vat_usd" value="{{ form_values.vat_usd }}">
+    <input type="hidden" name="exchange_rate" value="{{ form_values.exchange_rate }}">
+    {% endif %}
+</form>
+
+{% if can_manage_vat_docs and source_operation %}
+{% with operation=source_operation %}
+{% include "operations/_vat_documents.html" %}
+{% endwith %}
+{% endif %}
+{% endblock %}

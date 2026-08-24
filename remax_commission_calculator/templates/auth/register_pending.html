@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('register_pending_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="auth-layout">
+    <div class="panel auth-card">
+        <div class="auth-brand">
+            <img
+                src="{{ url_for('static', filename='images/logo-full.png') }}"
+                alt="{{ t('app_title') }}"
+                class="auth-brand-logo"
+            >
+            <p class="auth-brand-slogan">{{ t('app_slogan') }}</p>
+        </div>
+
+        <div class="page-header-text auth-header">
+            <h2>{{ t('register_pending_title') }}</h2>
+            <p>{{ t('register_pending_text', email=email) }}</p>
+        </div>
+
+        {% if verify_url %}
+        <p class="field-help">{{ t('register_pending_dev_help') }}</p>
+        <p><a href="{{ verify_url }}">{{ verify_url }}</a></p>
+        {% endif %}
+
+        <div class="form-actions">
+            <a href="{{ url_for('login') }}" class="btn btn-primary">{{ t('back_to_login') }}</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

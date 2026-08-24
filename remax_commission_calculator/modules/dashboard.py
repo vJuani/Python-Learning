@@ -1,3 +1,5 @@
+from modules.cli_tenant import get_cli_organization_id
+
 from modules.database import (
     get_agent_ranking as get_agent_ranking_db,
     get_agents,
@@ -80,6 +82,7 @@ def get_agent_ranking(operations):
 
 def show_agent_ranking():
     ranking = get_agent_ranking_db(
+        get_cli_organization_id(),
         limit=3
     )
 
@@ -104,10 +107,14 @@ def show_agent_ranking():
 
 
 def show_dashboard():
-    metrics = get_dashboard_metrics()
+    organization_id = get_cli_organization_id()
 
-    agents = get_agents()
-    properties = get_properties()
+    metrics = get_dashboard_metrics(
+        organization_id
+    )
+
+    agents = get_agents(organization_id)
+    properties = get_properties(organization_id)
 
     print("\n=========================================")
     print("                DASHBOARD")

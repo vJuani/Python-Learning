@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('approval_property_new_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('approval_property_new_title') }}</h2>
+        <p>{{ property_data.address }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('approvals_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="panel">
+    <dl class="access-detail">
+        <dt>{{ t('address') }}</dt>
+        <dd>{{ property_data.address }}</dd>
+        <dt>{{ t('jurisdiction') }}</dt>
+        <dd>{{ property_data.jurisdiction }}</dd>
+        <dt>{{ t('agent') }}</dt>
+        <dd>{{ property_data.agent_name or '—' }}</dd>
+        <dt>{{ t('status') }}</dt>
+        <dd>{{ t('registration_status_pending_approval') }}</dd>
+    </dl>
+</section>
+
+<section class="panel">
+    <form
+        method="post"
+        action="{{ url_for('approvals_property_approve', property_id=property_data.id) }}"
+        class="form-actions"
+    >
+        <button type="submit" class="btn btn-primary">{{ t('approve') }}</button>
+    </form>
+</section>
+
+<section class="panel panel-danger">
+    <h3>{{ t('reject_access_request') }}</h3>
+    <form
+        method="post"
+        action="{{ url_for('approvals_property_reject', property_id=property_data.id) }}"
+        class="agent-form"
+    >
+        <div class="form-group">
+            <label for="rejection_reason">{{ t('rejection_reason') }}</label>
+            <textarea
+                id="rejection_reason"
+                name="rejection_reason"
+                class="form-input"
+                rows="3"
+                required
+            ></textarea>
+        </div>
+        <button type="submit" class="btn btn-danger">{{ t('reject') }}</button>
+    </form>
+</section>
+{% endblock %}

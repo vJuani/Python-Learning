@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('search_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('search_title') }}</h2>
+        <p>{{ t('search_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <form class="search-form global-search-form" method="get" action="{{ url_for('search_results') }}">
+        <input
+            type="text"
+            name="q"
+            class="form-input"
+            placeholder="{{ t('search_placeholder') }}"
+            value="{{ query }}"
+        >
+        <button type="submit" class="btn btn-primary">{{ t('search') }}</button>
+    </form>
+</section>
+
+{% if not has_query %}
+<section class="panel">
+    <div class="empty-state">
+        <p class="empty-state-title">{{ t('start_searching') }}</p>
+        <p class="empty-state-text">{{ t('start_searching_text') }}</p>
+    </div>
+</section>
+{% elif total_results == 0 %}
+<section class="panel">
+    <div class="empty-state">
+        <p class="empty-state-title">{{ t('no_results_title') }}</p>
+        <p class="empty-state-text">{{ t('no_results_text') }} <strong>"{{ query }}"</strong>.</p>
+    </div>
+</section>
+{% else %}
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('search_summary') }}</h3>
+        <span class="badge">{{ total_results }} {{ t('results') }}</span>
+    </div>
+    <p class="empty-message">{{ t('showing_matches') }} <strong>"{{ query }}"</strong>.</p>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('agents') }}</h3>
+        <span class="badge">{{ agents|length }} {{ t('found') }}</span>
+    </div>
+
+    {% if agents %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('id') }}</th>
+                    <th>{{ t('name') }}</th>
+                    <th>{{ t('type') }}</th>
+                    <th>{{ t('actions') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for agent in agents %}
+                <tr>
+                    <td>{{ agent.id }}</td>
+                    <td>{{ agent.name }}</td>
+                    <td><span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span></td>
+                    <td class="table-actions">
+                        {% if can_write() %}
+                        <a href="{{ url_for('agents_edit', agent_id=agent.id) }}" class="btn btn-small btn-edit">{{ t('edit') }}</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-message">{{ t('no_agents_matched') }}</p>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('properties') }}</h3>
+        <span class="badge">{{ properties|length }} {{ t('found') }}</span>
+    </div>
+
+    {% if properties %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('id') }}</th>
+                    <th>{{ t('address') }}</th>
+                    <th>{{ t('jurisdiction') }}</th>
+                    <th>{{ t('actions') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for property_data in properties %}
+                <tr>
+                    <td>{{ property_data.id }}</td>
+                    <td>{{ property_data.address }}</td>
+                    <td><span class="type-tag badge-{{ property_data.jurisdiction|lower }}">{{ property_data.jurisdiction }}</span></td>
+                    <td class="table-actions">
+                        {% if can_write() %}
+                        <a href="{{ url_for('properties_edit', property_id=property_data.id) }}" class="btn btn-small btn-edit">{{ t('edit') }}</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-message">{{ t('no_properties_matched') }}</p>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('operations') }}</h3>
+        <span class="badge">{{ operations|length }} {{ t('found') }}</span>
+    </div>
+
+    {% if operations %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('id') }}</th>
+                    <th>{{ t('date') }}</th>
+                    <th>{{ t('agent') }}</th>
+                    <th>{{ t('property') }}</th>
+                    <th>{{ t('currency') }}</th>
+                    <th>{{ t('original_amount') }}</th>
+                    <th>{{ t('usd_equivalent') }}</th>
+                    <th>{{ t('total_commission') }}</th>
+                    <th>{{ t('actions') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for operation in operations %}
+                <tr>
+                    <td>{{ operation.id }}</td>
+                    <td>{{ operation.date }}</td>
+                    <td>{{ operation.agent }}</td>
+                    <td>{{ operation.property }}</td>
+                    <td>{{ operation.currency }}</td>
+                    <td class="money">{{ operation.original_amount|money(operation.currency) }}</td>
+                    <td class="money">{{ operation.sale_price|money }}</td>
+                    <td class="money money-emphasis">{{ operation.total_commission|money }}</td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}" class="btn btn-small btn-secondary">{{ t('view') }}</a>
+                        {% if can_write() %}
+                        <a href="{{ url_for('operations_edit', operation_id=operation.db_id) }}" class="btn btn-small btn-edit">{{ t('edit') }}</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-message">{{ t('no_operations_matched') }}</p>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

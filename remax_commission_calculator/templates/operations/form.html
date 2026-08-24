@@ -1,16 +1,17 @@
 {% extends "base.html" %}
 
-{% block title %}{{ form_title }} | RE/MAX Commission Calculator{% endblock %}
+{% block title %}{% if is_edit %}{{ t('edit_operation_title') }}{% else %}{{ t('new_operation_title') }}{% endif %} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>{{ form_title }}</h2>
-        <p>Complete the operation data and preview the commission calculation before saving.</p>
+        <h2>{% if is_edit %}{{ t('edit_operation_title') }}{% else %}{{ t('new_operation_title') }}{% endif %}</h2>
+        <p>{{ t('operation_form_help') }}</p>
     </div>
 
     <div class="page-actions">
-        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">Volver</a>
+        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
     </div>
 </section>
 
@@ -22,6 +23,16 @@
 </div>
 {% endif %}
 
+{% if not can_create_operations %}
+<section class="panel">
+    <p class="empty-message">
+        {{ t('need_agent_property') }}
+        <a href="{{ url_for('agents_list') }}">{{ t('manage_agents') }}</a>
+        {{ t('or') }}
+        <a href="{{ url_for('properties_list') }}">{{ t('manage_properties') }}</a>.
+    </p>
+</section>
+{% else %}
 <section class="panel">
     <form
         class="agent-form"
@@ -29,22 +40,27 @@
         action="{% if is_edit %}{{ url_for('operations_edit', operation_id=operation_id) }}{% else %}{{ url_for('operations_new') }}{% endif %}"
     >
         <div class="form-group">
-            <label for="operation_date">Operation Date</label>
+            <label for="operation_date">{{ t('operation_date') }}</label>
             <input
                 type="text"
                 id="operation_date"
                 name="operation_date"
                 class="form-input"
-                placeholder="dd/mm/yyyy"
+                placeholder="{{ t('placeholder_date') }}"
                 value="{{ form_values.operation_date }}"
                 required
             >
         </div>
 
         <div class="form-group">
-            <label for="agent_id">Agent</label>
+            <label for="agent_id">{{ t('agent') }}</label>
+            {% if lock_agent_selection %}
+            <input type="hidden" name="agent_id" value="{{ form_values.agent_id }}">
+            <select id="agent_id" class="form-input" disabled>
+            {% else %}
             <select id="agent_id" name="agent_id" class="form-input" required>
-                <option value="">Select an agent</option>
+            {% endif %}
+                <option value="">{{ t('select_agent') }}</option>
                 {% for agent in agents %}
                 <option
                     value="{{ agent.id }}"
@@ -57,9 +73,9 @@
         </div>
 
         <div class="form-group">
-            <label for="property_id">Property</label>
+            <label for="property_id">{{ t('property') }}</label>
             <select id="property_id" name="property_id" class="form-input" required>
-                <option value="">Select a property</option>
+                <option value="">{{ t('select_property') }}</option>
                 {% for property_data in properties %}
                 <option
                     value="{{ property_data.id }}"
@@ -72,21 +88,68 @@
         </div>
 
         <div class="form-group">
-            <label for="sale_price">Sale Price</label>
+            <label for="currency">{{ t('currency') }}</label>
+            <select
+                id="currency"
+                name="currency"
+                class="form-input"
+                required
+            >
+                <option
+                    value="USD"
+                    {% if form_values.currency == "USD" %}selected{% endif %}
+                >
+                    USD
+                </option>
+                <option
+                    value="ARS"
+                    {% if form_values.currency == "ARS" %}selected{% endif %}
+                >
+                    ARS
+                </option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="original_amount">{{ t('original_amount') }}</label>
             <input
                 type="number"
                 step="0.01"
                 min="0"
-                id="sale_price"
-                name="sale_price"
+                id="original_amount"
+                name="original_amount"
                 class="form-input"
-                value="{{ form_values.sale_price }}"
+                value="{{ form_values.original_amount }}"
                 required
             >
+            <small class="field-help">
+                {{ t('original_amount_help') }}
+            </small>
+        </div>
+
+        <div
+            class="form-group"
+            id="exchange-rate-group"
+            {% if form_values.currency != "ARS" %}hidden{% endif %}
+        >
+            <label for="exchange_rate">{{ t('exchange_rate') }}</label>
+            <input
+                type="number"
+                step="0.0001"
+                min="0"
+                id="exchange_rate"
+                name="exchange_rate"
+                class="form-input"
+                value="{{ form_values.exchange_rate }}"
+                {% if form_values.currency == "ARS" %}required{% endif %}
+            >
+            <small class="field-help">
+                {{ t('exchange_rate_help') }}
+            </small>
         </div>
 
         <div class="form-group">
-            <label for="commission_rate">Commission Rate (%)</label>
+            <label for="commission_rate">{{ t('commission_rate') }}</label>
             <input
                 type="number"
                 step="0.01"
@@ -100,15 +163,15 @@
         </div>
 
         <div class="form-group">
-            <label for="was_invoiced">Invoiced</label>
+            <label for="was_invoiced">{{ t('invoiced') }}</label>
             <select id="was_invoiced" name="was_invoiced" class="form-input" required>
-                <option value="no" {% if form_values.was_invoiced == "no" %}selected{% endif %}>No</option>
-                <option value="yes" {% if form_values.was_invoiced == "yes" %}selected{% endif %}>Yes</option>
+                <option value="no" {% if form_values.was_invoiced == "no" %}selected{% endif %}>{{ t('no') }}</option>
+                <option value="yes" {% if form_values.was_invoiced == "yes" %}selected{% endif %}>{{ t('yes') }}</option>
             </select>
         </div>
 
         <div class="form-group">
-            <label for="vat_amount">VAT Amount</label>
+            <label for="vat_amount">{{ t('vat_amount') }}</label>
             <input
                 type="number"
                 step="0.01"
@@ -118,40 +181,49 @@
                 class="form-input"
                 value="{{ form_values.vat_amount }}"
             >
-            <small class="field-help">Required when invoiced is Yes.</small>
+            <small class="field-help">{{ t('vat_help') }}</small>
         </div>
 
         <div class="form-actions">
-            <button type="submit" name="action" value="preview" class="btn btn-secondary">{{ preview_label }}</button>
-            <button type="submit" name="action" value="save" class="btn btn-primary">{{ submit_label }}</button>
-            <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">Volver</a>
+            <button type="submit" name="action" value="preview" class="btn btn-secondary">{{ t('preview_calculation') }}</button>
+            <button type="submit" name="action" value="save" class="btn btn-primary">
+                {% if is_edit %}{{ t('save_changes') }}{% else %}{{ submit_label }}{% endif %}
+            </button>
+            {% if show_submit_for_approval %}
+            <button type="submit" name="action" value="submit" class="btn btn-edit">{{ t('submit_for_approval') }}</button>
+            {% endif %}
+            <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
         </div>
     </form>
 </section>
+{% endif %}
 
-{% if is_edit %}
+{% if is_edit and can_delete() %}
 <section class="panel panel-danger">
     <div class="panel-header">
-        <h3>Delete Operation</h3>
+        <h3>{{ t('delete_operation') }}</h3>
+        <span class="badge badge-no">{{ t('irreversible') }}</span>
     </div>
 
     <p class="danger-text">
-        You are about to delete operation
-        <strong>{{ operation_id }}</strong>.
+        {{ t('delete_operation_text') }}
+        <strong>COM-{{ "%06d"|format(operation_id) }}</strong>.
+        {{ t('delete_cannot_undo') }}
     </p>
 
     <form
         class="delete-form"
         method="post"
         action="{{ url_for('operations_delete', operation_id=operation_id) }}"
-        onsubmit="return confirm('Are you sure you want to delete this operation?');"
+        onsubmit="return confirm('{{ t('confirm_delete_operation_js') }}');"
     >
         <label class="checkbox-label">
-            <input type="checkbox" name="confirm_delete" value="yes">
-            I confirm I want to delete this operation
+            <input type="checkbox" name="confirm_delete" value="yes" required>
+            {{ t('confirm_delete_operation_check') }}
         </label>
 
-        <button type="submit" class="btn btn-danger">Delete Operation</button>
+        <button type="submit" class="btn btn-danger">{{ t('delete_operation') }}</button>
     </form>
 </section>
 {% endif %}

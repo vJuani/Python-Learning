@@ -1,34 +1,26 @@
 {% extends "base.html" %}
 
-{% block title %}Agents | RE/MAX Commission Calculator{% endblock %}
+{% block title %}{{ t('agents_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>Agents</h2>
-        <p>Manage agents from the existing database.</p>
+        <h2>{{ t('agents_title') }}</h2>
+        <p>{{ t('agents_subtitle') }}</p>
     </div>
 
     <div class="page-actions">
-        <a href="{{ url_for('agents_new') }}" class="btn btn-primary">Nuevo agente</a>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Volver</a>
+        {% if is_admin() %}
+        <a href="{{ url_for('agents_new') }}" class="btn btn-primary">{{ t('new_agent') }}</a>
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
 </section>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div class="flash-messages">
-        {% for category, message in messages %}
-        <p class="flash-message flash-{{ category }}">{{ message }}</p>
-        {% endfor %}
-    </div>
-    {% endif %}
-{% endwith %}
-
 <section class="panel">
     <div class="panel-header">
-        <h3>Search Agents</h3>
-        <span class="badge">{{ agent_count }} found</span>
+        <h3>{{ t('search_agents') }}</h3>
+        <span class="badge">{{ agent_count }} {{ t('found') }}</span>
     </div>
 
     <form class="search-form" method="get" action="{{ url_for('agents_list') }}">
@@ -36,20 +28,20 @@
             type="text"
             name="q"
             class="form-input"
-            placeholder="Search by ID or name"
+            placeholder="{{ t('search_by_id_or_name') }}"
             value="{{ search_query }}"
         >
-        <button type="submit" class="btn btn-primary">Search</button>
+        <button type="submit" class="btn btn-primary">{{ t('search') }}</button>
 
         {% if search_query %}
-        <a href="{{ url_for('agents_list') }}" class="btn btn-secondary">Clear</a>
+        <a href="{{ url_for('agents_list') }}" class="btn btn-secondary">{{ t('clear') }}</a>
         {% endif %}
     </form>
 </section>
 
 <section class="panel">
     <div class="panel-header">
-        <h3>Agent List</h3>
+        <h3>{{ t('agent_list') }}</h3>
     </div>
 
     {% if agents %}
@@ -57,10 +49,10 @@
         <table>
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Actions</th>
+                    <th>{{ t('id') }}</th>
+                    <th>{{ t('name') }}</th>
+                    <th>{{ t('type') }}</th>
+                    <th>{{ t('actions') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -69,15 +61,17 @@
                     <td>{{ agent.id }}</td>
                     <td>{{ agent.name }}</td>
                     <td>
-                        <span class="type-tag">{{ agent.type }}</span>
+                        <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
                     </td>
-                    <td>
+                    <td class="table-actions">
+                        {% if is_admin() %}
                         <a
                             href="{{ url_for('agents_edit', agent_id=agent.id) }}"
-                            class="btn btn-small btn-secondary"
+                            class="btn btn-small btn-edit"
                         >
-                            Editar
+                            {{ t('edit') }}
                         </a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -85,7 +79,20 @@
         </table>
     </div>
     {% else %}
-    <p class="empty-message">No agents found.</p>
+    <div class="empty-state">
+        <p class="empty-state-title">
+            {% if search_query %}{{ t('no_agents_match') }}{% else %}{{ t('no_agents_title') }}{% endif %}
+        </p>
+        <p class="empty-state-text">
+            {% if not search_query %}
+            {% if is_admin() %}
+            <a href="{{ url_for('agents_new') }}">{{ t('create_first_agent') }}</a>
+            {% endif %}
+            {% else %}
+            {{ t('try_another_search') }}
+            {% endif %}
+        </p>
+    </div>
     {% endif %}
 </section>
 {% endblock %}

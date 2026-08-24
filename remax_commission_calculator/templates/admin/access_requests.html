@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('access_requests_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('access_requests_title') }}</h2>
+        <p>{{ t('access_requests_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    {% if request_count == 0 %}
+    <p>{{ t('access_requests_empty') }}</p>
+    {% else %}
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>{{ t('name') }}</th>
+                    <th>{{ t('email') }}</th>
+                    <th>{{ t('phone') }}</th>
+                    <th>{{ t('status') }}</th>
+                    <th>{{ t('created_at') }}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in requests %}
+                <tr>
+                    <td>{{ item.first_name }} {{ item.last_name }}</td>
+                    <td>{{ item.email }}</td>
+                    <td>{{ item.phone or '—' }}</td>
+                    <td>{{ t('registration_status_' ~ item.status) }}</td>
+                    <td>{{ item.created_at }}</td>
+                    <td>
+                        <a
+                            href="{{ url_for('access_request_detail', request_id=item.id) }}"
+                            class="btn btn-small btn-secondary"
+                        >
+                            {{ t('view') }}
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

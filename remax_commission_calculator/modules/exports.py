@@ -224,7 +224,7 @@ def export_excel(
     )
 
     dashboard["A1"] = (
-        "REMAX COMMISSION REPORT"
+        "Commission Calculator Report"
     )
 
     dashboard["A1"].font = Font(

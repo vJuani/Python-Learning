@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('approval_property_change_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('approval_property_change_title') }}</h2>
+        <p>{{ change_request.current_address }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('approvals_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="panel">
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('field') }}</th>
+                    <th>{{ t('current_value') }}</th>
+                    <th>{{ t('proposed_value') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr{% if change_request.current_address != change_request.proposed_address %} class="diff-row"{% endif %}>
+                    <td>{{ t('address') }}</td>
+                    <td>{{ change_request.current_address }}</td>
+                    <td>{{ change_request.proposed_address }}</td>
+                </tr>
+                <tr{% if change_request.current_jurisdiction != change_request.proposed_jurisdiction %} class="diff-row"{% endif %}>
+                    <td>{{ t('jurisdiction') }}</td>
+                    <td>{{ change_request.current_jurisdiction }}</td>
+                    <td>{{ change_request.proposed_jurisdiction }}</td>
+                </tr>
+                <tr{% if change_request.current_agent_id != change_request.proposed_agent_id %} class="diff-row"{% endif %}>
+                    <td>{{ t('agent') }}</td>
+                    <td>{{ change_request.current_agent_name or '—' }}</td>
+                    <td>{{ change_request.proposed_agent_name or '—' }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <form
+        method="post"
+        action="{{ url_for('approvals_property_change_approve', request_id=change_request.id) }}"
+        class="form-actions"
+    >
+        <button type="submit" class="btn btn-primary">{{ t('approve') }}</button>
+    </form>
+</section>
+
+<section class="panel panel-danger">
+    <h3>{{ t('reject_access_request') }}</h3>
+    <form
+        method="post"
+        action="{{ url_for('approvals_property_change_reject', request_id=change_request.id) }}"
+        class="agent-form"
+    >
+        <div class="form-group">
+            <label for="rejection_reason">{{ t('rejection_reason') }}</label>
+            <textarea
+                id="rejection_reason"
+                name="rejection_reason"
+                class="form-input"
+                rows="3"
+                required
+            ></textarea>
+        </div>
+        <button type="submit" class="btn btn-danger">{{ t('reject') }}</button>
+    </form>
+</section>
+{% endblock %}

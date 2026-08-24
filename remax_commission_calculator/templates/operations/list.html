@@ -1,55 +1,194 @@
 {% extends "base.html" %}
 
-{% block title %}Operations | RE/MAX Commission Calculator{% endblock %}
+{% block title %}{{ t('operations_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>Operations</h2>
-        <p>Commission operations stored in the existing database.</p>
+        <h2>{{ t('operations_title') }}</h2>
+        <p>{{ t('operations_subtitle') }}</p>
     </div>
 
     <div class="page-actions">
-        <a href="{{ url_for('operations_new') }}" class="btn btn-primary">Nueva operación</a>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Volver</a>
+        {% if can_write() %}
+        {% if can_create_operations %}
+        <a href="{{ url_for('operations_new') }}" class="btn btn-primary">{{ t('new_operation') }}</a>
+        {% else %}
+        <span class="btn btn-secondary disabled-hint">{{ t('new_operation') }}</span>
+        {% endif %}
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
 </section>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div class="flash-messages">
-        {% for category, message in messages %}
-        <p class="flash-message flash-{{ category }}">{{ message }}</p>
-        {% endfor %}
+{% if can_write() and not can_create_operations %}
+<section class="panel">
+    <div class="empty-state">
+        <p class="empty-state-title">{{ t('setup_required') }}</p>
+        <p class="empty-state-text">
+            {{ t('setup_required_text') }}
+            <a href="{{ url_for('agents_list') }}">{{ t('go_to_agents') }}</a>
+            {{ t('or') }}
+            <a href="{{ url_for('properties_list') }}">{{ t('go_to_properties') }}</a>.
+        </p>
     </div>
-    {% endif %}
-{% endwith %}
+</section>
+{% endif %}
 
 <section class="panel">
     <div class="panel-header">
-        <h3>Search Operations</h3>
-        <span class="badge">{{ operation_count }} found</span>
+        <h3>{{ t('advanced_filters') }}</h3>
+        <span class="badge">{{ operation_count }} {{ t('found') }}</span>
     </div>
 
-    <form class="search-form" method="get" action="{{ url_for('operations_list') }}">
-        <input
-            type="text"
-            name="q"
-            class="form-input"
-            placeholder="Search by ID, agent, property, date or price"
-            value="{{ search_query }}"
-        >
-        <button type="submit" class="btn btn-primary">Search</button>
+    {% if filter_errors %}
+    <div class="flash-messages">
+        {% for error in filter_errors %}
+        <p class="flash-message flash-error">{{ error }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
 
-        {% if search_query %}
-        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">Clear</a>
-        {% endif %}
+    <form class="filter-form" method="get" action="{{ url_for('operations_list') }}">
+        <div class="filter-grid">
+            <div class="form-group">
+                <label for="operation_id">{{ t('operation_id') }}</label>
+                <input
+                    type="text"
+                    id="operation_id"
+                    name="operation_id"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_com_id') }}"
+                    value="{{ filters.operation_id }}"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="agent">{{ t('agent') }}</label>
+                <input
+                    type="text"
+                    id="agent"
+                    name="agent"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_agent') }}"
+                    value="{{ filters.agent }}"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="property">{{ t('property') }}</label>
+                <input
+                    type="text"
+                    id="property"
+                    name="property"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_address') }}"
+                    value="{{ filters.property }}"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="jurisdiction">{{ t('jurisdiction') }}</label>
+                <select id="jurisdiction" name="jurisdiction" class="form-input">
+                    <option value="">{{ t('all_jurisdictions') }}</option>
+                    {% for jurisdiction in jurisdictions %}
+                    <option
+                        value="{{ jurisdiction }}"
+                        {% if filters.jurisdiction == jurisdiction %}selected{% endif %}
+                    >
+                        {{ jurisdiction }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="min_amount">{{ t('min_amount') }}</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    id="min_amount"
+                    name="min_amount"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_amount') }}"
+                    value="{{ filters.min_amount }}"
+                >
+                <small class="field-help">{{ t('usd_equiv_min_help') }}</small>
+            </div>
+
+            <div class="form-group">
+                <label for="max_amount">{{ t('max_amount') }}</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    id="max_amount"
+                    name="max_amount"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_amount') }}"
+                    value="{{ filters.max_amount }}"
+                >
+                <small class="field-help">{{ t('usd_equiv_max_help') }}</small>
+            </div>
+
+            <div class="form-group">
+                <label for="date_from">{{ t('start_date') }}</label>
+                <input
+                    type="text"
+                    id="date_from"
+                    name="date_from"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_date') }}"
+                    value="{{ filters.date_from }}"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="date_to">{{ t('end_date') }}</label>
+                <input
+                    type="text"
+                    id="date_to"
+                    name="date_to"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_date') }}"
+                    value="{{ filters.date_to }}"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="was_invoiced">{{ t('invoiced') }}</label>
+                <select id="was_invoiced" name="was_invoiced" class="form-input">
+                    <option value="">{{ t('all') }}</option>
+                    <option value="yes" {% if filters.was_invoiced == "yes" %}selected{% endif %}>{{ t('yes') }}</option>
+                    <option value="no" {% if filters.was_invoiced == "no" %}selected{% endif %}>{{ t('no') }}</option>
+                </select>
+                <small class="field-help">{{ t('invoiced_help') }}</small>
+            </div>
+
+            <div class="form-group">
+                <label for="status">{{ t('status') }}</label>
+                <select id="status" name="status" class="form-input">
+                    <option value="">{{ t('all') }}</option>
+                    {% for status in operation_statuses %}
+                    <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>
+                        {{ t('status_' ~ status) }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{{ t('filter') }}</button>
+            <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">{{ t('clear_filters') }}</a>
+        </div>
     </form>
 </section>
 
 <section class="panel">
     <div class="panel-header">
-        <h3>Operation List</h3>
+        <h3>{{ t('operation_list') }}</h3>
     </div>
 
     {% if operations %}
@@ -57,13 +196,16 @@
         <table>
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Date</th>
-                    <th>Agent</th>
-                    <th>Property</th>
-                    <th>Sale Price</th>
-                    <th>Total Commission</th>
-                    <th>Actions</th>
+                    <th>{{ t('id') }}</th>
+                    <th>{{ t('date') }}</th>
+                    <th>{{ t('status') }}</th>
+                    <th>{{ t('agent') }}</th>
+                    <th>{{ t('property') }}</th>
+                    <th>{{ t('currency') }}</th>
+                    <th>{{ t('original_amount') }}</th>
+                    <th>{{ t('usd_equivalent') }}</th>
+                    <th>{{ t('total_commission') }}</th>
+                    <th>{{ t('actions') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -71,23 +213,28 @@
                 <tr>
                     <td>{{ operation.id }}</td>
                     <td>{{ operation.date }}</td>
+                    <td><span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span></td>
                     <td>{{ operation.agent }}</td>
                     <td>{{ operation.property }}</td>
-                    <td>USD {{ "%.2f"|format(operation.sale_price) }}</td>
-                    <td>USD {{ "%.2f"|format(operation.total_commission) }}</td>
+                    <td>{{ operation.currency }}</td>
+                    <td class="money">{{ operation.original_amount|money(operation.currency) }}</td>
+                    <td class="money">{{ operation.sale_price|money }}</td>
+                    <td class="money money-emphasis">{{ operation.total_commission|money }}</td>
                     <td class="table-actions">
                         <a
                             href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
                             class="btn btn-small btn-secondary"
                         >
-                            Ver
+                            {{ t('view') }}
                         </a>
+                        {% if is_admin() or (is_agent() and operation.status in ['draft', 'rejected']) %}
                         <a
                             href="{{ url_for('operations_edit', operation_id=operation.db_id) }}"
-                            class="btn btn-small btn-secondary"
+                            class="btn btn-small btn-edit"
                         >
-                            Editar
+                            {{ t('edit') }}
                         </a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -95,7 +242,31 @@
         </table>
     </div>
     {% else %}
-    <p class="empty-message">No operations found.</p>
+    <div class="empty-state">
+        <p class="empty-state-title">
+            {% if filter_errors %}
+            {{ t('fix_filter_values') }}
+            {% elif filters_active %}
+            {{ t('no_operations_match_filters') }}
+            {% elif can_create_operations %}
+            {{ t('no_operations_found') }}
+            {% else %}
+            {{ t('no_operations_yet') }}
+            {% endif %}
+        </p>
+        <p class="empty-state-text">
+            {% if filter_errors %}
+            {{ t('correct_errors_retry') }}
+            {% elif filters_active %}
+            {{ t('adjust_filters') }}
+            {% elif not can_write() %}
+            {% elif can_create_operations %}
+            <a href="{{ url_for('operations_new') }}">{{ t('create_first_operation') }}</a>
+            {% else %}
+            {{ t('create_agent_property_first') }}
+            {% endif %}
+        </p>
+    </div>
     {% endif %}
 </section>
 {% endblock %}

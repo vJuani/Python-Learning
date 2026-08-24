@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('settings_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('settings_title') }}</h2>
+        <p>{{ t('settings_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="panel">
+    <form
+        class="agent-form"
+        method="post"
+        action="{{ url_for('organization_settings') }}"
+        enctype="multipart/form-data"
+    >
+        <div class="form-group">
+            <label for="display_name">{{ t('settings_display_name') }}</label>
+            <input
+                type="text"
+                id="display_name"
+                name="display_name"
+                class="form-input"
+                value="{{ form_values.display_name }}"
+                required
+            >
+            <small class="field-help">{{ t('settings_display_name_help') }}</small>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="default_language">{{ t('settings_default_language') }}</label>
+                <select id="default_language" name="default_language" class="form-input" required>
+                    <option value="es" {% if form_values.default_language == "es" %}selected{% endif %}>
+                        {{ t('language_es') }}
+                    </option>
+                    <option value="en" {% if form_values.default_language == "en" %}selected{% endif %}>
+                        {{ t('language_en') }}
+                    </option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="default_currency">{{ t('settings_default_currency') }}</label>
+                <select id="default_currency" name="default_currency" class="form-input" required>
+                    <option value="USD" {% if form_values.default_currency == "USD" %}selected{% endif %}>USD</option>
+                    <option value="ARS" {% if form_values.default_currency == "ARS" %}selected{% endif %}>ARS</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="timezone">{{ t('settings_timezone') }}</label>
+            <select id="timezone" name="timezone" class="form-input" required>
+                {% for timezone in timezones %}
+                <option value="{{ timezone }}" {% if form_values.timezone == timezone %}selected{% endif %}>
+                    {{ timezone }}
+                </option>
+                {% endfor %}
+            </select>
+            <small class="field-help">{{ t('settings_timezone_help') }}</small>
+        </div>
+
+        <div class="form-group">
+            <label for="accent_color">{{ t('settings_accent_color') }}</label>
+            <input
+                type="text"
+                id="accent_color"
+                name="accent_color"
+                class="form-input"
+                value="{{ form_values.accent_color }}"
+                placeholder="#0f766e"
+                pattern="^#[0-9A-Fa-f]{6}$"
+            >
+            <small class="field-help">{{ t('settings_accent_color_help') }}</small>
+        </div>
+
+        <div class="form-group">
+            <label for="logo">{{ t('settings_logo') }}</label>
+            {% if current_logo_url %}
+            <div class="settings-logo-preview">
+                <img src="{{ current_logo_url }}" alt="{{ form_values.display_name }}" class="settings-logo-image">
+                <p class="field-help">{{ t('settings_current_logo') }}</p>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="remove_logo" value="yes">
+                    {{ t('settings_remove_logo') }}
+                </label>
+            </div>
+            {% endif %}
+            <input
+                type="file"
+                id="logo"
+                name="logo"
+                class="form-input"
+                accept=".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp"
+            >
+            <small class="field-help">{{ t('settings_logo_help') }}</small>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{{ t('save') }}</button>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('cancel') }}</a>
+        </div>
+    </form>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('registration_code_title') }}</h3>
+    </div>
+    <p class="field-help">{{ t('registration_code_help') }}</p>
+
+    {% if new_registration_code %}
+    <div class="flash-messages">
+        <p class="flash-message flash-success">
+            {{ t('registration_code_once') }}
+            <strong>{{ new_registration_code }}</strong>
+        </p>
+    </div>
+    {% endif %}
+
+    <p>
+        {{ t('registration_status_label') }}:
+        {% if registration_enabled and has_registration_code %}
+        {{ t('registration_active') }}
+        {% elif has_registration_code %}
+        {{ t('registration_paused') }}
+        {% else %}
+        {{ t('registration_missing_code') }}
+        {% endif %}
+    </p>
+
+    <form method="post" action="{{ url_for('rotate_registration_code') }}" class="form-actions">
+        <button type="submit" name="action" value="rotate" class="btn btn-primary">
+            {{ t('generate_registration_code') }}
+        </button>
+        {% if has_registration_code and registration_enabled %}
+        <button type="submit" name="action" value="disable" class="btn btn-secondary">
+            {{ t('disable_registration') }}
+        </button>
+        {% elif has_registration_code %}
+        <button type="submit" name="action" value="enable" class="btn btn-secondary">
+            {{ t('enable_registration') }}
+        </button>
+        {% endif %}
+    </form>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('guest_links_title') }}</h3>
+    </div>
+    <p class="field-help">{{ t('guest_links_help') }}</p>
+
+    {% if new_guest_url %}
+    <div class="flash-messages">
+        <p class="flash-message flash-success">
+            {{ t('guest_link_once') }}
+            <a href="{{ new_guest_url }}">{{ new_guest_url }}</a>
+        </p>
+    </div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('manage_guest_links') }}" class="agent-form">
+        <input type="hidden" name="action" value="create">
+        <div class="form-group">
+            <label for="label">{{ t('guest_link_label_optional') }}</label>
+            <input type="text" id="label" name="label" class="form-input">
+        </div>
+        <button type="submit" class="btn btn-primary">{{ t('create_guest_link') }}</button>
+    </form>
+
+    {% if guest_links %}
+    <div class="table-wrap" style="margin-top: 1rem;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>{{ t('guest_link_label') }}</th>
+                    <th>{{ t('created_at') }}</th>
+                    <th>{{ t('status') }}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for link in guest_links %}
+                <tr>
+                    <td>{{ link.label or '—' }}</td>
+                    <td>{{ link.created_at }}</td>
+                    <td>
+                        {% if link.is_active %}
+                        {{ t('active') }}
+                        {% else %}
+                        {{ t('revoked') }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if link.is_active %}
+                        <form
+                            method="post"
+                            action="{{ url_for('manage_guest_links') }}"
+                            onsubmit="return confirm('{{ t('confirm_revoke_guest_link') }}');"
+                        >
+                            <input type="hidden" name="action" value="revoke">
+                            <input type="hidden" name="access_id" value="{{ link.id }}">
+                            <button type="submit" class="btn btn-small btn-danger">{{ t('revoke') }}</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

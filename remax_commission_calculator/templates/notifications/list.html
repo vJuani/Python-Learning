@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('notifications_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('notifications_title') }}</h2>
+        <p>{{ t('notifications_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        {% if notifications %}
+        <form method="post" action="{{ url_for('notifications_mark_all_read') }}">
+            <button type="submit" class="btn btn-secondary">{{ t('notifications_mark_all_read') }}</button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    {% if notifications %}
+    <div class="approval-list">
+        {% for notification in notifications %}
+        <article class="approval-item{% if not notification.is_read %} approval-item-unread{% endif %}">
+            <div class="approval-item-main">
+                <h3>{{ t('notification_' ~ notification.kind) }}</h3>
+                {% if notification.payload.address %}
+                <p class="approval-item-summary">{{ notification.payload.address }}</p>
+                {% endif %}
+                {% if notification.payload.reason %}
+                <p class="field-help">{{ t('rejection_reason') }}: {{ notification.payload.reason }}</p>
+                {% endif %}
+                <p class="field-help">{{ notification.created_at }}</p>
+            </div>
+            {% if not notification.is_read %}
+            <div class="approval-item-actions">
+                <form
+                    method="post"
+                    action="{{ url_for('notifications_mark_read', notification_id=notification.id) }}"
+                >
+                    <button type="submit" class="btn btn-small btn-secondary">{{ t('mark_read') }}</button>
+                </form>
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p>{{ t('notifications_empty') }}</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,12 +1,11 @@
 import sqlite3
 
-
-DATABASE_NAME = "commission.db"
+from modules.config import get_database_path
 
 
 def get_connection():
     connection = sqlite3.connect(
-        DATABASE_NAME
+        get_database_path()
     )
 
     connection.execute(

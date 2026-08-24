@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('register_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="auth-layout">
+    <div class="panel auth-card">
+        <div class="auth-brand">
+            <img
+                src="{{ url_for('static', filename='images/logo-full.png') }}"
+                alt="{{ t('app_title') }}"
+                class="auth-brand-logo"
+            >
+            <p class="auth-brand-slogan">{{ t('app_slogan') }}</p>
+        </div>
+
+        <div class="page-header-text auth-header">
+            <h2>{{ t('register_title') }}</h2>
+            <p>{{ t('register_subtitle') }}</p>
+        </div>
+
+        {% if awaiting_approval %}
+        <div class="flash-messages">
+            <p class="flash-message flash-success">
+                {{ t('registration_awaiting_approval') }}
+            </p>
+        </div>
+        <div class="form-actions">
+            <a href="{{ url_for('login') }}" class="btn btn-primary">{{ t('back_to_login') }}</a>
+        </div>
+        {% elif continue_verification %}
+        <div class="flash-messages">
+            <p class="flash-message flash-success">
+                {{ t('registration_continue_help', email=masked_email) }}
+            </p>
+        </div>
+        <form
+            class="agent-form"
+            method="post"
+            action="{{ url_for('register_continue_verification') }}"
+        >
+            <input type="hidden" name="email" value="{{ form_values.email }}">
+            <input
+                type="hidden"
+                name="organization_code"
+                value="{{ form_values.organization_code }}"
+            >
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    {{ t('registration_continue_verification') }}
+                </button>
+                <a href="{{ url_for('register') }}" class="btn btn-ghost">
+                    {{ t('back') }}
+                </a>
+            </div>
+        </form>
+        {% else %}
+        {% if errors %}
+        <div class="flash-messages">
+            {% for error in errors %}
+            <p class="flash-message flash-error">{{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <form class="agent-form" method="post" action="{{ url_for('register') }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="first_name">{{ t('first_name') }}</label>
+                    <input
+                        type="text"
+                        id="first_name"
+                        name="first_name"
+                        class="form-input"
+                        value="{{ form_values.first_name }}"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="last_name">{{ t('last_name') }}</label>
+                    <input
+                        type="text"
+                        id="last_name"
+                        name="last_name"
+                        class="form-input"
+                        value="{{ form_values.last_name }}"
+                        required
+                    >
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="email">{{ t('email') }}</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    class="form-input"
+                    value="{{ form_values.email }}"
+                    autocomplete="email"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="phone">{{ t('phone_optional') }}</label>
+                <input
+                    type="text"
+                    id="phone"
+                    name="phone"
+                    class="form-input"
+                    value="{{ form_values.phone }}"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="organization_code">{{ t('organization_code') }}</label>
+                <input
+                    type="text"
+                    id="organization_code"
+                    name="organization_code"
+                    class="form-input"
+                    value="{{ form_values.organization_code }}"
+                    autocomplete="off"
+                    required
+                >
+                <small class="field-help">{{ t('organization_code_help') }}</small>
+            </div>
+
+            <div class="form-group">
+                <label for="password">{{ t('password') }}</label>
+                {% with password_id='password', password_name='password', password_required=true, password_autocomplete='new-password' %}
+                {% include "_password_input.html" %}
+                {% endwith %}
+                <small class="field-help">{{ t('password_policy_help') }}</small>
+            </div>
+
+            <div class="form-group">
+                <label for="confirm_password">{{ t('confirm_password') }}</label>
+                {% with password_id='confirm_password', password_name='confirm_password', password_required=true, password_autocomplete='new-password' %}
+                {% include "_password_input.html" %}
+                {% endwith %}
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">{{ t('register_submit') }}</button>
+                <a href="{{ url_for('login') }}" class="btn btn-ghost">{{ t('back_to_login') }}</a>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

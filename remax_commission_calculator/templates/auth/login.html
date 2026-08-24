@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('login_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="auth-layout">
+    <div class="panel auth-card">
+        <div class="auth-brand">
+            <img
+                src="{{ url_for('static', filename='images/logo-full.png') }}"
+                alt="{{ t('app_title') }}"
+                class="auth-brand-logo"
+            >
+            <p class="auth-brand-slogan">{{ t('app_slogan') }}</p>
+        </div>
+
+        <div class="page-header-text auth-header">
+            <h2>{{ t('login_title') }}</h2>
+            <p>{{ t('login_subtitle') }}</p>
+        </div>
+
+        <form class="agent-form" method="post" action="{{ url_for('login') }}">
+            <input type="hidden" name="next" value="{{ next_url }}">
+
+            <div class="form-group">
+                <label for="username">{{ t('login_email_or_username') }}</label>
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    class="form-input"
+                    value="{{ username }}"
+                    autocomplete="username"
+                    autofocus
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password">{{ t('password') }}</label>
+                {% with password_id='password', password_name='password', password_required=true, password_autocomplete='current-password' %}
+                {% include "_password_input.html" %}
+                {% endwith %}
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">{{ t('login_button') }}</button>
+            </div>
+        </form>
+
+        <div class="auth-links">
+            <a href="{{ url_for('register') }}" class="btn btn-secondary">{{ t('register_button') }}</a>
+            <p class="field-help">{{ t('guest_access_login_help') }}</p>
+        </div>
+    </div>
+</section>
+{% endblock %}

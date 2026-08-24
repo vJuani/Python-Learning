@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}{{ t('edit_user_title') }}{% else %}{{ t('new_user_title') }}{% endif %} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{% if is_edit %}{{ t('edit_user_title') }}{% else %}{{ t('new_user_title') }}{% endif %}</h2>
+        <p>
+            {% if is_edit %}
+            {{ t('edit_user_help') }}
+            {% else %}
+            {{ t('new_user_help') }}
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('users_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="panel">
+    <form
+        class="agent-form"
+        method="post"
+        action="{% if is_edit %}{{ url_for('users_edit', user_id=user_id) }}{% else %}{{ url_for('users_new') }}{% endif %}"
+    >
+        <div class="form-group">
+            <label for="username">{{ t('username') }}</label>
+            <input
+                type="text"
+                id="username"
+                name="username"
+                class="form-input"
+                value="{{ form_values.username }}"
+                autocomplete="off"
+                required
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="password">
+                {% if is_edit %}{{ t('password_optional') }}{% else %}{{ t('password') }}{% endif %}
+            </label>
+            {% with password_id='password', password_name='password', password_required=(not is_edit), password_autocomplete='new-password' %}
+            {% include "_password_input.html" %}
+            {% endwith %}
+            <small class="field-help">
+                {% if is_edit %}{{ t('password_help_edit') }}{% else %}{{ t('password_help_new') }}{% endif %}
+            </small>
+        </div>
+
+        <div class="form-group">
+            <label for="role">{{ t('role') }}</label>
+            <select id="role" name="role" class="form-input" required>
+                <option value="">{{ t('select_role') }}</option>
+                {% for role in roles %}
+                <option
+                    value="{{ role }}"
+                    {% if form_values.role == role %}selected{% endif %}
+                >
+                    {{ t('role_' ~ role) }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div
+            class="form-group"
+            id="linked-agent-group"
+            {% if form_values.role != "agent" %}hidden{% endif %}
+        >
+            <label for="agent_id">{{ t('linked_agent') }}</label>
+            <select id="agent_id" name="agent_id" class="form-input">
+                <option value="">{{ t('select_agent_optional') }}</option>
+                {% for agent in agents %}
+                <option
+                    value="{{ agent.id }}"
+                    {% if form_values.agent_id|string == agent.id|string %}selected{% endif %}
+                >
+                    {{ agent.name }} ({{ agent.type }})
+                </option>
+                {% endfor %}
+            </select>
+            <small class="field-help">{{ t('linked_agent_help') }}</small>
+        </div>
+
+        <div class="form-group">
+            <label for="is_active">{{ t('status') }}</label>
+            <select id="is_active" name="is_active" class="form-input" required>
+                <option value="yes" {% if form_values.is_active == "yes" %}selected{% endif %}>{{ t('active') }}</option>
+                <option value="no" {% if form_values.is_active == "no" %}selected{% endif %}>{{ t('inactive') }}</option>
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {% if is_edit %}{{ t('save_changes') }}{% else %}{{ t('create_user') }}{% endif %}
+            </button>
+            <a href="{{ url_for('users_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
+        </div>
+    </form>
+</section>
+
+{% if is_edit and can_manage_users() and current_user.id != user_id %}
+<section class="panel panel-danger">
+    <div class="panel-header">
+        <h3>{{ t('delete_user') }}</h3>
+        <span class="badge badge-no">{{ t('irreversible') }}</span>
+    </div>
+
+    <p class="danger-text">
+        {{ t('delete_user_text') }}
+        <strong>{{ form_values.username }}</strong>.
+        {{ t('delete_cannot_undo') }}
+    </p>
+
+    <form
+        class="delete-form"
+        method="post"
+        action="{{ url_for('users_delete', user_id=user_id) }}"
+        onsubmit="return confirm('{{ t('confirm_delete_user_js') }}');"
+    >
+        <label class="checkbox-label">
+            <input type="checkbox" name="confirm_delete" value="yes" required>
+            {{ t('confirm_delete_user_check') }}
+        </label>
+
+        <button type="submit" class="btn btn-danger">{{ t('delete_user') }}</button>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

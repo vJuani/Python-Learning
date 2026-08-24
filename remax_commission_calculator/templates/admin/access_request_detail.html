@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('access_request_detail_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('access_request_detail_title') }}</h2>
+        <p>{{ request_data.first_name }} {{ request_data.last_name }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('access_requests_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="panel">
+    <dl class="detail-list">
+        <div>
+            <dt>{{ t('email') }}</dt>
+            <dd>{{ request_data.email }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('phone') }}</dt>
+            <dd>{{ request_data.phone or '—' }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('status') }}</dt>
+            <dd>{{ t('registration_status_' ~ request_data.status) }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('created_at') }}</dt>
+            <dd>{{ request_data.created_at }}</dd>
+        </div>
+        {% if request_data.email_verified_at %}
+        <div>
+            <dt>{{ t('email_verified_at') }}</dt>
+            <dd>{{ request_data.email_verified_at }}</dd>
+        </div>
+        {% endif %}
+        {% if request_data.rejection_reason %}
+        <div>
+            <dt>{{ t('rejection_reason') }}</dt>
+            <dd>{{ request_data.rejection_reason }}</dd>
+        </div>
+        {% endif %}
+    </dl>
+</section>
+
+{% if request_data.status == 'pending_approval' %}
+<section class="panel">
+    <h3>{{ t('approve_access_request') }}</h3>
+
+    {% if suggestions %}
+    <p class="field-help">{{ t('suggested_agents_help') }}</p>
+    <ul>
+        {% for agent in suggestions %}
+        <li>{{ agent.name }} ({{ agent.type }})</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <form
+        class="agent-form"
+        method="post"
+        action="{{ url_for('access_request_detail', request_id=request_data.id) }}"
+    >
+        <input type="hidden" name="action" value="approve">
+
+        <div class="form-group">
+            <label for="agent_mode">{{ t('agent_link_mode') }}</label>
+            <select id="agent_mode" name="agent_mode" class="form-input" required>
+                <option value="create" selected>{{ t('create_new_agent') }}</option>
+                <option value="link">{{ t('link_existing_agent') }}</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="agent_type">{{ t('agent_type') }}</label>
+            <select id="agent_type" name="agent_type" class="form-input">
+                {% for agent_type in agent_types %}
+                <option value="{{ agent_type }}">{{ agent_type }}</option>
+                {% endfor %}
+            </select>
+            <small class="field-help">{{ t('agent_type_create_help') }}</small>
+        </div>
+
+        <div class="form-group">
+            <label for="agent_id">{{ t('linked_agent') }}</label>
+            <select id="agent_id" name="agent_id" class="form-input">
+                <option value="">{{ t('select_agent_optional') }}</option>
+                {% for agent in agents %}
+                <option value="{{ agent.id }}">{{ agent.name }} ({{ agent.type }})</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary">{{ t('approve') }}</button>
+    </form>
+</section>
+
+<section class="panel panel-danger">
+    <h3>{{ t('reject_access_request') }}</h3>
+
+    <form
+        class="agent-form"
+        method="post"
+        action="{{ url_for('access_request_detail', request_id=request_data.id) }}"
+    >
+        <input type="hidden" name="action" value="reject">
+
+        <div class="form-group">
+            <label for="rejection_reason">{{ t('rejection_reason') }}</label>
+            <textarea
+                id="rejection_reason"
+                name="rejection_reason"
+                class="form-input"
+                rows="3"
+                required
+            ></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-danger">{{ t('reject') }}</button>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

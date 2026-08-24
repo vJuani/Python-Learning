@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('approvals_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('approvals_title') }}</h2>
+        <p>{{ t('approvals_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    {% if item_count == 0 %}
+    <p>{{ t('approvals_empty') }}</p>
+    {% else %}
+    <div class="approval-list">
+        {% for item in items %}
+        <article class="approval-item">
+            <div class="approval-item-main">
+                <h3>{{ t(item.title_key) }}</h3>
+                <p class="approval-item-agent">{{ item.agent_name }}</p>
+                <p class="approval-item-summary">{{ item.summary }}</p>
+                {% if item.minutes_ago is not none %}
+                <p class="field-help">
+                    {% if item.minutes_ago == 0 %}
+                    {{ t('approval_just_now') }}
+                    {% else %}
+                    {{ t('approval_minutes_ago', minutes=item.minutes_ago) }}
+                    {% endif %}
+                </p>
+                {% endif %}
+            </div>
+            <div class="approval-item-actions">
+                {% if item.item_type == 'property_new' %}
+                <a
+                    href="{{ url_for('approvals_property_detail', property_id=item.entity_id) }}"
+                    class="btn btn-primary btn-small"
+                >
+                    {{ t('approval_review') }}
+                </a>
+                {% elif item.item_type == 'property_change' %}
+                <a
+                    href="{{ url_for('approvals_property_change_detail', request_id=item.entity_id) }}"
+                    class="btn btn-primary btn-small"
+                >
+                    {{ t('approval_view_changes') }}
+                </a>
+                {% elif item.item_type == 'operation' %}
+                <a
+                    href="{{ url_for('operations_detail', operation_id=item.entity_id) }}"
+                    class="btn btn-primary btn-small"
+                >
+                    {{ t('approval_review_calculation') }}
+                </a>
+                {% elif item.item_type == 'registration' %}
+                <a
+                    href="{{ url_for('access_request_detail', request_id=item.entity_id) }}"
+                    class="btn btn-primary btn-small"
+                >
+                    {{ t('approval_review') }}
+                </a>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

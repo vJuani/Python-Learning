@@ -1,126 +1,159 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard | RE/MAX Commission Calculator{% endblock %}
+{% block title %}{{ t('dashboard_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>Dashboard</h2>
-        <p>Resumen general de operaciones, agentes y comisiones.</p>
+        <h2>{{ t('dashboard_title') }}</h2>
+        <p>{{ t('dashboard_subtitle') }}</p>
+        <p class="field-help">{{ t('dashboard_official_note') }}</p>
     </div>
 
-    <div class="page-actions">
-        <a href="{{ url_for('agents_list') }}" class="btn btn-primary">View Agents</a>
-        <a href="{{ url_for('properties_list') }}" class="btn btn-primary">View Properties</a>
-        <a href="{{ url_for('operations_list') }}" class="btn btn-primary">View Operations</a>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Refresh</a>
+    <div class="page-actions dashboard-actions">
+        <a href="{{ url_for('operations_list') }}" class="btn btn-primary">{{ t('operations') }}</a>
+        <a href="{{ url_for('agents_list') }}" class="btn btn-secondary">{{ t('agents') }}</a>
+        <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">{{ t('properties') }}</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('refresh') }}</a>
     </div>
 </section>
 
-<section class="stats-grid" aria-label="Summary cards">
-    <article class="stat-card">
-        <span class="stat-label">Operations</span>
+<section class="stats-grid" aria-label="{{ t('dashboard_title') }}">
+    <article class="stat-card stat-card-accent">
+        <span class="stat-label">{{ t('operations') }}</span>
         <strong class="stat-value">{{ metrics.total_operations }}</strong>
     </article>
 
     <article class="stat-card">
-        <span class="stat-label">Agents</span>
+        <span class="stat-label">{{ t('agents') }}</span>
         <strong class="stat-value">{{ agent_count }}</strong>
     </article>
 
     <article class="stat-card">
-        <span class="stat-label">Properties</span>
+        <span class="stat-label">{{ t('properties') }}</span>
         <strong class="stat-value">{{ property_count }}</strong>
     </article>
 
-    <article class="stat-card">
-        <span class="stat-label">Gross Commission</span>
-        <strong class="stat-value">USD {{ "%.2f"|format(metrics.gross_commission) }}</strong>
+    <article class="stat-card stat-card-accent">
+        <span class="stat-label">{{ t('gross_commission') }}</span>
+        <strong class="stat-value money">{{ metrics.gross_commission|money }}</strong>
     </article>
 
     <article class="stat-card">
-        <span class="stat-label">Office Revenue</span>
-        <strong class="stat-value">USD {{ "%.2f"|format(metrics.office_revenue) }}</strong>
+        <span class="stat-label">{{ t('office_revenue') }}</span>
+        <strong class="stat-value money">{{ metrics.office_revenue|money }}</strong>
     </article>
 
     <article class="stat-card">
-        <span class="stat-label">Agent Payments</span>
-        <strong class="stat-value">USD {{ "%.2f"|format(metrics.agent_payments) }}</strong>
+        <span class="stat-label">{{ t('agent_payments') }}</span>
+        <strong class="stat-value money">{{ metrics.agent_payments|money }}</strong>
     </article>
 
     <article class="stat-card">
-        <span class="stat-label">Highest Commission</span>
-        <strong class="stat-value">USD {{ "%.2f"|format(metrics.highest_commission) }}</strong>
+        <span class="stat-label">{{ t('highest_commission') }}</span>
+        <strong class="stat-value money">{{ metrics.highest_commission|money }}</strong>
     </article>
 
     <article class="stat-card">
-        <span class="stat-label">Average Commission</span>
-        <strong class="stat-value">USD {{ "%.2f"|format(metrics.average_commission) }}</strong>
+        <span class="stat-label">{{ t('average_commission') }}</span>
+        <strong class="stat-value money">{{ metrics.average_commission|money }}</strong>
     </article>
 </section>
 
-<section class="panel">
-    <div class="panel-header">
-        <h3>Top Agents</h3>
-    </div>
-
-    {% if ranking %}
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr>
-                    <th>Rank</th>
-                    <th>Agent</th>
-                    <th>Total Commission</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for agent_name, commission in ranking %}
-                <tr>
-                    <td>{{ loop.index }}</td>
-                    <td>{{ agent_name }}</td>
-                    <td>USD {{ "%.2f"|format(commission) }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <p class="empty-message">No agent data available.</p>
-    {% endif %}
+{% if is_agent() %}
+<section class="stats-grid" aria-label="{{ t('workflow_section') }}">
+    <article class="stat-card">
+        <span class="stat-label">{{ t('status_draft') }}</span>
+        <strong class="stat-value">{{ workflow_counts.draft }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ t('status_pending') }}</span>
+        <strong class="stat-value">{{ workflow_counts.pending }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ t('status_approved') }}</span>
+        <strong class="stat-value">{{ workflow_counts.approved }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ t('status_rejected') }}</span>
+        <strong class="stat-value">{{ workflow_counts.rejected }}</strong>
+    </article>
 </section>
+<p class="field-help">{{ t('workflow_section_help') }}</p>
+{% endif %}
 
-<section class="panel" id="agents">
-    <div class="panel-header">
-        <h3>Agents</h3>
-        <span class="badge">{{ agent_count }} total</span>
-    </div>
+<div class="dashboard-grid">
+    <section class="panel">
+        <div class="panel-header">
+            <h3>{{ t('top_agents') }}</h3>
+        </div>
 
-    {% if agents %}
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Type</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for agent in agents %}
-                <tr>
-                    <td>{{ agent.id }}</td>
-                    <td>{{ agent.name }}</td>
-                    <td>
-                        <span class="type-tag">{{ agent.type }}</span>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <p class="empty-message">No agents found.</p>
-    {% endif %}
-</section>
+        {% if ranking %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>{{ t('rank') }}</th>
+                        <th>{{ t('agent') }}</th>
+                        <th>{{ t('total_commission') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for agent_name, commission in ranking %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ agent_name }}</td>
+                        <td class="money money-emphasis">{{ commission|money }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p class="empty-state-title">{{ t('no_ranking_title') }}</p>
+            <p class="empty-state-text">{{ t('no_ranking_text') }}</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="panel" id="agents">
+        <div class="panel-header">
+            <h3>{{ t('agents') }}</h3>
+            <span class="badge">{{ agent_count }} {{ t('total') }}</span>
+        </div>
+
+        {% if agents %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>{{ t('id') }}</th>
+                        <th>{{ t('name') }}</th>
+                        <th>{{ t('type') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for agent in agents %}
+                    <tr>
+                        <td>{{ agent.id }}</td>
+                        <td>{{ agent.name }}</td>
+                        <td>
+                            <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p class="empty-state-title">{{ t('no_agents_title') }}</p>
+            {% if is_admin() %}
+            <p class="empty-state-text"><a href="{{ url_for('agents_new') }}">{{ t('create_first_agent') }}</a></p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+</div>
 {% endblock %}

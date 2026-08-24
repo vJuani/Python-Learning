@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('users_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('users_title') }}</h2>
+        <p>{{ t('users_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        {% if can_manage_users() %}
+        <a href="{{ url_for('users_new') }}" class="btn btn-primary">{{ t('new_user') }}</a>
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('user_list') }}</h3>
+        <span class="badge">{{ user_count }} {{ t('total') }}</span>
+    </div>
+
+    {% if users %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('id') }}</th>
+                    <th>{{ t('username') }}</th>
+                    <th>{{ t('role') }}</th>
+                    <th>{{ t('linked_agent') }}</th>
+                    <th>{{ t('status') }}</th>
+                    <th>{{ t('actions') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.username }}</td>
+                    <td>
+                        <span class="type-tag badge-soft">{{ t('role_' ~ user.role) }}</span>
+                    </td>
+                    <td>
+                        {% if user.agent_name %}
+                        {{ user.agent_name }}
+                        {% else %}
+                        {{ t('no_linked_agent') }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge {% if user.is_active %}badge-yes{% else %}badge-no{% endif %}">
+                            {% if user.is_active %}{{ t('active') }}{% else %}{{ t('inactive') }}{% endif %}
+                        </span>
+                    </td>
+                    <td class="table-actions">
+                        {% if can_manage_users() %}
+                        <a
+                            href="{{ url_for('users_edit', user_id=user.id) }}"
+                            class="btn btn-small btn-edit"
+                        >
+                            {{ t('edit') }}
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p class="empty-state-title">{{ t('no_users_found') }}</p>
+        <p class="empty-state-text">
+            {% if can_manage_users() %}
+            <a href="{{ url_for('users_new') }}">{{ t('create_first_user') }}</a>
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

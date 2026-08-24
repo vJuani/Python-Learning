@@ -1,21 +1,75 @@
 {% extends "base.html" %}
 
-{% block title %}{{ operation.id }} | RE/MAX Commission Calculator{% endblock %}
+{% block title %}{{ operation.id }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>Operation Detail</h2>
-        <p>Full commission breakdown for {{ operation.id }}.</p>
+        <h2>{{ t('detail_title') }}</h2>
+        <p>{{ t('detail_subtitle') }} {{ operation.id }}.</p>
     </div>
 
     <div class="page-actions">
-        <a href="{{ url_for('operations_edit', operation_id=operation.db_id) }}" class="btn btn-primary">Editar</a>
-        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">Volver</a>
+        {% if can_edit_operation %}
+        <a href="{{ url_for('operations_edit', operation_id=operation.db_id) }}" class="btn btn-edit">{{ t('edit') }}</a>
+        {% endif %}
+        <a
+            href="{{ url_for('vat_calculator', operation_id=operation.db_id) }}"
+            class="btn btn-secondary"
+        >{{ t('vat_calc_open_from_operation') }}</a>
+        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('status') }}</h3>
+        <span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span>
+    </div>
+
+    {% if operation.rejection_reason %}
+    <p class="danger-text">
+        <strong>{{ t('rejection_reason') }}:</strong>
+        {{ operation.rejection_reason }}
+    </p>
+    {% endif %}
+
+    {% if can_submit_operation %}
+    <form method="post" action="{{ url_for('operations_submit', operation_id=operation.db_id) }}" class="form-actions">
+        <button type="submit" class="btn btn-edit">{{ t('submit_for_approval') }}</button>
+    </form>
+    {% endif %}
+
+    {% if can_review_operation %}
+    <div class="form-actions">
+        <form method="post" action="{{ url_for('operations_approve', operation_id=operation.db_id) }}">
+            <button type="submit" class="btn btn-primary">{{ t('approve_operation') }}</button>
+        </form>
+    </div>
+
+    <form
+        method="post"
+        action="{{ url_for('operations_reject', operation_id=operation.db_id) }}"
+        class="agent-form"
+    >
+        <div class="form-group">
+            <label for="rejection_reason">{{ t('rejection_reason') }}</label>
+            <textarea
+                id="rejection_reason"
+                name="rejection_reason"
+                class="form-input"
+                rows="3"
+                required
+            ></textarea>
+        </div>
+        <button type="submit" class="btn btn-danger">{{ t('reject_operation') }}</button>
+    </form>
+    {% endif %}
 </section>
 
 <section class="panel">
     {% include "operations/_summary.html" %}
 </section>
+
+{% include "operations/_vat_documents.html" %}
 {% endblock %}

@@ -16,7 +16,23 @@ def show_result(operation):
     print("-----------------------------------")
 
     print(
-        f"Sale price: "
+        f"Currency: "
+        f"{operation.get('currency', 'USD')}"
+    )
+    print(
+        f"Original amount: "
+        f"{operation.get('currency', 'USD')} "
+        f"{operation.get('original_amount', operation['sale_price']):.2f}"
+    )
+
+    if operation.get("currency") == "ARS":
+        print(
+            "Exchange rate (ARS/USD): "
+            f"{operation.get('exchange_rate', 1):.4f}"
+        )
+
+    print(
+        f"USD equivalent: "
         f"USD {operation['sale_price']:.2f}"
     )
 
