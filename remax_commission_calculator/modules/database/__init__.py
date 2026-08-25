@@ -1,12 +1,23 @@
 from .connection import (
+    IntegrityError,
+    adapt_sql,
+    execute_insert,
     get_connection,
-    get_database_path
+    get_database_backend,
+    get_database_path,
+    get_database_url,
 )
 
 from .schema import (
     DEFAULT_ORGANIZATION_ID,
     DEFAULT_ORGANIZATION_NAME,
     create_tables
+)
+
+from .schema_postgres import (
+    POSTGRES_SCHEMA_VERSION,
+    POSTGRES_TABLES,
+    create_postgres_schema,
 )
 
 from .tenant import TenantError

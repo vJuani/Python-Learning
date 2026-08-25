@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta
 
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import require_organization_id
 
 
@@ -81,7 +84,8 @@ def create_registration_request(
     connection = get_connection()
     cursor = connection.cursor()
 
-    cursor.execute(
+    request_id = execute_insert(
+        cursor,
         """
         INSERT INTO registration_requests (
             organization_id,
@@ -106,8 +110,6 @@ def create_registration_request(
             _now_iso()
         )
     )
-
-    request_id = cursor.lastrowid
     connection.commit()
     connection.close()
 
@@ -314,7 +316,8 @@ def create_email_verification_token(
         cursor=cursor
     )
 
-    cursor.execute(
+    token_id = execute_insert(
+        cursor,
         """
         INSERT INTO email_verification_tokens (
             registration_request_id,
@@ -334,8 +337,6 @@ def create_email_verification_token(
             now
         )
     )
-
-    token_id = cursor.lastrowid
     connection.commit()
     connection.close()
 

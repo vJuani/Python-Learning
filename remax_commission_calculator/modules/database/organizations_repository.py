@@ -1,6 +1,13 @@
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .organization_settings_repository import (
     ensure_organization_settings
+)
+from modules.config import (
+    BACKEND_SQLITE,
+    get_database_backend,
 )
 
 
@@ -87,9 +94,13 @@ def provision_organization(
     cursor = connection.cursor()
 
     try:
-        cursor.execute("BEGIN")
+        # SQLite: explicit BEGIN. PostgreSQL (psycopg) already
+        # opens a transaction on the first statement.
+        if get_database_backend() == BACKEND_SQLITE:
+            cursor.execute("BEGIN")
 
-        cursor.execute(
+        organization_id = execute_insert(
+            cursor,
             """
             INSERT INTO organizations (
                 name,
@@ -102,8 +113,6 @@ def provision_organization(
                 1 if is_active else 0
             )
         )
-
-        organization_id = cursor.lastrowid
 
         cursor.execute(
             """
@@ -130,7 +139,8 @@ def provision_organization(
             )
         )
 
-        cursor.execute(
+        admin_user_id = execute_insert(
+            cursor,
             """
             INSERT INTO users (
                 username,
@@ -152,8 +162,6 @@ def provision_organization(
                 admin_username.lower()
             )
         )
-
-        admin_user_id = cursor.lastrowid
         connection.commit()
 
     except Exception as error:
@@ -177,7 +185,8 @@ def add_organization(name, is_active=True):
     connection = get_connection()
     cursor = connection.cursor()
 
-    cursor.execute(
+    organization_id = execute_insert(
+        cursor,
         """
         INSERT INTO organizations (
             name,
@@ -190,8 +199,6 @@ def add_organization(name, is_active=True):
             1 if is_active else 0
         )
     )
-
-    organization_id = cursor.lastrowid
 
     connection.commit()
     connection.close()

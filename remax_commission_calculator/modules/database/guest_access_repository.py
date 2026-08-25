@@ -1,6 +1,9 @@
 from datetime import datetime
 
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import require_organization_id
 
 
@@ -23,7 +26,8 @@ def create_guest_access(
     connection = get_connection()
     cursor = connection.cursor()
 
-    cursor.execute(
+    access_id = execute_insert(
+        cursor,
         """
         INSERT INTO organization_guest_access (
             organization_id,
@@ -42,8 +46,6 @@ def create_guest_access(
             _now_iso()
         )
     )
-
-    access_id = cursor.lastrowid
     connection.commit()
     connection.close()
 

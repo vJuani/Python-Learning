@@ -1,6 +1,9 @@
 from datetime import datetime
 
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import (
     TenantError,
     assert_agent_in_organization,
@@ -212,7 +215,8 @@ def add_property(
     if status == STATUS_PENDING and submitted_at is None:
         submitted_at = now
 
-    cursor.execute(
+    property_id = execute_insert(
+        cursor,
         """
         INSERT INTO properties (
             address,
@@ -243,8 +247,6 @@ def add_property(
             last_synced_at,
         )
     )
-
-    property_id = cursor.lastrowid
 
     connection.commit()
     connection.close()

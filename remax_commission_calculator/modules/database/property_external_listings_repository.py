@@ -3,9 +3,12 @@ External property listings repository.
 """
 
 from datetime import datetime
-import sqlite3
 
-from .connection import get_connection
+from .connection import (
+    IntegrityError,
+    execute_insert,
+    get_connection,
+)
 from .tenant import (
     TenantError,
     assert_property_in_organization,
@@ -321,7 +324,8 @@ def create_property_external_listing(
             organization_id,
         )
 
-        cursor.execute(
+        listing_id = execute_insert(
+            cursor,
             """
             INSERT INTO property_external_listings (
                 organization_id,
@@ -361,15 +365,13 @@ def create_property_external_listing(
                 created_by_user_id,
             ),
         )
-
-        listing_id = cursor.lastrowid
         connection.commit()
 
     except TenantError:
         connection.rollback()
         raise
 
-    except sqlite3.IntegrityError as error:
+    except IntegrityError as error:
         connection.rollback()
         raise _translate_integrity_error(error) from error
 
@@ -472,7 +474,7 @@ def update_property_external_listing(
         connection.rollback()
         raise
 
-    except sqlite3.IntegrityError as error:
+    except IntegrityError as error:
         connection.rollback()
         raise _translate_integrity_error(error) from error
 

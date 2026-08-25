@@ -12,7 +12,6 @@ from flask import (
 
 import os
 import io
-import sqlite3
 
 from datetime import date
 
@@ -42,6 +41,7 @@ from modules.auth import (
 )
 
 from modules.database import (
+    IntegrityError,
     TenantError,
     add_agent,
     add_property,
@@ -3719,7 +3719,7 @@ def agents_delete(agent_id):
             organization_id
         )
 
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         flash_i18n("agent_delete_blocked", "error")
 
         return redirect(
@@ -4385,7 +4385,7 @@ def properties_delete(property_id):
             organization_id
         )
 
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         flash_i18n("property_delete_blocked", "error")
 
         return redirect(

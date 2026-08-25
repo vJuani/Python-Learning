@@ -7,7 +7,10 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import (
     TenantError,
     assert_agent_in_organization,
@@ -204,7 +207,8 @@ def create_organization_integration(
                 organization_id,
             )
 
-        cursor.execute(
+        integration_id = execute_insert(
+            cursor,
             """
             INSERT INTO organization_integrations (
                 organization_id,
@@ -235,8 +239,6 @@ def create_organization_integration(
                 now,
             ),
         )
-
-        integration_id = cursor.lastrowid
         connection.commit()
 
     except TenantError:
@@ -447,7 +449,8 @@ def start_integration_sync_run(
             "Integration was not found in this organization."
         )
 
-    cursor.execute(
+    run_id = execute_insert(
+        cursor,
         """
         INSERT INTO integration_sync_runs (
             organization_id,
@@ -473,8 +476,6 @@ def start_integration_sync_run(
             now,
         ),
     )
-
-    run_id = cursor.lastrowid
     connection.commit()
     connection.close()
 

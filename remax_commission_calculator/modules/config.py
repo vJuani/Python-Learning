@@ -8,6 +8,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DEV_SECRET_KEY = "dev-secret-key"
 DEPLOYED_ENVS = frozenset({"production", "staging"})
+BACKEND_SQLITE = "sqlite"
+BACKEND_POSTGRES = "postgres"
 
 
 def load_dotenv_file():
@@ -76,6 +78,33 @@ def get_secret_key():
         return secret_key
 
     return secret_key or DEFAULT_DEV_SECRET_KEY
+
+
+def get_database_url():
+    """
+    PostgreSQL DSN when set (e.g. Railway DATABASE_URL).
+
+    Presence of this variable selects the postgres backend.
+    """
+    raw_url = os.environ.get("DATABASE_URL", "").strip()
+
+    if not raw_url:
+        return None
+
+    return raw_url
+
+
+def get_database_backend():
+    """
+    Active database backend.
+
+    - ``postgres`` when ``DATABASE_URL`` is set
+    - ``sqlite`` otherwise (uses ``DATABASE_PATH`` / default file)
+    """
+    if get_database_url():
+        return BACKEND_POSTGRES
+
+    return BACKEND_SQLITE
 
 
 def get_database_path():
@@ -179,7 +208,11 @@ def apply_config(app):
     app.config["DEBUG"] = get_flask_debug()
     app.config["TESTING"] = False
     app.config["SECRET_KEY"] = get_secret_key()
+    app.config["DATABASE_BACKEND"] = (
+        get_database_backend()
+    )
     app.config["DATABASE_PATH"] = get_database_path()
+    app.config["DATABASE_URL"] = get_database_url()
     app.config["UPLOAD_ROOT"] = str(
         get_upload_root()
     )

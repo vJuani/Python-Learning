@@ -1938,6 +1938,19 @@ def migrate_schema():
 
 
 def create_tables():
+    from modules.config import (
+        BACKEND_POSTGRES,
+        get_database_backend,
+    )
+
+    if get_database_backend() == BACKEND_POSTGRES:
+        from .schema_postgres import (
+            create_postgres_schema,
+        )
+
+        create_postgres_schema()
+        return
+
     connection = get_connection()
     cursor = connection.cursor()
 

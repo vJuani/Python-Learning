@@ -1,4 +1,7 @@
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import (
     TenantError,
     assert_agent_in_organization,
@@ -251,7 +254,8 @@ def add_user(
         else username.strip().lower()
     )
 
-    cursor.execute(
+    user_id = execute_insert(
+        cursor,
         """
         INSERT INTO users (
             username,
@@ -282,8 +286,6 @@ def add_user(
             account_status
         )
     )
-
-    user_id = cursor.lastrowid
 
     connection.commit()
     connection.close()

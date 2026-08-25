@@ -1,7 +1,10 @@
 import json
 from datetime import datetime
 
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import require_organization_id
 
 
@@ -27,7 +30,8 @@ def create_notification(
     connection = get_connection()
     cursor = connection.cursor()
 
-    cursor.execute(
+    notification_id = execute_insert(
+        cursor,
         """
         INSERT INTO notifications (
             organization_id,
@@ -53,8 +57,6 @@ def create_notification(
             _now_iso()
         )
     )
-
-    notification_id = cursor.lastrowid
     connection.commit()
     connection.close()
 

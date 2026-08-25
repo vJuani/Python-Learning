@@ -6,7 +6,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import (
     TenantError,
     require_organization_id,
@@ -182,7 +185,8 @@ def insert_wallet_movement(
                     "Source agent was not found in this organization."
                 )
 
-        cursor.execute(
+        movement_id = execute_insert(
+            cursor,
             """
             INSERT INTO agent_wallet_movements (
                 organization_id,
@@ -216,8 +220,6 @@ def insert_wallet_movement(
                 _now_iso(),
             ),
         )
-
-        movement_id = cursor.lastrowid
         connection.commit()
 
     except Exception:

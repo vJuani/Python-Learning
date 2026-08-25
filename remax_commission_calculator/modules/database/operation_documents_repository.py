@@ -4,7 +4,10 @@ Private operation documents repository.
 
 from datetime import datetime
 
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import require_organization_id
 
 
@@ -224,7 +227,8 @@ def _insert_document(
     uploaded_by_user_id,
     now,
 ):
-    cursor.execute(
+    return execute_insert(
+        cursor,
         """
         INSERT INTO operation_documents (
             organization_id,
@@ -253,7 +257,6 @@ def _insert_document(
             now,
         ),
     )
-    return cursor.lastrowid
 
 
 def upsert_operation_document(

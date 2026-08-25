@@ -4,3 +4,4 @@ python-dotenv==1.0.1
 gunicorn==23.0.0
 reportlab==5.0.1
 openpyxl==3.1.5
+psycopg[binary]==3.2.13

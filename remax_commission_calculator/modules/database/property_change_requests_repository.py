@@ -1,6 +1,9 @@
 from datetime import datetime
 
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import (
     TenantError,
     require_organization_id
@@ -194,7 +197,8 @@ def create_property_change_request(
             "A pending change request already exists for this property."
         )
 
-    cursor.execute(
+    request_id = execute_insert(
+        cursor,
         """
         INSERT INTO property_change_requests (
             organization_id,
@@ -226,7 +230,6 @@ def create_property_change_request(
         )
     )
 
-    request_id = cursor.lastrowid
     connection.commit()
     connection.close()
 

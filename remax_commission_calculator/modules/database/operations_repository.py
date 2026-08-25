@@ -1,4 +1,7 @@
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import (
     TenantError,
     assert_operation_pair_in_organization,
@@ -151,7 +154,8 @@ def add_operation(
         require_property_owner=require_property_owner
     )
 
-    cursor.execute(
+    operation_id = execute_insert(
+        cursor,
         """
         INSERT INTO operations (
             operation_date,
@@ -208,8 +212,6 @@ def add_operation(
             invoice_full_commission
         )
     )
-
-    operation_id = cursor.lastrowid
 
     connection.commit()
     connection.close()

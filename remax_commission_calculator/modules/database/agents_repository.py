@@ -1,6 +1,9 @@
 from datetime import datetime
 
-from .connection import get_connection
+from .connection import (
+    execute_insert,
+    get_connection,
+)
 from .tenant import (
     TenantError,
     require_organization_id,
@@ -237,7 +240,8 @@ def add_agent(
             organization_id,
         )
 
-        cursor.execute(
+        agent_id = execute_insert(
+            cursor,
             """
             INSERT INTO agents (
                 name,
@@ -260,8 +264,6 @@ def add_agent(
                 team_leader_agent_id,
             )
         )
-
-        agent_id = cursor.lastrowid
         connection.commit()
 
     except Exception:
