@@ -51,6 +51,42 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
+    document.querySelectorAll("details.nav-dropdown").forEach(function (dropdown) {
+        dropdown.addEventListener("toggle", function () {
+            if (!dropdown.open) {
+                return;
+            }
+
+            document.querySelectorAll("details.nav-dropdown[open]").forEach(function (other) {
+                if (other !== dropdown) {
+                    other.open = false;
+                }
+            });
+        });
+    });
+
+    document.addEventListener("click", function (event) {
+        var target = event.target;
+
+        if (target.closest && target.closest("details.nav-dropdown")) {
+            return;
+        }
+
+        document.querySelectorAll("details.nav-dropdown[open]").forEach(function (dropdown) {
+            dropdown.open = false;
+        });
+    });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key !== "Escape") {
+            return;
+        }
+
+        document.querySelectorAll("details.nav-dropdown[open]").forEach(function (dropdown) {
+            dropdown.open = false;
+        });
+    });
+
     var currencySelect = document.getElementById("currency");
     var exchangeGroup = document.getElementById("exchange-rate-group");
     var exchangeInput = document.getElementById("exchange_rate");
