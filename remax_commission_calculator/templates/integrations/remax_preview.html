@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('remax_export_preview_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('remax_export_preview_title') }}</h2>
+        <p>
+            {% if preview.filename %}{{ preview.filename }} · {% endif %}
+            {{ t('remax_export_agent_label') }}:
+            <strong>{{ preview.agent.name }}</strong>
+            ·
+            {{ t('csv_import_listing_provider') }}:
+            <strong>remax_web</strong>
+        </p>
+        <p class="field-help">{{ t('remax_export_currency_note') }}</p>
+    </div>
+
+    <div class="page-actions">
+        <form method="post" action="{{ url_for('remax_export_cancel') }}" style="display:inline;">
+            <input type="hidden" name="batch_id" value="{{ batch_id }}">
+            <button type="submit" class="btn btn-secondary">{{ t('csv_import_cancel') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('remax_export_confirm') }}" style="display:inline;">
+            <input type="hidden" name="batch_id" value="{{ batch_id }}">
+            <button
+                type="submit"
+                class="btn btn-primary"
+                {% if not preview.can_confirm %}disabled{% endif %}
+            >
+                {{ t('csv_import_confirm') }}
+            </button>
+        </form>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('csv_import_summary') }}</h3>
+    </div>
+    <ul class="summary-list">
+        <li>{{ t('csv_import_rows_valid') }}: {{ preview.summary.rows_valid }} / {{ preview.summary.rows_total }}</li>
+        <li>
+            {{ t('csv_import_properties') }}:
+            {{ t('csv_import_new') }} {{ preview.summary.properties_new }},
+            {{ t('csv_import_updates') }} {{ preview.summary.properties_update }}
+        </li>
+        <li>{{ t('csv_import_errors') }}: {{ preview.summary.errors }}</li>
+        <li>{{ t('csv_import_warnings') }}: {{ preview.summary.warnings }}</li>
+    </ul>
+    {% if not preview.can_confirm %}
+    <p class="flash-message flash-error">{{ t('remax_export_blocked') }}</p>
+    {% endif %}
+</section>
+
+{% if preview.issues %}
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('csv_import_issues') }}</h3>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('csv_import_errors') }}</th>
+                    <th>Code</th>
+                    <th>Row</th>
+                    <th>MLSID</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for issue in preview.issues %}
+                <tr>
+                    <td>{{ issue.severity }}</td>
+                    <td>{{ issue.code }}</td>
+                    <td>{{ issue.row_number or '—' }}</td>
+                    <td>{{ issue.mlsid or '—' }}</td>
+                    <td>{{ issue.message }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('csv_import_properties') }}</h3>
+    </div>
+    <form
+        method="post"
+        action="{{ url_for('remax_export_resolve', batch_id=batch_id) }}"
+    >
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>MLSID</th>
+                        <th>{{ t('address') }}</th>
+                        <th>{{ t('remax_export_locality') }}</th>
+                        <th>{{ t('jurisdiction') }}</th>
+                        <th>{{ t('listing_status') }}</th>
+                        <th>{{ t('remax_export_property_type') }}</th>
+                        <th>{{ t('property_listing_purpose') }}</th>
+                        <th>{{ t('remax_export_price') }}</th>
+                        <th>%</th>
+                        <th>{{ t('csv_import_action_create') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prop in preview.properties %}
+                    <tr>
+                        <td>{{ prop.mlsid }}</td>
+                        <td>{{ prop.address }}</td>
+                        <td>{{ prop.locality or '—' }}</td>
+                        <td>
+                            <select
+                                name="jurisdiction__{{ prop.mlsid }}"
+                                class="form-input"
+                            >
+                                <option value="">{{ t('remax_export_pick_jurisdiction') }}</option>
+                                {% for item in jurisdictions %}
+                                <option
+                                    value="{{ item }}"
+                                    {% if prop.jurisdiction == item %}selected{% endif %}
+                                >{{ item }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="field-help">{{ prop.jurisdiction_source or '' }}</small>
+                        </td>
+                        <td>
+                            {{ prop.status_raw or '—' }}
+                            →
+                            {{ prop.status or '—' }}
+                        </td>
+                        <td>
+                            <div>{{ prop.property_type_raw or '—' }}</div>
+                            <select
+                                name="property_type__{{ prop.mlsid }}"
+                                class="form-input"
+                            >
+                                <option value="">{{ t('remax_export_pick_property_type') }}</option>
+                                {% for item in property_types %}
+                                <option
+                                    value="{{ item }}"
+                                    {% if prop.property_type == item %}selected{% endif %}
+                                >{{ t('property_type_' + item) }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td>
+                            {{ prop.purpose_raw or '—' }}
+                            →
+                            {{ prop.listing_purpose or '—' }}
+                        </td>
+                        <td>
+                            {% if prop.price is not none %}
+                            {{ prop.price }} {{ prop.currency or '' }}
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                        <td>
+                            C: {{ prop.buyer_side_commission_percent if prop.buyer_side_commission_percent is not none else '—' }}
+                            /
+                            V: {{ prop.seller_side_commission_percent if prop.seller_side_commission_percent is not none else '—' }}
+                        </td>
+                        <td>
+                            {% if prop.action == 'create' %}
+                            {{ t('csv_import_action_create') }}
+                            {% elif prop.action == 'update' %}
+                            {{ t('csv_import_action_update') }}
+                            {% else %}
+                            {{ t('remax_export_blocked_row') }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-secondary">
+                {{ t('remax_export_apply_overrides') }}
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}

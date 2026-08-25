@@ -31,6 +31,18 @@ def _normalize_external_id(value):
     return value
 
 
+def _normalize_optional_url(value):
+    if value is None:
+        return None
+
+    value = str(value).strip()
+
+    if value == "":
+        return None
+
+    return value
+
+
 def _build_listing_dict(row):
     if row is None:
         return None
@@ -44,11 +56,14 @@ def _build_listing_dict(row):
         "external_id": row[5],
         "url": row[6],
         "status": row[7],
-        "created_at": row[8],
-        "updated_at": row[9],
-        "last_synced_at": row[10],
-        "created_by_user_id": row[11],
-        "updated_by_user_id": row[12],
+        "listing_currency": row[8],
+        "buyer_side_commission_percent": row[9],
+        "seller_side_commission_percent": row[10],
+        "created_at": row[11],
+        "updated_at": row[12],
+        "last_synced_at": row[13],
+        "created_by_user_id": row[14],
+        "updated_by_user_id": row[15],
     }
 
 
@@ -62,6 +77,9 @@ LISTINGS_BASE_QUERY = """
         property_external_listings.external_id,
         property_external_listings.url,
         property_external_listings.status,
+        property_external_listings.listing_currency,
+        property_external_listings.buyer_side_commission_percent,
+        property_external_listings.seller_side_commission_percent,
         property_external_listings.created_at,
         property_external_listings.updated_at,
         property_external_listings.last_synced_at,
@@ -141,7 +159,7 @@ def _listing_with_property_from_row(row):
     if listing is None:
         return None
 
-    listing["property_address"] = row[13]
+    listing["property_address"] = row[16]
     return listing
 
 
@@ -155,6 +173,9 @@ LISTING_WITH_PROPERTY_QUERY = """
         property_external_listings.external_id,
         property_external_listings.url,
         property_external_listings.status,
+        property_external_listings.listing_currency,
+        property_external_listings.buyer_side_commission_percent,
+        property_external_listings.seller_side_commission_percent,
         property_external_listings.created_at,
         property_external_listings.updated_at,
         property_external_listings.last_synced_at,
@@ -279,11 +300,15 @@ def create_property_external_listing(
     provider_label=None,
     created_by_user_id=None,
     last_synced_at=None,
+    listing_currency=None,
+    buyer_side_commission_percent=None,
+    seller_side_commission_percent=None,
 ):
     organization_id = require_organization_id(
         organization_id
     )
     external_id = _normalize_external_id(external_id)
+    url = _normalize_optional_url(url)
     now = _now_iso()
 
     connection = get_connection()
@@ -306,12 +331,17 @@ def create_property_external_listing(
                 external_id,
                 url,
                 status,
+                listing_currency,
+                buyer_side_commission_percent,
+                seller_side_commission_percent,
                 created_at,
                 updated_at,
                 last_synced_at,
                 created_by_user_id,
                 updated_by_user_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
             """,
             (
                 organization_id,
@@ -321,6 +351,9 @@ def create_property_external_listing(
                 external_id,
                 url,
                 status,
+                listing_currency,
+                buyer_side_commission_percent,
+                seller_side_commission_percent,
                 now,
                 now,
                 last_synced_at,
@@ -360,11 +393,15 @@ def update_property_external_listing(
     provider_label=None,
     updated_by_user_id=None,
     last_synced_at=None,
+    listing_currency=None,
+    buyer_side_commission_percent=None,
+    seller_side_commission_percent=None,
 ):
     organization_id = require_organization_id(
         organization_id
     )
     external_id = _normalize_external_id(external_id)
+    url = _normalize_optional_url(url)
     now = _now_iso()
 
     connection = get_connection()
@@ -403,6 +440,9 @@ def update_property_external_listing(
                 external_id = ?,
                 url = ?,
                 status = ?,
+                listing_currency = ?,
+                buyer_side_commission_percent = ?,
+                seller_side_commission_percent = ?,
                 updated_at = ?,
                 updated_by_user_id = ?,
                 last_synced_at = COALESCE(?, last_synced_at)
@@ -415,6 +455,9 @@ def update_property_external_listing(
                 external_id,
                 url,
                 status,
+                listing_currency,
+                buyer_side_commission_percent,
+                seller_side_commission_percent,
                 now,
                 updated_by_user_id,
                 last_synced_at,
@@ -532,21 +575,7 @@ def list_synced_listings_for_provider(
 
     cursor.execute(
         f"""
-        SELECT
-            property_external_listings.id,
-            property_external_listings.organization_id,
-            property_external_listings.property_id,
-            property_external_listings.provider,
-            property_external_listings.provider_label,
-            property_external_listings.external_id,
-            property_external_listings.url,
-            property_external_listings.status,
-            property_external_listings.created_at,
-            property_external_listings.updated_at,
-            property_external_listings.last_synced_at,
-            property_external_listings.created_by_user_id,
-            property_external_listings.updated_by_user_id
-        FROM property_external_listings
+        {LISTINGS_BASE_QUERY}
         INNER JOIN properties
             ON properties.id
                 = property_external_listings.property_id

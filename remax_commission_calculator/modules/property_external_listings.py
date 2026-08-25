@@ -37,6 +37,7 @@ LISTING_PROVIDERS = STRUCTURED_PROVIDERS + (PROVIDER_OTHER,)
 STATUS_ACTIVE = "active"
 STATUS_PAUSED = "paused"
 STATUS_RESERVED = "reserved"
+STATUS_NEGOTIATION = "negotiation"
 STATUS_SOLD = "sold"
 STATUS_INACTIVE = "inactive"
 
@@ -44,6 +45,7 @@ LISTING_STATUSES = (
     STATUS_ACTIVE,
     STATUS_PAUSED,
     STATUS_RESERVED,
+    STATUS_NEGOTIATION,
     STATUS_SOLD,
     STATUS_INACTIVE,
 )
@@ -63,6 +65,7 @@ STATUS_LABEL_KEYS = {
     STATUS_ACTIVE: "listing_status_active",
     STATUS_PAUSED: "listing_status_paused",
     STATUS_RESERVED: "listing_status_reserved",
+    STATUS_NEGOTIATION: "listing_status_negotiation",
     STATUS_SOLD: "listing_status_sold",
     STATUS_INACTIVE: "listing_status_inactive",
 }

@@ -169,6 +169,15 @@ def run_sync(integration: dict) -> SyncResult:
                     external_property.listing_status,
                     external_id=external_property.external_id,
                     last_synced_at=synced_at,
+                    listing_currency=(
+                        external_property.listing_currency
+                    ),
+                    buyer_side_commission_percent=(
+                        external_property.buyer_side_commission_percent
+                    ),
+                    seller_side_commission_percent=(
+                        external_property.seller_side_commission_percent
+                    ),
                 )
                 result.listings_created += 1
             else:
@@ -208,6 +217,15 @@ def run_sync(integration: dict) -> SyncResult:
                     status=external_property.listing_status,
                     external_id=external_property.external_id,
                     last_synced_at=synced_at,
+                    listing_currency=(
+                        external_property.listing_currency
+                    ),
+                    buyer_side_commission_percent=(
+                        external_property.buyer_side_commission_percent
+                    ),
+                    seller_side_commission_percent=(
+                        external_property.seller_side_commission_percent
+                    ),
                 )
                 result.listings_updated += 1
 

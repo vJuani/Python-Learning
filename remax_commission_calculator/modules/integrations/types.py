@@ -22,12 +22,15 @@ class ExternalProperty:
     agent_external_id: str
     address: str
     jurisdiction: str
-    url: str
+    url: Optional[str]
     listing_provider: str
     listing_status: str = "active"
     property_type: Optional[str] = None
     listing_price: Optional[float] = None
     listing_purpose: Optional[str] = None
+    listing_currency: Optional[str] = None
+    buyer_side_commission_percent: Optional[float] = None
+    seller_side_commission_percent: Optional[float] = None
 
 
 @dataclass

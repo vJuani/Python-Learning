@@ -214,8 +214,12 @@ from modules.organization_settings import (
 
 from modules.integrations import (
     cancel_csv_upload,
+    cancel_remax_export,
     confirm_csv_upload,
+    confirm_remax_export,
     preview_csv_upload,
+    preview_remax_export,
+    resolve_remax_export_preview,
 )
 
 from modules.config import (
@@ -2667,6 +2671,242 @@ def csv_import_cancel():
     flash_i18n("csv_import_cancelled", "success")
 
     return redirect(url_for("csv_import_upload"))
+
+
+@app.route(
+    "/integrations/remax",
+    methods=["GET", "POST"],
+)
+@admin_required
+def remax_export_upload():
+    organization_id = require_user_organization()
+    agents = get_agents(organization_id)
+
+    if request.method == "GET":
+        return render_template(
+            "integrations/remax_upload.html",
+            agents=agents,
+        )
+
+    agent_id_raw = request.form.get("agent_id", "").strip()
+    upload = request.files.get("remax_file")
+
+    try:
+        agent_id = int(agent_id_raw)
+    except (TypeError, ValueError):
+        flash_i18n("remax_export_agent_required", "error")
+        return redirect(url_for("remax_export_upload"))
+
+    agent = get_agent_record(agent_id, organization_id)
+
+    if agent is None:
+        flash_i18n("remax_export_agent_invalid", "error")
+        return redirect(url_for("remax_export_upload"))
+
+    if upload is None or upload.filename == "":
+        flash_i18n("remax_export_no_file", "error")
+        return redirect(url_for("remax_export_upload"))
+
+    filename = upload.filename or ""
+    lower_name = filename.lower()
+
+    if not (
+        lower_name.endswith(".csv")
+        or lower_name.endswith(".xlsx")
+    ):
+        flash_i18n("remax_export_bad_extension", "error")
+        return redirect(url_for("remax_export_upload"))
+
+    raw = upload.read()
+
+    try:
+        batch = preview_remax_export(
+            organization_id,
+            raw,
+            agent_id=agent_id,
+            filename=filename,
+        )
+    except ValueError as error:
+        if str(error) == "remax_agent_not_found":
+            flash_i18n("remax_export_agent_invalid", "error")
+        else:
+            flash_i18n("remax_export_parse_failed", "error")
+        return redirect(url_for("remax_export_upload"))
+
+    session["remax_export_batch_id"] = batch["id"]
+
+    return redirect(
+        url_for(
+            "remax_export_preview",
+            batch_id=batch["id"],
+        )
+    )
+
+
+@app.route(
+    "/integrations/remax/preview/<batch_id>",
+    methods=["GET"],
+)
+@admin_required
+def remax_export_preview(batch_id):
+    organization_id = require_user_organization()
+
+    from modules.database.csv_import_batches_repository import (
+        get_csv_import_batch,
+    )
+    from modules.property_types import PROPERTY_TYPES
+    from modules.validators import JURISDICTIONS
+
+    batch = get_csv_import_batch(
+        batch_id,
+        organization_id,
+    )
+
+    if batch is None:
+        flash_i18n("remax_export_batch_missing", "error")
+        return redirect(url_for("remax_export_upload"))
+
+    return render_template(
+        "integrations/remax_preview.html",
+        batch_id=batch["id"],
+        preview=batch["preview"],
+        property_types=PROPERTY_TYPES,
+        jurisdictions=JURISDICTIONS,
+    )
+
+
+@app.route(
+    "/integrations/remax/preview/<batch_id>/resolve",
+    methods=["POST"],
+)
+@admin_required
+def remax_export_resolve(batch_id):
+    organization_id = require_user_organization()
+
+    from modules.database.csv_import_batches_repository import (
+        get_csv_import_batch,
+    )
+
+    batch = get_csv_import_batch(
+        batch_id,
+        organization_id,
+    )
+
+    if batch is None:
+        flash_i18n("remax_export_batch_missing", "error")
+        return redirect(url_for("remax_export_upload"))
+
+    overrides = {}
+    source_rows = (
+        (batch["payload"] or {}).get("meta") or {}
+    ).get("source_rows") or []
+
+    for row in source_rows:
+        mlsid = row.get("mlsid") or ""
+        if not mlsid:
+            continue
+
+        jurisdiction = request.form.get(
+            f"jurisdiction__{mlsid}",
+            "",
+        ).strip().upper()
+        property_type = request.form.get(
+            f"property_type__{mlsid}",
+            "",
+        ).strip().lower()
+
+        entry = {}
+        if jurisdiction in ("CABA", "PBA"):
+            entry["jurisdiction"] = jurisdiction
+        if property_type:
+            entry["property_type"] = property_type
+
+        if entry:
+            overrides[mlsid] = entry
+
+    try:
+        resolve_remax_export_preview(
+            organization_id,
+            batch_id,
+            overrides,
+        )
+    except ValueError:
+        flash_i18n("remax_export_batch_missing", "error")
+        return redirect(url_for("remax_export_upload"))
+
+    flash_i18n("remax_export_overrides_applied", "success")
+
+    return redirect(
+        url_for(
+            "remax_export_preview",
+            batch_id=batch_id,
+        )
+    )
+
+
+@app.route(
+    "/integrations/remax/confirm",
+    methods=["POST"],
+)
+@admin_required
+def remax_export_confirm():
+    organization_id = require_user_organization()
+    batch_id = request.form.get("batch_id") or session.get(
+        "remax_export_batch_id"
+    )
+
+    if not batch_id:
+        flash_i18n("remax_export_batch_missing", "error")
+        return redirect(url_for("remax_export_upload"))
+
+    try:
+        result = confirm_remax_export(
+            organization_id,
+            batch_id,
+        )
+    except ValueError as error:
+        code = str(error)
+        if code == "csv_batch_has_blockers":
+            flash_i18n("remax_export_blocked", "error")
+        else:
+            flash_i18n("remax_export_batch_missing", "error")
+        return redirect(url_for("remax_export_upload"))
+
+    session.pop("remax_export_batch_id", None)
+
+    flash_i18n("remax_export_success", "success")
+    flash(
+        (
+            f"properties +{result.properties_created}/"
+            f"~{result.properties_updated}, "
+            f"listings +{result.listings_created}/"
+            f"~{result.listings_updated}, "
+            f"deactivated {result.listings_deactivated}"
+        ),
+        "success",
+    )
+
+    return redirect(url_for("properties_list"))
+
+
+@app.route(
+    "/integrations/remax/cancel",
+    methods=["POST"],
+)
+@admin_required
+def remax_export_cancel():
+    organization_id = require_user_organization()
+    batch_id = request.form.get("batch_id") or session.get(
+        "remax_export_batch_id"
+    )
+
+    if batch_id:
+        cancel_remax_export(organization_id, batch_id)
+
+    session.pop("remax_export_batch_id", None)
+    flash_i18n("remax_export_cancelled", "success")
+
+    return redirect(url_for("remax_export_upload"))
 
 
 @app.route(

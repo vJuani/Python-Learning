@@ -37,6 +37,10 @@
         class="nav-link{% if request.endpoint and request.endpoint.startswith('csv_import_') %} active{% endif %}"
     >{{ t('nav_csv_import') }}</a>
     <a
+        href="{{ url_for('remax_export_upload') }}"
+        class="nav-link{% if request.endpoint and request.endpoint.startswith('remax_export_') %} active{% endif %}"
+    >{{ t('nav_remax_export') }}</a>
+    <a
         href="{{ url_for('team_report') }}"
         class="nav-link{% if request.endpoint and request.endpoint.startswith('team_report') %} active{% endif %}"
     >{{ t('nav_team_report') }}</a>

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('remax_export_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('remax_export_title') }}</h2>
+        <p>{{ t('remax_export_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('csv_import_upload') }}" class="btn btn-secondary">{{ t('nav_csv_import') }}</a>
+        <a href="{{ url_for('organization_settings') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <form
+        class="agent-form"
+        method="post"
+        action="{{ url_for('remax_export_upload') }}"
+        enctype="multipart/form-data"
+    >
+        <div class="form-group">
+            <label for="agent_id">{{ t('remax_export_agent_label') }}</label>
+            <select
+                id="agent_id"
+                name="agent_id"
+                class="form-input"
+                required
+            >
+                <option value="">{{ t('remax_export_agent_placeholder') }}</option>
+                {% for agent in agents %}
+                <option value="{{ agent.id }}">{{ agent.name }}</option>
+                {% endfor %}
+            </select>
+            <small class="field-help">{{ t('remax_export_agent_help') }}</small>
+        </div>
+
+        <div class="form-group">
+            <label for="remax_file">{{ t('remax_export_choose_file') }}</label>
+            <input
+                type="file"
+                id="remax_file"
+                name="remax_file"
+                class="form-input"
+                accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                required
+            >
+            <small class="field-help">{{ t('remax_export_upload_help') }}</small>
+        </div>
+
+        <p class="field-help">{{ t('remax_export_currency_note') }}</p>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {{ t('remax_export_preview_title') }}
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}

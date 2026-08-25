@@ -66,6 +66,7 @@ LISTING_STATUSES = (
     "active",
     "paused",
     "reserved",
+    "negotiation",
     "sold",
     "inactive",
 )
@@ -517,6 +518,7 @@ def rows_to_payload(rows: list[ParsedCsvRow]) -> dict:
                 "property_type": row.property_type,
                 "listing_price": row.price,
                 "listing_purpose": row.listing_purpose,
+                "listing_currency": row.currency,
             }
         )
 
@@ -545,7 +547,7 @@ def payload_to_external(payload: dict) -> tuple[
             agent_external_id=item["agent_external_id"],
             address=item["address"],
             jurisdiction=item["jurisdiction"],
-            url=item["url"],
+            url=item.get("url"),
             listing_provider=item["listing_provider"],
             listing_status=item.get(
                 "listing_status",
@@ -554,6 +556,13 @@ def payload_to_external(payload: dict) -> tuple[
             property_type=item.get("property_type"),
             listing_price=item.get("listing_price"),
             listing_purpose=item.get("listing_purpose"),
+            listing_currency=item.get("listing_currency"),
+            buyer_side_commission_percent=item.get(
+                "buyer_side_commission_percent"
+            ),
+            seller_side_commission_percent=item.get(
+                "seller_side_commission_percent"
+            ),
         )
         for item in payload.get("properties", [])
     ]

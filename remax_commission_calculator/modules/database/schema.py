@@ -808,59 +808,220 @@ def _migrate_operation_documents(cursor):
         )
 
 
-def _migrate_property_external_listings(cursor):
+PROPERTY_EXTERNAL_LISTINGS_CREATE_SQL = """
+    CREATE TABLE property_external_listings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        organization_id INTEGER NOT NULL,
+        property_id INTEGER NOT NULL,
+        provider TEXT NOT NULL,
+        provider_label TEXT,
+        external_id TEXT,
+        url TEXT,
+        status TEXT NOT NULL,
+        listing_currency TEXT,
+        buyer_side_commission_percent REAL,
+        seller_side_commission_percent REAL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_synced_at TEXT,
+        created_by_user_id INTEGER,
+        updated_by_user_id INTEGER,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+        FOREIGN KEY (property_id)
+            REFERENCES properties(id)
+            ON DELETE RESTRICT,
+        FOREIGN KEY (created_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+        FOREIGN KEY (updated_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+
+        CHECK (
+            provider IN (
+                'remax_web',
+                'organization_website',
+                'zonaprop',
+                'argenprop',
+                'mercadolibre',
+                'other'
+            )
+        ),
+        CHECK (
+            status IN (
+                'active',
+                'paused',
+                'reserved',
+                'negotiation',
+                'sold',
+                'inactive'
+            )
+        ),
+        CHECK (
+            listing_currency IS NULL
+            OR listing_currency IN ('USD', 'ARS')
+        ),
+        CHECK (
+            url IS NULL
+            OR url LIKE 'http://%'
+            OR url LIKE 'https://%'
+        )
+    )
+"""
+
+
+def _property_external_listings_sql(cursor):
     cursor.execute(
         """
-        CREATE TABLE IF NOT EXISTS property_external_listings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            organization_id INTEGER NOT NULL,
-            property_id INTEGER NOT NULL,
-            provider TEXT NOT NULL,
-            provider_label TEXT,
-            external_id TEXT,
-            url TEXT NOT NULL,
-            status TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            last_synced_at TEXT,
-            created_by_user_id INTEGER,
-            updated_by_user_id INTEGER,
+        SELECT sql
+        FROM sqlite_master
+        WHERE type = 'table'
+            AND name = 'property_external_listings'
+        """
+    )
+    row = cursor.fetchone()
 
-            FOREIGN KEY (organization_id)
-                REFERENCES organizations(id)
-                ON DELETE RESTRICT,
-            FOREIGN KEY (property_id)
-                REFERENCES properties(id)
-                ON DELETE RESTRICT,
-            FOREIGN KEY (created_by_user_id)
-                REFERENCES users(id)
-                ON DELETE SET NULL,
-            FOREIGN KEY (updated_by_user_id)
-                REFERENCES users(id)
-                ON DELETE SET NULL,
+    if row is None or row[0] is None:
+        return ""
 
-            CHECK (
-                provider IN (
-                    'remax_web',
-                    'organization_website',
-                    'zonaprop',
-                    'argenprop',
-                    'mercadolibre',
-                    'other'
-                )
-            ),
-            CHECK (
-                status IN (
+    return row[0]
+
+
+def _property_external_listings_needs_upgrade(cursor):
+    if not _table_exists(cursor, "property_external_listings"):
+        return False
+
+    sql = _property_external_listings_sql(cursor)
+
+    if "negotiation" not in sql:
+        return True
+
+    if "listing_currency" not in sql:
+        return True
+
+    if "buyer_side_commission_percent" not in sql:
+        return True
+
+    # Legacy NOT NULL url without nullable support.
+    if "url TEXT NOT NULL" in sql:
+        return True
+
+    return False
+
+
+def _rebuild_property_external_listings(cursor):
+    cursor.execute("PRAGMA foreign_keys = OFF")
+
+    cursor.execute(
+        """
+        ALTER TABLE property_external_listings
+        RENAME TO property_external_listings_legacy
+        """
+    )
+
+    cursor.execute(PROPERTY_EXTERNAL_LISTINGS_CREATE_SQL)
+
+    legacy_cols = {
+        row[1]
+        for row in cursor.execute(
+            "PRAGMA table_info(property_external_listings_legacy)"
+        ).fetchall()
+    }
+
+    has_currency = "listing_currency" in legacy_cols
+    has_buyer = "buyer_side_commission_percent" in legacy_cols
+    has_seller = "seller_side_commission_percent" in legacy_cols
+
+    currency_expr = (
+        "listing_currency"
+        if has_currency
+        else "NULL"
+    )
+    buyer_expr = (
+        "buyer_side_commission_percent"
+        if has_buyer
+        else "NULL"
+    )
+    seller_expr = (
+        "seller_side_commission_percent"
+        if has_seller
+        else "NULL"
+    )
+
+    cursor.execute(
+        f"""
+        INSERT INTO property_external_listings (
+            id,
+            organization_id,
+            property_id,
+            provider,
+            provider_label,
+            external_id,
+            url,
+            status,
+            listing_currency,
+            buyer_side_commission_percent,
+            seller_side_commission_percent,
+            created_at,
+            updated_at,
+            last_synced_at,
+            created_by_user_id,
+            updated_by_user_id
+        )
+        SELECT
+            id,
+            organization_id,
+            property_id,
+            provider,
+            provider_label,
+            external_id,
+            CASE
+                WHEN url IS NULL OR url = '' THEN NULL
+                ELSE url
+            END,
+            CASE
+                WHEN status = 'negotiation' THEN 'negotiation'
+                WHEN status IN (
                     'active',
                     'paused',
                     'reserved',
                     'sold',
                     'inactive'
-                )
-            )
-        )
+                ) THEN status
+                ELSE 'inactive'
+            END,
+            {currency_expr},
+            {buyer_expr},
+            {seller_expr},
+            created_at,
+            updated_at,
+            last_synced_at,
+            created_by_user_id,
+            updated_by_user_id
+        FROM property_external_listings_legacy
         """
     )
+
+    cursor.execute(
+        "DROP TABLE property_external_listings_legacy"
+    )
+    cursor.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_property_external_listings(cursor):
+    if not _table_exists(cursor, "property_external_listings"):
+        cursor.execute(
+            PROPERTY_EXTERNAL_LISTINGS_CREATE_SQL.replace(
+                "CREATE TABLE property_external_listings",
+                "CREATE TABLE IF NOT EXISTS property_external_listings",
+                1,
+            )
+        )
+    elif _property_external_listings_needs_upgrade(cursor):
+        _rebuild_property_external_listings(cursor)
 
     cursor.execute(
         """

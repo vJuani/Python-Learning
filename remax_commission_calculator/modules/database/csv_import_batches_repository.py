@@ -69,6 +69,33 @@ def create_csv_import_batch(
     return get_csv_import_batch(batch_id, organization_id)
 
 
+def delete_csv_import_batch(batch_id, organization_id):
+    organization_id = require_organization_id(
+        organization_id
+    )
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        DELETE FROM csv_import_batches
+        WHERE id = ?
+            AND organization_id = ?
+        """,
+        (
+            batch_id,
+            organization_id,
+        ),
+    )
+
+    deleted = cursor.rowcount > 0
+    connection.commit()
+    connection.close()
+
+    return deleted
+
+
 def get_csv_import_batch(batch_id, organization_id):
     organization_id = require_organization_id(
         organization_id
@@ -120,7 +147,13 @@ def get_csv_import_batch(batch_id, organization_id):
     }
 
 
-def delete_csv_import_batch(batch_id, organization_id):
+def update_csv_import_batch(
+    batch_id,
+    organization_id,
+    *,
+    payload,
+    preview,
+):
     organization_id = require_organization_id(
         organization_id
     )
@@ -130,18 +163,25 @@ def delete_csv_import_batch(batch_id, organization_id):
 
     cursor.execute(
         """
-        DELETE FROM csv_import_batches
+        UPDATE csv_import_batches
+        SET payload_json = ?,
+            preview_json = ?
         WHERE id = ?
             AND organization_id = ?
         """,
         (
+            json.dumps(payload),
+            json.dumps(preview),
             batch_id,
             organization_id,
         ),
     )
 
-    deleted = cursor.rowcount > 0
+    updated = cursor.rowcount > 0
     connection.commit()
     connection.close()
 
-    return deleted
+    if not updated:
+        return None
+
+    return get_csv_import_batch(batch_id, organization_id)
