@@ -34,7 +34,7 @@ from modules.database import (
     set_registration_code,
     touch_guest_access
 )
-from modules.config import is_production
+from modules.config import is_deployed
 from modules.email_delivery import (
     send_registration_approved_email,
     send_registration_rejected_email,
@@ -273,7 +273,7 @@ def cancel_pending_registration_for_dev(
     request so the same email can register again.
     Never deletes users.
     """
-    if is_production():
+    if is_deployed():
         return None, "err_dev_only"
 
     target = None

@@ -7,6 +7,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DEV_SECRET_KEY = "dev-secret-key"
+DEPLOYED_ENVS = frozenset({"production", "staging"})
 
 
 def load_dotenv_file():
@@ -29,12 +30,21 @@ def is_production():
     return get_app_env() == "production"
 
 
+def is_staging():
+    return get_app_env() == "staging"
+
+
+def is_deployed():
+    """True for staging and production (not local development)."""
+    return get_app_env() in DEPLOYED_ENVS
+
+
 def is_development():
-    return not is_production()
+    return not is_deployed()
 
 
 def get_flask_debug():
-    if is_production():
+    if is_deployed():
         return False
 
     raw_value = os.environ.get(
@@ -53,14 +63,14 @@ def get_flask_debug():
 def get_secret_key():
     secret_key = os.environ.get("SECRET_KEY")
 
-    if is_production():
+    if is_deployed():
         if (
             not secret_key
             or secret_key == DEFAULT_DEV_SECRET_KEY
         ):
             raise RuntimeError(
                 "SECRET_KEY must be set to a strong random "
-                "value when APP_ENV=production."
+                "value when APP_ENV is staging or production."
             )
 
         return secret_key
@@ -123,7 +133,7 @@ def get_port():
 def get_log_level():
     default_level = (
         "INFO"
-        if is_production()
+        if is_deployed()
         else "DEBUG"
     )
 
@@ -152,7 +162,7 @@ def get_session_cookie_secure(app):
             "on"
         )
 
-    return is_production()
+    return is_deployed()
 
 
 def get_session_cookie_samesite():

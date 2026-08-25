@@ -12,7 +12,7 @@ requests and their verification tokens.
 import argparse
 import sys
 
-from modules.config import apply_config, is_production, load_dotenv_file
+from modules.config import apply_config, is_deployed, load_dotenv_file
 from modules.database import create_tables
 from modules.registration import cancel_pending_registration_for_dev
 from web_app import app
@@ -23,10 +23,11 @@ def main():
     apply_config(app)
     create_tables()
 
-    if is_production():
+    if is_deployed():
         print(
             "Refused: cancel_pending_registration is "
-            "development-only (APP_ENV=production)."
+            "development-only "
+            "(APP_ENV=staging or production)."
         )
         return 1
 
