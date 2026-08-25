@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('csv_import_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('csv_import_title') }}</h2>
+        <p>{{ t('csv_import_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('organization_settings') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <form
+        class="agent-form"
+        method="post"
+        action="{{ url_for('csv_import_upload') }}"
+        enctype="multipart/form-data"
+    >
+        <div class="form-group">
+            <label for="csv_file">{{ t('csv_import_choose_file') }}</label>
+            <input
+                type="file"
+                id="csv_file"
+                name="csv_file"
+                class="form-input"
+                accept=".csv,text/csv"
+                required
+            >
+            <small class="field-help">{{ t('csv_import_upload_help') }}</small>
+        </div>
+
+        <p class="field-help">
+            {{ t('csv_import_integration_provider') }}:
+            <strong>csv_upload</strong>
+            ·
+            {{ t('csv_import_listing_provider') }}:
+            <strong>remax_web</strong> (default)
+        </p>
+        <p class="field-help">{{ t('csv_import_currency_note') }}</p>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {{ t('csv_import_preview_title') }}
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}

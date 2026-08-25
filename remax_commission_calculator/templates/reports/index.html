@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+
+{% block title %}{{ report.labels.title }} | {{ t('app_title') }}{% endblock %}
+
+{% block sidebar %}
+<div class="sidebar-panel">
+    <h3 class="sidebar-title">{{ t('sidebar_filters') }}</h3>
+
+    <form
+        method="get"
+        class="sidebar-filter-form report-toolbar-form"
+        action="{{ url_for('reports_index') }}"
+        id="reports-filter-form"
+    >
+        <input type="hidden" name="view" value="{{ report.view }}">
+
+        <div class="report-toolbar-fields">
+            {% if report.view != 'monthly' %}
+            <label class="report-field">
+                <span>{{ report.labels.period_mode }}</span>
+                <select name="period_mode" id="reports-period-mode">
+                    <option value="all" {% if report.form.period_mode == 'all' %}selected{% endif %}>{{ report.labels.period_all }}</option>
+                    <option value="month" {% if report.form.period_mode == 'month' %}selected{% endif %}>{{ report.labels.period_month }}</option>
+                    <option value="year" {% if report.form.period_mode == 'year' %}selected{% endif %}>{{ report.labels.period_year }}</option>
+                    <option value="range" {% if report.form.period_mode == 'range' %}selected{% endif %}>{{ report.labels.period_range }}</option>
+                </select>
+            </label>
+            {% else %}
+            <input type="hidden" name="period_mode" value="month">
+            {% endif %}
+
+            <label class="report-field" id="reports-month-field" {% if report.view != 'monthly' and report.form.period_mode != 'month' %}hidden{% endif %}>
+                <span>{{ t('reports_filter_month') }}</span>
+                <input
+                    type="month"
+                    name="month_year"
+                    value="{{ report.form.month_year }}"
+                >
+            </label>
+
+            <label class="report-field" id="reports-year-field" {% if report.view != 'monthly' and report.form.period_mode != 'year' %}hidden{% endif %}>
+                <span>{{ t('reports_filter_year') }}</span>
+                <select name="year">
+                    {% for year in report.years %}
+                    <option
+                        value="{{ year }}"
+                        {% if report.form.year == year %}selected{% endif %}
+                    >{{ year }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="report-field" id="reports-date-from-field" {% if report.form.period_mode != 'range' %}hidden{% endif %}>
+                <span>{{ t('reports_filter_date_from') }}</span>
+                <input
+                    type="date"
+                    name="date_from"
+                    value="{{ report.form.date_from }}"
+                >
+            </label>
+
+            <label class="report-field" id="reports-date-to-field" {% if report.form.period_mode != 'range' %}hidden{% endif %}>
+                <span>{{ t('reports_filter_date_to') }}</span>
+                <input
+                    type="date"
+                    name="date_to"
+                    value="{{ report.form.date_to }}"
+                >
+            </label>
+
+            <label class="report-field">
+                <span>{{ t('reports_filter_agent') }}</span>
+                <select name="agent_id" {% if is_agent() %}disabled{% endif %}>
+                    {% if not is_agent() %}
+                    <option value="">{{ t('reports_all') }}</option>
+                    {% endif %}
+                    {% for agent in report.agents %}
+                    <option
+                        value="{{ agent.id }}"
+                        {% if report.form.agent_id == agent.id %}selected{% endif %}
+                    >{{ agent.name }}</option>
+                    {% endfor %}
+                </select>
+                {% if is_agent() and report.form.agent_id %}
+                <input type="hidden" name="agent_id" value="{{ report.form.agent_id }}">
+                {% endif %}
+            </label>
+
+            {% if report.view == 'general' or report.view == 'invoiced' %}
+            <label class="report-field">
+                <span>{{ t('reports_filter_status') }}</span>
+                <select name="status">
+                    <option value="">{{ t('reports_official_approved') }}</option>
+                    <option value="approved" {% if report.form.status == 'approved' %}selected{% endif %}>{{ t('status_approved') }}</option>
+                    <option value="pending" {% if report.form.status == 'pending' %}selected{% endif %}>{{ t('status_pending') }}</option>
+                    <option value="draft" {% if report.form.status == 'draft' %}selected{% endif %}>{{ t('status_draft') }}</option>
+                    <option value="rejected" {% if report.form.status == 'rejected' %}selected{% endif %}>{{ t('status_rejected') }}</option>
+                </select>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="sidebar-filter-actions">
+            <button type="submit" class="btn btn-primary btn-block">{{ t('sidebar_apply_filters') }}</button>
+            <a
+                href="{{ url_for('reports_index', view=report.view) }}"
+                class="btn btn-secondary btn-block"
+            >{{ t('clear_filters') }}</a>
+        </div>
+    </form>
+
+    <div class="sidebar-export-actions">
+        <a
+            class="btn btn-ghost btn-block report-download-btn"
+            href="{{ url_for('reports_pdf', **request.args) }}"
+            title="{{ report.labels.download_pdf }}"
+        >PDF</a>
+        <a
+            class="btn btn-secondary btn-block report-download-btn"
+            href="{{ url_for('reports_xlsx', **request.args) }}"
+            title="{{ report.labels.download_xlsx }}"
+        >Excel</a>
+    </div>
+
+    {% if report.active_filters %}
+    <p class="report-active-filters">
+        {{ report.labels.filters_applied }}:
+        {{ report.active_filters | join(' · ') }}
+    </p>
+    {% endif %}
+    <p class="field-help report-official-note">{{ report.labels.official_note }}</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="page-header report-page-header">
+    <div class="page-header-text">
+        <h2>{{ report.labels.title }}</h2>
+        <p>{{ report.labels.subtitle }}</p>
+        {% if report.view == 'uninvoiced' %}
+        <p class="field-help">{{ t('reports_uninvoiced_help') }}</p>
+        {% endif %}
+    </div>
+</section>
+
+<nav class="report-tabs" aria-label="{{ report.labels.title }}">
+    <a
+        class="report-tab{% if report.view == 'general' %} active{% endif %}"
+        href="{{ url_for('reports_index', view='general') }}"
+    >{{ report.labels.view_general }}</a>
+    <a
+        class="report-tab{% if report.view == 'monthly' %} active{% endif %}"
+        href="{{ url_for('reports_index', view='monthly') }}"
+    >{{ report.labels.view_monthly }}</a>
+    <a
+        class="report-tab{% if report.view == 'invoiced' %} active{% endif %}"
+        href="{{ url_for('reports_index', view='invoiced') }}"
+    >{{ report.labels.view_invoiced }}</a>
+    <a
+        class="report-tab{% if report.view == 'uninvoiced' %} active{% endif %}"
+        href="{{ url_for('reports_index', view='uninvoiced') }}"
+    >{{ report.labels.view_uninvoiced }}</a>
+</nav>
+
+{% if report.errors %}
+<section class="panel">
+    <ul class="flash-list">
+        {% for error in report.errors %}
+        <li>{{ error }}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<section class="stats-grid" aria-label="{{ report.labels.title }}">
+    <article class="stat-card stat-card-accent">
+        <span class="stat-label">{{ report.labels.operations_count }}</span>
+        <strong class="stat-value">{{ report.metrics.operations_count }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ report.labels.approved_count }}</span>
+        <strong class="stat-value">{{ report.metrics.approved_count }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ report.labels.pending_count }}</span>
+        <strong class="stat-value">{{ report.metrics.pending_count }}</strong>
+    </article>
+    <article class="stat-card stat-card-accent">
+        <span class="stat-label">{{ report.labels.volume_usd }}</span>
+        <strong class="stat-value money">{{ report.metrics.volume_usd|money }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ report.labels.total_commission }}</span>
+        <strong class="stat-value money">{{ report.metrics.total_commission|money }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ report.labels.agent_payments }}</span>
+        <strong class="stat-value money">{{ report.metrics.agent_payments|money }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ report.labels.office_net }}</span>
+        <strong class="stat-value money">{{ report.metrics.office_net|money }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ report.labels.vat_total }}</span>
+        <strong class="stat-value money">{{ report.metrics.vat_total|money }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ report.labels.properties_count }}</span>
+        <strong class="stat-value">{{ report.metrics.properties_count }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ report.labels.average_commission }}</span>
+        <strong class="stat-value money">{{ report.metrics.average_commission|money }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ report.labels.invoiced_count }}</span>
+        <strong class="stat-value">{{ report.metrics.invoiced_count }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ report.labels.not_invoiced_count }}</span>
+        <strong class="stat-value">{{ report.metrics.not_invoiced_count }}</strong>
+    </article>
+</section>
+
+{% if report.show_charts %}
+<section class="panel" id="reports-charts-panel">
+    <div class="panel-header">
+        <h3>{{ report.labels.charts_title }}</h3>
+    </div>
+    <p id="reports-charts-fallback" class="field-help" hidden>
+        {{ report.labels.charts_unavailable }}
+    </p>
+    <div class="report-charts-grid" id="reports-charts-grid">
+        <div class="report-chart-card">
+            <h4>{{ report.labels.chart_commissions_month }}</h4>
+            <canvas id="chart-commissions-month" aria-label="{{ report.labels.chart_commissions_month }}"></canvas>
+        </div>
+        <div class="report-chart-card">
+            <h4>{{ report.labels.chart_operations_month }}</h4>
+            <canvas id="chart-operations-month" aria-label="{{ report.labels.chart_operations_month }}"></canvas>
+        </div>
+        <div class="report-chart-card">
+            <h4>{{ report.labels.chart_agent_ranking }}</h4>
+            <canvas id="chart-agent-ranking" aria-label="{{ report.labels.chart_agent_ranking }}"></canvas>
+        </div>
+        <div class="report-chart-card">
+            <h4>{{ report.labels.chart_status }}</h4>
+            <canvas id="chart-status" aria-label="{{ report.labels.chart_status }}"></canvas>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<div class="dashboard-grid">
+    <section class="panel">
+        <div class="panel-header">
+            <h3>{{ report.labels.ranking_title }}</h3>
+        </div>
+        {% if report.agent_ranking %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>{{ report.labels.col_rank }}</th>
+                        <th>{{ report.labels.col_agent }}</th>
+                        <th>{{ report.labels.col_operations }}</th>
+                        <th>{{ report.labels.col_commission }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in report.agent_ranking %}
+                    <tr>
+                        <td>{{ item.rank }}</td>
+                        <td>{{ item.agent_name }}</td>
+                        <td>{{ item.operations_count }}</td>
+                        <td class="money">{{ item.total_commission|money }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="field-help">{{ report.labels.no_operations }}</p>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <div class="panel-header">
+            <h3>{{ report.labels.monthly_title }}</h3>
+        </div>
+        {% if report.monthly_series %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>{{ report.labels.col_month }}</th>
+                        <th>{{ report.labels.col_operations }}</th>
+                        <th>{{ report.labels.col_volume }}</th>
+                        <th>{{ report.labels.col_commission }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in report.monthly_series %}
+                    <tr>
+                        <td>{{ item.month }}</td>
+                        <td>{{ item.operations_count }}</td>
+                        <td class="money">{{ item.volume_usd|money }}</td>
+                        <td class="money">{{ item.total_commission|money }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="field-help">{{ report.labels.no_operations }}</p>
+        {% endif %}
+    </section>
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ report.labels.operations_title }}</h3>
+    </div>
+    {% if report.operations %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ report.labels.col_id }}</th>
+                    <th>{{ report.labels.col_date }}</th>
+                    <th>{{ report.labels.col_agent }}</th>
+                    <th>{{ report.labels.col_property }}</th>
+                    <th>{{ report.labels.col_status }}</th>
+                    <th>{{ report.labels.col_invoiced }}</th>
+                    <th>{{ report.labels.col_currency }}</th>
+                    <th>{{ report.labels.col_original_amount }}</th>
+                    <th>{{ report.labels.col_sale_price_usd }}</th>
+                    <th>{{ report.labels.col_commission }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in report.operations %}
+                <tr>
+                    <td>{{ item.id }}</td>
+                    <td>{{ item.date }}</td>
+                    <td>{{ item.agent }}</td>
+                    <td>{{ item.property }}</td>
+                    <td>{{ item.status_label }}</td>
+                    <td>{{ item.was_invoiced_label }}</td>
+                    <td>{{ item.currency }}</td>
+                    <td class="money">
+                        {% if item.show_fx %}
+                        {{ item.currency }} {{ '%.2f'|format(item.original_amount) }}
+                        <span class="field-help">FX {{ '%.4f'|format(item.exchange_rate) }}</span>
+                        {% else %}
+                        {{ item.original_amount|money }}
+                        {% endif %}
+                    </td>
+                    <td class="money">{{ item.sale_price|money }}</td>
+                    <td class="money">{{ item.total_commission|money }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="field-help">{{ report.labels.no_operations }}</p>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var modeSelect = document.getElementById("reports-period-mode");
+    var monthField = document.getElementById("reports-month-field");
+    var yearField = document.getElementById("reports-year-field");
+    var fromField = document.getElementById("reports-date-from-field");
+    var toField = document.getElementById("reports-date-to-field");
+
+    function syncPeriodFields() {
+        if (!modeSelect) {
+            return;
+        }
+
+        var mode = modeSelect.value;
+        if (monthField) {
+            monthField.hidden = mode !== "month";
+        }
+        if (yearField) {
+            yearField.hidden = mode !== "year";
+        }
+        if (fromField) {
+            fromField.hidden = mode !== "range";
+        }
+        if (toField) {
+            toField.hidden = mode !== "range";
+        }
+    }
+
+    if (modeSelect) {
+        modeSelect.addEventListener("change", syncPeriodFields);
+        syncPeriodFields();
+    }
+})();
+</script>
+{% if report.show_charts %}
+<script>
+window.__reportsChartData = {{ report.charts | tojson }};
+</script>
+<script
+    src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+    crossorigin="anonymous"
+    onerror="window.__chartJsFailed = true;"
+></script>
+<script src="{{ url_for('static', filename='js/reports.js') }}"></script>
+{% endif %}
+{% endblock %}

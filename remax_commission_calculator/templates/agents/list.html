@@ -2,6 +2,35 @@
 
 {% block title %}{{ t('agents_title') }} | {{ t('app_title') }}{% endblock %}
 
+{% block sidebar %}
+<div class="sidebar-panel">
+    <h3 class="sidebar-title">{{ t('search_agents') }}</h3>
+
+    <form class="sidebar-filter-form search-form" method="get" action="{{ url_for('agents_list') }}">
+        <div class="form-group">
+            <label for="agent-search-q">{{ t('search_by_id_or_name') }}</label>
+            <input
+                type="text"
+                id="agent-search-q"
+                name="q"
+                class="form-input"
+                placeholder="{{ t('search_by_id_or_name') }}"
+                value="{{ search_query }}"
+            >
+        </div>
+
+        <div class="sidebar-filter-actions">
+            <button type="submit" class="btn btn-primary btn-block">{{ t('search') }}</button>
+            {% if search_query %}
+            <a href="{{ url_for('agents_list') }}" class="btn btn-secondary btn-block">{{ t('clear') }}</a>
+            {% endif %}
+        </div>
+    </form>
+
+    <p class="sidebar-count">{{ agent_count }} {{ t('found') }}</p>
+</div>
+{% endblock %}
+
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
@@ -15,28 +44,6 @@
         {% endif %}
         <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
-</section>
-
-<section class="panel">
-    <div class="panel-header">
-        <h3>{{ t('search_agents') }}</h3>
-        <span class="badge">{{ agent_count }} {{ t('found') }}</span>
-    </div>
-
-    <form class="search-form" method="get" action="{{ url_for('agents_list') }}">
-        <input
-            type="text"
-            name="q"
-            class="form-input"
-            placeholder="{{ t('search_by_id_or_name') }}"
-            value="{{ search_query }}"
-        >
-        <button type="submit" class="btn btn-primary">{{ t('search') }}</button>
-
-        {% if search_query %}
-        <a href="{{ url_for('agents_list') }}" class="btn btn-secondary">{{ t('clear') }}</a>
-        {% endif %}
-    </form>
 </section>
 
 <section class="panel">
@@ -64,6 +71,12 @@
                         <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
                     </td>
                     <td class="table-actions">
+                        <a
+                            href="{{ url_for('agents_detail', agent_id=agent.id) }}"
+                            class="btn btn-small btn-secondary"
+                        >
+                            {{ t('view') }}
+                        </a>
                         {% if is_admin() %}
                         <a
                             href="{{ url_for('agents_edit', agent_id=agent.id) }}"

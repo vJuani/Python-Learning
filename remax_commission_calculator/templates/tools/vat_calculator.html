@@ -213,9 +213,9 @@
     {% endif %}
 </form>
 
-{% if can_manage_vat_docs and source_operation %}
+{% if can_manage_documents and source_operation %}
 {% with operation=source_operation %}
-{% include "operations/_vat_documents.html" %}
+{% include "operations/_documents.html" %}
 {% endwith %}
 {% endif %}
 {% endblock %}

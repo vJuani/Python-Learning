@@ -2,6 +2,13 @@
 
 {% block title %}{{ t('search_title') }} | {{ t('app_title') }}{% endblock %}
 
+{% block sidebar %}
+<div class="sidebar-panel">
+    <h3 class="sidebar-title">{{ t('nav_search') }}</h3>
+    {% include "_sidebar_search.html" %}
+</div>
+{% endblock %}
+
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
@@ -12,19 +19,6 @@
     <div class="page-actions">
         <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
-</section>
-
-<section class="panel">
-    <form class="search-form global-search-form" method="get" action="{{ url_for('search_results') }}">
-        <input
-            type="text"
-            name="q"
-            class="form-input"
-            placeholder="{{ t('search_placeholder') }}"
-            value="{{ query }}"
-        >
-        <button type="submit" class="btn btn-primary">{{ t('search') }}</button>
-    </form>
 </section>
 
 {% if not has_query %}
@@ -112,6 +106,7 @@
                     <td>{{ property_data.address }}</td>
                     <td><span class="type-tag badge-{{ property_data.jurisdiction|lower }}">{{ property_data.jurisdiction }}</span></td>
                     <td class="table-actions">
+                        <a href="{{ url_for('properties_detail', property_id=property_data.id) }}" class="btn btn-small btn-secondary">{{ t('property_view') }}</a>
                         {% if can_write() %}
                         <a href="{{ url_for('properties_edit', property_id=property_data.id) }}" class="btn btn-small btn-edit">{{ t('edit') }}</a>
                         {% endif %}

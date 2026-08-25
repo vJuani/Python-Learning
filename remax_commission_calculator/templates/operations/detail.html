@@ -14,6 +14,10 @@
         <a href="{{ url_for('operations_edit', operation_id=operation.db_id) }}" class="btn btn-edit">{{ t('edit') }}</a>
         {% endif %}
         <a
+            href="{{ url_for('operations_summary', operation_id=operation.db_id) }}"
+            class="btn btn-primary"
+        >{{ t('op_summary_open') }}</a>
+        <a
             href="{{ url_for('vat_calculator', operation_id=operation.db_id) }}"
             class="btn btn-secondary"
         >{{ t('vat_calc_open_from_operation') }}</a>
@@ -34,10 +38,18 @@
     </p>
     {% endif %}
 
+    {% if show_readiness_checklist %}
+    {% include "operations/_readiness_checklist.html" %}
+    {% endif %}
+
     {% if can_submit_operation %}
     <form method="post" action="{{ url_for('operations_submit', operation_id=operation.db_id) }}" class="form-actions">
         <button type="submit" class="btn btn-edit">{{ t('submit_for_approval') }}</button>
     </form>
+    {% elif show_readiness_checklist %}
+    <div class="form-actions">
+        <button type="button" class="btn btn-edit" disabled>{{ t('submit_for_approval') }}</button>
+    </div>
     {% endif %}
 
     {% if can_review_operation %}
@@ -71,5 +83,5 @@
     {% include "operations/_summary.html" %}
 </section>
 
-{% include "operations/_vat_documents.html" %}
+{% include "operations/_documents.html" %}
 {% endblock %}

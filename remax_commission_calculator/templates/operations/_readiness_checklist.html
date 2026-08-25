@@ -1,0 +1,22 @@
+{% if operation_readiness %}
+<section class="panel readiness-panel">
+    <div class="panel-header">
+        <h3>{{ t('readiness_title') }}</h3>
+    </div>
+
+    <ul class="readiness-checklist">
+        {% for item in operation_readiness.requirements if item.required %}
+        <li class="readiness-item{% if item.complete %} readiness-item-complete{% else %} readiness-item-pending{% endif %}">
+            <span class="readiness-mark" aria-hidden="true">
+                {% if item.complete %}✓{% else %}✗{% endif %}
+            </span>
+            <span>{{ t(item.label_key) }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+
+    {% if not operation_readiness.is_ready %}
+    <p class="field-help readiness-help">{{ t('readiness_help') }}</p>
+    {% endif %}
+</section>
+{% endif %}

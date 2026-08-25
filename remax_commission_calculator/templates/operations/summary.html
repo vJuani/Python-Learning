@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}{{ summary.labels.page_title }} {{ summary.operation.id }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ summary.labels.page_title }}</h2>
+        <p>{{ summary.labels.page_subtitle }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a
+            href="{{ url_for('operations_summary_pdf', operation_id=operation.db_id) }}"
+            class="btn btn-primary"
+        >{{ summary.labels.download_pdf }}</a>
+        <a
+            href="{{ url_for('operations_summary_xlsx', operation_id=operation.db_id) }}"
+            class="btn btn-secondary"
+        >{{ summary.labels.download_xlsx }}</a>
+        <a
+            href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
+            class="btn btn-ghost"
+        >{{ t('op_summary_back_detail') }}</a>
+    </div>
+</section>
+
+<section class="panel op-summary-brand">
+    <div class="op-summary-brand-copy">
+        <strong>{{ summary.brand.app_name }}</strong>
+        <p>{{ summary.brand.slogan }}</p>
+        {% if summary.brand.organization_name %}
+        <p class="field-help">{{ summary.brand.organization_name }}</p>
+        {% endif %}
+    </div>
+    <div class="op-summary-brand-meta">
+        <span class="badge status-{{ summary.operation.status }}">{{ summary.operation.status_label }}</span>
+        <strong>{{ summary.operation.id }}</strong>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ summary.labels.section_operation }}</h3>
+    </div>
+    <div class="summary-grid">
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_operation_id }}</span>
+            <strong>{{ summary.operation.id }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_date }}</span>
+            <strong>{{ summary.operation.date or summary.labels.empty_value }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_status }}</span>
+            <strong>{{ summary.operation.status_label }}</strong>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ summary.labels.section_property }}</h3>
+    </div>
+    <div class="summary-grid">
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_property_id }}</span>
+            <strong>{{ summary.operation.property_id or summary.labels.empty_value }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_property }}</span>
+            <strong>{{ summary.operation.property_address or summary.labels.empty_value }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_jurisdiction }}</span>
+            <strong>{{ summary.operation.jurisdiction or summary.labels.empty_value }}</strong>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ summary.labels.section_agent }}</h3>
+    </div>
+    <div class="summary-grid">
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_agent }}</span>
+            <strong>{{ summary.operation.agent_name or summary.labels.empty_value }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_agent_type }}</span>
+            <strong>{{ summary.operation.agent_type or summary.labels.empty_value }}</strong>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ summary.labels.section_billing }}</h3>
+    </div>
+    <div class="summary-grid">
+        {% for line in summary.billing_lines %}
+        <div class="summary-item{% if line.emphasize %} highlight{% endif %}">
+            <span class="summary-label">{{ line.label }}</span>
+            <strong class="{% if line.kind == 'money' %}money{% if line.emphasize %} money-emphasis{% endif %}{% endif %}">
+                {% if line.kind == 'money' %}
+                    {{ line.value|money(line.currency or 'USD') }}
+                {% elif line.kind == 'rate' %}
+                    {{ line.value|number(4) }}
+                {% elif line.kind == 'percent' %}
+                    {{ line.value|number }}%
+                {% else %}
+                    {{ line.value }}
+                {% endif %}
+            </strong>
+        </div>
+        {% endfor %}
+    </div>
+    <p class="field-help">{{ summary.labels.billing_note }}</p>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ summary.labels.section_commission }}</h3>
+    </div>
+    <div class="summary-grid">
+        {% for line in summary.commission_lines %}
+        <div class="summary-item{% if line.emphasize %} highlight{% endif %}">
+            <span class="summary-label">{{ line.label }}</span>
+            <strong class="{% if line.kind == 'money' %}money{% if line.emphasize %} money-emphasis{% endif %}{% endif %}">
+                {% if line.kind == 'money' %}
+                    {{ line.value|money(line.currency or 'USD') }}
+                {% elif line.kind == 'rate' %}
+                    {{ line.value|number(4) }}
+                {% elif line.kind == 'percent' %}
+                    {{ line.value|number }}%
+                {% else %}
+                    {{ line.value }}
+                {% endif %}
+            </strong>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ summary.labels.section_status }}</h3>
+        <span class="badge status-{{ summary.operation.status }}">{{ summary.operation.status_label }}</span>
+    </div>
+    <div class="summary-grid">
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_created_by }}</span>
+            <strong>{{ summary.people.created_by_name or summary.labels.empty_value }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_reviewed_by }}</span>
+            <strong>{{ summary.people.reviewed_by_name or summary.labels.empty_value }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_reviewed_at }}</span>
+            <strong>{{ summary.operation.reviewed_at or summary.labels.empty_value }}</strong>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">{{ summary.labels.field_rejection_reason }}</span>
+            <strong>{{ summary.operation.rejection_reason or summary.labels.empty_value }}</strong>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ summary.labels.section_documents }}</h3>
+    </div>
+
+    {% if not summary.can_see_documents %}
+    <p class="field-help">{{ summary.labels.documents_hidden }}</p>
+    {% elif summary.documents %}
+    <div class="op-summary-docs">
+        {% for document in summary.documents %}
+        <div class="vat-doc-row">
+            <div class="vat-doc-meta">
+                <strong>{{ document.doc_type_label }}</strong>
+                <p class="field-help">{{ document.original_filename }}</p>
+                <p class="field-help">
+                    {% if document.uploaded_at %}{{ document.uploaded_at }}{% endif %}
+                    {% if document.uploaded_by_name %} · {{ document.uploaded_by_name }}{% endif %}
+                </p>
+            </div>
+            <div class="form-actions vat-doc-actions">
+                <a
+                    href="{{ url_for('operation_document_download', document_id=document.id) }}"
+                    class="btn btn-secondary btn-small"
+                    target="_blank"
+                    rel="noopener"
+                >{{ t('vat_docs_view') }}</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="field-help">{{ summary.labels.no_documents }}</p>
+    {% endif %}
+</section>
+{% endblock %}

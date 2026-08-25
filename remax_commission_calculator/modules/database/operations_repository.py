@@ -42,7 +42,8 @@ OPERATIONS_BASE_QUERY = """
         operations.rejection_reason,
         operations.created_by_user_id,
         operations.reviewed_by_user_id,
-        operations.reviewed_at
+        operations.reviewed_at,
+        operations.invoice_full_commission
 
     FROM operations
 
@@ -97,7 +98,11 @@ def build_operation_dict(rows):
             "rejection_reason": row[25],
             "created_by_user_id": row[26],
             "reviewed_by_user_id": row[27],
-            "reviewed_at": row[28]
+            "reviewed_at": row[28],
+            "invoice_full_commission": (
+                row[29] if len(row) > 29 and row[29]
+                else "no"
+            ),
         })
 
     return operations
@@ -125,7 +130,8 @@ def add_operation(
     status="approved",
     created_by_user_id=None,
     rejection_reason=None,
-    require_property_owner=False
+    require_property_owner=False,
+    invoice_full_commission="no"
 ):
     organization_id = require_organization_id(
         organization_id
@@ -168,12 +174,13 @@ def add_operation(
             exchange_rate,
             status,
             rejection_reason,
-            created_by_user_id
+            created_by_user_id,
+            invoice_full_commission
         )
         VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?
+            ?, ?, ?, ?
         )
         """,
         (
@@ -197,7 +204,8 @@ def add_operation(
             exchange_rate,
             status,
             rejection_reason,
-            created_by_user_id
+            created_by_user_id,
+            invoice_full_commission
         )
     )
 
@@ -371,6 +379,102 @@ DATE_SORTABLE_SQL = (
     "substr(operations.operation_date, 1, 2)"
 )
 
+MONTH_KEY_SQL = (
+    "substr(operations.operation_date, 7, 4) || '-' || "
+    "substr(operations.operation_date, 4, 2)"
+)
+
+
+def build_operation_filter_conditions(
+    organization_id,
+    operation_id=None,
+    agent_name=None,
+    property_address=None,
+    min_amount=None,
+    max_amount=None,
+    date_from=None,
+    date_to=None,
+    was_invoiced=None,
+    jurisdiction=None,
+    agent_id=None,
+    status=None,
+    currency=None,
+    agent_type=None,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+
+    conditions = [
+        "operations.organization_id = ?"
+    ]
+    params = [organization_id]
+
+    if operation_id is not None:
+        conditions.append("operations.id = ?")
+        params.append(operation_id)
+
+    if agent_id is not None:
+        conditions.append("operations.agent_id = ?")
+        params.append(agent_id)
+
+    if agent_name is not None:
+        conditions.append(
+            "LOWER(agents.name) LIKE LOWER(?)"
+        )
+        params.append(f"%{agent_name}%")
+
+    if property_address is not None:
+        conditions.append(
+            "LOWER(properties.address) LIKE LOWER(?)"
+        )
+        params.append(f"%{property_address}%")
+
+    if min_amount is not None:
+        conditions.append("operations.sale_price >= ?")
+        params.append(min_amount)
+
+    if max_amount is not None:
+        conditions.append("operations.sale_price <= ?")
+        params.append(max_amount)
+
+    if date_from is not None:
+        conditions.append(f"{DATE_SORTABLE_SQL} >= ?")
+        params.append(date_from)
+
+    if date_to is not None:
+        conditions.append(f"{DATE_SORTABLE_SQL} <= ?")
+        params.append(date_to)
+
+    if was_invoiced is not None:
+        conditions.append("operations.was_invoiced = ?")
+        params.append(was_invoiced)
+
+    if jurisdiction is not None:
+        conditions.append("properties.jurisdiction = ?")
+        params.append(jurisdiction)
+
+    if currency is not None:
+        conditions.append("operations.currency = ?")
+        params.append(currency)
+
+    if agent_type is not None:
+        conditions.append("agents.type = ?")
+        params.append(agent_type)
+
+    if status is not None:
+        if isinstance(status, (list, tuple)):
+            placeholders = ", ".join("?" for _ in status)
+            conditions.append(
+                f"operations.status IN ({placeholders})"
+            )
+            params.extend(status)
+        else:
+            conditions.append("operations.status = ?")
+            params.append(status)
+
+    return conditions, params
+
 
 def filter_operations(
     organization_id,
@@ -384,7 +488,46 @@ def filter_operations(
     was_invoiced=None,
     jurisdiction=None,
     agent_id=None,
-    status=None
+    status=None,
+    currency=None,
+    agent_type=None,
+):
+    conditions, params = build_operation_filter_conditions(
+        organization_id,
+        operation_id=operation_id,
+        agent_name=agent_name,
+        property_address=property_address,
+        min_amount=min_amount,
+        max_amount=max_amount,
+        date_from=date_from,
+        date_to=date_to,
+        was_invoiced=was_invoiced,
+        jurisdiction=jurisdiction,
+        agent_id=agent_id,
+        status=status,
+        currency=currency,
+        agent_type=agent_type,
+    )
+
+    connection = get_connection()
+    cursor = connection.cursor()
+    query = (
+        OPERATIONS_BASE_QUERY
+        + " WHERE "
+        + " AND ".join(conditions)
+        + " ORDER BY operations.id"
+    )
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    connection.close()
+
+    return build_operation_dict(rows)
+
+
+def list_operations_for_property(
+    property_id,
+    organization_id,
+    agent_id=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -393,97 +536,23 @@ def filter_operations(
     connection = get_connection()
     cursor = connection.cursor()
 
-    conditions = [
-        "operations.organization_id = ?"
-    ]
-    params = [organization_id]
-
-    if operation_id is not None:
-        conditions.append(
-            "operations.id = ?"
-        )
-        params.append(operation_id)
-
-    if agent_id is not None:
-        conditions.append(
-            "operations.agent_id = ?"
-        )
-        params.append(agent_id)
-
-    if agent_name is not None:
-        conditions.append(
-            "LOWER(agents.name) LIKE LOWER(?)"
-        )
-        params.append(
-            f"%{agent_name}%"
-        )
-
-    if property_address is not None:
-        conditions.append(
-            "LOWER(properties.address) "
-            "LIKE LOWER(?)"
-        )
-        params.append(
-            f"%{property_address}%"
-        )
-
-    if min_amount is not None:
-        conditions.append(
-            "operations.sale_price >= ?"
-        )
-        params.append(min_amount)
-
-    if max_amount is not None:
-        conditions.append(
-            "operations.sale_price <= ?"
-        )
-        params.append(max_amount)
-
-    if date_from is not None:
-        conditions.append(
-            f"{DATE_SORTABLE_SQL} >= ?"
-        )
-        params.append(date_from)
-
-    if date_to is not None:
-        conditions.append(
-            f"{DATE_SORTABLE_SQL} <= ?"
-        )
-        params.append(date_to)
-
-    if was_invoiced is not None:
-        conditions.append(
-            "operations.was_invoiced = ?"
-        )
-        params.append(was_invoiced)
-
-    if jurisdiction is not None:
-        conditions.append(
-            "properties.jurisdiction = ?"
-        )
-        params.append(jurisdiction)
-
-    if status is not None:
-        if isinstance(status, (list, tuple)):
-            placeholders = ", ".join(
-                "?" for _ in status
-            )
-            conditions.append(
-                f"operations.status IN ({placeholders})"
-            )
-            params.extend(status)
-        else:
-            conditions.append(
-                "operations.status = ?"
-            )
-            params.append(status)
-
     query = (
         OPERATIONS_BASE_QUERY
-        + " WHERE "
-        + " AND ".join(conditions)
-        + " ORDER BY operations.id"
+        + """
+        WHERE operations.organization_id = ?
+            AND operations.property_id = ?
+        """
     )
+    params = [
+        organization_id,
+        property_id,
+    ]
+
+    if agent_id is not None:
+        query += " AND operations.agent_id = ?"
+        params.append(agent_id)
+
+    query += " ORDER BY operations.id DESC"
 
     cursor.execute(query, params)
     rows = cursor.fetchall()
@@ -546,7 +615,8 @@ def update_operation(
     exchange_rate=1,
     status=None,
     rejection_reason=None,
-    require_property_owner=False
+    require_property_owner=False,
+    invoice_full_commission="no"
 ):
     organization_id = require_organization_id(
         organization_id
@@ -587,7 +657,8 @@ def update_operation(
                 office_total = ?,
                 currency = ?,
                 original_amount = ?,
-                exchange_rate = ?
+                exchange_rate = ?,
+                invoice_full_commission = ?
             WHERE id = ?
                 AND organization_id = ?
             """,
@@ -609,6 +680,7 @@ def update_operation(
                 currency,
                 original_amount,
                 exchange_rate,
+                invoice_full_commission,
                 operation_id,
                 organization_id
             )
@@ -636,7 +708,8 @@ def update_operation(
                 original_amount = ?,
                 exchange_rate = ?,
                 status = ?,
-                rejection_reason = ?
+                rejection_reason = ?,
+                invoice_full_commission = ?
             WHERE id = ?
                 AND organization_id = ?
             """,
@@ -660,6 +733,7 @@ def update_operation(
                 exchange_rate,
                 status,
                 rejection_reason,
+                invoice_full_commission,
                 operation_id,
                 organization_id
             )

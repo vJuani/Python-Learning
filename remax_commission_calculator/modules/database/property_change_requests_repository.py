@@ -30,17 +30,23 @@ def _build_change_dict(row):
         "proposed_address": row[4],
         "proposed_jurisdiction": row[5],
         "proposed_agent_id": row[6],
-        "status": row[7],
-        "rejection_reason": row[8],
-        "reviewed_by_user_id": row[9],
-        "reviewed_at": row[10],
-        "created_at": row[11],
-        "current_address": row[12] if len(row) > 12 else None,
-        "current_jurisdiction": row[13] if len(row) > 13 else None,
-        "current_agent_id": row[14] if len(row) > 14 else None,
-        "current_agent_name": row[15] if len(row) > 15 else None,
-        "proposed_agent_name": row[16] if len(row) > 16 else None,
-        "requester_name": row[17] if len(row) > 17 else None
+        "proposed_property_type": row[7],
+        "proposed_listing_price": row[8],
+        "proposed_listing_purpose": row[9],
+        "status": row[10],
+        "rejection_reason": row[11],
+        "reviewed_by_user_id": row[12],
+        "reviewed_at": row[13],
+        "created_at": row[14],
+        "current_address": row[15] if len(row) > 15 else None,
+        "current_jurisdiction": row[16] if len(row) > 16 else None,
+        "current_agent_id": row[17] if len(row) > 17 else None,
+        "current_property_type": row[18] if len(row) > 18 else None,
+        "current_listing_price": row[19] if len(row) > 19 else None,
+        "current_listing_purpose": row[20] if len(row) > 20 else None,
+        "current_agent_name": row[21] if len(row) > 21 else None,
+        "proposed_agent_name": row[22] if len(row) > 22 else None,
+        "requester_name": row[23] if len(row) > 23 else None,
     }
 
 
@@ -53,6 +59,9 @@ CHANGE_DETAIL_QUERY = """
         property_change_requests.proposed_address,
         property_change_requests.proposed_jurisdiction,
         property_change_requests.proposed_agent_id,
+        property_change_requests.proposed_property_type,
+        property_change_requests.proposed_listing_price,
+        property_change_requests.proposed_listing_purpose,
         property_change_requests.status,
         property_change_requests.rejection_reason,
         property_change_requests.reviewed_by_user_id,
@@ -61,6 +70,9 @@ CHANGE_DETAIL_QUERY = """
         properties.address,
         properties.jurisdiction,
         properties.agent_id,
+        properties.property_type,
+        properties.listing_price,
+        properties.listing_purpose,
         current_agents.name,
         proposed_agents.name,
         requester.username
@@ -123,12 +135,11 @@ def get_pending_change_for_property(
     cursor = connection.cursor()
 
     cursor.execute(
-        """
-        SELECT id
-        FROM property_change_requests
-        WHERE property_id = ?
-            AND organization_id = ?
-            AND status = ?
+        CHANGE_DETAIL_QUERY
+        + """
+        WHERE property_change_requests.property_id = ?
+            AND property_change_requests.organization_id = ?
+            AND property_change_requests.status = ?
         LIMIT 1
         """,
         (
@@ -141,10 +152,7 @@ def get_pending_change_for_property(
     row = cursor.fetchone()
     connection.close()
 
-    if row is None:
-        return None
-
-    return row[0]
+    return _build_change_dict(row)
 
 
 def create_property_change_request(
@@ -153,7 +161,10 @@ def create_property_change_request(
     requested_by_user_id,
     proposed_address,
     proposed_jurisdiction,
-    proposed_agent_id
+    proposed_agent_id,
+    proposed_property_type=None,
+    proposed_listing_price=None,
+    proposed_listing_purpose=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -192,10 +203,13 @@ def create_property_change_request(
             proposed_address,
             proposed_jurisdiction,
             proposed_agent_id,
+            proposed_property_type,
+            proposed_listing_price,
+            proposed_listing_purpose,
             status,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             organization_id,
@@ -204,6 +218,9 @@ def create_property_change_request(
             proposed_address.strip(),
             proposed_jurisdiction.strip(),
             proposed_agent_id,
+            proposed_property_type,
+            proposed_listing_price,
+            proposed_listing_purpose,
             STATUS_PENDING,
             _now_iso()
         )
@@ -263,7 +280,10 @@ def approve_property_change_request(
             property_id,
             proposed_address,
             proposed_jurisdiction,
-            proposed_agent_id
+            proposed_agent_id,
+            proposed_property_type,
+            proposed_listing_price,
+            proposed_listing_purpose
         FROM property_change_requests
         WHERE id = ?
             AND organization_id = ?
@@ -293,7 +313,10 @@ def approve_property_change_request(
         SET
             address = ?,
             jurisdiction = ?,
-            agent_id = ?
+            agent_id = ?,
+            property_type = ?,
+            listing_price = ?,
+            listing_purpose = ?
         WHERE id = ?
             AND organization_id = ?
         """,
@@ -301,6 +324,9 @@ def approve_property_change_request(
             row[1],
             row[2],
             row[3],
+            row[4],
+            row[5],
+            row[6],
             property_id,
             organization_id
         )
@@ -328,8 +354,6 @@ def approve_property_change_request(
     connection.commit()
     connection.close()
 
-    return property_id
-
 
 def reject_property_change_request(
     request_id,
@@ -343,6 +367,8 @@ def reject_property_change_request(
 
     connection = get_connection()
     cursor = connection.cursor()
+
+    now = _now_iso()
 
     cursor.execute(
         """
@@ -360,15 +386,18 @@ def reject_property_change_request(
             STATUS_REJECTED,
             rejection_reason.strip(),
             reviewed_by_user_id,
-            _now_iso(),
+            now,
             request_id,
             organization_id,
             STATUS_PENDING
         )
     )
 
-    updated = cursor.rowcount
+    if cursor.rowcount == 0:
+        connection.close()
+        raise TenantError(
+            "Property change request was not found or is not pending."
+        )
+
     connection.commit()
     connection.close()
-
-    return updated > 0

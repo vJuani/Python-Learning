@@ -23,12 +23,16 @@
 </div>
 {% endif %}
 
+{% include "operations/_readiness_checklist.html" %}
+
 {% if not can_create_operations %}
 <section class="panel">
     <p class="empty-message">
         {{ t('need_agent_property') }}
+        {% if is_admin() %}
         <a href="{{ url_for('agents_list') }}">{{ t('manage_agents') }}</a>
         {{ t('or') }}
+        {% endif %}
         <a href="{{ url_for('properties_list') }}">{{ t('manage_properties') }}</a>.
     </p>
 </section>
@@ -168,6 +172,15 @@
                 <option value="no" {% if form_values.was_invoiced == "no" %}selected{% endif %}>{{ t('no') }}</option>
                 <option value="yes" {% if form_values.was_invoiced == "yes" %}selected{% endif %}>{{ t('yes') }}</option>
             </select>
+        </div>
+
+        <div class="form-group">
+            <label for="invoice_full_commission">{{ t('invoice_full_commission') }}</label>
+            <select id="invoice_full_commission" name="invoice_full_commission" class="form-input" required>
+                <option value="yes" {% if form_values.invoice_full_commission == "yes" %}selected{% endif %}>{{ t('invoice_full_commission_yes') }}</option>
+                <option value="no" {% if form_values.invoice_full_commission != "yes" %}selected{% endif %}>{{ t('invoice_full_commission_no') }}</option>
+            </select>
+            <small class="field-help">{{ t('invoice_full_commission_help') }}</small>
         </div>
 
         <div class="form-group">

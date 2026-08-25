@@ -20,7 +20,8 @@ from modules.database import (
     get_operations,
     get_properties,
     get_property_record,
-    update_operation
+    update_operation,
+    update_operation_status,
 )
 
 from modules.menus import (
@@ -43,7 +44,8 @@ from modules.validators import (
     parse_optional_date,
     parse_optional_positive_float,
     parse_positive_float,
-    validate_date_format
+    validate_date_format,
+    validate_invoice_full_commission,
 )
 
 
@@ -226,7 +228,8 @@ def validate_operation_inputs(
     vat_amount,
     operation_date=None,
     currency="USD",
-    exchange_rate=""
+    exchange_rate="",
+    invoice_full_commission="no",
 ):
     errors = []
     parsed = {}
@@ -318,6 +321,17 @@ def validate_operation_inputs(
         )
     else:
         parsed["was_invoiced"] = was_invoiced
+
+    invoice_error = validate_invoice_full_commission(
+        invoice_full_commission
+    )
+
+    if invoice_error:
+        errors.append(invoice_error)
+    else:
+        parsed["invoice_full_commission"] = (
+            invoice_full_commission
+        )
 
     if was_invoiced == "yes":
         vat_value, vat_error = (
@@ -425,7 +439,11 @@ def prepare_operation_from_form(
         exchange_rate=form_values.get(
             "exchange_rate",
             ""
-        )
+        ),
+        invoice_full_commission=form_values.get(
+            "invoice_full_commission",
+            "no",
+        ),
     )
 
     if len(errors) > 0:
@@ -454,6 +472,10 @@ def prepare_operation_from_form(
     except ValueError as error:
         errors.append(str(error))
         return errors, None, parsed
+
+    operation["invoice_full_commission"] = parsed[
+        "invoice_full_commission"
+    ]
 
     return errors, operation, parsed
 
@@ -497,7 +519,11 @@ def save_calculated_operation(
         ),
         status=status,
         created_by_user_id=created_by_user_id,
-        require_property_owner=require_property_owner
+        require_property_owner=require_property_owner,
+        invoice_full_commission=operation.get(
+            "invoice_full_commission",
+            "no",
+        ),
     )
 
     operation["id"] = (
@@ -507,6 +533,16 @@ def save_calculated_operation(
         f"PROP-{property_id:06d}"
     )
     operation["status"] = status
+
+    if status == "approved":
+        from modules.agent_wallet import (
+            post_wallet_for_approved_operation,
+        )
+
+        post_wallet_for_approved_operation(
+            organization_id,
+            operation_id,
+        )
 
     return operation_id, operation
 
@@ -552,7 +588,11 @@ def update_calculated_operation(
         ),
         status=status,
         rejection_reason=rejection_reason,
-        require_property_owner=require_property_owner
+        require_property_owner=require_property_owner,
+        invoice_full_commission=operation.get(
+            "invoice_full_commission",
+            "no",
+        ),
     )
 
     operation["id"] = (
@@ -565,6 +605,16 @@ def update_calculated_operation(
     if status is not None:
         operation["status"] = status
 
+        from modules.agent_wallet import (
+            sync_wallet_for_operation_status,
+        )
+
+        sync_wallet_for_operation_status(
+            organization_id,
+            operation_id,
+            status,
+        )
+
     return operation
 
 
@@ -572,9 +622,58 @@ def remove_operation(
     operation_id,
     organization_id
 ):
+    from modules.agent_wallet import (
+        reverse_wallet_for_operation,
+    )
+    from modules.database.operations_repository import (
+        get_operation_record,
+    )
+
+    existing = get_operation_record(
+        operation_id,
+        organization_id,
+    )
+
+    if (
+        existing is not None
+        and (existing.get("status") or "") == "approved"
+    ):
+        reverse_wallet_for_operation(
+            organization_id,
+            operation_id,
+        )
+
     delete_operation(
         operation_id,
         organization_id
+    )
+
+
+def change_operation_status(
+    operation_id,
+    organization_id,
+    status,
+    reviewed_by_user_id=None,
+    reviewed_at=None,
+    rejection_reason=None,
+):
+    from modules.agent_wallet import (
+        sync_wallet_for_operation_status,
+    )
+
+    update_operation_status(
+        operation_id,
+        organization_id,
+        status,
+        reviewed_by_user_id=reviewed_by_user_id,
+        reviewed_at=reviewed_at,
+        rejection_reason=rejection_reason,
+    )
+
+    return sync_wallet_for_operation_status(
+        organization_id,
+        operation_id,
+        status,
     )
 
 

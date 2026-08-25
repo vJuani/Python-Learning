@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}{{ property_display_id }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ property_display_id }}</h2>
+        <p>{{ t('property_detail_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        {% if can_edit_property %}
+        <a
+            href="{{ url_for('properties_edit', property_id=property_data.id) }}"
+            class="btn btn-edit"
+        >{{ t('edit') }}</a>
+        {% endif %}
+        <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('property_detail_title') }}</h3>
+        <span class="badge badge-soft">{{ t('property_status_' ~ (property_data.status or 'approved')) }}</span>
+    </div>
+
+    <dl class="access-detail property-detail-grid">
+        <dt>{{ t('address') }}</dt>
+        <dd>{{ property_data.address }}</dd>
+        <dt>{{ t('jurisdiction') }}</dt>
+        <dd>{{ property_data.jurisdiction }}</dd>
+        <dt>{{ t('property_type') }}</dt>
+        <dd>
+            {% if property_data.property_type %}
+            {{ t('property_type_' ~ property_data.property_type) }}
+            {% else %}
+            —
+            {% endif %}
+        </dd>
+        <dt>{{ t('property_listing_price') }}</dt>
+        <dd>
+            {% if property_data.listing_price is not none %}
+            {{ property_data.listing_price|money }}
+            {% else %}
+            —
+            {% endif %}
+        </dd>
+        <dt>{{ t('property_listing_purpose') }}</dt>
+        <dd>
+            {% if property_data.listing_purpose %}
+            {{ t('listing_purpose_' ~ property_data.listing_purpose) }}
+            {% else %}
+            —
+            {% endif %}
+        </dd>
+        <dt>{{ t('agent') }}</dt>
+        <dd>{{ property_data.agent_name or '—' }}</dd>
+        <dt>{{ t('status') }}</dt>
+        <dd>{{ t('property_status_' ~ (property_data.status or 'approved')) }}</dd>
+    </dl>
+
+    {% if property_data.status == 'rejected' and property_data.rejection_reason %}
+    <p class="danger-text">
+        <strong>{{ t('rejection_reason') }}:</strong>
+        {{ property_data.rejection_reason }}
+    </p>
+    {% endif %}
+</section>
+
+{% if pending_change %}
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('property_pending_change_title') }}</h3>
+    </div>
+    <dl class="access-detail">
+        <dt>{{ t('address') }}</dt>
+        <dd>{{ pending_change.proposed_address }}</dd>
+        <dt>{{ t('jurisdiction') }}</dt>
+        <dd>{{ pending_change.proposed_jurisdiction }}</dd>
+        <dt>{{ t('property_listing_price') }}</dt>
+        <dd>
+            {% if pending_change.proposed_listing_price is not none %}
+            {{ pending_change.proposed_listing_price|money }}
+            {% else %}
+            —
+            {% endif %}
+        </dd>
+        <dt>{{ t('property_listing_purpose') }}</dt>
+        <dd>
+            {% if pending_change.proposed_listing_purpose %}
+            {{ t('listing_purpose_' ~ pending_change.proposed_listing_purpose) }}
+            {% else %}
+            —
+            {% endif %}
+        </dd>
+    </dl>
+</section>
+{% endif %}
+
+{% include "properties/_publications_panel.html" %}
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('property_related_operations') }}</h3>
+    </div>
+
+    {% if related_operations %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('id') }}</th>
+                    <th>{{ t('operation_date') }}</th>
+                    <th>{{ t('status') }}</th>
+                    <th>{{ t('actions') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for operation in related_operations %}
+                <tr>
+                    <td>{{ operation.id }}</td>
+                    <td>{{ operation.operation_date }}</td>
+                    <td>
+                        <span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span>
+                    </td>
+                    <td class="table-actions">
+                        <a
+                            href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
+                            class="btn btn-small btn-secondary"
+                        >{{ t('property_view') }}</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p class="empty-state-text">{{ t('property_related_operations_empty') }}</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

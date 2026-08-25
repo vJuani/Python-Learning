@@ -46,10 +46,8 @@ from modules.database import (
     add_agent,
     add_property,
     add_user,
-    count_operations_by_status,
     count_pending_approvals,
     count_pending_registration_requests,
-    count_properties,
     count_unread_notifications,
     create_property_change_request,
     approve_property_change_request,
@@ -69,10 +67,8 @@ from modules.database import (
     delete_agent,
     delete_property,
     delete_user,
-    get_agent_ranking,
     get_agent_record,
     get_agents,
-    get_dashboard_metrics,
     get_operation_record,
     get_organization_settings,
     get_properties,
@@ -82,6 +78,7 @@ from modules.database import (
     get_user_by_username,
     get_users,
     list_guest_accesses,
+    list_operations_for_property,
     list_registration_requests,
     revoke_guest_access,
     set_registration_enabled,
@@ -105,17 +102,31 @@ from modules.vat_billing_calculator import (
     parse_calculator_inputs,
 )
 
-from modules.vat_documents import (
-    DOC_TYPE_AGENT_CLIENT,
-    DOC_TYPE_MARTILLERO_CLIENT,
+from modules.operation_documents import (
     absolute_document_path,
-    documents_by_type_map,
-    get_vat_document,
+    get_operation_document,
+    group_documents_for_ui,
     is_valid_doc_type,
-    list_vat_documents_for_operation,
-    remove_vat_document,
-    upload_or_replace_vat_document,
+    list_operation_documents,
+    remove_operation_document,
+    upload_or_replace_operation_document,
 )
+
+from modules.operation_summary import (
+    build_billing_lines,
+    build_commission_lines,
+    load_operation_summary,
+)
+from modules.pdf_operation_summary import build_operation_summary_pdf
+from modules.excel_operation_summary import build_operation_summary_xlsx
+from modules.organization_reports import load_organization_report
+from modules.pdf_organization_report import build_organization_report_pdf
+from modules.excel_organization_report import build_organization_report_xlsx
+from modules.organization_dashboard import (
+    empty_organization_dashboard,
+    load_organization_dashboard,
+)
+
 
 from modules.i18n import (
     DEFAULT_LANGUAGE,
@@ -130,12 +141,28 @@ from modules.properties import (
     validate_property_filters
 )
 
+from modules.property_external_listings import (
+    PROVIDER_OTHER,
+    PROVIDER_REMAX_WEB,
+    STATUS_ACTIVE,
+    format_property_display_id,
+    get_listing_record,
+    load_property_listings,
+    load_property_listings_for_property,
+    provider_options,
+    remove_listing,
+    save_existing_listing,
+    save_new_listing,
+    status_options,
+)
+
 from modules.search import (
     global_search,
     search_agents
 )
 
 from modules.operations import (
+    change_operation_status,
     get_filtered_operations,
     has_active_operation_filters,
     prepare_operation_from_form,
@@ -148,9 +175,17 @@ from modules.operations import (
 from modules.validators import (
     AGENT_TYPES,
     JURISDICTIONS,
+    parse_positive_float,
     validate_agent_form,
     validate_property_form
 )
+
+from modules.operation_readiness import (
+    OperationNotReadyError,
+    submit_operation_for_approval,
+    validate_operation_readiness,
+)
+from modules.property_types import LISTING_PURPOSES, PROPERTY_TYPES
 
 from modules.workflow import (
     OPERATION_STATUSES,
@@ -175,6 +210,12 @@ from modules.organization_settings import (
     LOGO_EXTENSIONS,
     build_branding_css,
     validate_organization_settings_form
+)
+
+from modules.integrations import (
+    cancel_csv_upload,
+    confirm_csv_upload,
+    preview_csv_upload,
 )
 
 from modules.config import (
@@ -649,6 +690,126 @@ def ensure_property_scope(
     return property_data
 
 
+def ensure_property_view_scope(
+    property_id,
+    organization_id
+):
+    property_data = get_property_record(
+        property_id,
+        organization_id
+    )
+
+    if property_data is None:
+        abort(404)
+
+    scoped_id, scope_blocked = get_agent_scope()
+
+    if scope_blocked:
+        abort(403)
+
+    if (
+        scoped_id is not None
+        and property_data["agent_id"] != scoped_id
+    ):
+        abort(403)
+
+    if get_guest_access() is not None:
+        if property_data.get(
+            "status",
+            PROPERTY_STATUS_APPROVED
+        ) != PROPERTY_STATUS_APPROVED:
+            abort(403)
+
+    return property_data
+
+
+def _default_listing_form():
+    return {
+        "provider": PROVIDER_REMAX_WEB,
+        "url": "",
+        "status": STATUS_ACTIVE,
+        "external_id": "",
+        "provider_label": "",
+    }
+
+
+def _listing_form_template_context(
+    property_data,
+    listing_data=None,
+    errors=None,
+    is_edit=False,
+    listing_conflict=None,
+):
+    language = get_current_language()
+
+    return {
+        "property_data": property_data,
+        "listing_data": listing_data or _default_listing_form(),
+        "provider_options": provider_options(language),
+        "status_options": status_options(language),
+        "errors": localize_form_errors(errors or []),
+        "is_edit": is_edit,
+        "provider_other": PROVIDER_OTHER,
+        "listing_conflict": listing_conflict,
+    }
+
+
+def _property_form_fields_from_request():
+    listing_price_raw = request.form.get(
+        "listing_price",
+        "",
+    ).strip()
+
+    listing_price, _price_error = parse_positive_float(
+        listing_price_raw or None,
+        "Property listing price",
+    )
+
+    return {
+        "address": request.form.get("address", "").strip(),
+        "jurisdiction": request.form.get(
+            "jurisdiction",
+            "",
+        ).strip(),
+        "property_type": request.form.get(
+            "property_type",
+            "",
+        ).strip(),
+        "listing_price_raw": listing_price_raw,
+        "listing_price": listing_price,
+        "listing_purpose": request.form.get(
+            "listing_purpose",
+            "",
+        ).strip(),
+        "agent_id": request.form.get(
+            "agent_id",
+            "",
+        ).strip(),
+    }
+
+
+def _property_form_context(property_data):
+    return {
+        "property_types": PROPERTY_TYPES,
+        "listing_purposes": LISTING_PURPOSES,
+    }
+
+
+def _property_form_data_from_fields(fields, owner_agent_id):
+    return {
+        "address": fields["address"],
+        "jurisdiction": fields["jurisdiction"],
+        "agent_id": owner_agent_id or "",
+        "property_type": fields["property_type"],
+        "listing_price": (
+            fields["listing_price_raw"]
+            if fields["listing_price"] is None
+            else fields["listing_price"]
+        ),
+        "listing_purpose": fields["listing_purpose"],
+    }
+
+
 def ensure_operation_editable(operation):
     if is_admin():
         return
@@ -686,75 +847,75 @@ def resolve_owned_agent_id(form_agent_id):
 
 def get_empty_dashboard_context():
     return {
-        "metrics": {
-            "total_operations": 0,
-            "gross_commission": 0,
-            "office_revenue": 0,
-            "agent_payments": 0,
-            "highest_commission": 0,
-            "average_commission": 0
-        },
-        "agents": [],
-        "agent_count": 0,
-        "property_count": 0,
-        "ranking": [],
-        "workflow_counts": {
-            "draft": 0,
-            "pending": 0,
-            "approved": 0,
-            "rejected": 0
-        }
+        "dashboard": empty_organization_dashboard(
+            language=get_current_language()
+        ),
+        "team_block": None,
     }
 
 
 def get_dashboard_context(
     organization_id,
-    agent_id=None
+    agent_id=None,
+    raw_filters=None,
 ):
-    metrics = get_dashboard_metrics(
-        organization_id,
-        agent_id=agent_id
-    )
-    ranking = get_agent_ranking(
-        organization_id,
-        limit=3,
-        agent_id=agent_id
-    )
+    user = get_current_user()
 
-    if agent_id is None:
-        agents = get_agents(organization_id)
-        properties = get_properties(
-            organization_id
-        )
+    if is_guest_session():
+        role = "guest"
+    elif is_agent(user):
+        role = "agent"
     else:
-        agents = [
-            agent
-            for agent in get_agents(
-                organization_id
-            )
-            if agent["id"] == agent_id
-        ]
-        properties = get_properties(
-            organization_id,
-            agent_id=agent_id
+        role = "admin"
+
+    dashboard = load_organization_dashboard(
+        organization_id,
+        raw_filters or {},
+        language=get_current_language(),
+        scoped_agent_id=agent_id,
+        role=role,
+        can_write=can_write(user),
+        can_manage_approvals=can_approve(user),
+        can_create_operations=can_create_operations(
+            organization_id
+        ),
+    )
+
+    language = get_current_language()
+    welcome_name = ""
+
+    if user is not None:
+        welcome_name = (
+            user.get("agent_name")
+            or user.get("username")
+            or ""
+        ).strip()
+    elif is_guest_session():
+        welcome_name = translate("role_guest", language=language)
+
+    dashboard["welcome_name"] = welcome_name
+
+    team_block = None
+    if (
+        user is not None
+        and not is_guest_session()
+        and agent_id is not None
+    ):
+        from modules.team_reports import (
+            agent_is_team_leader,
+            build_dashboard_team_block,
         )
 
-    workflow_counts = count_operations_by_status(
-        organization_id,
-        agent_id=agent_id
-    )
+        if agent_is_team_leader(organization_id, agent_id):
+            team_block = build_dashboard_team_block(
+                organization_id,
+                agent_id,
+                language=language,
+            )
 
     return {
-        "metrics": metrics,
-        "agents": agents,
-        "agent_count": len(agents),
-        "property_count": count_properties(
-            organization_id,
-            status=PROPERTY_STATUS_APPROVED,
-            agent_id=agent_id
-        ),
-        "ranking": ranking,
-        "workflow_counts": workflow_counts
+        "dashboard": dashboard,
+        "team_block": team_block,
     }
 
 
@@ -961,6 +1122,10 @@ def get_operation_form_values(form):
             "was_invoiced",
             "no"
         ),
+        "invoice_full_commission": form.get(
+            "invoice_full_commission",
+            "no",
+        ),
         "vat_amount": form.get(
             "vat_amount",
             "0"
@@ -1013,6 +1178,10 @@ def operation_to_form_values(operation):
         "was_invoiced": operation[
             "was_invoiced"
         ],
+        "invoice_full_commission": operation.get(
+            "invoice_full_commission",
+            "no",
+        ),
         "vat_amount": str(vat_amount),
         "operation_date": operation["date"]
     }
@@ -1027,7 +1196,8 @@ def render_operation_form(
     organization_id,
     is_edit,
     operation_id=None,
-    show_submit_for_approval=False
+    show_submit_for_approval=False,
+    operation_readiness=None,
 ):
     scoped_id, scope_blocked = get_agent_scope()
 
@@ -1069,6 +1239,8 @@ def render_operation_form(
             organization_id
         ),
         show_submit_for_approval=show_submit_for_approval,
+        operation_readiness=operation_readiness,
+        property_types=PROPERTY_TYPES,
         lock_agent_selection=(scoped_id is not None)
     )
 
@@ -1677,9 +1849,18 @@ def approvals_property_detail(property_id):
     ):
         abort(404)
 
+    language = get_current_language()
+
     return render_template(
         "approvals/property_review.html",
         property_data=property_data,
+        property_display_id=format_property_display_id(
+            property_data["id"]
+        ),
+        listings=load_property_listings_for_property(
+            property_data,
+            language=language,
+        ),
         errors=[]
     )
 
@@ -2355,6 +2536,140 @@ def organization_settings():
 
 
 @app.route(
+    "/integrations/csv",
+    methods=["GET", "POST"],
+)
+@admin_required
+def csv_import_upload():
+    organization_id = require_user_organization()
+
+    if request.method == "GET":
+        return render_template(
+            "integrations/csv_upload.html"
+        )
+
+    upload = request.files.get("csv_file")
+
+    if upload is None or upload.filename == "":
+        flash_i18n("csv_import_no_file", "error")
+        return redirect(url_for("csv_import_upload"))
+
+    raw = upload.read()
+    batch = preview_csv_upload(
+        organization_id,
+        raw,
+        filename=upload.filename,
+    )
+
+    session["csv_import_batch_id"] = batch["id"]
+
+    return redirect(
+        url_for(
+            "csv_import_preview",
+            batch_id=batch["id"],
+        )
+    )
+
+
+@app.route(
+    "/integrations/csv/preview/<batch_id>",
+    methods=["GET"],
+)
+@admin_required
+def csv_import_preview(batch_id):
+    organization_id = require_user_organization()
+
+    from modules.database.csv_import_batches_repository import (
+        get_csv_import_batch,
+    )
+
+    batch = get_csv_import_batch(
+        batch_id,
+        organization_id,
+    )
+
+    if batch is None:
+        flash_i18n("csv_import_batch_missing", "error")
+        return redirect(url_for("csv_import_upload"))
+
+    return render_template(
+        "integrations/csv_preview.html",
+        batch_id=batch["id"],
+        preview=batch["preview"],
+    )
+
+
+@app.route(
+    "/integrations/csv/confirm",
+    methods=["POST"],
+)
+@admin_required
+def csv_import_confirm():
+    organization_id = require_user_organization()
+    batch_id = request.form.get("batch_id") or session.get(
+        "csv_import_batch_id"
+    )
+
+    if not batch_id:
+        flash_i18n("csv_import_batch_missing", "error")
+        return redirect(url_for("csv_import_upload"))
+
+    try:
+        result = confirm_csv_upload(
+            organization_id,
+            batch_id,
+        )
+    except ValueError as error:
+        code = str(error)
+        if code == "csv_batch_has_blockers":
+            flash_i18n("csv_import_blocked", "error")
+        else:
+            flash_i18n("csv_import_batch_missing", "error")
+        return redirect(url_for("csv_import_upload"))
+
+    session.pop("csv_import_batch_id", None)
+
+    flash_i18n(
+        "csv_import_success",
+        "success",
+    )
+    flash(
+        (
+            f"agents +{result.agents_created}/"
+            f"~{result.agents_updated}, "
+            f"properties +{result.properties_created}/"
+            f"~{result.properties_updated}, "
+            f"listings +{result.listings_created}/"
+            f"~{result.listings_updated}, "
+            f"deactivated {result.listings_deactivated}"
+        ),
+        "success",
+    )
+
+    return redirect(url_for("properties_list"))
+
+
+@app.route(
+    "/integrations/csv/cancel",
+    methods=["POST"],
+)
+@admin_required
+def csv_import_cancel():
+    organization_id = require_user_organization()
+    batch_id = request.form.get("batch_id") or session.get(
+        "csv_import_batch_id"
+    )
+
+    if batch_id:
+        cancel_csv_upload(organization_id, batch_id)
+
+    session.pop("csv_import_batch_id", None)
+    flash_i18n("csv_import_cancelled", "success")
+
+    return redirect(url_for("csv_import_upload"))
+
+
+@app.route(
     "/settings/registration-code",
     methods=["POST"]
 )
@@ -2541,7 +2856,8 @@ def dashboard():
 
     context = get_dashboard_context(
         organization_id,
-        agent_id=agent_id
+        agent_id=agent_id,
+        raw_filters=request.args,
     )
 
     return render_template(
@@ -2550,8 +2866,99 @@ def dashboard():
     )
 
 
-@app.route("/agents")
+def _load_organization_report_for_request():
+    organization_id = require_user_organization()
+    agent_id, scope_blocked = get_agent_scope()
+
+    if scope_blocked:
+        flash_i18n("agent_scope_missing", "error")
+
+    report = load_organization_report(
+        organization_id,
+        request.args,
+        language=get_current_language(),
+        scoped_agent_id=(
+            0 if scope_blocked else agent_id
+        ),
+    )
+
+    if scope_blocked:
+        report["operations"] = []
+        report["agent_ranking"] = []
+        report["monthly_series"] = []
+        zero_metrics = {}
+
+        for key, value in report["metrics"].items():
+            zero_metrics[key] = (
+                0.0 if isinstance(value, float) else 0
+            )
+
+        report["metrics"] = zero_metrics
+        report["status_counts"] = {
+            "draft": 0,
+            "pending": 0,
+            "approved": 0,
+            "rejected": 0,
+        }
+
+    return report
+
+
+@app.route("/reports")
 @login_required
+def reports_index():
+    report = _load_organization_report_for_request()
+    return render_template(
+        "reports/index.html",
+        report=report,
+    )
+
+
+@app.route("/reports/pdf")
+@login_required
+def reports_pdf():
+    report = _load_organization_report_for_request()
+    pdf_bytes = build_organization_report_pdf(report)
+    filename = f"{report['download_basename']}.pdf"
+
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@app.route("/reports/xlsx")
+@login_required
+def reports_xlsx():
+    report = _load_organization_report_for_request()
+    xlsx_bytes = build_organization_report_xlsx(report)
+    filename = f"{report['download_basename']}.xlsx"
+
+    return send_file(
+        io.BytesIO(xlsx_bytes),
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument"
+            ".spreadsheetml.sheet"
+        ),
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+def _parse_team_leader_id(raw):
+    value = (raw or "").strip()
+    if value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+@app.route("/agents")
+@admin_required
 def agents_list():
     organization_id = require_user_organization()
 
@@ -2560,8 +2967,6 @@ def agents_list():
         ""
     ).strip()
 
-    agent_id, scope_blocked = get_agent_scope()
-
     if search_query:
         agents = search_agents(
             search_query,
@@ -2569,18 +2974,6 @@ def agents_list():
         )
     else:
         agents = get_agents(organization_id)
-
-    if scope_blocked:
-        flash_i18n("agent_scope_missing", "error")
-
-        agents = []
-
-    elif agent_id is not None:
-        agents = [
-            agent
-            for agent in agents
-            if agent["id"] == agent_id
-        ]
 
     return render_template(
         "agents/list.html",
@@ -2611,11 +3004,23 @@ def agents_new():
             "agent_type",
             ""
         )
+        team_leader_agent_id = _parse_team_leader_id(
+            request.form.get("team_leader_agent_id")
+        )
 
         errors = validate_agent_form(
             name,
             agent_type
         )
+
+        if (
+            team_leader_agent_id is not None
+            and get_agent_by_id(
+                team_leader_agent_id,
+                organization_id,
+            ) is None
+        ):
+            errors.append("err_team_leader_invalid")
 
         if errors:
             return render_template(
@@ -2624,18 +3029,27 @@ def agents_new():
                 submit_label="Create Agent",
                 agent={
                     "name": name,
-                    "type": agent_type
+                    "type": agent_type,
+                    "team_leader_agent_id": team_leader_agent_id,
                 },
                 agent_types=AGENT_TYPES,
+                team_leader_candidates=get_agents(
+                    organization_id
+                ),
                 errors=localize_form_errors(errors),
                 is_edit=False
             )
 
-        add_agent(
-            name,
-            agent_type,
-            organization_id
-        )
+        try:
+            add_agent(
+                name,
+                agent_type,
+                organization_id,
+                team_leader_agent_id=team_leader_agent_id,
+            )
+        except (ValueError, TenantError):
+            flash_i18n("err_team_leader_invalid", "error")
+            return redirect(url_for("agents_new"))
 
         flash_i18n("agent_added", "success")
 
@@ -2649,9 +3063,11 @@ def agents_new():
         submit_label="Create Agent",
         agent={
             "name": "",
-            "type": ""
+            "type": "",
+            "team_leader_agent_id": None,
         },
         agent_types=AGENT_TYPES,
+        team_leader_candidates=get_agents(organization_id),
         errors=[],
         is_edit=False
     )
@@ -2691,15 +3107,33 @@ def agents_edit(agent_id):
             "agent_type",
             ""
         )
+        team_leader_agent_id = _parse_team_leader_id(
+            request.form.get("team_leader_agent_id")
+        )
 
         errors = validate_agent_form(
             name,
             agent_type
         )
 
+        if team_leader_agent_id == agent_id:
+            errors.append("err_team_leader_self")
+
+        if (
+            team_leader_agent_id is not None
+            and get_agent_by_id(
+                team_leader_agent_id,
+                organization_id,
+            ) is None
+        ):
+            errors.append("err_team_leader_invalid")
+
         if errors:
             agent["name"] = name
             agent["type"] = agent_type
+            agent["team_leader_agent_id"] = (
+                team_leader_agent_id
+            )
 
             return render_template(
                 "agents/form.html",
@@ -2707,21 +3141,42 @@ def agents_edit(agent_id):
                 submit_label="Save Changes",
                 agent=agent,
                 agent_types=AGENT_TYPES,
+                team_leader_candidates=[
+                    candidate
+                    for candidate in get_agents(
+                        organization_id
+                    )
+                    if candidate["id"] != agent_id
+                ],
                 errors=localize_form_errors(errors),
                 is_edit=True
             )
 
-        update_agent(
-            agent_id,
-            name,
-            agent_type,
-            organization_id
-        )
+        try:
+            update_agent(
+                agent_id,
+                name,
+                agent_type,
+                organization_id,
+                team_leader_agent_id=team_leader_agent_id,
+                update_team_leader=True,
+            )
+        except (ValueError, TenantError):
+            flash_i18n("err_team_leader_invalid", "error")
+            return redirect(
+                url_for(
+                    "agents_edit",
+                    agent_id=agent_id,
+                )
+            )
 
         flash_i18n("agent_updated", "success")
 
         return redirect(
-            url_for("agents_list")
+            url_for(
+                "agents_detail",
+                agent_id=agent_id,
+            )
         )
 
     return render_template(
@@ -2730,8 +3185,232 @@ def agents_edit(agent_id):
         submit_label="Save Changes",
         agent=agent,
         agent_types=AGENT_TYPES,
+        team_leader_candidates=[
+            candidate
+            for candidate in get_agents(organization_id)
+            if candidate["id"] != agent_id
+        ],
         errors=[],
         is_edit=True
+    )
+
+
+@app.route("/agents/<int:agent_id>")
+@login_required
+def agents_detail(agent_id):
+    if is_guest_session():
+        abort(403)
+
+    organization_id = require_user_organization()
+    current_user = get_current_user()
+
+    from modules.team_reports import build_agent_profile_view
+
+    target = get_agent_by_id(agent_id, organization_id)
+    if target is None:
+        abort(404)
+
+    linked_id = (
+        current_user.get("agent_id")
+        if current_user is not None
+        else None
+    )
+    is_admin_user = is_admin(current_user)
+    is_self = linked_id == agent_id
+    is_junior_of_viewer = (
+        linked_id is not None
+        and target.get("team_leader_agent_id") == linked_id
+    )
+
+    if not is_admin_user and not is_self and not is_junior_of_viewer:
+        abort(403)
+
+    # Guests never reach here; hide wallet from non-owners except admin/self/TL on junior.
+    show_wallet = is_admin_user or is_self
+    # TL viewing junior: production stats yes, wallet no (avoids leaking other juniors via TL wallet)
+    show_junior_stats = (
+        target.get("type") in ("Junior", "RAPP")
+        and (is_admin_user or is_self or is_junior_of_viewer)
+    )
+    include_team_stats = is_admin_user or is_self
+
+    view = build_agent_profile_view(
+        organization_id,
+        agent_id,
+        include_wallet=show_wallet,
+        include_team_stats=include_team_stats,
+    )
+
+    if view is None:
+        abort(404)
+
+    can_view_team_report = (
+        view["is_team_leader"]
+        and (is_admin_user or is_self)
+    )
+
+    return render_template(
+        "agents/detail.html",
+        agent=view["agent"],
+        is_team_leader=view["is_team_leader"],
+        juniors=view["juniors"],
+        junior_rows=view["junior_rows"],
+        team_leader=view["team_leader"],
+        own_stats=view["own_stats"],
+        wallet_totals=view["totals"],
+        wallet_movements=view["movements"],
+        show_wallet=show_wallet,
+        show_junior_stats=show_junior_stats,
+        show_team_leader=bool(view["team_leader"]),
+        can_open_team_leader=is_admin_user,
+        can_open_juniors=is_admin_user or is_self,
+        can_view_team_report=can_view_team_report,
+        can_edit=is_admin_user,
+    )
+
+
+@app.route("/wallet")
+@login_required
+def my_wallet():
+    if is_guest_session():
+        abort(403)
+
+    organization_id = require_user_organization()
+    current_user = get_current_user()
+    agent_id = current_user.get("agent_id")
+
+    if agent_id is None:
+        flash_i18n("wallet_no_linked_agent", "error")
+        return redirect(url_for("dashboard"))
+
+    return redirect(
+        url_for("agents_detail", agent_id=agent_id)
+    )
+
+
+def _require_team_report_access(team_leader_id):
+    if is_guest_session():
+        abort(403)
+
+    organization_id = require_user_organization()
+    current_user = get_current_user()
+    leader = get_agent_by_id(team_leader_id, organization_id)
+
+    if leader is None:
+        abort(404)
+
+    if is_admin(current_user):
+        return organization_id, leader
+
+    linked_id = current_user.get("agent_id")
+    if linked_id == team_leader_id:
+        return organization_id, leader
+
+    abort(403)
+
+
+def _load_team_report_for_request(team_leader_id):
+    organization_id, _leader = _require_team_report_access(
+        team_leader_id
+    )
+
+    # Admin may switch leader via query param
+    current_user = get_current_user()
+    selected_id = team_leader_id
+    if is_admin(current_user):
+        raw = request.args.get("team_leader_id")
+        if raw:
+            try:
+                candidate = int(raw)
+                if get_agent_by_id(candidate, organization_id):
+                    selected_id = candidate
+            except (TypeError, ValueError):
+                pass
+
+    from modules.team_reports import load_team_report
+
+    report = load_team_report(
+        organization_id,
+        selected_id,
+        request.args,
+        language=get_current_language(),
+    )
+
+    if report is None:
+        abort(404)
+
+    return report
+
+
+@app.route("/reports/team")
+@app.route("/reports/team/<int:team_leader_id>")
+@login_required
+def team_report(team_leader_id=None):
+    if is_guest_session():
+        abort(403)
+
+    organization_id = require_user_organization()
+    current_user = get_current_user()
+
+    if team_leader_id is None:
+        if is_admin(current_user):
+            from modules.team_reports import list_team_leaders
+
+            leaders = list_team_leaders(organization_id)
+            if not leaders:
+                flash_i18n("team_no_leaders", "error")
+                return redirect(url_for("agents_list"))
+            return redirect(
+                url_for(
+                    "team_report",
+                    team_leader_id=leaders[0]["id"],
+                )
+            )
+
+        linked = current_user.get("agent_id")
+        if linked is None:
+            abort(403)
+        return redirect(
+            url_for("team_report", team_leader_id=linked)
+        )
+
+    report = _load_team_report_for_request(team_leader_id)
+    return render_template(
+        "reports/team.html",
+        report=report,
+    )
+
+
+@app.route("/reports/team/<int:team_leader_id>/pdf")
+@login_required
+def team_report_pdf(team_leader_id):
+    report = _load_team_report_for_request(team_leader_id)
+    from modules.pdf_team_report import build_team_report_pdf
+
+    pdf_bytes = build_team_report_pdf(report)
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"{report['download_basename']}.pdf",
+    )
+
+
+@app.route("/reports/team/<int:team_leader_id>/xlsx")
+@login_required
+def team_report_xlsx(team_leader_id):
+    report = _load_team_report_for_request(team_leader_id)
+    from modules.excel_team_report import build_team_report_xlsx
+
+    xlsx_bytes = build_team_report_xlsx(report)
+    return send_file(
+        io.BytesIO(xlsx_bytes),
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument"
+            ".spreadsheetml.sheet"
+        ),
+        as_attachment=True,
+        download_name=f"{report['download_basename']}.xlsx",
     )
 
 
@@ -2881,28 +3560,18 @@ def properties_new():
     agents = get_agents(organization_id)
 
     if request.method == "POST":
-        address = request.form.get(
-            "address",
-            ""
-        ).strip()
-
-        jurisdiction = request.form.get(
-            "jurisdiction",
-            ""
-        )
-
-        form_agent_id = request.form.get(
-            "agent_id",
-            ""
-        ).strip()
+        fields = _property_form_fields_from_request()
 
         owner_agent_id, forced = resolve_owned_agent_id(
-            form_agent_id
+            fields["agent_id"]
         )
 
         errors = validate_property_form(
-            address,
-            jurisdiction
+            fields["address"],
+            fields["jurisdiction"],
+            fields["property_type"],
+            listing_price=fields["listing_price_raw"],
+            listing_purpose=fields["listing_purpose"],
         )
 
         if owner_agent_id is None:
@@ -2921,16 +3590,16 @@ def properties_new():
                 "properties/form.html",
                 form_title="New Property",
                 submit_label="Create Property",
-                property_data={
-                    "address": address,
-                    "jurisdiction": jurisdiction,
-                    "agent_id": owner_agent_id or ""
-                },
+                property_data=_property_form_data_from_fields(
+                    fields,
+                    owner_agent_id,
+                ),
                 jurisdictions=JURISDICTIONS,
                 agents=agents,
                 lock_agent_selection=forced,
                 errors=localize_form_errors(errors),
-                is_edit=False
+                is_edit=False,
+                **_property_form_context({}),
             )
 
         property_status = (
@@ -2940,12 +3609,15 @@ def properties_new():
         )
 
         add_property(
-            address,
-            jurisdiction,
+            fields["address"],
+            fields["jurisdiction"],
             organization_id,
             agent_id=owner_agent_id,
             status=property_status,
-            created_by_user_id=get_current_user()["id"]
+            created_by_user_id=get_current_user()["id"],
+            property_type=fields["property_type"],
+            listing_price=fields["listing_price"],
+            listing_purpose=fields["listing_purpose"],
         )
 
         if property_status == PROPERTY_STATUS_PENDING:
@@ -2966,13 +3638,270 @@ def properties_new():
         property_data={
             "address": "",
             "jurisdiction": "",
-            "agent_id": default_agent_id
+            "agent_id": default_agent_id,
+            "property_type": "",
+            "listing_price": "",
+            "listing_purpose": "",
         },
         jurisdictions=JURISDICTIONS,
         agents=agents,
-        lock_agent_selection=(scoped_id is not None),
+        lock_agent_selection=scoped_id is not None,
         errors=[],
-        is_edit=False
+        is_edit=False,
+        **_property_form_context({}),
+    )
+
+
+@app.route("/properties/<int:property_id>")
+@login_required
+def properties_detail(property_id):
+    organization_id = require_user_organization()
+
+    property_data = ensure_property_view_scope(
+        property_id,
+        organization_id
+    )
+
+    language = get_current_language()
+    agent_id, _scope_blocked = get_agent_scope()
+
+    listings = load_property_listings_for_property(
+        property_data,
+        language=language,
+    )
+
+    related_operations = list_operations_for_property(
+        property_data["id"],
+        property_data["organization_id"],
+        agent_id=agent_id,
+    )
+
+    pending_change = get_pending_change_for_property(
+        property_data["id"],
+        property_data["organization_id"],
+    )
+
+    can_manage_listings = (
+        get_guest_access() is None
+        and can_write(get_current_user())
+    )
+
+    return render_template(
+        "properties/detail.html",
+        property_data=property_data,
+        property_display_id=format_property_display_id(
+            property_data["id"]
+        ),
+        listings=listings,
+        related_operations=related_operations,
+        pending_change=pending_change,
+        can_manage_listings=can_manage_listings,
+        can_edit_property=(
+            get_guest_access() is None
+            and can_write(get_current_user())
+        ),
+    )
+
+
+@app.route(
+    "/properties/<int:property_id>/listings/new",
+    methods=[
+        "GET",
+        "POST",
+    ],
+)
+@write_required
+def property_listings_new(property_id):
+    organization_id = require_user_organization()
+
+    property_data = ensure_property_scope(
+        property_id,
+        organization_id
+    )
+
+    if request.method == "POST":
+        form_data = {
+            "provider": request.form.get("provider", ""),
+            "url": request.form.get("url", ""),
+            "status": request.form.get("status", ""),
+            "external_id": request.form.get(
+                "external_id",
+                "",
+            ),
+            "provider_label": request.form.get(
+                "provider_label",
+                "",
+            ),
+        }
+
+        errors, _listing, parsed, listing_conflict = (
+            save_new_listing(
+                organization_id,
+                property_id,
+                form_data,
+                user_id=get_current_user()["id"],
+                language=get_current_language(),
+            )
+        )
+
+        if errors:
+            return render_template(
+                "properties/listing_form.html",
+                **_listing_form_template_context(
+                    property_data,
+                    listing_data=parsed,
+                    errors=errors,
+                    is_edit=False,
+                    listing_conflict=listing_conflict,
+                )
+            )
+
+        flash_i18n("listing_created", "success")
+
+        return redirect(
+            url_for(
+                "properties_detail",
+                property_id=property_id,
+            )
+        )
+
+    return render_template(
+        "properties/listing_form.html",
+        **_listing_form_template_context(
+            property_data,
+            is_edit=False,
+        )
+    )
+
+
+@app.route(
+    "/properties/<int:property_id>/listings/"
+    "<int:listing_id>/edit",
+    methods=[
+        "GET",
+        "POST",
+    ],
+)
+@write_required
+def property_listings_edit(property_id, listing_id):
+    organization_id = require_user_organization()
+
+    property_data = ensure_property_scope(
+        property_id,
+        organization_id
+    )
+
+    listing = get_listing_record(
+        listing_id,
+        organization_id
+    )
+
+    if (
+        listing is None
+        or listing["property_id"] != property_id
+    ):
+        abort(404)
+
+    if request.method == "POST":
+        form_data = {
+            "provider": request.form.get("provider", ""),
+            "url": request.form.get("url", ""),
+            "status": request.form.get("status", ""),
+            "external_id": request.form.get(
+                "external_id",
+                "",
+            ),
+            "provider_label": request.form.get(
+                "provider_label",
+                "",
+            ),
+        }
+
+        errors, _listing, parsed, listing_conflict = (
+            save_existing_listing(
+                listing_id,
+                organization_id,
+                form_data,
+                user_id=get_current_user()["id"],
+                language=get_current_language(),
+            )
+        )
+
+        if errors:
+            return render_template(
+                "properties/listing_form.html",
+                **_listing_form_template_context(
+                    property_data,
+                    listing_data=parsed,
+                    errors=errors,
+                    is_edit=True,
+                    listing_conflict=listing_conflict,
+                )
+            )
+
+        flash_i18n("listing_updated", "success")
+
+        return redirect(
+            url_for(
+                "properties_detail",
+                property_id=property_id,
+            )
+        )
+
+    listing_form = {
+        "provider": listing["provider"],
+        "url": listing["url"],
+        "status": listing["status"],
+        "external_id": listing.get("external_id") or "",
+        "provider_label": listing.get("provider_label") or "",
+    }
+
+    return render_template(
+        "properties/listing_form.html",
+        **_listing_form_template_context(
+            property_data,
+            listing_data=listing_form,
+            is_edit=True,
+        ),
+        listing_id=listing_id,
+    )
+
+
+@app.route(
+    "/properties/<int:property_id>/listings/"
+    "<int:listing_id>/delete",
+    methods=["POST"],
+)
+@write_required
+def property_listings_delete(property_id, listing_id):
+    organization_id = require_user_organization()
+
+    ensure_property_scope(
+        property_id,
+        organization_id
+    )
+
+    listing = get_listing_record(
+        listing_id,
+        organization_id
+    )
+
+    if (
+        listing is None
+        or listing["property_id"] != property_id
+    ):
+        abort(404)
+
+    if remove_listing(listing_id, organization_id):
+        flash_i18n("listing_deleted", "success")
+    else:
+        flash_i18n("listing_not_found", "error")
+
+    return redirect(
+        url_for(
+            "properties_detail",
+            property_id=property_id,
+        )
     )
 
 
@@ -2997,33 +3926,23 @@ def properties_edit(property_id):
     forced_owner = scoped_id is not None
 
     if request.method == "POST":
-        address = request.form.get(
-            "address",
-            ""
-        ).strip()
-
-        jurisdiction = request.form.get(
-            "jurisdiction",
-            ""
-        )
-
-        form_agent_id = request.form.get(
-            "agent_id",
-            ""
-        ).strip()
+        fields = _property_form_fields_from_request()
 
         if forced_owner:
             owner_agent_id = scoped_id
         else:
             owner_agent_id, _forced = (
                 resolve_owned_agent_id(
-                    form_agent_id
+                    fields["agent_id"]
                 )
             )
 
         errors = validate_property_form(
-            address,
-            jurisdiction
+            fields["address"],
+            fields["jurisdiction"],
+            fields["property_type"],
+            listing_price=fields["listing_price_raw"],
+            listing_purpose=fields["listing_purpose"],
         )
 
         if owner_agent_id is None:
@@ -3038,9 +3957,12 @@ def properties_edit(property_id):
             errors.append("err_invalid_agent")
 
         if errors:
-            property_data["address"] = address
-            property_data["jurisdiction"] = jurisdiction
-            property_data["agent_id"] = owner_agent_id
+            property_data.update(
+                _property_form_data_from_fields(
+                    fields,
+                    owner_agent_id,
+                )
+            )
 
             return render_template(
                 "properties/form.html",
@@ -3051,7 +3973,8 @@ def properties_edit(property_id):
                 agents=agents,
                 lock_agent_selection=forced_owner,
                 errors=localize_form_errors(errors),
-                is_edit=True
+                is_edit=True,
+                **_property_form_context(property_data),
             )
 
         current_user = get_current_user()
@@ -3059,10 +3982,13 @@ def properties_edit(property_id):
         if is_admin(current_user):
             update_property(
                 property_id,
-                address,
-                jurisdiction,
+                fields["address"],
+                fields["jurisdiction"],
                 organization_id,
-                agent_id=owner_agent_id
+                agent_id=owner_agent_id,
+                property_type=fields["property_type"],
+                listing_price=fields["listing_price"],
+                listing_purpose=fields["listing_purpose"],
             )
             flash_i18n("property_updated", "success")
         elif property_is_official(
@@ -3075,9 +4001,12 @@ def properties_edit(property_id):
                 errors.append("err_property_change_pending")
 
             if errors:
-                property_data["address"] = address
-                property_data["jurisdiction"] = jurisdiction
-                property_data["agent_id"] = owner_agent_id
+                property_data.update(
+                    _property_form_data_from_fields(
+                        fields,
+                        owner_agent_id,
+                    )
+                )
 
                 return render_template(
                     "properties/form.html",
@@ -3088,25 +4017,32 @@ def properties_edit(property_id):
                     agents=agents,
                     lock_agent_selection=forced_owner,
                     errors=localize_form_errors(errors),
-                    is_edit=True
+                    is_edit=True,
+                    **_property_form_context(property_data),
                 )
 
             create_property_change_request(
                 property_id,
                 organization_id,
                 current_user["id"],
-                address,
-                jurisdiction,
-                owner_agent_id
+                fields["address"],
+                fields["jurisdiction"],
+                owner_agent_id,
+                proposed_property_type=fields["property_type"],
+                proposed_listing_price=fields["listing_price"],
+                proposed_listing_purpose=fields["listing_purpose"],
             )
             flash_i18n("property_change_submitted", "success")
         else:
             update_property(
                 property_id,
-                address,
-                jurisdiction,
+                fields["address"],
+                fields["jurisdiction"],
                 organization_id,
-                agent_id=owner_agent_id
+                agent_id=owner_agent_id,
+                property_type=fields["property_type"],
+                listing_price=fields["listing_price"],
+                listing_purpose=fields["listing_purpose"],
             )
 
             if property_data.get("status") == PROPERTY_STATUS_REJECTED:
@@ -3132,7 +4068,8 @@ def properties_edit(property_id):
         agents=agents,
         lock_agent_selection=forced_owner,
         errors=[],
-        is_edit=True
+        is_edit=True,
+        **_property_form_context(property_data),
     )
 
 
@@ -3298,8 +4235,9 @@ def operations_detail(operation_id):
         organization_id
     )
 
-    vat_documents = []
-    can_manage_vat_docs = (
+    documents = []
+    document_categories = []
+    can_manage_documents = (
         get_guest_access() is None
         and (
             is_admin()
@@ -3307,11 +4245,63 @@ def operations_detail(operation_id):
         )
     )
 
-    if can_manage_vat_docs:
-        vat_documents = list_vat_documents_for_operation(
+    if can_manage_documents:
+        documents = list_operation_documents(
             organization_id,
             operation_id
         )
+        uploader_cache = {}
+
+        for document in documents:
+            user_id = document.get("uploaded_by_user_id")
+
+            if user_id is None:
+                document["uploaded_by_name"] = None
+                continue
+
+            if user_id not in uploader_cache:
+                uploader_cache[user_id] = get_user_by_id(
+                    user_id
+                )
+
+            user = uploader_cache[user_id]
+            document["uploaded_by_name"] = (
+                (
+                    f"{(user.get('first_name') or '').strip()} "
+                    f"{(user.get('last_name') or '').strip()}"
+                ).strip()
+                or user.get("username")
+                or user.get("email")
+            ) if user else None
+
+        document_categories = group_documents_for_ui(
+            documents
+        )
+
+    language = get_current_language()
+    commission_lines = build_commission_lines(
+        operation,
+        language,
+    )
+    billing_lines = build_billing_lines(
+        operation,
+        language,
+    )
+
+    show_readiness = (
+        is_agent()
+        and agent_can_submit_status(
+            operation.get("status")
+        )
+    )
+    operation_readiness = (
+        validate_operation_readiness(
+            operation_id,
+            organization_id,
+        )
+        if show_readiness
+        else None
+    )
 
     return render_template(
         "operations/detail.html",
@@ -3326,27 +4316,24 @@ def operations_detail(operation_id):
             )
         ),
         can_submit_operation=(
-            is_agent()
-            and agent_can_submit_status(
-                operation.get("status")
-            )
+            show_readiness
+            and operation_readiness is not None
+            and operation_readiness["is_ready"]
         ),
+        show_readiness_checklist=show_readiness,
+        operation_readiness=operation_readiness,
         can_review_operation=(
             can_approve()
             and operation.get("status") == STATUS_PENDING
         ),
-        can_manage_vat_docs=can_manage_vat_docs,
-        vat_documents_by_type=documents_by_type_map(
-            vat_documents
-        ),
-        vat_doc_types=(
-            DOC_TYPE_MARTILLERO_CLIENT,
-            DOC_TYPE_AGENT_CLIENT,
-        )
+        can_manage_documents=can_manage_documents,
+        document_categories=document_categories,
+        commission_lines=commission_lines,
+        billing_lines=billing_lines,
     )
 
 
-def _require_vat_docs_user():
+def _require_documents_user():
     if get_guest_access() is not None:
         abort(403)
 
@@ -3378,14 +4365,95 @@ def _load_scoped_operation(operation_id, organization_id):
     return operation
 
 
+def _can_see_summary_documents():
+    if get_guest_access() is not None:
+        return False
+
+    user = get_current_user()
+
+    if user is None:
+        return False
+
+    return is_admin(user) or is_agent(user)
+
+
+def _load_operation_summary_for_request(operation_id):
+    organization_id = require_user_organization()
+    operation = _load_scoped_operation(
+        operation_id,
+        organization_id
+    )
+    summary = load_operation_summary(
+        operation,
+        language=get_current_language(),
+        can_see_documents=_can_see_summary_documents(),
+    )
+    return operation, summary
+
+
+@app.route("/operations/<int:operation_id>/summary")
+@login_required
+def operations_summary(operation_id):
+    operation, summary = _load_operation_summary_for_request(
+        operation_id
+    )
+
+    return render_template(
+        "operations/summary.html",
+        operation=operation,
+        summary=summary,
+    )
+
+
+@app.route("/operations/<int:operation_id>/summary/pdf")
+@login_required
+def operations_summary_pdf(operation_id):
+    operation, summary = _load_operation_summary_for_request(
+        operation_id
+    )
+    pdf_bytes = build_operation_summary_pdf(summary)
+    filename = f"{summary['download_basename']}.pdf"
+
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@app.route("/operations/<int:operation_id>/summary/xlsx")
+@login_required
+def operations_summary_xlsx(operation_id):
+    operation, summary = _load_operation_summary_for_request(
+        operation_id
+    )
+    xlsx_bytes = build_operation_summary_xlsx(summary)
+    filename = f"{summary['download_basename']}.xlsx"
+
+    return send_file(
+        io.BytesIO(xlsx_bytes),
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument"
+            ".spreadsheetml.sheet"
+        ),
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@app.route(
+    "/operations/<int:operation_id>/documents/<doc_type>",
+    methods=["POST"]
+)
 @app.route(
     "/operations/<int:operation_id>/vat-documents/<doc_type>",
     methods=["POST"]
 )
 @login_required
 @write_required
-def operations_vat_document_upload(operation_id, doc_type):
-    user = _require_vat_docs_user()
+def operations_document_upload(operation_id, doc_type):
+    user = _require_documents_user()
     organization_id = require_user_organization()
     _load_scoped_operation(operation_id, organization_id)
 
@@ -3398,7 +4466,7 @@ def operations_vat_document_upload(operation_id, doc_type):
             )
         )
 
-    document, error_key = upload_or_replace_vat_document(
+    document, error_key = upload_or_replace_operation_document(
         organization_id=organization_id,
         operation_id=operation_id,
         doc_type=doc_type,
@@ -3424,13 +4492,14 @@ def operations_vat_document_upload(operation_id, doc_type):
     )
 
 
+@app.route("/documents/<int:document_id>")
 @app.route("/vat-documents/<int:document_id>")
 @login_required
-def vat_document_download(document_id):
-    _require_vat_docs_user()
+def operation_document_download(document_id):
+    _require_documents_user()
     organization_id = require_user_organization()
 
-    document = get_vat_document(
+    document = get_operation_document(
         document_id,
         organization_id
     )
@@ -3449,9 +4518,6 @@ def vat_document_download(document_id):
         abort(404)
 
     as_attachment = request.args.get("download") == "1"
-
-    # Read into memory so the on-disk file is not kept open
-    # (Windows cannot replace/delete a locked file).
     file_bytes = absolute_path.read_bytes()
 
     return send_file(
@@ -3463,16 +4529,20 @@ def vat_document_download(document_id):
 
 
 @app.route(
+    "/documents/<int:document_id>/delete",
+    methods=["POST"]
+)
+@app.route(
     "/vat-documents/<int:document_id>/delete",
     methods=["POST"]
 )
 @login_required
 @write_required
-def vat_document_delete(document_id):
-    _require_vat_docs_user()
+def operation_document_delete(document_id):
+    _require_documents_user()
     organization_id = require_user_organization()
 
-    document = get_vat_document(
+    document = get_operation_document(
         document_id,
         organization_id
     )
@@ -3483,7 +4553,7 @@ def vat_document_delete(document_id):
     operation_id = document["operation_id"]
     _load_scoped_operation(operation_id, organization_id)
 
-    removed = remove_vat_document(
+    removed = remove_operation_document(
         document_id,
         organization_id
     )
@@ -3615,21 +4685,20 @@ def vat_calculator():
                     result["vat_usd"]
                 )
 
-    vat_documents_by_type = {}
-    can_manage_vat_docs = False
+    document_categories = []
+    can_manage_documents = False
 
     if (
         source_operation is not None
         and get_guest_access() is None
         and (is_admin() or is_agent())
     ):
-        can_manage_vat_docs = True
-        vat_documents_by_type = documents_by_type_map(
-            list_vat_documents_for_operation(
-                organization_id,
-                source_operation["db_id"]
-            )
+        can_manage_documents = True
+        docs = list_operation_documents(
+            organization_id,
+            source_operation["db_id"]
         )
+        document_categories = group_documents_for_ui(docs)
 
     return render_template(
         "tools/vat_calculator.html",
@@ -3637,12 +4706,8 @@ def vat_calculator():
         result=result,
         errors=errors,
         source_operation=source_operation,
-        can_manage_vat_docs=can_manage_vat_docs,
-        vat_documents_by_type=vat_documents_by_type,
-        vat_doc_types=(
-            DOC_TYPE_MARTILLERO_CLIENT,
-            DOC_TYPE_AGENT_CLIENT,
-        )
+        can_manage_documents=can_manage_documents,
+        document_categories=document_categories,
     )
 
 
@@ -3708,6 +4773,7 @@ def operations_new():
             )
 
         if action == "preview":
+            language = get_current_language()
             return render_template(
                 "operations/preview.html",
                 operation=operation,
@@ -3715,6 +4781,14 @@ def operations_new():
                 parsed=parsed,
                 is_edit=False,
                 operation_id=None,
+                commission_lines=build_commission_lines(
+                    operation,
+                    language,
+                ),
+                billing_lines=build_billing_lines(
+                    operation,
+                    language,
+                ),
                 back_url=url_for(
                     "operations_new"
                 ),
@@ -3765,6 +4839,7 @@ def operations_new():
             "exchange_rate": "",
             "commission_rate": "",
             "was_invoiced": "no",
+            "invoice_full_commission": "no",
             "vat_amount": "0",
             "operation_date": date.today().strftime(
                 "%d/%m/%Y"
@@ -3856,6 +4931,7 @@ def operations_edit(operation_id):
             )
 
         if action == "preview":
+            language = get_current_language()
             return render_template(
                 "operations/preview.html",
                 operation=calculated,
@@ -3863,6 +4939,14 @@ def operations_edit(operation_id):
                 parsed=parsed,
                 is_edit=True,
                 operation_id=operation_id,
+                commission_lines=build_commission_lines(
+                    calculated,
+                    language,
+                ),
+                billing_lines=build_billing_lines(
+                    calculated,
+                    language,
+                ),
                 back_url=url_for(
                     "operations_edit",
                     operation_id=operation_id
@@ -3877,15 +4961,15 @@ def operations_edit(operation_id):
         rejection_reason = operation.get(
             "rejection_reason"
         )
-
-        if (
+        submitting = (
             action == "submit"
             and is_agent(current_user)
             and agent_can_submit_status(next_status)
-        ):
-            next_status = STATUS_PENDING
-            rejection_reason = None
+        )
 
+        if submitting:
+            next_status = STATUS_DRAFT
+            rejection_reason = None
         elif is_agent(current_user):
             if next_status == STATUS_REJECTED:
                 next_status = STATUS_DRAFT
@@ -3904,10 +4988,27 @@ def operations_edit(operation_id):
             require_property_owner=require_owner
         )
 
-        if next_status == STATUS_PENDING:
-            flash_i18n("operation_submitted", "success")
-        else:
-            flash_i18n("operation_updated", "success")
+        if submitting:
+            try:
+                submit_operation_for_approval(
+                    operation_id,
+                    organization_id,
+                    user=current_user,
+                )
+                flash_i18n("operation_submitted", "success")
+            except OperationNotReadyError:
+                flash_i18n(
+                    "operation_not_ready_for_approval",
+                    "error",
+                )
+            return redirect(
+                url_for(
+                    "operations_detail",
+                    operation_id=operation_id,
+                )
+            )
+
+        flash_i18n("operation_updated", "success")
 
         return redirect(
             url_for("operations_list")
@@ -3916,6 +5017,11 @@ def operations_edit(operation_id):
     form_values = operation_to_form_values(
         operation
     )
+
+    operation_readiness = validate_operation_readiness(
+        operation_id,
+        organization_id,
+    ) if show_submit else None
 
     return render_operation_form(
         "Edit Operation",
@@ -3926,7 +5032,12 @@ def operations_edit(operation_id):
         organization_id,
         is_edit=True,
         operation_id=operation_id,
-        show_submit_for_approval=show_submit
+        show_submit_for_approval=(
+            show_submit
+            and operation_readiness is not None
+            and operation_readiness["is_ready"]
+        ),
+        operation_readiness=operation_readiness,
     )
 
 
@@ -3960,12 +5071,23 @@ def operations_submit(operation_id):
     ):
         abort(403)
 
-    update_operation_status(
-        operation_id,
-        organization_id,
-        STATUS_PENDING,
-        rejection_reason=None
-    )
+    try:
+        submit_operation_for_approval(
+            operation_id,
+            organization_id,
+            user=current_user,
+        )
+    except OperationNotReadyError:
+        flash_i18n(
+            "operation_not_ready_for_approval",
+            "error",
+        )
+        return redirect(
+            url_for(
+                "operations_detail",
+                operation_id=operation_id,
+            )
+        )
 
     flash_i18n("operation_submitted", "success")
 
@@ -4006,7 +5128,7 @@ def operations_approve(operation_id):
             )
         )
 
-    update_operation_status(
+    change_operation_status(
         operation_id,
         organization_id,
         STATUS_APPROVED,
@@ -4088,7 +5210,7 @@ def operations_reject(operation_id):
             )
         )
 
-    update_operation_status(
+    change_operation_status(
         operation_id,
         organization_id,
         STATUS_REJECTED,

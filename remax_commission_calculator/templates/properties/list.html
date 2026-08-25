@@ -2,26 +2,11 @@
 
 {% block title %}{{ t('properties_title') }} | {{ t('app_title') }}{% endblock %}
 
-{% block content %}
-<section class="page-header">
-    <div class="page-header-text">
-        <h2>{{ t('properties_title') }}</h2>
-        <p>{{ t('properties_subtitle') }}</p>
-    </div>
+{% block sidebar %}
+<div class="sidebar-panel">
+    <h3 class="sidebar-title">{{ t('sidebar_filters') }}</h3>
 
-    <div class="page-actions">
-        {% if can_write() %}
-        <a href="{{ url_for('properties_new') }}" class="btn btn-primary">{{ t('new_property') }}</a>
-        {% endif %}
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
-    </div>
-</section>
-
-<section class="panel">
-    <div class="panel-header">
-        <h3>{{ t('advanced_filters') }}</h3>
-        <span class="badge">{{ property_count }} {{ t('found') }}</span>
-    </div>
+    {% include "_sidebar_search.html" %}
 
     {% if filter_errors %}
     <div class="flash-messages">
@@ -31,7 +16,7 @@
     </div>
     {% endif %}
 
-    <form class="filter-form" method="get" action="{{ url_for('properties_list') }}">
+    <form class="sidebar-filter-form filter-form" method="get" action="{{ url_for('properties_list') }}">
         <div class="filter-grid">
             <div class="form-group">
                 <label for="property_id">{{ t('property_id') }}</label>
@@ -116,11 +101,29 @@
             </div>
         </div>
 
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary">{{ t('filter') }}</button>
-            <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">{{ t('clear_filters') }}</a>
+        <div class="sidebar-filter-actions">
+            <button type="submit" class="btn btn-primary btn-block">{{ t('sidebar_apply_filters') }}</button>
+            <a href="{{ url_for('properties_list') }}" class="btn btn-secondary btn-block">{{ t('clear_filters') }}</a>
         </div>
     </form>
+
+    <p class="sidebar-count">{{ property_count }} {{ t('found') }}</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('properties_title') }}</h2>
+        <p>{{ t('properties_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        {% if can_write() %}
+        <a href="{{ url_for('properties_new') }}" class="btn btn-primary">{{ t('new_property') }}</a>
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
 </section>
 
 <section class="panel">
@@ -155,6 +158,10 @@
                         {% endif %}
                     </td>
                     <td class="table-actions">
+                        <a
+                            href="{{ url_for('properties_detail', property_id=property_data.id) }}"
+                            class="btn btn-small btn-secondary"
+                        >{{ t('property_view') }}</a>
                         {% if can_write() %}
                         <a
                             href="{{ url_for('properties_edit', property_id=property_data.id) }}"

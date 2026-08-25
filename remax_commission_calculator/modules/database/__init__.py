@@ -14,9 +14,22 @@ from .tenant import TenantError
 from .agents_repository import (
     add_agent,
     delete_agent,
+    find_agent_by_external_id,
     get_agent_record,
     get_agents,
-    update_agent
+    list_team_juniors,
+    update_agent,
+    update_agent_from_sync,
+)
+
+from .agent_wallet_repository import (
+    MOVEMENT_OWN_COMMISSION,
+    MOVEMENT_TEAM_LEADER_INCOME,
+    get_wallet_movement_by_idempotency_key,
+    insert_wallet_movement,
+    list_wallet_movements_for_agent,
+    list_wallet_movements_for_operation,
+    sum_wallet_by_type,
 )
 
 from .properties_repository import (
@@ -31,6 +44,7 @@ from .properties_repository import (
     get_properties,
     get_property_record,
     update_property,
+    update_property_from_sync,
     update_property_status
 )
 
@@ -68,6 +82,7 @@ from .operations_repository import (
     search_operations_by_date,
     search_operations_by_id,
     search_operations_by_property,
+    list_operations_for_property,
     update_operation,
     update_operation_status
 )
@@ -134,13 +149,59 @@ from .guest_access_repository import (
     touch_guest_access
 )
 
-from .vat_documents_repository import (
+from .operation_documents_repository import (
+    DOC_CATEGORIES,
     DOC_TYPE_AGENT_CLIENT,
+    DOC_TYPE_DEED_CONTRACT,
+    DOC_TYPE_LABEL_KEYS,
     DOC_TYPE_MARTILLERO_CLIENT,
+    DOC_TYPE_OTHER,
+    DOC_TYPE_RESERVATION,
+    DOC_TYPE_TRANSFER,
+    DOC_TYPE_UIF_ADDITIONAL,
+    DOC_TYPE_UIF_FORM,
+    STRUCTURED_DOC_TYPES,
     VALID_DOC_TYPES,
+    allows_multiple_documents,
+    delete_operation_document,
     delete_vat_document,
+    get_operation_document,
+    get_operation_document_by_type,
     get_vat_document,
     get_vat_document_by_type,
+    list_operation_documents,
     list_vat_documents_for_operation,
-    upsert_vat_document
+    upsert_operation_document,
+    upsert_vat_document,
+)
+
+from .property_external_listings_repository import (
+    ListingPersistenceError,
+    create_property_external_listing,
+    delete_property_external_listing,
+    find_listing_by_external_id,
+    find_listing_by_provider_for_property,
+    get_property_external_listing,
+    list_property_external_listings,
+    list_synced_listings_for_provider,
+    mark_listing_inactive,
+    update_property_external_listing,
+)
+
+from .organization_integrations_repository import (
+    PROVIDER_CSV_UPLOAD,
+    PROVIDER_STUB_FIXTURE,
+    SCOPE_AGENT,
+    SCOPE_ORGANIZATION,
+    create_organization_integration,
+    find_organization_integration_by_provider,
+    get_integration_sync_run,
+    get_organization_integration,
+    list_organization_integrations,
+)
+
+from .csv_import_batches_repository import (
+    create_csv_import_batch,
+    delete_csv_import_batch,
+    get_csv_import_batch,
 )

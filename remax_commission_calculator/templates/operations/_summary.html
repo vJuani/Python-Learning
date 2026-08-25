@@ -37,67 +37,47 @@
         </div>
     </div>
 
+    {% if billing_lines %}
     <hr class="summary-divider">
-
     <div class="summary-grid">
-        <div class="summary-item">
-            <span class="summary-label">{{ t('currency') }}</span>
-            <strong>{{ operation.currency }}</strong>
+        {% for line in billing_lines %}
+        <div class="summary-item{% if line.emphasize %} highlight{% endif %}">
+            <span class="summary-label">{{ line.label }}</span>
+            <strong class="{% if line.kind == 'money' %}money{% if line.emphasize %} money-emphasis{% endif %}{% endif %}">
+                {% if line.kind == 'money' %}
+                    {{ line.value|money(line.currency or 'USD') }}
+                {% elif line.kind == 'rate' %}
+                    {{ line.value|number(4) }}
+                {% elif line.kind == 'percent' %}
+                    {{ line.value|number }}%
+                {% else %}
+                    {{ line.value }}
+                {% endif %}
+            </strong>
         </div>
-        <div class="summary-item">
-            <span class="summary-label">{{ t('original_amount') }}</span>
-            <strong class="money">{{ operation.original_amount|money(operation.currency) }}</strong>
-        </div>
-        {% if operation.currency == "ARS" %}
-        <div class="summary-item">
-            <span class="summary-label">{{ t('exchange_rate') }}</span>
-            <strong>{{ operation.exchange_rate|number(4) }}</strong>
-        </div>
-        {% endif %}
-        <div class="summary-item">
-            <span class="summary-label">{{ t('usd_equivalent') }}</span>
-            <strong class="money">{{ operation.sale_price|money }}</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">{{ t('field_commission_rate') }}</span>
-            <strong>{{ operation.commission_rate|number }}%</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">{{ t('total_commission') }}</span>
-            <strong class="money money-emphasis">{{ operation.total_commission|money }}</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">{{ t('abao') }}</span>
-            <strong class="money">{{ operation.abao|money }}</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">{{ t('commission_after_abao') }}</span>
-            <strong class="money">{{ operation.commission_after_abao|money }}</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">{{ t('martillero') }}</span>
-            <strong class="money">{{ operation.martillero|money }}</strong>
-        </div>
+        {% endfor %}
     </div>
+    {% endif %}
 
+    {% if commission_lines %}
     <hr class="summary-divider">
-
     <div class="summary-grid">
-        <div class="summary-item">
-            <span class="summary-label">{{ t('agent_payment') }}</span>
-            <strong class="money">{{ operation.agent_payment|money }}</strong>
+        {% for line in commission_lines %}
+        <div class="summary-item{% if line.emphasize %} highlight{% endif %}">
+            <span class="summary-label">{{ line.label }}</span>
+            <strong class="{% if line.kind == 'money' %}money{% if line.emphasize %} money-emphasis{% endif %}{% endif %}">
+                {% if line.kind == 'money' %}
+                    {{ line.value|money(line.currency or 'USD') }}
+                {% elif line.kind == 'rate' %}
+                    {{ line.value|number(4) }}
+                {% elif line.kind == 'percent' %}
+                    {{ line.value|number }}%
+                {% else %}
+                    {{ line.value }}
+                {% endif %}
+            </strong>
         </div>
-        <div class="summary-item">
-            <span class="summary-label">{{ t('office_net_payment') }}</span>
-            <strong class="money">{{ operation.office_payment|money }}</strong>
-        </div>
-        <div class="summary-item">
-            <span class="summary-label">{{ t('vat') }}</span>
-            <strong class="money">{{ operation.vat_amount|money }}</strong>
-        </div>
-        <div class="summary-item highlight">
-            <span class="summary-label">{{ t('office_total') }}</span>
-            <strong class="money money-emphasis">{{ operation.office_total|money }}</strong>
-        </div>
+        {% endfor %}
     </div>
+    {% endif %}
 </section>

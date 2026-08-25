@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}{{ report.labels.title }} | {{ t('app_title') }}{% endblock %}
+
+{% block sidebar %}
+<div class="sidebar-panel">
+    <h3 class="sidebar-title">{{ t('sidebar_filters') }}</h3>
+
+    <form
+        method="get"
+        class="sidebar-filter-form report-toolbar-form"
+        action="{{ url_for('team_report', team_leader_id=report.leader.id) }}"
+        id="team-report-filter-form"
+    >
+        {% if is_admin() and report.team_leaders %}
+        <label class="report-field">
+            <span>{{ t('team_leader_label') }}</span>
+            <select
+                name="team_leader_id"
+                onchange="window.location='{{ url_for('team_report', team_leader_id=0) }}'.replace('/0', '/' + this.value) + window.location.search.replace(/[?&]team_leader_id=\d+/g, '');"
+            >
+                {% for leader in report.team_leaders %}
+                <option
+                    value="{{ leader.id }}"
+                    {% if report.leader.id == leader.id %}selected{% endif %}
+                >
+                    {{ leader.name }} ({{ leader.type }})
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+        {% endif %}
+
+        <label class="report-field">
+            <span>{{ t('team_period_mode') }}</span>
+            <select name="period_mode" id="team-period-mode">
+                <option value="month" {% if report.form.period_mode == 'month' %}selected{% endif %}>{{ t('team_period_month') }}</option>
+                <option value="year" {% if report.form.period_mode == 'year' %}selected{% endif %}>{{ t('team_period_year') }}</option>
+                <option value="range" {% if report.form.period_mode == 'range' %}selected{% endif %}>{{ t('team_period_range') }}</option>
+                <option value="all" {% if report.form.period_mode == 'all' %}selected{% endif %}>{{ t('team_period_all') }}</option>
+            </select>
+        </label>
+
+        <label class="report-field" id="team-month-field" {% if report.form.period_mode != 'month' %}hidden{% endif %}>
+            <span>{{ t('reports_filter_month') }}</span>
+            <input type="month" name="month_year" value="{{ report.form.month_year }}">
+        </label>
+
+        <label class="report-field" id="team-year-field" {% if report.form.period_mode != 'year' %}hidden{% endif %}>
+            <span>{{ t('reports_filter_year') }}</span>
+            <select name="year">
+                {% for year in report.years %}
+                <option value="{{ year }}" {% if report.form.year == year|string %}selected{% endif %}>{{ year }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label class="report-field" id="team-date-from-field" {% if report.form.period_mode != 'range' %}hidden{% endif %}>
+            <span>{{ t('reports_filter_date_from') }}</span>
+            <input type="date" name="date_from" value="{{ report.form.date_from }}">
+        </label>
+
+        <label class="report-field" id="team-date-to-field" {% if report.form.period_mode != 'range' %}hidden{% endif %}>
+            <span>{{ t('reports_filter_date_to') }}</span>
+            <input type="date" name="date_to" value="{{ report.form.date_to }}">
+        </label>
+
+        <div class="sidebar-filter-actions">
+            <button type="submit" class="btn btn-primary btn-block">{{ t('search') }}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ report.labels.title }}</h2>
+        <p>
+            {{ report.leader.name }}
+            <span class="type-tag badge-{{ report.leader.type|lower }}">{{ report.leader.type }}</span>
+        </p>
+    </div>
+
+    <div class="page-actions">
+        <a
+            href="{{ url_for('team_report_pdf', team_leader_id=report.leader.id, **request.args) }}"
+            class="btn btn-secondary"
+        >PDF</a>
+        <a
+            href="{{ url_for('team_report_xlsx', team_leader_id=report.leader.id, **request.args) }}"
+            class="btn btn-secondary"
+        >Excel</a>
+        <a href="{{ url_for('agents_detail', agent_id=report.leader.id) }}" class="btn btn-ghost">{{ t('back') }}</a>
+    </div>
+</section>
+
+{% if report.errors %}
+<div class="flash-messages">
+    {% for error in report.errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('team_report_metrics') }}</h3>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-label">{{ report.labels.team_production }}</span>
+            <strong class="stat-value money">{{ report.metrics.team_production|money }}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">{{ report.labels.juniors_production }}</span>
+            <strong class="stat-value money">{{ report.metrics.juniors_production|money }}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">{{ report.labels.leader_own }}</span>
+            <strong class="stat-value money">{{ report.metrics.leader_own_income|money }}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">{{ report.labels.juniors_income }}</span>
+            <strong class="stat-value money">{{ report.metrics.juniors_income_to_leader|money }}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">{{ report.labels.combined }}</span>
+            <strong class="stat-value money">{{ report.metrics.combined_income|money }}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">{{ report.labels.operations }}</span>
+            <strong class="stat-value">{{ report.metrics.operations_count }}</strong>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('team_section_title') }}</h3>
+    </div>
+    {% if report.junior_rows %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('name') }}</th>
+                    <th>{{ t('agent_type') }}</th>
+                    <th>{{ t('team_ops_approved') }}</th>
+                    <th>{{ t('team_production') }}</th>
+                    <th>{{ t('junior_yield_label') }}</th>
+                    <th>{{ t('team_income_for_leader') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in report.junior_rows %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('agents_detail', agent_id=row.agent.id) }}">
+                            {{ row.agent.name }}
+                        </a>
+                    </td>
+                    <td>{{ row.agent.type }}</td>
+                    <td>{{ row.operations_count }}</td>
+                    <td class="money">{{ row.production|money }}</td>
+                    <td class="money">{{ row.junior_yield|money }}</td>
+                    <td class="money">{{ row.team_leader_income|money }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state-text">{{ t('team_no_juniors') }}</p>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('team_operations_title') }}</h3>
+    </div>
+    {% if report.operations %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('id') }}</th>
+                    <th>{{ t('date') }}</th>
+                    <th>{{ t('name') }}</th>
+                    <th>{{ t('agent_type') }}</th>
+                    <th>{{ t('team_production') }}</th>
+                    <th>{{ t('junior_yield_label') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for operation in report.operations %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}">
+                            {{ operation.id }}
+                        </a>
+                    </td>
+                    <td>{{ operation.date }}</td>
+                    <td>{{ operation.agent }}</td>
+                    <td>{{ operation.agent_type }}</td>
+                    <td class="money">{{ operation.total_commission|money }}</td>
+                    <td class="money">{{ operation.agent_payment|money }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state-text">{{ t('team_no_operations') }}</p>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var mode = document.getElementById("team-period-mode");
+    if (!mode) return;
+    function sync() {
+        var value = mode.value;
+        document.getElementById("team-month-field").hidden = value !== "month";
+        document.getElementById("team-year-field").hidden = value !== "year";
+        document.getElementById("team-date-from-field").hidden = value !== "range";
+        document.getElementById("team-date-to-field").hidden = value !== "range";
+    }
+    mode.addEventListener("change", sync);
+    sync();
+})();
+</script>
+{% endblock %}

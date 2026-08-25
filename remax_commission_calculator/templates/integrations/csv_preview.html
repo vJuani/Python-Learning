@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('csv_import_preview_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('csv_import_preview_title') }}</h2>
+        <p>
+            {% if preview.filename %}{{ preview.filename }} · {% endif %}
+            {{ t('csv_import_integration_provider') }}:
+            <strong>{{ preview.integration_provider }}</strong>
+            ·
+            {{ t('csv_import_listing_provider') }}:
+            <strong>{{ preview.listing_providers|join(', ') or preview.default_listing_provider }}</strong>
+        </p>
+        <p class="field-help">{{ t('csv_import_currency_note') }}</p>
+    </div>
+
+    <div class="page-actions">
+        <form method="post" action="{{ url_for('csv_import_cancel') }}" style="display:inline;">
+            <input type="hidden" name="batch_id" value="{{ batch_id }}">
+            <button type="submit" class="btn btn-secondary">{{ t('csv_import_cancel') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('csv_import_confirm') }}" style="display:inline;">
+            <input type="hidden" name="batch_id" value="{{ batch_id }}">
+            <button
+                type="submit"
+                class="btn btn-primary"
+                {% if not preview.can_confirm %}disabled{% endif %}
+            >
+                {{ t('csv_import_confirm') }}
+            </button>
+        </form>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('csv_import_summary') }}</h3>
+    </div>
+    <ul class="summary-list">
+        <li>{{ t('csv_import_rows_valid') }}: {{ preview.summary.rows_valid }}</li>
+        <li>
+            {{ t('csv_import_agents') }}:
+            {{ preview.summary.agents_total }}
+            ({{ t('csv_import_new') }} {{ preview.summary.agents_new }},
+            {{ t('csv_import_updates') }} {{ preview.summary.agents_update }})
+        </li>
+        <li>
+            {{ t('csv_import_properties') }}:
+            {{ t('csv_import_new') }} {{ preview.summary.properties_new }},
+            {{ t('csv_import_updates') }} {{ preview.summary.properties_update }}
+        </li>
+        <li>{{ t('csv_import_errors') }}: {{ preview.summary.errors }}</li>
+        <li>{{ t('csv_import_warnings') }}: {{ preview.summary.warnings }}</li>
+    </ul>
+    {% if not preview.can_confirm %}
+    <p class="flash-message flash-error">{{ t('csv_import_blocked') }}</p>
+    {% endif %}
+</section>
+
+{% if preview.issues %}
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('csv_import_issues') }}</h3>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('csv_import_errors') }}</th>
+                    <th>Code</th>
+                    <th>Row</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for issue in preview.issues %}
+                <tr>
+                    <td>{{ issue.severity }}</td>
+                    <td>{{ issue.code }}</td>
+                    <td>{{ issue.row_number or '—' }}</td>
+                    <td>{{ issue.message }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('csv_import_agents') }}</h3>
+    </div>
+    {% if preview.agents %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>agent_external_id</th>
+                    <th>agent_name</th>
+                    <th>email</th>
+                    <th>Match</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for agent in preview.agents %}
+                <tr>
+                    <td>{{ agent.agent_external_id }}</td>
+                    <td>{{ agent.agent_name }}</td>
+                    <td>{{ agent.agent_email or '—' }}</td>
+                    <td>
+                        {% if agent.match %}
+                        {{ t('csv_import_match_existing') }} #{{ agent.match.id }}
+                        {% else %}
+                        {{ t('csv_import_match_new') }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if agent.action == 'create' %}
+                        {{ t('csv_import_action_create') }}
+                        {% else %}
+                        {{ t('csv_import_action_update') }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>—</p>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('csv_import_properties') }}</h3>
+    </div>
+    {% if preview.properties %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>property_external_id</th>
+                    <th>address</th>
+                    <th>agent</th>
+                    <th>price</th>
+                    <th>currency</th>
+                    <th>url</th>
+                    <th>status</th>
+                    <th>type</th>
+                    <th>listing_provider</th>
+                    <th>Match</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for prop in preview.properties %}
+                <tr>
+                    <td>{{ prop.property_external_id }}</td>
+                    <td>{{ prop.address }}</td>
+                    <td>{{ prop.agent_name }} ({{ prop.agent_external_id }})</td>
+                    <td>{{ prop.price if prop.price is not none else '—' }}</td>
+                    <td>{{ prop.currency }}</td>
+                    <td>
+                        <a href="{{ prop.url }}" target="_blank" rel="noopener noreferrer">
+                            {{ prop.url }}
+                        </a>
+                    </td>
+                    <td>{{ prop.status }}</td>
+                    <td>{{ prop.property_type or '—' }}</td>
+                    <td>{{ prop.listing_provider }}</td>
+                    <td>
+                        {% if prop.match %}
+                        {{ t('csv_import_match_existing') }} #{{ prop.match.property_id }}
+                        {% else %}
+                        {{ t('csv_import_match_new') }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if prop.action == 'create' %}
+                        {{ t('csv_import_action_create') }}
+                        {% else %}
+                        {{ t('csv_import_action_update') }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>—</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if is_edit %}{{ t('listing_edit_title') }}{% else %}{{ t('listing_new_title') }}{% endif %}
+| {{ t('app_title') }}
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>
+            {% if is_edit %}
+            {{ t('listing_edit_title') }}
+            {% else %}
+            {{ t('listing_new_title') }}
+            {% endif %}
+        </h2>
+        <p>{{ t('listing_form_help') }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a
+            href="{{ url_for('properties_detail', property_id=property_data.id) }}"
+            class="btn btn-secondary"
+        >{{ t('back') }}</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+    {% if listing_conflict %}
+    <p class="listing-conflict-actions">
+        <a
+            href="{{ url_for('properties_detail', property_id=listing_conflict.property_id) }}"
+            class="btn btn-small btn-secondary"
+        >{{ t('listing_view_linked_property') }}</a>
+    </p>
+    {% endif %}
+</div>
+{% endif %}
+
+<section class="panel">
+    <form
+        class="agent-form"
+        method="post"
+        action="{% if is_edit %}{{ url_for('property_listings_edit', property_id=property_data.id, listing_id=listing_id) }}{% else %}{{ url_for('property_listings_new', property_id=property_data.id) }}{% endif %}"
+    >
+        <div class="form-group">
+            <label for="provider">{{ t('listing_provider') }}</label>
+            <select id="provider" name="provider" class="form-input" required>
+                {% for option in provider_options %}
+                <option
+                    value="{{ option.value }}"
+                    {% if listing_data.provider == option.value %}selected{% endif %}
+                >{{ option.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group" id="provider-label-group" hidden>
+            <label for="provider_label">{{ t('listing_provider_label') }}</label>
+            <input
+                type="text"
+                id="provider_label"
+                name="provider_label"
+                class="form-input"
+                value="{{ listing_data.provider_label }}"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="url">{{ t('listing_url') }}</label>
+            <input
+                type="url"
+                id="url"
+                name="url"
+                class="form-input"
+                value="{{ listing_data.url }}"
+                placeholder="https://"
+                required
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="external_id">{{ t('listing_external_id') }}</label>
+            <input
+                type="text"
+                id="external_id"
+                name="external_id"
+                class="form-input"
+                value="{{ listing_data.external_id }}"
+            >
+            <small class="field-help">{{ t('listing_external_id_help') }}</small>
+        </div>
+
+        <div class="form-group">
+            <label for="status">{{ t('listing_status') }}</label>
+            <select id="status" name="status" class="form-input" required>
+                {% for option in status_options %}
+                <option
+                    value="{{ option.value }}"
+                    {% if listing_data.status == option.value %}selected{% endif %}
+                >{{ option.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{% if is_edit %}{{ t('save_changes') }}{% else %}{{ t('listing_save') }}{% endif %}</button>
+            <a
+                href="{{ url_for('properties_detail', property_id=property_data.id) }}"
+                class="btn btn-secondary"
+            >{{ t('cancel') }}</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var providerSelect = document.getElementById("provider");
+    var labelGroup = document.getElementById("provider-label-group");
+    var otherValue = {{ provider_other|tojson }};
+
+    function syncProviderLabel() {
+        if (!providerSelect || !labelGroup) {
+            return;
+        }
+
+        labelGroup.hidden = providerSelect.value !== otherValue;
+    }
+
+    if (providerSelect) {
+        providerSelect.addEventListener("change", syncProviderLabel);
+        syncProviderLabel();
+    }
+})();
+</script>
+{% endblock %}

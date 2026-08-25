@@ -22,6 +22,9 @@ uploads/
 # Logs
 *.log
 
+# Local email/dev scratch files
+tmp_email_inbox.txt
+
 # Local data and generated exports
 *.json
 *.csv

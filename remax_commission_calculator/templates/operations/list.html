@@ -2,44 +2,11 @@
 
 {% block title %}{{ t('operations_title') }} | {{ t('app_title') }}{% endblock %}
 
-{% block content %}
-<section class="page-header">
-    <div class="page-header-text">
-        <h2>{{ t('operations_title') }}</h2>
-        <p>{{ t('operations_subtitle') }}</p>
-    </div>
+{% block sidebar %}
+<div class="sidebar-panel">
+    <h3 class="sidebar-title">{{ t('sidebar_filters') }}</h3>
 
-    <div class="page-actions">
-        {% if can_write() %}
-        {% if can_create_operations %}
-        <a href="{{ url_for('operations_new') }}" class="btn btn-primary">{{ t('new_operation') }}</a>
-        {% else %}
-        <span class="btn btn-secondary disabled-hint">{{ t('new_operation') }}</span>
-        {% endif %}
-        {% endif %}
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
-    </div>
-</section>
-
-{% if can_write() and not can_create_operations %}
-<section class="panel">
-    <div class="empty-state">
-        <p class="empty-state-title">{{ t('setup_required') }}</p>
-        <p class="empty-state-text">
-            {{ t('setup_required_text') }}
-            <a href="{{ url_for('agents_list') }}">{{ t('go_to_agents') }}</a>
-            {{ t('or') }}
-            <a href="{{ url_for('properties_list') }}">{{ t('go_to_properties') }}</a>.
-        </p>
-    </div>
-</section>
-{% endif %}
-
-<section class="panel">
-    <div class="panel-header">
-        <h3>{{ t('advanced_filters') }}</h3>
-        <span class="badge">{{ operation_count }} {{ t('found') }}</span>
-    </div>
+    {% include "_sidebar_search.html" %}
 
     {% if filter_errors %}
     <div class="flash-messages">
@@ -49,7 +16,7 @@
     </div>
     {% endif %}
 
-    <form class="filter-form" method="get" action="{{ url_for('operations_list') }}">
+    <form class="sidebar-filter-form filter-form" method="get" action="{{ url_for('operations_list') }}">
         <div class="filter-grid">
             <div class="form-group">
                 <label for="operation_id">{{ t('operation_id') }}</label>
@@ -179,12 +146,50 @@
             </div>
         </div>
 
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary">{{ t('filter') }}</button>
-            <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">{{ t('clear_filters') }}</a>
+        <div class="sidebar-filter-actions">
+            <button type="submit" class="btn btn-primary btn-block">{{ t('sidebar_apply_filters') }}</button>
+            <a href="{{ url_for('operations_list') }}" class="btn btn-secondary btn-block">{{ t('clear_filters') }}</a>
         </div>
     </form>
+
+    <p class="sidebar-count">{{ operation_count }} {{ t('found') }}</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('operations_title') }}</h2>
+        <p>{{ t('operations_subtitle') }}</p>
+    </div>
+
+    <div class="page-actions">
+        {% if can_write() %}
+        {% if can_create_operations %}
+        <a href="{{ url_for('operations_new') }}" class="btn btn-primary">{{ t('new_operation') }}</a>
+        {% else %}
+        <span class="btn btn-secondary disabled-hint">{{ t('new_operation') }}</span>
+        {% endif %}
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
 </section>
+
+{% if can_write() and not can_create_operations %}
+<section class="panel">
+    <div class="empty-state">
+        <p class="empty-state-title">{{ t('setup_required') }}</p>
+        <p class="empty-state-text">
+            {{ t('setup_required_text') }}
+            {% if is_admin() %}
+            <a href="{{ url_for('agents_list') }}">{{ t('go_to_agents') }}</a>
+            {{ t('or') }}
+            {% endif %}
+            <a href="{{ url_for('properties_list') }}">{{ t('go_to_properties') }}</a>.
+        </p>
+    </div>
+</section>
+{% endif %}
 
 <section class="panel">
     <div class="panel-header">

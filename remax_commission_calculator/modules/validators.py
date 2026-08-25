@@ -1,5 +1,11 @@
 from datetime import datetime
 
+from modules.property_types import (
+    INVOICE_FULL_COMMISSION_VALUES,
+    LISTING_PURPOSES,
+    PROPERTY_TYPES,
+)
+
 
 AGENT_TYPES = (
     "Alto",
@@ -110,18 +116,60 @@ def validate_date_format(
             f"{field_name} cannot be empty."
         )
 
-    try:
-        datetime.strptime(
-            value,
-            "%d/%m/%Y"
-        )
+    normalized, error = normalize_date_input(
+        value,
+        field_name,
+    )
 
-    except ValueError:
-        return None, (
-            f"{field_name} must use dd/mm/yyyy format."
-        )
+    if error:
+        return None, error
 
-    return value, None
+    return normalized, None
+
+
+def normalize_date_input(
+    value,
+    field_name="Date",
+):
+    value = str(value).strip()
+
+    if value == "":
+        return None, None
+
+    for date_format in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            parsed = datetime.strptime(
+                value,
+                date_format,
+            )
+
+        except ValueError:
+            continue
+
+        return parsed.strftime("%d/%m/%Y"), None
+
+    return None, (
+        f"{field_name} must use dd/mm/yyyy format."
+    )
+
+
+def date_display_to_iso(value):
+    if value is None:
+        return ""
+
+    value = str(value).strip()
+
+    if value == "":
+        return ""
+
+    normalized, error = normalize_date_input(value)
+
+    if error or normalized is None:
+        return ""
+
+    day, month, year = normalized.split("/")
+
+    return f"{year}-{month}-{day}"
 
 
 def parse_optional_positive_float(
@@ -154,9 +202,9 @@ def parse_optional_date(
     if value == "":
         return None, None
 
-    return validate_date_format(
+    return normalize_date_input(
         value,
-        field_name
+        field_name,
     )
 
 
@@ -194,7 +242,10 @@ def validate_agent_form(
 
 def validate_property_form(
     address,
-    jurisdiction
+    jurisdiction,
+    property_type=None,
+    listing_price=None,
+    listing_purpose=None,
 ):
     errors = []
 
@@ -215,4 +266,42 @@ def validate_property_form(
     if jurisdiction_error:
         errors.append(jurisdiction_error)
 
+    if property_type is None or str(property_type).strip() == "":
+        errors.append("err_property_type_required")
+    else:
+        type_error = validate_choice(
+            property_type,
+            PROPERTY_TYPES,
+            "property type"
+        )
+
+        if type_error:
+            errors.append("err_invalid_property_type")
+
+    price_value, price_error = parse_positive_float(
+        listing_price,
+        "Property listing price",
+    )
+
+    if price_error:
+        if (
+            listing_price is None
+            or str(listing_price).strip() == ""
+        ):
+            errors.append("err_property_listing_price_required")
+        else:
+            errors.append("err_invalid_property_listing_price")
+
+    if listing_purpose is None or str(listing_purpose).strip() == "":
+        errors.append("err_property_listing_purpose_required")
+    elif listing_purpose not in LISTING_PURPOSES:
+        errors.append("err_invalid_property_listing_purpose")
+
     return errors
+
+
+def validate_invoice_full_commission(value):
+    if value not in INVOICE_FULL_COMMISSION_VALUES:
+        return "err_invalid_invoice_full_commission"
+
+    return None

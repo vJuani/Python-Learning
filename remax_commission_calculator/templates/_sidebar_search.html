@@ -1,0 +1,15 @@
+<form class="sidebar-search-form" method="get" action="{{ url_for('search_results') }}">
+    <label class="sidebar-field" for="sidebar-search-q">
+        <span>{{ t('nav_search') }}</span>
+        <input
+            type="text"
+            id="sidebar-search-q"
+            name="q"
+            class="form-input"
+            placeholder="{{ t('nav_search_placeholder') }}"
+            value="{{ request.args.get('q', '') }}"
+            aria-label="{{ t('nav_search_aria') }}"
+        >
+    </label>
+    <button type="submit" class="btn btn-secondary btn-block">{{ t('nav_search_button') }}</button>
+</form>

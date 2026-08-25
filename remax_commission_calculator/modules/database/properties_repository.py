@@ -32,7 +32,11 @@ def _build_property_dict(row):
         "reviewed_by_user_id": row[8] if len(row) > 8 else None,
         "reviewed_at": row[9] if len(row) > 9 else None,
         "created_by_user_id": row[10] if len(row) > 10 else None,
-        "submitted_at": row[11] if len(row) > 11 else None
+        "submitted_at": row[11] if len(row) > 11 else None,
+        "property_type": row[12] if len(row) > 12 else None,
+        "listing_price": row[13] if len(row) > 13 else None,
+        "listing_purpose": row[14] if len(row) > 14 else None,
+        "last_synced_at": row[15] if len(row) > 15 else None,
     }
 
 
@@ -49,7 +53,11 @@ PROPERTIES_BASE_QUERY = """
         properties.reviewed_by_user_id,
         properties.reviewed_at,
         properties.created_by_user_id,
-        properties.submitted_at
+        properties.submitted_at,
+        properties.property_type,
+        properties.listing_price,
+        properties.listing_purpose,
+        properties.last_synced_at
     FROM properties
     LEFT JOIN agents
         ON properties.agent_id = agents.id
@@ -179,7 +187,11 @@ def add_property(
     agent_id=None,
     status=STATUS_APPROVED,
     created_by_user_id=None,
-    submitted_at=None
+    submitted_at=None,
+    property_type=None,
+    listing_price=None,
+    listing_purpose=None,
+    last_synced_at=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -209,9 +221,13 @@ def add_property(
             agent_id,
             status,
             created_by_user_id,
-            submitted_at
+            submitted_at,
+            property_type,
+            listing_price,
+            listing_purpose,
+            last_synced_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             address,
@@ -220,7 +236,11 @@ def add_property(
             agent_id,
             status,
             created_by_user_id,
-            submitted_at
+            submitted_at,
+            property_type,
+            listing_price,
+            listing_purpose,
+            last_synced_at,
         )
     )
 
@@ -237,7 +257,10 @@ def update_property(
     address,
     jurisdiction,
     organization_id,
-    agent_id=None
+    agent_id=None,
+    property_type=None,
+    listing_price=None,
+    listing_purpose=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -259,7 +282,10 @@ def update_property(
         SET
             address = ?,
             jurisdiction = ?,
-            agent_id = ?
+            agent_id = ?,
+            property_type = ?,
+            listing_price = ?,
+            listing_purpose = ?
         WHERE id = ?
             AND organization_id = ?
         """,
@@ -267,9 +293,78 @@ def update_property(
             address,
             jurisdiction,
             agent_id,
+            property_type,
+            listing_price,
+            listing_purpose,
             property_id,
             organization_id
         )
+    )
+
+    if cursor.rowcount == 0:
+        connection.close()
+        raise TenantError(
+            "Property was not found in this organization."
+        )
+
+    connection.commit()
+    connection.close()
+
+
+def update_property_from_sync(
+    property_id,
+    organization_id,
+    *,
+    address,
+    jurisdiction,
+    agent_id,
+    property_type=None,
+    listing_price=None,
+    listing_purpose=None,
+    last_synced_at=None,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+
+    if last_synced_at is None:
+        last_synced_at = _now_iso()
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    if agent_id is not None:
+        assert_agent_in_organization(
+            cursor,
+            agent_id,
+            organization_id
+        )
+
+    cursor.execute(
+        """
+        UPDATE properties
+        SET
+            address = ?,
+            jurisdiction = ?,
+            agent_id = ?,
+            property_type = ?,
+            listing_price = ?,
+            listing_purpose = ?,
+            last_synced_at = ?
+        WHERE id = ?
+            AND organization_id = ?
+        """,
+        (
+            address,
+            jurisdiction,
+            agent_id,
+            property_type,
+            listing_price,
+            listing_purpose,
+            last_synced_at,
+            property_id,
+            organization_id,
+        ),
     )
 
     if cursor.rowcount == 0:
@@ -404,7 +499,11 @@ def filter_properties(
                 properties.reviewed_by_user_id,
                 properties.reviewed_at,
                 properties.created_by_user_id,
-                properties.submitted_at
+                properties.submitted_at,
+                properties.property_type,
+                properties.listing_price,
+                properties.listing_purpose,
+                properties.last_synced_at
             FROM properties
             LEFT JOIN agents
                 ON properties.agent_id = agents.id

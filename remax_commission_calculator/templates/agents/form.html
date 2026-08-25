@@ -67,6 +67,26 @@
             </select>
         </div>
 
+        <div class="form-group">
+            <label for="team_leader_agent_id">{{ t('team_leader_label') }}</label>
+            <select
+                id="team_leader_agent_id"
+                name="team_leader_agent_id"
+                class="form-input"
+            >
+                <option value="">{{ t('team_leader_none') }}</option>
+                {% for candidate in team_leader_candidates or [] %}
+                <option
+                    value="{{ candidate.id }}"
+                    {% if agent.team_leader_agent_id == candidate.id %}selected{% endif %}
+                >
+                    {{ candidate.name }} ({{ candidate.type }})
+                </option>
+                {% endfor %}
+            </select>
+            <small class="field-help">{{ t('team_leader_help') }}</small>
+        </div>
+
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">
                 {% if is_edit %}{{ t('save_changes') }}{% else %}{{ t('create_agent') }}{% endif %}

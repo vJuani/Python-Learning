@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}{{ agent.name }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ agent.name }}</h2>
+        <p>
+            <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
+            {% if is_team_leader %}
+            · {{ t('team_leader_badge') }}
+            {% endif %}
+            {% if team_leader and show_team_leader %}
+            · {{ t('team_leader_label') }}:
+            {% if can_open_team_leader %}
+            <a href="{{ url_for('agents_detail', agent_id=team_leader.id) }}">
+                {{ team_leader.name }}
+            </a>
+            {% else %}
+            {{ team_leader.name }}
+            {% endif %}
+            ({{ team_leader.type }})
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="page-actions">
+        {% if is_team_leader and can_view_team_report %}
+        <a
+            href="{{ url_for('team_report', team_leader_id=agent.id) }}"
+            class="btn btn-secondary"
+        >{{ t('team_report_open') }}</a>
+        {% endif %}
+        {% if can_edit %}
+        <a href="{{ url_for('agents_edit', agent_id=agent.id) }}" class="btn btn-primary">{{ t('edit') }}</a>
+        <a href="{{ url_for('agents_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        {% else %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        {% endif %}
+    </div>
+</section>
+
+{% if is_team_leader and junior_rows %}
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('team_section_title') }}</h3>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('name') }}</th>
+                    <th>{{ t('agent_type') }}</th>
+                    <th>{{ t('team_ops_approved') }}</th>
+                    <th>{{ t('team_production') }}</th>
+                    <th>{{ t('team_income_for_leader') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in junior_rows %}
+                <tr>
+                    <td>
+                        {% if can_open_juniors %}
+                        <a href="{{ url_for('agents_detail', agent_id=row.agent.id) }}">
+                            {{ row.agent.name }}
+                        </a>
+                        {% else %}
+                        {{ row.agent.name }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="type-tag badge-{{ row.agent.type|lower }}">{{ row.agent.type }}</span>
+                    </td>
+                    <td>{{ row.operations_count }}</td>
+                    <td class="money">{{ row.production|money }}</td>
+                    <td class="money">{{ row.team_leader_income|money }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{% if show_junior_stats %}
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('junior_stats_title') }}</h3>
+    </div>
+    <ul class="summary-list">
+        <li>{{ t('team_ops_approved') }}: {{ own_stats.operations_count }}</li>
+        <li>{{ t('team_production') }}: {{ own_stats.production|money }}</li>
+        <li>{{ t('junior_yield_label') }}: {{ own_stats.agent_yield|money }}</li>
+    </ul>
+</section>
+{% endif %}
+
+{% if show_wallet and wallet_totals %}
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('wallet_section_title') }}</h3>
+    </div>
+    <ul class="summary-list">
+        <li>
+            {{ t('wallet_own_commissions') }}:
+            {{ wallet_totals.own_commission|money }}
+        </li>
+        <li>
+            {{ t('wallet_team_income') }}:
+            {{ wallet_totals.team_leader_income|money }}
+        </li>
+        <li>
+            {{ t('wallet_adjustments') }}:
+            {{ (wallet_totals.adjustment + wallet_totals.reversal)|money }}
+        </li>
+        <li>
+            <strong>
+                {{ t('wallet_total') }}:
+                {{ wallet_totals.total|money }}
+            </strong>
+        </li>
+    </ul>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('wallet_recent_movements') }}</h3>
+    </div>
+    {% if wallet_movements %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ t('wallet_date') }}</th>
+                    <th>{{ t('wallet_reference') }}</th>
+                    <th>{{ t('wallet_source_agent') }}</th>
+                    <th>{{ t('wallet_movement_type') }}</th>
+                    <th>{{ t('wallet_amount') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mov in wallet_movements %}
+                <tr>
+                    <td>{{ mov.created_at }}</td>
+                    <td>
+                        {% if mov.operation_id %}
+                        <a href="{{ url_for('operations_detail', operation_id=mov.operation_id) }}">
+                            {{ mov.reference or ('COM-%06d'|format(mov.operation_id)) }}
+                        </a>
+                        {% else %}
+                        {{ mov.reference or '—' }}
+                        {% endif %}
+                    </td>
+                    <td>{{ mov.source_agent_name or '—' }}</td>
+                    <td>{{ t('wallet_type_' ~ mov.movement_type) }}</td>
+                    <td class="money">
+                        {% if mov.amount >= 0 %}+{% endif %}
+                        {{ mov.amount|money(mov.currency) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state-text">{{ t('wallet_no_movements') }}</p>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

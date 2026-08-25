@@ -1,5 +1,6 @@
 import os
 import shutil
+from pathlib import Path
 from datetime import datetime
 
 from .connection import (
@@ -697,10 +698,10 @@ def _migrate_property_approvals_and_notifications(cursor):
     )
 
 
-def _migrate_vat_documents(cursor):
+def _migrate_operation_documents(cursor):
     cursor.execute(
         """
-        CREATE TABLE IF NOT EXISTS operation_vat_documents (
+        CREATE TABLE IF NOT EXISTS operation_documents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             organization_id INTEGER NOT NULL,
             operation_id INTEGER NOT NULL,
@@ -726,13 +727,14 @@ def _migrate_vat_documents(cursor):
             CHECK (
                 doc_type IN (
                     'martillero_client',
-                    'agent_client'
+                    'agent_client',
+                    'uif_form',
+                    'uif_additional',
+                    'transfer_receipt',
+                    'reservation_deposit',
+                    'deed_contract',
+                    'other'
                 )
-            ),
-            UNIQUE (
-                organization_id,
-                operation_id,
-                doc_type
             )
         )
         """
@@ -740,9 +742,22 @@ def _migrate_vat_documents(cursor):
 
     cursor.execute(
         """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_operation_documents_structured_unique
+        ON operation_documents (
+            organization_id,
+            operation_id,
+            doc_type
+        )
+        WHERE doc_type != 'other'
+        """
+    )
+
+    cursor.execute(
+        """
         CREATE INDEX IF NOT EXISTS
-        idx_vat_docs_org_operation
-        ON operation_vat_documents (
+        idx_operation_documents_org_operation
+        ON operation_documents (
             organization_id,
             operation_id
         )
@@ -752,8 +767,776 @@ def _migrate_vat_documents(cursor):
     cursor.execute(
         """
         CREATE INDEX IF NOT EXISTS
-        idx_vat_docs_operation
-        ON operation_vat_documents (operation_id)
+        idx_operation_documents_operation
+        ON operation_documents (operation_id)
+        """
+    )
+
+    if _table_exists(cursor, "operation_vat_documents"):
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO operation_documents (
+                id,
+                organization_id,
+                operation_id,
+                doc_type,
+                stored_name,
+                original_filename,
+                content_type,
+                size_bytes,
+                uploaded_by_user_id,
+                created_at,
+                updated_at
+            )
+            SELECT
+                id,
+                organization_id,
+                operation_id,
+                doc_type,
+                stored_name,
+                original_filename,
+                content_type,
+                size_bytes,
+                uploaded_by_user_id,
+                created_at,
+                updated_at
+            FROM operation_vat_documents
+            """
+        )
+        cursor.execute(
+            "DROP TABLE operation_vat_documents"
+        )
+
+
+def _migrate_property_external_listings(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS property_external_listings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            property_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            provider_label TEXT,
+            external_id TEXT,
+            url TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_synced_at TEXT,
+            created_by_user_id INTEGER,
+            updated_by_user_id INTEGER,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (property_id)
+                REFERENCES properties(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (created_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (updated_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+
+            CHECK (
+                provider IN (
+                    'remax_web',
+                    'organization_website',
+                    'zonaprop',
+                    'argenprop',
+                    'mercadolibre',
+                    'other'
+                )
+            ),
+            CHECK (
+                status IN (
+                    'active',
+                    'paused',
+                    'reserved',
+                    'sold',
+                    'inactive'
+                )
+            )
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_property_external_listings_org_property
+        ON property_external_listings (
+            organization_id,
+            property_id
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_property_external_listings_org_provider
+        ON property_external_listings (
+            organization_id,
+            provider
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_property_external_listings_structured_provider
+        ON property_external_listings (
+            organization_id,
+            property_id,
+            provider
+        )
+        WHERE provider != 'other'
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_property_external_listings_external_id
+        ON property_external_listings (
+            organization_id,
+            provider,
+            external_id
+        )
+        WHERE external_id IS NOT NULL
+            AND external_id != ''
+        """
+    )
+
+
+def _migrate_document_storage_folders():
+    from modules.config import get_private_upload_root
+
+    root = get_private_upload_root()
+    organizations = root / "organizations"
+
+    if not organizations.is_dir():
+        return
+
+    for legacy_dir in organizations.glob(
+        "*/operations/*/vat-docs"
+    ):
+        target = legacy_dir.parent / "documents"
+
+        if target.exists():
+            for child in legacy_dir.iterdir():
+                destination = target / child.name
+
+                if not destination.exists():
+                    child.rename(destination)
+
+            try:
+                legacy_dir.rmdir()
+            except OSError:
+                pass
+        else:
+            legacy_dir.rename(target)
+
+
+def _migrate_property_and_operation_requirements(cursor):
+    if _table_exists(cursor, "properties"):
+        if not _column_exists(
+            cursor,
+            "properties",
+            "property_type"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE properties
+                ADD COLUMN property_type TEXT
+                """
+            )
+
+    if _table_exists(cursor, "operations"):
+        if not _column_exists(
+            cursor,
+            "operations",
+            "invoice_full_commission"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE operations
+                ADD COLUMN invoice_full_commission TEXT
+                NOT NULL DEFAULT 'no'
+                """
+            )
+
+        cursor.execute(
+            """
+            UPDATE operations
+            SET invoice_full_commission = 'no'
+            WHERE invoice_full_commission IS NULL
+                OR invoice_full_commission = ''
+            """
+        )
+
+    if _table_exists(cursor, "property_change_requests"):
+        if not _column_exists(
+            cursor,
+            "property_change_requests",
+            "proposed_property_type"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE property_change_requests
+                ADD COLUMN proposed_property_type TEXT
+                """
+            )
+
+        if not _column_exists(
+            cursor,
+            "property_change_requests",
+            "proposed_listing_price"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE property_change_requests
+                ADD COLUMN proposed_listing_price REAL
+                """
+            )
+
+        if not _column_exists(
+            cursor,
+            "property_change_requests",
+            "proposed_listing_purpose"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE property_change_requests
+                ADD COLUMN proposed_listing_purpose TEXT
+                """
+            )
+
+    if _table_exists(cursor, "properties"):
+        if not _column_exists(
+            cursor,
+            "properties",
+            "listing_price"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE properties
+                ADD COLUMN listing_price REAL
+                """
+            )
+
+        if not _column_exists(
+            cursor,
+            "properties",
+            "listing_purpose"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE properties
+                ADD COLUMN listing_purpose TEXT
+                """
+            )
+
+
+def _organization_integrations_sql_has_csv_upload(cursor):
+    cursor.execute(
+        """
+        SELECT sql
+        FROM sqlite_master
+        WHERE type = 'table'
+            AND name = 'organization_integrations'
+        """
+    )
+    row = cursor.fetchone()
+
+    if row is None or row[0] is None:
+        return False
+
+    return "csv_upload" in row[0]
+
+
+def _rebuild_organization_integrations_for_csv_upload(cursor):
+    # FK from integration_sync_runs blocks DROP while foreign_keys=ON.
+    cursor.execute("PRAGMA foreign_keys = OFF")
+
+    cursor.execute(
+        """
+        CREATE TABLE organization_integrations_migrated (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            scope_type TEXT NOT NULL,
+            agent_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'disconnected',
+            external_office_id TEXT,
+            config_json TEXT,
+            last_synced_at TEXT,
+            last_sync_status TEXT,
+            last_sync_error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (agent_id)
+                REFERENCES agents(id)
+                ON DELETE RESTRICT,
+
+            CHECK (
+                provider IN (
+                    'remax',
+                    'organization_website',
+                    'stub_fixture',
+                    'csv_upload'
+                )
+            ),
+            CHECK (
+                scope_type IN (
+                    'organization',
+                    'agent'
+                )
+            ),
+            CHECK (
+                status IN (
+                    'disconnected',
+                    'connected',
+                    'error',
+                    'disabled'
+                )
+            ),
+            CHECK (
+                last_sync_status IS NULL
+                OR last_sync_status IN (
+                    'ok',
+                    'partial',
+                    'failed'
+                )
+            ),
+            CHECK (
+                (
+                    scope_type = 'organization'
+                    AND agent_id IS NULL
+                )
+                OR (
+                    scope_type = 'agent'
+                    AND agent_id IS NOT NULL
+                )
+            )
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        INSERT INTO organization_integrations_migrated (
+            id,
+            organization_id,
+            provider,
+            scope_type,
+            agent_id,
+            status,
+            external_office_id,
+            config_json,
+            last_synced_at,
+            last_sync_status,
+            last_sync_error,
+            created_at,
+            updated_at
+        )
+        SELECT
+            id,
+            organization_id,
+            provider,
+            scope_type,
+            agent_id,
+            status,
+            external_office_id,
+            config_json,
+            last_synced_at,
+            last_sync_status,
+            last_sync_error,
+            created_at,
+            updated_at
+        FROM organization_integrations
+        """
+    )
+
+    cursor.execute("DROP TABLE organization_integrations")
+    cursor.execute(
+        """
+        ALTER TABLE organization_integrations_migrated
+        RENAME TO organization_integrations
+        """
+    )
+    cursor.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_agent_teams_and_wallet(cursor):
+    if _table_exists(cursor, "agents"):
+        if not _column_exists(
+            cursor,
+            "agents",
+            "team_leader_agent_id",
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE agents
+                ADD COLUMN team_leader_agent_id INTEGER
+                REFERENCES agents(id)
+                ON DELETE SET NULL
+                """
+            )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_agents_team_leader
+            ON agents (
+                organization_id,
+                team_leader_agent_id
+            )
+            WHERE team_leader_agent_id IS NOT NULL
+            """
+        )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS agent_wallet_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            agent_id INTEGER NOT NULL,
+            operation_id INTEGER,
+            movement_type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT NOT NULL DEFAULT 'USD',
+            source_agent_id INTEGER,
+            related_movement_id INTEGER,
+            description TEXT,
+            reference TEXT,
+            idempotency_key TEXT,
+            created_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (agent_id)
+                REFERENCES agents(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (operation_id)
+                REFERENCES operations(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (source_agent_id)
+                REFERENCES agents(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (related_movement_id)
+                REFERENCES agent_wallet_movements(id)
+                ON DELETE SET NULL,
+
+            CHECK (
+                movement_type IN (
+                    'own_commission',
+                    'team_leader_income',
+                    'adjustment',
+                    'reversal'
+                )
+            ),
+            CHECK (
+                currency IN ('USD', 'ARS')
+            )
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_wallet_idempotency
+        ON agent_wallet_movements (
+            organization_id,
+            idempotency_key
+        )
+        WHERE idempotency_key IS NOT NULL
+            AND idempotency_key != ''
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_wallet_agent
+        ON agent_wallet_movements (
+            organization_id,
+            agent_id,
+            created_at
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_wallet_operation
+        ON agent_wallet_movements (
+            organization_id,
+            operation_id
+        )
+        """
+    )
+
+
+def _migrate_organization_integrations(cursor):
+    if _table_exists(cursor, "agents"):
+        if not _column_exists(
+            cursor,
+            "agents",
+            "external_provider"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE agents
+                ADD COLUMN external_provider TEXT
+                """
+            )
+
+        if not _column_exists(
+            cursor,
+            "agents",
+            "external_id"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE agents
+                ADD COLUMN external_id TEXT
+                """
+            )
+
+        if not _column_exists(
+            cursor,
+            "agents",
+            "last_synced_at"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE agents
+                ADD COLUMN last_synced_at TEXT
+                """
+            )
+
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_agents_org_external_identity
+            ON agents (
+                organization_id,
+                external_provider,
+                external_id
+            )
+            WHERE external_provider IS NOT NULL
+                AND external_id IS NOT NULL
+                AND external_id != ''
+            """
+        )
+
+    if _table_exists(cursor, "properties"):
+        if not _column_exists(
+            cursor,
+            "properties",
+            "last_synced_at"
+        ):
+            cursor.execute(
+                """
+                ALTER TABLE properties
+                ADD COLUMN last_synced_at TEXT
+                """
+            )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS organization_integrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            scope_type TEXT NOT NULL,
+            agent_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'disconnected',
+            external_office_id TEXT,
+            config_json TEXT,
+            last_synced_at TEXT,
+            last_sync_status TEXT,
+            last_sync_error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (agent_id)
+                REFERENCES agents(id)
+                ON DELETE RESTRICT,
+
+            CHECK (
+                provider IN (
+                    'remax',
+                    'organization_website',
+                    'stub_fixture',
+                    'csv_upload'
+                )
+            ),
+            CHECK (
+                scope_type IN (
+                    'organization',
+                    'agent'
+                )
+            ),
+            CHECK (
+                status IN (
+                    'disconnected',
+                    'connected',
+                    'error',
+                    'disabled'
+                )
+            ),
+            CHECK (
+                last_sync_status IS NULL
+                OR last_sync_status IN (
+                    'ok',
+                    'partial',
+                    'failed'
+                )
+            ),
+            CHECK (
+                (
+                    scope_type = 'organization'
+                    AND agent_id IS NULL
+                )
+                OR (
+                    scope_type = 'agent'
+                    AND agent_id IS NOT NULL
+                )
+            )
+        )
+        """
+    )
+
+    if (
+        _table_exists(cursor, "organization_integrations")
+        and not _organization_integrations_sql_has_csv_upload(
+            cursor
+        )
+    ):
+        _rebuild_organization_integrations_for_csv_upload(
+            cursor
+        )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS csv_import_batches (
+            id TEXT PRIMARY KEY,
+            organization_id INTEGER NOT NULL,
+            filename TEXT,
+            payload_json TEXT NOT NULL,
+            preview_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_csv_import_batches_organization
+        ON csv_import_batches (organization_id)
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_org_integrations_org_provider_org_scope
+        ON organization_integrations (
+            organization_id,
+            provider
+        )
+        WHERE scope_type = 'organization'
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_org_integrations_org_provider_agent_scope
+        ON organization_integrations (
+            organization_id,
+            provider,
+            agent_id
+        )
+        WHERE scope_type = 'agent'
+            AND agent_id IS NOT NULL
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_org_integrations_organization
+        ON organization_integrations (organization_id)
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS integration_sync_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            integration_id INTEGER NOT NULL,
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            status TEXT NOT NULL,
+            agents_created INTEGER NOT NULL DEFAULT 0,
+            agents_updated INTEGER NOT NULL DEFAULT 0,
+            properties_created INTEGER NOT NULL DEFAULT 0,
+            properties_updated INTEGER NOT NULL DEFAULT 0,
+            listings_created INTEGER NOT NULL DEFAULT 0,
+            listings_updated INTEGER NOT NULL DEFAULT 0,
+            listings_deactivated INTEGER NOT NULL DEFAULT 0,
+            error_summary TEXT,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (integration_id)
+                REFERENCES organization_integrations(id)
+                ON DELETE CASCADE,
+
+            CHECK (
+                status IN (
+                    'running',
+                    'ok',
+                    'partial',
+                    'failed'
+                )
+            )
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_integration_sync_runs_integration
+        ON integration_sync_runs (
+            integration_id,
+            started_at
+        )
         """
     )
 
@@ -958,7 +1741,11 @@ def migrate_schema():
         _migrate_workflow_and_ownership(cursor)
         _migrate_access_and_registration(cursor)
         _migrate_property_approvals_and_notifications(cursor)
-        _migrate_vat_documents(cursor)
+        _migrate_operation_documents(cursor)
+        _migrate_property_external_listings(cursor)
+        _migrate_property_and_operation_requirements(cursor)
+        _migrate_organization_integrations(cursor)
+        _migrate_agent_teams_and_wallet(cursor)
 
         _validate_migration(
             cursor,
@@ -984,6 +1771,7 @@ def migrate_schema():
         raise MigrationError(message) from error
 
     connection.close()
+    _migrate_document_storage_folders()
 
     return backup_path
 
@@ -1006,10 +1794,18 @@ def create_tables():
             name TEXT NOT NULL,
             type TEXT NOT NULL,
             organization_id INTEGER NOT NULL,
+            external_provider TEXT,
+            external_id TEXT,
+            last_synced_at TEXT,
+            team_leader_agent_id INTEGER,
 
             FOREIGN KEY (organization_id)
                 REFERENCES organizations(id)
-                ON DELETE RESTRICT
+                ON DELETE RESTRICT,
+
+            FOREIGN KEY (team_leader_agent_id)
+                REFERENCES agents(id)
+                ON DELETE SET NULL
         )
     """)
 
@@ -1020,6 +1816,10 @@ def create_tables():
             jurisdiction TEXT NOT NULL,
             organization_id INTEGER NOT NULL,
             agent_id INTEGER,
+            property_type TEXT,
+            listing_price REAL,
+            listing_purpose TEXT,
+            last_synced_at TEXT,
 
             FOREIGN KEY (organization_id)
                 REFERENCES organizations(id)
@@ -1042,6 +1842,7 @@ def create_tables():
             organization_id INTEGER NOT NULL,
 
             was_invoiced TEXT NOT NULL,
+            invoice_full_commission TEXT NOT NULL DEFAULT 'no',
 
             vat_amount REAL NOT NULL,
 

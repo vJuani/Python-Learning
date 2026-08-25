@@ -1,0 +1,63 @@
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('property_publications_title') }}</h3>
+        {% if can_manage_listings %}
+        <a
+            href="{{ url_for('property_listings_new', property_id=property_data.id) }}"
+            class="btn btn-small btn-primary"
+        >{{ t('listing_add') }}</a>
+        {% endif %}
+    </div>
+
+    <p class="field-help">{{ t('property_publications_help') }}</p>
+
+    {% if listings %}
+    <div class="table-wrapper">
+        <table class="property-listings-table">
+            <thead>
+                <tr>
+                    <th>{{ t('listing_provider') }}</th>
+                    <th>{{ t('listing_status') }}</th>
+                    <th>{{ t('actions') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for listing in listings %}
+                <tr>
+                    <td>{{ listing.provider_display }}</td>
+                    <td>
+                        <span class="badge badge-soft">{{ listing.status_display }}</span>
+                    </td>
+                    <td class="table-actions property-listing-actions">
+                        <a
+                            href="{{ listing.url }}"
+                            class="btn btn-small btn-secondary"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >{{ t(listing.view_label_key) }}</a>
+                        {% if can_manage_listings %}
+                        <a
+                            href="{{ url_for('property_listings_edit', property_id=property_data.id, listing_id=listing.id) }}"
+                            class="btn btn-small btn-edit"
+                        >{{ t('listing_edit') }}</a>
+                        <form
+                            method="post"
+                            action="{{ url_for('property_listings_delete', property_id=property_data.id, listing_id=listing.id) }}"
+                            class="inline-delete-form"
+                            onsubmit="return confirm('{{ t('confirm_delete_listing_js') }}');"
+                        >
+                            <button type="submit" class="btn btn-small btn-danger">{{ t('listing_delete') }}</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p class="empty-state-title">{{ t('property_publications_empty') }}</p>
+    </div>
+    {% endif %}
+</section>
