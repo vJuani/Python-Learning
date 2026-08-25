@@ -64,9 +64,16 @@
                     id="agent"
                     name="agent"
                     class="form-input"
-                    placeholder="{{ t('placeholder_agent') }}"
+                    list="property-agent-options"
+                    placeholder="{{ t('placeholder_agent_search') }}"
                     value="{{ filters.agent }}"
+                    autocomplete="off"
                 >
+                <datalist id="property-agent-options">
+                    {% for agent in agents %}
+                    <option value="{{ agent.name }}"></option>
+                    {% endfor %}
+                </datalist>
                 <small class="field-help">{{ t('related_agent_help') }}</small>
             </div>
 

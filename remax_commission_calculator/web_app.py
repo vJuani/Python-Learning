@@ -3775,6 +3775,7 @@ def properties_list():
 
         filter_errors = []
         properties = []
+        filter_agents = []
     else:
         include_all_statuses = (
             is_admin()
@@ -3788,6 +3789,16 @@ def properties_list():
                 include_all_statuses=include_all_statuses
             )
         )
+        all_agents = get_agents(organization_id)
+
+        if agent_id is not None:
+            filter_agents = [
+                agent
+                for agent in all_agents
+                if agent["id"] == agent_id
+            ]
+        else:
+            filter_agents = all_agents
 
     _, parsed_filters = validate_property_filters(
         filters
@@ -3800,6 +3811,7 @@ def properties_list():
         filter_errors=localize_form_errors(filter_errors),
         property_count=len(properties),
         jurisdictions=JURISDICTIONS,
+        agents=filter_agents if not scope_blocked else [],
         filters_active=has_active_property_filters(
             parsed_filters
         )
