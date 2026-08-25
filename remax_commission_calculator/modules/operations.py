@@ -411,6 +411,14 @@ def validate_operation_inputs(
             errors.append(
                 "Selected property was not found."
             )
+        elif (
+            agent is not None
+            and property_data.get("agent_id")
+            != parsed["agent_id"]
+        ):
+            errors.append(
+                "Property does not belong to the selected agent."
+            )
 
     return errors, parsed
 

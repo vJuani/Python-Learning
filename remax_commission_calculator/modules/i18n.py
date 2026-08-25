@@ -375,6 +375,9 @@ TRANSLATIONS = {
         "err_invalid_invoiced": "Opción de facturación inválida.",
         "err_agent_not_found": "El agente seleccionado no fue encontrado.",
         "err_property_not_found": "La propiedad seleccionada no fue encontrada.",
+        "err_property_agent_mismatch": "La propiedad no pertenece al agente seleccionado.",
+        "select_agent_first_for_property": "Primero seleccioná un agente para ver sus propiedades.",
+        "no_properties_for_selected_agent": "Este agente no tiene propiedades asignadas.",
         "err_exchange_rate_positive": "El tipo de cambio debe ser mayor que cero.",
         "err_property_id_number": "El ID de propiedad debe ser un número válido.",
         "err_valid_jurisdiction": "Debés seleccionar una jurisdicción válida.",
@@ -1294,6 +1297,9 @@ TRANSLATIONS = {
         "err_invalid_invoiced": "Invalid invoiced option.",
         "err_agent_not_found": "Selected agent was not found.",
         "err_property_not_found": "Selected property was not found.",
+        "err_property_agent_mismatch": "The property does not belong to the selected agent.",
+        "select_agent_first_for_property": "Select an agent first to see their properties.",
+        "no_properties_for_selected_agent": "This agent has no assigned properties.",
         "err_exchange_rate_positive": "Exchange rate must be greater than zero.",
         "err_property_id_number": "Property ID must be a valid number.",
         "err_valid_jurisdiction": "You must select a valid jurisdiction.",
@@ -1879,6 +1885,9 @@ EXACT_ERROR_TO_KEY = {
     "property type": "err_invalid_property_type",
     "Selected agent was not found.": "err_agent_not_found",
     "Selected property was not found.": "err_property_not_found",
+    "Property does not belong to the selected agent.": (
+        "err_property_agent_mismatch"
+    ),
     "Exchange rate must be greater than zero.": (
         "err_exchange_rate_positive"
     ),

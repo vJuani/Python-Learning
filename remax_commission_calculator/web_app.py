@@ -1208,6 +1208,7 @@ def render_operation_form(
     if scope_blocked:
         agents = []
         properties = []
+        property_options = []
     elif scoped_id is not None:
         agents = [
             agent
@@ -1220,13 +1221,35 @@ def render_operation_form(
             organization_id,
             agent_id=scoped_id
         )
+        property_options = properties
         form_values = dict(form_values)
         form_values["agent_id"] = str(scoped_id)
     else:
         agents = get_agents(organization_id)
-        properties = get_properties(
+        property_options = get_properties(
             organization_id
         )
+        selected_agent_raw = str(
+            form_values.get("agent_id") or ""
+        ).strip()
+
+        if selected_agent_raw:
+            try:
+                selected_agent_id = int(
+                    selected_agent_raw
+                )
+            except (TypeError, ValueError):
+                selected_agent_id = None
+
+            if selected_agent_id is not None:
+                properties = get_properties(
+                    organization_id,
+                    agent_id=selected_agent_id,
+                )
+            else:
+                properties = []
+        else:
+            properties = []
 
     return render_template(
         "operations/form.html",
@@ -1236,6 +1259,7 @@ def render_operation_form(
         form_values=form_values,
         agents=agents,
         properties=properties,
+        property_options=property_options,
         errors=localize_form_errors(errors),
         is_edit=is_edit,
         operation_id=operation_id,
@@ -5001,6 +5025,14 @@ def operations_new():
         ):
             errors.append("access_denied")
 
+        ownership_denied = (
+            "Property does not belong to the selected agent."
+            in errors
+        )
+
+        if ownership_denied:
+            abort(403)
+
         if len(errors) > 0:
             return render_operation_form(
                 "New Operation",
@@ -5044,15 +5076,18 @@ def operations_new():
             status = STATUS_APPROVED
             require_owner = False
 
-        save_calculated_operation(
-            parsed["agent_id"],
-            parsed["property_id"],
-            organization_id,
-            operation,
-            status=status,
-            created_by_user_id=current_user["id"],
-            require_property_owner=require_owner
-        )
+        try:
+            save_calculated_operation(
+                parsed["agent_id"],
+                parsed["property_id"],
+                organization_id,
+                operation,
+                status=status,
+                created_by_user_id=current_user["id"],
+                require_property_owner=require_owner
+            )
+        except TenantError:
+            abort(403)
 
         if status == STATUS_DRAFT:
             flash_i18n("operation_draft_saved", "success")
@@ -5157,6 +5192,14 @@ def operations_edit(operation_id):
         ):
             errors.append("access_denied")
 
+        ownership_denied = (
+            "Property does not belong to the selected agent."
+            in errors
+        )
+
+        if ownership_denied:
+            abort(403)
+
         if len(errors) > 0:
             return render_operation_form(
                 "Edit Operation",
@@ -5217,16 +5260,19 @@ def operations_edit(operation_id):
 
         require_owner = is_agent(current_user)
 
-        update_calculated_operation(
-            operation_id,
-            parsed["agent_id"],
-            parsed["property_id"],
-            organization_id,
-            calculated,
-            status=next_status,
-            rejection_reason=rejection_reason,
-            require_property_owner=require_owner
-        )
+        try:
+            update_calculated_operation(
+                operation_id,
+                parsed["agent_id"],
+                parsed["property_id"],
+                organization_id,
+                calculated,
+                status=next_status,
+                rejection_reason=rejection_reason,
+                require_property_owner=require_owner
+            )
+        except TenantError:
+            abort(403)
 
         if submitting:
             try:

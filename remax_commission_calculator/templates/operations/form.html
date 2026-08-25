@@ -78,17 +78,40 @@
 
         <div class="form-group">
             <label for="property_id">{{ t('property') }}</label>
-            <select id="property_id" name="property_id" class="form-input" required>
+            <select
+                id="property_id"
+                name="property_id"
+                class="form-input"
+                required
+                data-empty-label="{{ t('select_property') }}"
+                data-no-agent-label="{{ t('select_agent_first_for_property') }}"
+                data-no-properties-label="{{ t('no_properties_for_selected_agent') }}"
+            >
                 <option value="">{{ t('select_property') }}</option>
-                {% for property_data in properties %}
+                {% set options = property_options if property_options is defined else properties %}
+                {% for property_data in options %}
                 <option
                     value="{{ property_data.id }}"
+                    data-agent-id="{{ property_data.agent_id if property_data.agent_id is not none else '' }}"
                     {% if form_values.property_id|string == property_data.id|string %}selected{% endif %}
+                    {% if form_values.agent_id and property_data.agent_id|string != form_values.agent_id|string %}hidden disabled{% endif %}
+                    {% if not form_values.agent_id and not lock_agent_selection %}hidden disabled{% endif %}
                 >
                     {{ property_data.address }} ({{ property_data.jurisdiction }})
                 </option>
                 {% endfor %}
             </select>
+            <small
+                id="property-agent-hint"
+                class="field-help"
+                {% if form_values.agent_id and properties %}hidden{% endif %}
+            >
+                {% if not form_values.agent_id and not lock_agent_selection %}
+                {{ t('select_agent_first_for_property') }}
+                {% elif form_values.agent_id and not properties %}
+                {{ t('no_properties_for_selected_agent') }}
+                {% endif %}
+            </small>
         </div>
 
         <div class="form-group">

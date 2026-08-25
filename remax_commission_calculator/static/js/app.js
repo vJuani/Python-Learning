@@ -113,6 +113,108 @@ document.addEventListener("DOMContentLoaded", function () {
         syncExchangeRateField();
     }
 
+    var operationAgentSelect = document.getElementById("agent_id");
+    var operationPropertySelect = document.getElementById("property_id");
+    var operationPropertyHint = document.getElementById("property-agent-hint");
+
+    function syncOperationPropertyOptions() {
+        if (!operationPropertySelect) {
+            return;
+        }
+
+        var selectedAgentId = "";
+
+        if (operationAgentSelect) {
+            selectedAgentId = String(operationAgentSelect.value || "");
+        }
+
+        var emptyLabel = operationPropertySelect.getAttribute(
+            "data-empty-label"
+        ) || "";
+        var noAgentLabel = operationPropertySelect.getAttribute(
+            "data-no-agent-label"
+        ) || "";
+        var noPropertiesLabel = operationPropertySelect.getAttribute(
+            "data-no-properties-label"
+        ) || "";
+        var previousValue = String(operationPropertySelect.value || "");
+        var visibleCount = 0;
+        var keepSelection = false;
+
+        Array.prototype.forEach.call(
+            operationPropertySelect.options,
+            function (option) {
+                if (!option.value) {
+                    option.hidden = false;
+                    option.disabled = false;
+                    return;
+                }
+
+                var optionAgentId = String(
+                    option.getAttribute("data-agent-id") || ""
+                );
+                var matches = (
+                    selectedAgentId !== ""
+                    && optionAgentId !== ""
+                    && optionAgentId === selectedAgentId
+                );
+
+                option.hidden = !matches;
+                option.disabled = !matches;
+
+                if (matches) {
+                    visibleCount += 1;
+
+                    if (option.value === previousValue) {
+                        keepSelection = true;
+                    }
+                }
+            }
+        );
+
+        if (!keepSelection) {
+            operationPropertySelect.value = "";
+        }
+
+        if (operationPropertyHint) {
+            if (!selectedAgentId) {
+                operationPropertyHint.hidden = false;
+                operationPropertyHint.textContent = noAgentLabel;
+            } else if (visibleCount === 0) {
+                operationPropertyHint.hidden = false;
+                operationPropertyHint.textContent = noPropertiesLabel;
+            } else {
+                operationPropertyHint.hidden = true;
+                operationPropertyHint.textContent = "";
+            }
+        }
+
+        var placeholder = operationPropertySelect.querySelector(
+            'option[value=""]'
+        );
+
+        if (placeholder) {
+            if (!selectedAgentId) {
+                placeholder.textContent = noAgentLabel || emptyLabel;
+            } else if (visibleCount === 0) {
+                placeholder.textContent = noPropertiesLabel || emptyLabel;
+            } else {
+                placeholder.textContent = emptyLabel;
+            }
+        }
+    }
+
+    if (operationPropertySelect) {
+        if (operationAgentSelect && !operationAgentSelect.disabled) {
+            operationAgentSelect.addEventListener(
+                "change",
+                syncOperationPropertyOptions
+            );
+        }
+
+        syncOperationPropertyOptions();
+    }
+
     var roleSelect = document.getElementById("role");
     var linkedAgentGroup = document.getElementById("linked-agent-group");
     var linkedAgentSelect = document.getElementById("agent_id");
