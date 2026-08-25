@@ -11,7 +11,7 @@ migrated in a second pass after all agent rows exist.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Callable, Optional, Sequence
 import sqlite3
 
@@ -139,6 +139,10 @@ class ValidationReport:
             self.passed = False
 
 
+# Destination money scale for NUMERIC(18,4) — validation only.
+MONEY_QUANT = Decimal("0.0001")
+
+
 def to_decimal(value: Any) -> Optional[Decimal]:
     """Convert SQLite REAL / numeric values without 2-decimal truncation."""
     if value is None:
@@ -170,6 +174,25 @@ def to_decimal(value: Any) -> Optional[Decimal]:
         raise EtlError(
             f"Cannot convert money value {value!r} to Decimal"
         ) from error
+
+
+def quantize_money(value: Any) -> Decimal:
+    """Normalize a monetary value to NUMERIC(18,4) scale (comparison only)."""
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        dec = value
+    else:
+        converted = to_decimal(value)
+        if converted is None:
+            return Decimal("0")
+        dec = converted
+    return dec.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
+
+
+def money_equal(left: Any, right: Any) -> bool:
+    """True when both sides match at NUMERIC(18,4) storage scale."""
+    return quantize_money(left) == quantize_money(right)
 
 
 def to_flag(value: Any) -> Optional[int]:
@@ -535,10 +558,28 @@ def _decimal_sum(conn, sql: str, params: Sequence[Any] = ()) -> Decimal:
     return Decimal(str(value))
 
 
-def _money_equal(left: Decimal, right: Decimal) -> bool:
-    """Compare at NUMERIC(18,4) storage scale (no 2dp truncation)."""
-    scale = Decimal("0.0001")
-    return left.quantize(scale) == right.quantize(scale)
+def _sqlite_money_sum(
+    sqlite_conn: sqlite3.Connection,
+    table: str,
+    column: str,
+) -> Decimal:
+    """
+    Sum money as stored in PG NUMERIC(18,4): per-row to_decimal + quantize.
+
+    Do not use SQL SUM(REAL) — binary float aggregates diverge from
+    destination scale even after quantizing the aggregate once.
+    """
+    total = Decimal("0")
+    for (raw,) in sqlite_conn.execute(
+        f"SELECT {column} FROM {table}"
+    ):
+        if raw is None:
+            continue
+        converted = to_decimal(raw)
+        if converted is None:
+            continue
+        total += quantize_money(converted)
+    return total
 
 
 def validate_migration(
@@ -600,7 +641,7 @@ def validate_migration(
                 src_nulls == dst_nulls,
             )
 
-    # Money sums (Decimal)
+    # Money sums at NUMERIC(18,4) destination scale
     if sqlite_table_exists(sqlite_conn, "operations"):
         money_cols = (
             "sale_price",
@@ -611,36 +652,36 @@ def validate_migration(
             "office_total",
         )
         for column in money_cols:
-            src_sum = _decimal_sum(
-                sqlite_conn,
-                f"SELECT COALESCE(SUM({column}), 0) "
-                f"FROM operations",
+            src_sum = _sqlite_money_sum(
+                sqlite_conn, "operations", column
             )
-            dst_sum = _decimal_sum(
-                pg_conn,
-                f"SELECT COALESCE(SUM({column}), 0) "
-                f"FROM operations",
+            dst_sum = quantize_money(
+                _decimal_sum(
+                    pg_conn,
+                    f"SELECT COALESCE(SUM({column}), 0) "
+                    f"FROM operations",
+                )
             )
             report.add(
                 f"operations SUM({column}): "
                 f"{src_sum} -> {dst_sum}",
-                _money_equal(src_sum, dst_sum),
+                money_equal(src_sum, dst_sum),
             )
 
     if sqlite_table_exists(sqlite_conn, "agent_wallet_movements"):
-        src_sum = _decimal_sum(
-            sqlite_conn,
-            "SELECT COALESCE(SUM(amount), 0) "
-            "FROM agent_wallet_movements",
+        src_sum = _sqlite_money_sum(
+            sqlite_conn, "agent_wallet_movements", "amount"
         )
-        dst_sum = _decimal_sum(
-            pg_conn,
-            "SELECT COALESCE(SUM(amount), 0) "
-            "FROM agent_wallet_movements",
+        dst_sum = quantize_money(
+            _decimal_sum(
+                pg_conn,
+                "SELECT COALESCE(SUM(amount), 0) "
+                "FROM agent_wallet_movements",
+            )
         )
         report.add(
             f"wallet sum: {src_sum} -> {dst_sum}",
-            _money_equal(src_sum, dst_sum),
+            money_equal(src_sum, dst_sum),
         )
 
     # Domain counts

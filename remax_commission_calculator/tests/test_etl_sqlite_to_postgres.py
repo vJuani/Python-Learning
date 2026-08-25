@@ -31,6 +31,75 @@ class EtlMapperUnitTests(unittest.TestCase):
         self.assertEqual(to_decimal(None), None)
         self.assertEqual(to_decimal(3), Decimal("3"))
 
+    def test_money_equal_at_numeric_scale(self):
+        from modules.database.etl_sqlite_to_postgres import (
+            money_equal,
+            quantize_money,
+        )
+
+        self.assertEqual(
+            quantize_money(Decimal("1.23456")),
+            Decimal("1.2346"),
+        )
+        self.assertTrue(
+            money_equal(
+                Decimal("10.00004"),
+                Decimal("10.0000"),
+            )
+        )
+        # Aggregate float SQL SUM vs PG NUMERIC still diverge at 4dp;
+        # money_equal alone is not enough without per-row SQLite sum.
+        self.assertFalse(
+            money_equal(
+                Decimal("16589.897142857146"),
+                Decimal("16589.8972"),
+            )
+        )
+
+    def test_sqlite_money_sum_matches_destination_scale(self):
+        import sqlite3
+
+        from modules.database.etl_sqlite_to_postgres import (
+            _sqlite_money_sum,
+            money_equal,
+            quantize_money,
+        )
+
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE agent_wallet_movements ("
+            "amount REAL)"
+        )
+        # Values whose SQL SUM(REAL) is noisy but per-row
+        # NUMERIC(18,4) storage matches PG.
+        amounts = (1000.12345, 2000.12345, 13589.650242857146)
+        for amount in amounts:
+            conn.execute(
+                "INSERT INTO agent_wallet_movements(amount) "
+                "VALUES (?)",
+                (amount,),
+            )
+        sql_sum = Decimal(
+            str(
+                conn.execute(
+                    "SELECT SUM(amount) "
+                    "FROM agent_wallet_movements"
+                ).fetchone()[0]
+            )
+        )
+        row_sum = _sqlite_money_sum(
+            conn, "agent_wallet_movements", "amount"
+        )
+        expected = sum(
+            (quantize_money(a) for a in amounts),
+            Decimal("0"),
+        )
+        self.assertEqual(row_sum, expected)
+        self.assertTrue(money_equal(row_sum, expected))
+        # Document why we do not compare SQL SUM(REAL) aggregates.
+        self.assertFalse(money_equal(sql_sum, expected))
+        conn.close()
+
     def test_to_flag(self):
         from modules.database.etl_sqlite_to_postgres import (
             to_flag,
