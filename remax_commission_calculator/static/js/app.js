@@ -39,6 +39,77 @@ document.addEventListener("DOMContentLoaded", function () {
         applyTheme(currentTheme);
     }
 
+    var railToggles = document.querySelectorAll(".rail-toggle");
+    var desktopRailMq = window.matchMedia("(min-width: 1025px)");
+
+    function applyRailCollapsed(collapsed) {
+        if (collapsed) {
+            root.setAttribute("data-rail", "collapsed");
+        } else {
+            root.removeAttribute("data-rail");
+        }
+
+        railToggles.forEach(function (railToggle) {
+            var label = collapsed
+                ? railToggle.getAttribute("data-label-expand")
+                : railToggle.getAttribute("data-label-collapse");
+            var textNode = railToggle.querySelector(".rail-toggle-text");
+
+            railToggle.setAttribute(
+                "aria-expanded",
+                collapsed ? "false" : "true"
+            );
+            railToggle.setAttribute("aria-label", label || "");
+            railToggle.setAttribute("title", label || "");
+
+            if (textNode) {
+                textNode.textContent = label || "";
+            }
+
+            if (railToggle.classList.contains("rail-toggle-header")) {
+                railToggle.hidden = !(
+                    desktopRailMq.matches && collapsed
+                );
+            }
+        });
+
+        try {
+            localStorage.setItem(
+                "cc-rail",
+                collapsed ? "collapsed" : "expanded"
+            );
+        } catch (error) {
+            /* ignore */
+        }
+    }
+
+    if (railToggles.length) {
+        railToggles.forEach(function (railToggle) {
+            railToggle.addEventListener("click", function () {
+                var isCollapsed = root.getAttribute("data-rail") === "collapsed";
+                applyRailCollapsed(!isCollapsed);
+            });
+        });
+
+        applyRailCollapsed(
+            root.getAttribute("data-rail") === "collapsed"
+        );
+
+        if (typeof desktopRailMq.addEventListener === "function") {
+            desktopRailMq.addEventListener("change", function () {
+                applyRailCollapsed(
+                    root.getAttribute("data-rail") === "collapsed"
+                );
+            });
+        } else if (typeof desktopRailMq.addListener === "function") {
+            desktopRailMq.addListener(function () {
+                applyRailCollapsed(
+                    root.getAttribute("data-rail") === "collapsed"
+                );
+            });
+        }
+    }
+
     var toggle = document.querySelector(".nav-toggle");
     var nav = document.querySelector(".main-nav");
     var shell = document.querySelector(".app-shell");

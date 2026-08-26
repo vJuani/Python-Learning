@@ -29,7 +29,7 @@
     --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
     --radius: 12px;
     --radius-sm: 8px;
-    --header-height: 68px;
+    --header-height: 64px;
     --font: "Plus Jakarta Sans", "Segoe UI", sans-serif;
     --body-gradient:
         radial-gradient(circle at top right, rgba(8, 96, 200, 0.08), transparent 28%),
@@ -458,13 +458,13 @@ a {
 .app-main {
     flex: 1;
     min-width: 0;
-    padding: 1.75rem 0 2rem;
+    padding: 1.25rem 0 1.5rem;
 }
 
 .app-main-inner {
     width: min(1180px, calc(100% - 2rem));
     margin: 0 auto;
-    padding: 0 1rem;
+    padding: 0 0.85rem;
 }
 
 .sidebar-panel {
@@ -1720,11 +1720,13 @@ thead .col-actions {
 
 /* Footer */
 .site-footer {
-    margin-top: 2rem;
-    padding: 1.35rem 0 2rem;
+    margin-top: auto;
+    padding: 0.65rem 0 0.85rem;
     color: var(--text-muted);
-    border-top: 1px solid var(--border);
-    background: var(--footer-bg);
+    border-top: 1px solid var(--border-soft);
+    background: transparent;
+    font-size: 0.78rem;
+    line-height: 1.35;
     transition: background 0.35s ease;
 }
 
@@ -1732,17 +1734,31 @@ thead .col-actions {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.75rem;
     flex-wrap: wrap;
+    width: min(1180px, calc(100% - 2rem));
+    margin: 0 auto;
+    padding: 0 0.85rem;
+}
+
+.footer-brand p {
+    margin: 0;
+}
+
+.footer-slogan {
+    opacity: 0.75;
+    font-weight: 500;
 }
 
 .footer-link {
-    color: var(--accent);
+    color: var(--text-muted);
     text-decoration: none;
-    font-weight: 700;
+    font-weight: 600;
+    font-size: 0.78rem;
 }
 
 .footer-link:hover {
+    color: var(--accent-ink);
     text-decoration: underline;
 }
 
@@ -2370,7 +2386,7 @@ a.dashboard-quick-card:hover {
 
 .panel + .panel,
 .panel-spaced {
-    margin-top: var(--space-8);
+    margin-top: var(--space-5);
 }
 
 .dashboard-welcome {
@@ -2721,11 +2737,25 @@ a.dashboard-quick-card:hover {
     }
 }
 
-/* ===== SaaS mockup pass: rail + card polish ===== */
+/* ===== SaaS desktop polish: density + collapsible rail ===== */
 :root {
-    --radius: 14px;
-    --radius-sm: 10px;
-    --rail-width: 15.5rem;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --rail-width: 14.25rem; /* ~228px */
+    --rail-collapsed-width: 4.25rem;
+    --header-height: 64px;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .app-rail {
@@ -2737,21 +2767,29 @@ a.dashboard-quick-card:hover {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    background: var(--bg);
 }
 
 .dashboard-period-chip {
     display: inline-flex;
-    margin: 0.35rem 0 0;
-    padding: 0.25rem 0.6rem;
+    margin: 0.25rem 0 0;
+    padding: 0.2rem 0.55rem;
     border-radius: 999px;
     background: var(--accent-soft);
     color: var(--accent-ink);
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     font-weight: 700;
+}
+
+.saas-kpi-grid {
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
 }
 
 .saas-kpi-grid .stat-card {
     border-radius: var(--radius);
+    min-height: 84px;
+    padding: 0.85rem 0.95rem;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -2761,11 +2799,28 @@ a.dashboard-quick-card:hover {
 }
 
 .saas-kpi-grid .stat-value {
-    font-size: 1.45rem;
+    font-size: 1.3rem;
 }
 
 .panel {
     border-radius: var(--radius);
+    padding: 1rem 1.05rem;
+    margin-bottom: 0.85rem;
+    background: var(--surface);
+    border-color: var(--border-soft);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+[data-theme="dark"] .panel {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+.panel-header {
+    margin-bottom: 0.75rem;
+}
+
+.panel-header h3 {
+    font-size: 0.98rem;
 }
 
 .entity-card {
@@ -2776,6 +2831,55 @@ a.dashboard-quick-card:hover {
 
 .entity-card:active {
     transform: scale(0.995);
+}
+
+.rail-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.06);
+    color: #e8eefc;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.rail-toggle:hover {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: rgba(59, 130, 246, 0.45);
+}
+
+.rail-toggle-icon {
+    display: block;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-left: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    margin-left: 0.15rem;
+    transition: transform 0.18s ease;
+}
+
+.rail-toggle-header {
+    border-color: var(--border);
+    background: var(--bg-soft);
+    color: var(--text-muted);
+}
+
+.rail-toggle-header:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+}
+
+.rail-toggle-header .rail-toggle-icon {
+    transform: rotate(-135deg);
+    margin-left: 0;
+    margin-right: 0.15rem;
 }
 
 .app-rail-nav .nav-link,
@@ -2789,50 +2893,70 @@ a.dashboard-quick-card:hover {
         display: grid;
         grid-template-columns: var(--rail-width) minmax(0, 1fr);
         min-height: 100vh;
+        transition: grid-template-columns 0.2s ease;
+    }
+
+    html[data-rail="collapsed"] body.has-app-rail {
+        grid-template-columns: var(--rail-collapsed-width) minmax(0, 1fr);
     }
 
     body.has-app-rail .app-rail {
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.65rem;
         position: sticky;
         top: 0;
         height: 100vh;
-        padding: 1rem 0.85rem 1.1rem;
-        border-right: 1px solid var(--border);
+        z-index: 40;
+        padding: 0.75rem 0.65rem 0.85rem;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
         background: var(--brand-navy);
         color: #e8eefc;
+        overflow-x: hidden;
         overflow-y: auto;
+    }
+
+    body.has-app-rail .app-rail-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.35rem;
+        min-height: 2.5rem;
     }
 
     body.has-app-rail .app-rail-brand {
         display: inline-flex;
         text-decoration: none;
-        margin: 0.15rem 0.35rem 0.35rem;
+        min-width: 0;
+        flex: 1;
     }
 
     body.has-app-rail .app-rail-brand .site-brand-logo-shell {
         background: rgba(255, 255, 255, 0.06);
         border-radius: var(--radius-sm);
-        padding: 0.35rem 0.45rem;
+        padding: 0.3rem 0.4rem;
+        max-width: 100%;
     }
 
     body.has-app-rail .app-rail-brand .site-brand-logo {
-        max-height: 2.1rem;
+        max-height: 1.85rem;
         width: auto;
+        max-width: 100%;
     }
 
     body.has-app-rail .app-rail-nav {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: 0.15rem;
         flex: 1;
     }
 
     body.has-app-rail .app-rail-nav .nav-link {
         color: rgba(232, 238, 252, 0.78);
         background: transparent;
-        padding: 0.7rem 0.8rem;
+        padding: 0.55rem 0.7rem;
+        font-size: 0.9rem;
+        line-height: 1.25;
     }
 
     body.has-app-rail .app-rail-nav .nav-link:hover,
@@ -2843,27 +2967,28 @@ a.dashboard-quick-card:hover {
 
     body.has-app-rail .app-rail-footer {
         display: grid;
-        gap: 0.45rem;
-        padding-top: 0.75rem;
+        gap: 0.35rem;
+        padding-top: 0.55rem;
         border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     body.has-app-rail .app-rail-user {
         display: grid;
-        gap: 0.1rem;
-        padding: 0 0.55rem;
+        gap: 0.05rem;
+        padding: 0 0.45rem;
         color: rgba(232, 238, 252, 0.85);
-        font-size: 0.82rem;
+        font-size: 0.78rem;
     }
 
     body.has-app-rail .app-rail-user strong {
-        font-size: 0.9rem;
+        font-size: 0.86rem;
         color: #fff;
     }
 
     body.has-app-rail .app-rail-footer .nav-link {
         color: rgba(232, 238, 252, 0.78);
-        padding: 0.65rem 0.8rem;
+        padding: 0.5rem 0.7rem;
+        font-size: 0.88rem;
     }
 
     body.has-app-rail .header-zone-left,
@@ -2874,8 +2999,9 @@ a.dashboard-quick-card:hover {
 
     body.has-app-rail .header-grid {
         grid-template-columns: 1fr auto;
-        padding-left: 1rem;
-        padding-right: 1rem;
+        min-height: var(--header-height);
+        padding-left: 0.85rem;
+        padding-right: 0.85rem;
     }
 
     body.has-app-rail .header-zone-right {
@@ -2885,10 +3011,27 @@ a.dashboard-quick-card:hover {
 
     body.has-app-rail .header-tools-desktop {
         display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
     }
 
     body.has-app-rail .site-header {
         backdrop-filter: blur(10px);
+        background: color-mix(in srgb, var(--header-bg) 92%, transparent);
+    }
+
+    body.has-app-rail .app-main {
+        padding-top: 1rem;
+        padding-bottom: 1.1rem;
+    }
+
+    body.has-app-rail .app-frame {
+        background:
+            linear-gradient(
+                180deg,
+                color-mix(in srgb, var(--bg-soft) 65%, transparent) 0%,
+                var(--bg) 18rem
+            );
     }
 
     body.has-app-rail .dashboard-welcome-brand {
@@ -2897,22 +3040,63 @@ a.dashboard-quick-card:hover {
 
     body.has-app-rail .dashboard-welcome {
         align-items: flex-start;
+        padding: 0.35rem 0 0.85rem;
     }
 
     .dashboard-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 1.25rem;
+        gap: 0.9rem;
         align-items: start;
     }
 
     .dashboard-grid > .panel:only-child {
         grid-column: 1 / -1;
     }
+
+    /* Collapsed rail */
+    html[data-rail="collapsed"] body.has-app-rail .app-rail {
+        padding-left: 0.45rem;
+        padding-right: 0.45rem;
+        align-items: center;
+    }
+
+    html[data-rail="collapsed"] body.has-app-rail .app-rail-top {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    html[data-rail="collapsed"] body.has-app-rail .app-rail-brand {
+        justify-content: center;
+        flex: 0;
+    }
+
+    html[data-rail="collapsed"] body.has-app-rail .app-rail-brand .site-brand-logo-shell {
+        padding: 0.35rem;
+    }
+
+    html[data-rail="collapsed"] body.has-app-rail .app-rail-brand .site-brand-logo {
+        max-height: 1.35rem;
+        max-width: 1.85rem;
+        object-fit: contain;
+    }
+
+    html[data-rail="collapsed"] body.has-app-rail .app-rail-nav,
+    html[data-rail="collapsed"] body.has-app-rail .app-rail-footer {
+        display: none;
+    }
+
+    html[data-rail="collapsed"] body.has-app-rail .rail-toggle .rail-toggle-icon {
+        transform: rotate(-135deg);
+        margin-left: 0;
+        margin-right: 0.12rem;
+    }
 }
 
 @media (max-width: 1024px) {
-    .app-rail {
+    .app-rail,
+    .rail-toggle,
+    .rail-toggle-header {
         display: none !important;
     }
 

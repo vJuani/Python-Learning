@@ -9,6 +9,9 @@
                 if (localStorage.getItem("cc-theme") === "dark") {
                     document.documentElement.setAttribute("data-theme", "dark");
                 }
+                if (localStorage.getItem("cc-rail") === "collapsed") {
+                    document.documentElement.setAttribute("data-rail", "collapsed");
+                }
             } catch (error) {
                 /* ignore */
             }
@@ -36,16 +39,30 @@
 <body class="{% if current_user or guest_access %}has-app-rail{% endif %}">
     {% if current_user or guest_access %}
     <aside class="app-rail" aria-label="{{ t('nav_aria') }}">
-        <a href="{{ url_for('dashboard') }}" class="app-rail-brand">
-            <span class="site-brand-logo-shell">
-                <img
-                    src="{% if organization_logo_url %}{{ organization_logo_url }}{% else %}{{ url_for('static', filename='images/logo-horizontal.png') }}{% endif %}"
-                    alt="{{ t('app_title') }}"
-                    class="site-brand-logo"
-                >
-            </span>
-        </a>
-        <nav class="app-rail-nav">
+        <div class="app-rail-top">
+            <a href="{{ url_for('dashboard') }}" class="app-rail-brand">
+                <span class="site-brand-logo-shell">
+                    <img
+                        src="{% if organization_logo_url %}{{ organization_logo_url }}{% else %}{{ url_for('static', filename='images/logo-horizontal.png') }}{% endif %}"
+                        alt="{{ t('app_title') }}"
+                        class="site-brand-logo"
+                    >
+                </span>
+            </a>
+            <button
+                type="button"
+                class="rail-toggle"
+                aria-expanded="true"
+                aria-controls="app-rail-nav"
+                data-label-collapse="{{ t('rail_collapse') }}"
+                data-label-expand="{{ t('rail_expand') }}"
+                title="{{ t('rail_collapse') }}"
+            >
+                <span class="rail-toggle-icon" aria-hidden="true"></span>
+                <span class="visually-hidden rail-toggle-text">{{ t('rail_collapse') }}</span>
+            </button>
+        </div>
+        <nav id="app-rail-nav" class="app-rail-nav">
             {% include "_app_nav_links.html" %}
         </nav>
         <div class="app-rail-footer">
@@ -177,6 +194,20 @@
                 </button>
 
                 <div class="header-tools header-tools-desktop">
+                    <button
+                        type="button"
+                        class="rail-toggle rail-toggle-header"
+                        aria-expanded="true"
+                        aria-controls="app-rail-nav"
+                        data-label-collapse="{{ t('rail_collapse') }}"
+                        data-label-expand="{{ t('rail_expand') }}"
+                        title="{{ t('rail_expand') }}"
+                        hidden
+                    >
+                        <span class="rail-toggle-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden rail-toggle-text">{{ t('rail_expand') }}</span>
+                    </button>
+
                     {% include "_nav_meta.html" %}
 
                     <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
