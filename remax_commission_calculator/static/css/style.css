@@ -882,6 +882,46 @@ a {
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+select.form-input,
+.sidebar-filter-form select.form-input,
+.report-field select,
+.report-field select.form-input {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--surface);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%235b6b7c' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.85rem center;
+    background-size: 0.75rem;
+    padding-right: 2.35rem;
+    cursor: pointer;
+}
+
+[data-theme="dark"] select.form-input,
+[data-theme="dark"] .sidebar-filter-form select.form-input,
+[data-theme="dark"] .report-field select,
+[data-theme="dark"] .report-field select.form-input {
+    background-color: var(--surface);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%2393a0b8' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    color-scheme: dark;
+}
+
+[data-theme="dark"] select.form-input option,
+[data-theme="dark"] .report-field select option,
+[data-theme="dark"] select option {
+    background-color: #151f33;
+    color: #e8eefc;
+}
+
+[data-theme="dark"] select.form-input option:checked,
+[data-theme="dark"] .report-field select option:checked,
+[data-theme="dark"] select option:checked,
+[data-theme="dark"] select.form-input option:hover,
+[data-theme="dark"] .report-field select option:hover {
+    background-color: #1e3a5f;
+    color: #ffffff;
+}
+
 .form-input:hover {
     border-color: #c0cbd8;
 }
@@ -1036,6 +1076,7 @@ a {
     justify-content: space-between;
     gap: 1rem;
     margin-bottom: 1rem;
+    flex-wrap: wrap;
 }
 
 .panel-header h3 {
@@ -1471,9 +1512,14 @@ thead .col-actions {
 }
 
 [data-theme="dark"] .form-input,
-[data-theme="dark"] .nav-search-input,
+[data-theme="dark"] .nav-search-input {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+}
+
 [data-theme="dark"] select.form-input {
-    background: rgba(255, 255, 255, 0.04);
+    background-color: var(--surface);
     color: var(--text);
     border-color: var(--border);
 }
@@ -1483,9 +1529,10 @@ thead .col-actions {
     border-color: #4b5f82;
 }
 
-[data-theme="dark"] .form-input option {
-    background: var(--surface);
-    color: var(--text);
+[data-theme="dark"] .form-input option,
+[data-theme="dark"] select.form-input option {
+    background: #151f33;
+    color: #e8eefc;
 }
 
 [data-theme="dark"] .form-input:focus,
@@ -1966,11 +2013,18 @@ a.dashboard-quick-card:hover {
     min-height: 2.55rem;
     border-radius: 0.75rem;
     border: 1px solid var(--border);
-    background: var(--bg-soft);
+    background-color: var(--bg-soft);
     color: var(--text);
     padding: 0.55rem 0.8rem;
     font: inherit;
     font-weight: 600;
+}
+
+.report-field input[type="month"],
+.report-field input[type="date"],
+.report-field input[type="text"],
+.report-field input.form-input {
+    background: var(--bg-soft);
 }
 
 .report-field select:focus,
@@ -2028,13 +2082,21 @@ a.dashboard-quick-card:hover {
 
 [data-theme="dark"] .report-field select,
 [data-theme="dark"] .report-field input {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+    color-scheme: dark;
+}
+
+[data-theme="dark"] .report-field select option {
+    background-color: #151f33;
+    color: #e8eefc;
 }
 
 [data-theme="dark"] .report-field select:focus,
 [data-theme="dark"] .report-field input:focus {
-    border-color: rgba(167, 139, 250, 0.55);
-    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.18);
+    border-color: rgba(59, 130, 246, 0.55);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
 }
 
 [data-theme="dark"] a.dashboard-quick-card.btn-secondary {
@@ -2524,6 +2586,77 @@ a.dashboard-quick-card:hover {
 .btn-inline {
     width: auto;
     align-self: flex-end;
+}
+
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--border-soft);
+}
+
+.pagination-summary {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.86rem;
+    font-weight: 600;
+}
+
+.pagination-controls {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.pagination-btn,
+.pagination-page {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.15rem;
+    min-height: 2.15rem;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.pagination-btn:hover,
+.pagination-page:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+}
+
+.pagination-page.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.pagination-btn.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.pagination-ellipsis {
+    min-width: 1.25rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.panel-header .results-meta-page-size {
+    margin-left: auto;
 }
 
 .autocomplete-form {

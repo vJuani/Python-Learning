@@ -143,6 +143,11 @@ from modules.properties import (
     validate_property_filters
 )
 
+from modules.pagination import (
+    DEFAULT_PER_PAGE,
+    paginate_list,
+)
+
 from modules.property_external_listings import (
     PROVIDER_OTHER,
     PROVIDER_REMAX_WEB,
@@ -3835,17 +3840,33 @@ def properties_list():
         filters
     )
 
+    property_count = len(properties)
+    pagination = paginate_list(
+        properties,
+        page=request.args.get("page", 1),
+        per_page=DEFAULT_PER_PAGE,
+    )
+    pagination_params = {
+        key: value
+        for key, value in filters.items()
+        if value
+    }
+
     return render_template(
         "properties/list.html",
-        properties=properties,
+        properties=pagination["items"],
         filters=filters,
         filter_errors=localize_form_errors(filter_errors),
-        property_count=len(properties),
+        property_count=property_count,
         jurisdictions=JURISDICTIONS,
         agents=filter_agents if not scope_blocked else [],
         filters_active=has_active_property_filters(
             parsed_filters
-        )
+        ),
+        pagination=pagination,
+        pagination_endpoint="properties_list",
+        pagination_params=pagination_params,
+        pagination_summary_key="pagination_showing_properties",
     )
 
 
@@ -4488,6 +4509,7 @@ def operations_list():
 
         filter_errors = []
         operations = []
+        filter_agents = []
     else:
         filter_errors, operations = (
             get_filtered_operations(
@@ -4496,6 +4518,16 @@ def operations_list():
                 agent_id=agent_id
             )
         )
+        all_agents = get_agents(organization_id)
+
+        if agent_id is not None:
+            filter_agents = [
+                agent
+                for agent in all_agents
+                if agent["id"] == agent_id
+            ]
+        else:
+            filter_agents = all_agents
 
     _, parsed_filters = validate_operation_filters(
         filters
@@ -4512,6 +4544,7 @@ def operations_list():
         ),
         jurisdictions=JURISDICTIONS,
         operation_statuses=OPERATION_STATUSES,
+        agents=filter_agents if not scope_blocked else [],
         filters_active=has_active_operation_filters(
             parsed_filters
         )

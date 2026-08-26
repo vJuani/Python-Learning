@@ -18,7 +18,7 @@
             {% if report.view != 'monthly' %}
             <label class="report-field">
                 <span>{{ report.labels.period_mode }}</span>
-                <select name="period_mode" id="reports-period-mode">
+                <select name="period_mode" id="reports-period-mode" class="form-input">
                     <option value="all" {% if report.form.period_mode == 'all' %}selected{% endif %}>{{ report.labels.period_all }}</option>
                     <option value="month" {% if report.form.period_mode == 'month' %}selected{% endif %}>{{ report.labels.period_month }}</option>
                     <option value="year" {% if report.form.period_mode == 'year' %}selected{% endif %}>{{ report.labels.period_year }}</option>
@@ -34,13 +34,14 @@
                 <input
                     type="month"
                     name="month_year"
+                    class="form-input"
                     value="{{ report.form.month_year }}"
                 >
             </label>
 
             <label class="report-field" id="reports-year-field" {% if report.view != 'monthly' and report.form.period_mode != 'year' %}hidden{% endif %}>
                 <span>{{ t('reports_filter_year') }}</span>
-                <select name="year">
+                <select name="year" class="form-input">
                     {% for year in report.years %}
                     <option
                         value="{{ year }}"
@@ -55,6 +56,7 @@
                 <input
                     type="date"
                     name="date_from"
+                    class="form-input"
                     value="{{ report.form.date_from }}"
                 >
             </label>
@@ -64,15 +66,16 @@
                 <input
                     type="date"
                     name="date_to"
+                    class="form-input"
                     value="{{ report.form.date_to }}"
                 >
             </label>
 
             <label class="report-field">
                 <span>{{ t('reports_filter_agent') }}</span>
-                <select name="agent_id" {% if is_agent() %}disabled{% endif %}>
+                <select name="agent_id" class="form-input" {% if is_agent() %}disabled{% endif %}>
                     {% if not is_agent() %}
-                    <option value="">{{ t('reports_all') }}</option>
+                    <option value="">{{ t('all_agents') }}</option>
                     {% endif %}
                     {% for agent in report.agents %}
                     <option
@@ -89,7 +92,7 @@
             {% if report.view == 'general' or report.view == 'invoiced' %}
             <label class="report-field">
                 <span>{{ t('reports_filter_status') }}</span>
-                <select name="status">
+                <select name="status" class="form-input">
                     <option value="">{{ t('reports_official_approved') }}</option>
                     <option value="approved" {% if report.form.status == 'approved' %}selected{% endif %}>{{ t('status_approved') }}</option>
                     <option value="pending" {% if report.form.status == 'pending' %}selected{% endif %}>{{ t('status_pending') }}</option>

@@ -17,6 +17,7 @@
             <span>{{ t('team_leader_label') }}</span>
             <select
                 name="team_leader_id"
+                class="form-input"
                 onchange="window.location='{{ url_for('team_report', team_leader_id=0) }}'.replace('/0', '/' + this.value) + window.location.search.replace(/[?&]team_leader_id=\d+/g, '');"
             >
                 {% for leader in report.team_leaders %}
@@ -33,7 +34,7 @@
 
         <label class="report-field">
             <span>{{ t('team_period_mode') }}</span>
-            <select name="period_mode" id="team-period-mode">
+            <select name="period_mode" id="team-period-mode" class="form-input">
                 <option value="month" {% if report.form.period_mode == 'month' %}selected{% endif %}>{{ t('team_period_month') }}</option>
                 <option value="year" {% if report.form.period_mode == 'year' %}selected{% endif %}>{{ t('team_period_year') }}</option>
                 <option value="range" {% if report.form.period_mode == 'range' %}selected{% endif %}>{{ t('team_period_range') }}</option>
@@ -48,7 +49,7 @@
 
         <label class="report-field" id="team-year-field" {% if report.form.period_mode != 'year' %}hidden{% endif %}>
             <span>{{ t('reports_filter_year') }}</span>
-            <select name="year">
+            <select name="year" class="form-input">
                 {% for year in report.years %}
                 <option value="{{ year }}" {% if report.form.year == year|string %}selected{% endif %}>{{ year }}</option>
                 {% endfor %}
