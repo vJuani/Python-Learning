@@ -11,7 +11,9 @@ from .connection import (
 from .schema import (
     DEFAULT_ORGANIZATION_ID,
     DEFAULT_ORGANIZATION_NAME,
-    create_tables
+    create_tables,
+    ensure_properties_external_id,
+    migrate_schema,
 )
 
 from .schema_postgres import (

@@ -1336,17 +1336,34 @@ def _rebuild_organization_integrations_for_csv_upload(cursor):
     cursor.execute("PRAGMA foreign_keys = ON")
 
 
-def _migrate_property_external_id(cursor):
-    """Add nullable properties.external_id (RE/MAX MLSID mirror)."""
-    if not _table_exists(cursor, "properties"):
-        return
+def _ensure_properties_external_id_column(cursor):
+    """
+    Idempotent: PRAGMA table_info, then ALTER if needed.
 
+    Does not backfill. Caller must commit when using a
+    dedicated connection so the column survives later errors.
+    """
+    if not _table_exists(cursor, "properties"):
+        return False
+
+    if _column_exists(cursor, "properties", "external_id"):
+        return False
+
+    cursor.execute(
+        """
+        ALTER TABLE properties
+        ADD COLUMN external_id TEXT
+        """
+    )
+    return True
+
+
+def _backfill_properties_external_id(cursor):
+    """Copy MLSID from listings only when column already exists."""
     if not _column_exists(cursor, "properties", "external_id"):
-        cursor.execute(
-            """
-            ALTER TABLE properties
-            ADD COLUMN external_id TEXT
-            """
+        raise MigrationError(
+            "Cannot backfill properties.external_id: "
+            "column is missing"
         )
 
     if _table_exists(cursor, "property_external_listings"):
@@ -1381,6 +1398,80 @@ def _migrate_property_external_id(cursor):
             AND external_id != ''
         """
     )
+
+
+def _migrate_property_external_id(cursor):
+    """
+    Add nullable properties.external_id (RE/MAX MLSID mirror).
+
+    Idempotent for existing SQLite databases:
+    1) PRAGMA table_info(properties)
+    2) ALTER TABLE ... ADD COLUMN when missing
+    3) Backfill from property_external_listings only after
+       the column is confirmed present
+    """
+    _ensure_properties_external_id_column(cursor)
+
+    if not _table_exists(cursor, "properties"):
+        return
+
+    if not _column_exists(cursor, "properties", "external_id"):
+        raise MigrationError(
+            "properties.external_id was not created"
+        )
+
+    _backfill_properties_external_id(cursor)
+
+
+def ensure_properties_external_id(connection=None):
+    """
+    Ensure properties.external_id on the active SQLite file.
+
+    Uses the same path as get_connection() / repositories.
+    Commits the ADD COLUMN before backfill so a later failure
+    cannot roll back the column. No-op on PostgreSQL.
+    """
+    from modules.config import (
+        BACKEND_SQLITE,
+        get_database_backend,
+    )
+
+    if get_database_backend() != BACKEND_SQLITE:
+        return False
+
+    owns_connection = connection is None
+
+    if owns_connection:
+        connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+        added = _ensure_properties_external_id_column(cursor)
+
+        if added:
+            connection.commit()
+
+        if not _table_exists(cursor, "properties"):
+            return added
+
+        if not _column_exists(
+            cursor,
+            "properties",
+            "external_id",
+        ):
+            raise MigrationError(
+                "properties.external_id missing after ALTER"
+            )
+
+        _backfill_properties_external_id(cursor)
+        connection.commit()
+        return added
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        if owns_connection:
+            connection.close()
 
 
 def _migrate_agent_teams_and_wallet(cursor):
@@ -1749,8 +1840,16 @@ def _migrate_organization_integrations(cursor):
     )
 
 
-def migrate_schema():
-    backup_path = _backup_database()
+def migrate_schema(create_backup=True):
+    # Commit external_id before the bulk transaction so a later
+    # rollback cannot drop the column on an existing Railway DB.
+    ensure_properties_external_id()
+
+    backup_path = (
+        _backup_database()
+        if create_backup
+        else None
+    )
 
     connection = get_connection()
     cursor = connection.cursor()
@@ -1985,7 +2084,7 @@ def migrate_schema():
     return backup_path
 
 
-def create_tables():
+def create_tables(create_backup=True):
     from modules.config import (
         BACKEND_POSTGRES,
         get_database_backend,
@@ -2191,4 +2290,4 @@ def create_tables():
     connection.commit()
     connection.close()
 
-    migrate_schema()
+    migrate_schema(create_backup=create_backup)

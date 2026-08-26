@@ -1,8 +1,9 @@
 """
 One-shot database/upload bootstrap for deploy release.
 
-Intended to run once before Gunicorn starts (Railway releaseCommand),
-not on every WSGI worker import.
+Intended to run once before Gunicorn starts (Railway releaseCommand).
+Gunicorn/`wsgi.py` also calls `create_tables(create_backup=False)` so an
+existing SQLite volume is migrated in the same process that serves traffic.
 
 Usage:
   python init_db.py

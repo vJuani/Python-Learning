@@ -37,7 +37,10 @@ Gunicorn command:
 gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
 ```
 
-`$PORT` is set by Railway. Do not run `create_tables()` from `wsgi.py`.
+`$PORT` is set by Railway. `wsgi.py` runs `create_tables(create_backup=False)`
+once at process start so existing SQLite volumes receive column migrations
+(e.g. `properties.external_id`) before requests. Full init with backup still
+runs via `releaseCommand` (`python init_db.py`).
 
 ## Persistent volume (required for SQLite)
 
