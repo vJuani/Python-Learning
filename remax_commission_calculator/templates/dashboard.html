@@ -85,7 +85,21 @@
             <h3>{{ t('dashboard_monthly_summary') }}</h3>
         </div>
         {% if monthly_series %}
-        <div class="table-wrapper">
+        <div class="month-summary-list hide-desktop">
+            {% for item in monthly_series %}
+            <article class="month-summary-card">
+                <div class="month-summary-main">
+                    <strong>{{ item.month }}</strong>
+                    <span>{{ item.operations_count }} {{ t('dashboard_col_ops') }}</span>
+                </div>
+                <div class="month-summary-money">
+                    <span class="money">{{ item.volume_usd|money }}</span>
+                    <span class="money money-emphasis">{{ item.total_commission|money }}</span>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        <div class="table-wrapper hide-mobile">
             <table>
                 <thead>
                     <tr>

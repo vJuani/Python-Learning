@@ -58,8 +58,8 @@
     </form>
 </section>
 
-<section class="panel">
-    <div class="panel-header">
+<section class="panel panel-list">
+    <div class="panel-header hide-mobile">
         <h3>{{ t('agent_list') }}</h3>
     </div>
 
@@ -68,20 +68,26 @@
         {% for agent in agents %}
         <article class="entity-card entity-card-agent">
             <div class="entity-card-heading">
-                <div class="entity-card-heading-text">
-                    <h4 class="entity-card-title">{{ agent.name }}</h4>
+                <div class="entity-card-agent-main">
+                    {% set name_parts = agent.name.split() %}
+                    <span class="entity-avatar" aria-hidden="true">
+                        {{ name_parts[0][0:1]|upper }}{% if name_parts|length > 1 %}{{ name_parts[1][0:1]|upper }}{% endif %}
+                    </span>
+                    <div class="entity-card-heading-text">
+                        <h4 class="entity-card-title">{{ agent.name }}</h4>
+                    </div>
                 </div>
                 <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
             </div>
-            <div class="entity-card-footer">
+            <div class="entity-card-footer entity-card-footer-actions">
                 <a
                     href="{{ url_for('agents_detail', agent_id=agent.id) }}"
                     class="entity-card-cta"
-                >{{ t('view') }} →</a>
+                >{{ t('view') }}</a>
                 {% if is_admin() %}
                 <a
                     href="{{ url_for('agents_edit', agent_id=agent.id) }}"
-                    class="btn btn-small btn-edit"
+                    class="entity-card-cta"
                 >{{ t('edit') }}</a>
                 {% endif %}
             </div>
