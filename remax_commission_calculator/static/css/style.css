@@ -4324,13 +4324,27 @@ a.dashboard-quick-card:hover {
 
     .main-nav-links .nav-link,
     .main-nav-links .app-nav-link {
-        padding: 0.42rem 0.65rem;
-        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.48rem 0.75rem;
+        border-radius: 10px;
         font-size: 0.86rem;
         font-weight: 650;
         background: transparent;
-        min-height: 0;
-        line-height: 1.25;
+        min-height: 2.15rem;
+        line-height: 1.2;
+        text-align: center;
+    }
+
+    .main-nav-links .nav-link.active,
+    .main-nav-links .app-nav-link.active {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        justify-content: center;
+        text-align: center;
     }
 
     .main-nav-tools-mobile {
@@ -4424,12 +4438,15 @@ a.dashboard-quick-card:hover {
         justify-content: center;
         gap: 0.2rem;
         min-height: 3.15rem;
-        padding: 0.25rem 0.2rem;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.3rem 0.15rem;
         border-radius: 10px;
         color: var(--text-muted);
         text-decoration: none;
         font-size: 0.68rem;
         font-weight: 700;
+        text-align: center;
     }
 
     .mobile-bottom-nav-item.active {
@@ -4439,13 +4456,24 @@ a.dashboard-quick-card:hover {
 
     .mobile-bottom-nav-icon {
         display: inline-flex;
+        align-items: center;
+        justify-content: center;
         width: 1.35rem;
         height: 1.35rem;
+        margin: 0 auto;
     }
 
     .mobile-bottom-nav-icon svg {
         width: 100%;
         height: 100%;
+        display: block;
+    }
+
+    .mobile-bottom-nav-label {
+        display: block;
+        width: 100%;
+        text-align: center;
+        line-height: 1.1;
     }
 
     .mobile-drawer-brand {
