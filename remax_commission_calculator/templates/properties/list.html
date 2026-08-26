@@ -143,17 +143,17 @@
         <table>
             <thead>
                 <tr>
-                    <th>{{ t('id') }}</th>
+                    <th class="col-secondary">{{ t('id') }}</th>
                     <th>{{ t('address') }}</th>
                     <th>{{ t('jurisdiction') }}</th>
                     <th>{{ t('status') }}</th>
-                    <th>{{ t('actions') }}</th>
+                    <th class="col-actions">{{ t('actions') }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for property_data in properties %}
                 <tr>
-                    <td>{{ property_data.id }}</td>
+                    <td class="col-secondary">{{ property_data.id }}</td>
                     <td>{{ property_data.address }}</td>
                     <td>
                         <span class="type-tag badge-{{ property_data.jurisdiction|lower }}">{{ property_data.jurisdiction }}</span>
@@ -164,7 +164,7 @@
                         <small class="field-help">{{ property_data.rejection_reason }}</small>
                         {% endif %}
                     </td>
-                    <td class="table-actions">
+                    <td class="table-actions col-actions">
                         <a
                             href="{{ url_for('properties_detail', property_id=property_data.id) }}"
                             class="btn btn-small btn-secondary"

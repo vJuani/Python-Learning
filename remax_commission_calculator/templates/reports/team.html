@@ -141,14 +141,14 @@
     </div>
     {% if report.junior_rows %}
     <div class="table-wrapper">
-        <table>
+        <table class="table-dense">
             <thead>
                 <tr>
                     <th>{{ t('name') }}</th>
-                    <th>{{ t('agent_type') }}</th>
+                    <th class="col-secondary">{{ t('agent_type') }}</th>
                     <th>{{ t('team_ops_approved') }}</th>
                     <th>{{ t('team_production') }}</th>
-                    <th>{{ t('junior_yield_label') }}</th>
+                    <th class="col-secondary">{{ t('junior_yield_label') }}</th>
                     <th>{{ t('team_income_for_leader') }}</th>
                 </tr>
             </thead>
@@ -160,10 +160,10 @@
                             {{ row.agent.name }}
                         </a>
                     </td>
-                    <td>{{ row.agent.type }}</td>
+                    <td class="col-secondary">{{ row.agent.type }}</td>
                     <td>{{ row.operations_count }}</td>
                     <td class="money">{{ row.production|money }}</td>
-                    <td class="money">{{ row.junior_yield|money }}</td>
+                    <td class="money col-secondary">{{ row.junior_yield|money }}</td>
                     <td class="money">{{ row.team_leader_income|money }}</td>
                 </tr>
                 {% endfor %}
@@ -181,13 +181,13 @@
     </div>
     {% if report.operations %}
     <div class="table-wrapper">
-        <table>
+        <table class="table-dense">
             <thead>
                 <tr>
-                    <th>{{ t('id') }}</th>
+                    <th class="col-secondary">{{ t('id') }}</th>
                     <th>{{ t('date') }}</th>
                     <th>{{ t('name') }}</th>
-                    <th>{{ t('agent_type') }}</th>
+                    <th class="col-secondary">{{ t('agent_type') }}</th>
                     <th>{{ t('team_production') }}</th>
                     <th>{{ t('junior_yield_label') }}</th>
                 </tr>
@@ -195,14 +195,14 @@
             <tbody>
                 {% for operation in report.operations %}
                 <tr>
-                    <td>
+                    <td class="col-secondary">
                         <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}">
                             {{ operation.id }}
                         </a>
                     </td>
                     <td>{{ operation.date }}</td>
                     <td>{{ operation.agent }}</td>
-                    <td>{{ operation.agent_type }}</td>
+                    <td class="col-secondary">{{ operation.agent_type }}</td>
                     <td class="money">{{ operation.total_commission|money }}</td>
                     <td class="money">{{ operation.agent_payment|money }}</td>
                 </tr>

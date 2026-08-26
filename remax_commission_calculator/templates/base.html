@@ -126,38 +126,81 @@
                     >{{ t('nav_vat_calculator') }}</a>
                 </div>
 
-                <div class="header-account header-account-mobile">
-                    {% if current_user %}
-                    <details class="nav-dropdown nav-account-dropdown">
-                        <summary class="nav-user nav-account-toggle" title="{{ t('logged_in_as') }}">
-                            <strong class="nav-user-name">{{ current_user.username }}</strong>
-                            <span class="nav-user-role">{{ t('role_' ~ current_user.role) }}</span>
-                            {% if current_user.agent_name %}
-                            <span class="nav-user-agent">{{ current_user.agent_name }}</span>
-                            {% endif %}
-                        </summary>
-                        <div class="nav-dropdown-menu" role="menu">
-                            {% if can_manage_users() %}
-                            <a
-                                href="{{ url_for('organization_settings') }}"
-                                class="nav-dropdown-item{% if request.endpoint == 'organization_settings' %} active{% endif %}"
-                                role="menuitem"
-                            >{{ t('nav_organization_settings') }}</a>
-                            {% endif %}
-                            <a
-                                href="{{ url_for('logout') }}"
-                                class="nav-dropdown-item"
-                                role="menuitem"
-                            >{{ t('logout') }}</a>
-                        </div>
-                    </details>
-                    {% else %}
-                    <span class="nav-user" title="{{ t('logged_in_as') }}">
-                        <strong class="nav-user-name">{{ t('role_guest') }}</strong>
-                        <span class="nav-user-role">{{ t('guest_read_only') }}</span>
-                    </span>
-                    <a href="{{ url_for('logout') }}" class="btn btn-small btn-secondary">{{ t('logout') }}</a>
-                    {% endif %}
+                <div class="main-nav-tools main-nav-tools-mobile">
+                    {% include "_nav_meta.html" %}
+
+                    <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
+                        <a
+                            href="{{ url_for('set_language', language='es') }}"
+                            class="lang-link{% if current_language == 'es' %} active{% endif %}"
+                        >ES</a>
+                        <a
+                            href="{{ url_for('set_language', language='en') }}"
+                            class="lang-link{% if current_language == 'en' %} active{% endif %}"
+                        >EN</a>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="theme-toggle"
+                        aria-label="{{ t('theme_toggle_dark') }}"
+                        data-label-dark="{{ t('theme_toggle_dark') }}"
+                        data-label-light="{{ t('theme_toggle_light') }}"
+                        title="{{ t('theme_toggle_dark') }}"
+                    >
+                        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path
+                                d="M21 14.5A8.5 8.5 0 0 1 9.5 3 6.5 6.5 0 1 0 21 14.5Z"
+                                stroke="currentColor"
+                                stroke-width="1.75"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+                        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.75" />
+                            <path
+                                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+                                stroke="currentColor"
+                                stroke-width="1.75"
+                                stroke-linecap="round"
+                            />
+                        </svg>
+                    </button>
+
+                    <div class="header-account header-account-mobile">
+                        {% if current_user %}
+                        <details class="nav-dropdown nav-account-dropdown">
+                            <summary class="nav-user nav-account-toggle" title="{{ t('logged_in_as') }}">
+                                <strong class="nav-user-name">{{ current_user.username }}</strong>
+                                <span class="nav-user-role">{{ t('role_' ~ current_user.role) }}</span>
+                                {% if current_user.agent_name %}
+                                <span class="nav-user-agent">{{ current_user.agent_name }}</span>
+                                {% endif %}
+                            </summary>
+                            <div class="nav-dropdown-menu" role="menu">
+                                {% if can_manage_users() %}
+                                <a
+                                    href="{{ url_for('organization_settings') }}"
+                                    class="nav-dropdown-item{% if request.endpoint == 'organization_settings' %} active{% endif %}"
+                                    role="menuitem"
+                                >{{ t('nav_organization_settings') }}</a>
+                                {% endif %}
+                                <a
+                                    href="{{ url_for('logout') }}"
+                                    class="nav-dropdown-item"
+                                    role="menuitem"
+                                >{{ t('logout') }}</a>
+                            </div>
+                        </details>
+                        {% else %}
+                        <span class="nav-user" title="{{ t('logged_in_as') }}">
+                            <strong class="nav-user-name">{{ t('role_guest') }}</strong>
+                            <span class="nav-user-role">{{ t('guest_read_only') }}</span>
+                        </span>
+                        <a href="{{ url_for('logout') }}" class="btn btn-small btn-secondary">{{ t('logout') }}</a>
+                        {% endif %}
+                    </div>
                 </div>
             </nav>
 
@@ -173,7 +216,7 @@
                     {{ t('nav_menu') }}
                 </button>
 
-                <div class="header-tools">
+                <div class="header-tools header-tools-desktop">
                     {% include "_nav_meta.html" %}
 
                     <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
@@ -189,7 +232,6 @@
                     <button
                         type="button"
                         class="theme-toggle"
-                        id="theme-toggle"
                         aria-label="{{ t('theme_toggle_dark') }}"
                         data-label-dark="{{ t('theme_toggle_dark') }}"
                         data-label-light="{{ t('theme_toggle_light') }}"
@@ -259,7 +301,7 @@
             </div>
 
             <div class="header-zone header-zone-right">
-                <div class="header-tools">
+                <div class="header-tools header-tools-desktop">
                     <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
                         <a
                             href="{{ url_for('set_language', language='es') }}"
@@ -273,7 +315,6 @@
                     <button
                         type="button"
                         class="theme-toggle"
-                        id="theme-toggle"
                         aria-label="{{ t('theme_toggle_dark') }}"
                         data-label-dark="{{ t('theme_toggle_dark') }}"
                         data-label-light="{{ t('theme_toggle_light') }}"
@@ -305,12 +346,31 @@
     </header>
 
     <div class="app-shell">
-        <aside class="app-sidebar" aria-label="{{ t('sidebar_filters') }}">
+        <aside
+            id="app-sidebar"
+            class="app-sidebar"
+            aria-label="{{ t('sidebar_filters') }}"
+        >
             {% block sidebar %}{% endblock %}
         </aside>
 
         <main class="app-main">
             <div class="app-main-inner">
+                <div class="filters-toolbar">
+                    <button
+                        type="button"
+                        class="filters-toggle btn btn-secondary"
+                        id="filters-toggle"
+                        aria-expanded="false"
+                        aria-controls="app-sidebar"
+                        hidden
+                        data-label-open="{{ t('filters_open') }}"
+                        data-label-close="{{ t('filters_close') }}"
+                    >
+                        {{ t('filters_open') }}
+                    </button>
+                    <span class="filters-active-chip" id="filters-active-chip" hidden></span>
+                </div>
                 {% include "_flash_messages.html" %}
                 {% block content %}{% endblock %}
             </div>

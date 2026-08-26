@@ -18,11 +18,11 @@
     </div>
 
     <div class="page-actions">
-        <form method="post" action="{{ url_for('remax_export_cancel') }}" style="display:inline;">
+        <form method="post" action="{{ url_for('remax_export_cancel') }}">
             <input type="hidden" name="batch_id" value="{{ batch_id }}">
             <button type="submit" class="btn btn-secondary">{{ t('csv_import_cancel') }}</button>
         </form>
-        <form method="post" action="{{ url_for('remax_export_confirm') }}" style="display:inline;">
+        <form method="post" action="{{ url_for('remax_export_confirm') }}">
             <input type="hidden" name="batch_id" value="{{ batch_id }}">
             <button
                 type="submit"
@@ -95,18 +95,18 @@
         action="{{ url_for('remax_export_resolve', batch_id=batch_id) }}"
     >
         <div class="table-wrapper">
-            <table>
+            <table class="table-dense">
                 <thead>
                     <tr>
                         <th>MLSID</th>
                         <th>{{ t('address') }}</th>
-                        <th>{{ t('remax_export_locality') }}</th>
+                        <th class="col-secondary">{{ t('remax_export_locality') }}</th>
                         <th>{{ t('jurisdiction') }}</th>
-                        <th>{{ t('listing_status') }}</th>
+                        <th class="col-secondary">{{ t('listing_status') }}</th>
                         <th>{{ t('remax_export_property_type') }}</th>
-                        <th>{{ t('property_listing_purpose') }}</th>
+                        <th class="col-secondary">{{ t('property_listing_purpose') }}</th>
                         <th>{{ t('remax_export_price') }}</th>
-                        <th>%</th>
+                        <th class="col-secondary">%</th>
                         <th>{{ t('csv_import_action_create') }}</th>
                     </tr>
                 </thead>
@@ -115,7 +115,7 @@
                     <tr>
                         <td>{{ prop.mlsid }}</td>
                         <td>{{ prop.address }}</td>
-                        <td>{{ prop.locality or '—' }}</td>
+                        <td class="col-secondary">{{ prop.locality or '—' }}</td>
                         <td>
                             <select
                                 name="jurisdiction__{{ prop.mlsid }}"
@@ -131,13 +131,13 @@
                             </select>
                             <small class="field-help">{{ prop.jurisdiction_source or '' }}</small>
                         </td>
-                        <td>
+                        <td class="col-secondary">
                             {{ prop.status_raw or '—' }}
                             →
                             {{ prop.status or '—' }}
                         </td>
                         <td>
-                            <div>{{ prop.property_type_raw or '—' }}</div>
+                            <div class="col-secondary">{{ prop.property_type_raw or '—' }}</div>
                             <select
                                 name="property_type__{{ prop.mlsid }}"
                                 class="form-input"
@@ -151,7 +151,7 @@
                                 {% endfor %}
                             </select>
                         </td>
-                        <td>
+                        <td class="col-secondary">
                             {{ prop.purpose_raw or '—' }}
                             →
                             {{ prop.listing_purpose or '—' }}
@@ -163,7 +163,7 @@
                             —
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="col-secondary">
                             C: {{ prop.buyer_side_commission_percent if prop.buyer_side_commission_percent is not none else '—' }}
                             /
                             V: {{ prop.seller_side_commission_percent if prop.seller_side_commission_percent is not none else '—' }}
@@ -190,4 +190,21 @@
         </div>
     </form>
 </section>
+
+<div class="sticky-actions-bar" aria-label="{{ t('csv_import_confirm') }}">
+    <form method="post" action="{{ url_for('remax_export_cancel') }}">
+        <input type="hidden" name="batch_id" value="{{ batch_id }}">
+        <button type="submit" class="btn btn-secondary">{{ t('csv_import_cancel') }}</button>
+    </form>
+    <form method="post" action="{{ url_for('remax_export_confirm') }}">
+        <input type="hidden" name="batch_id" value="{{ batch_id }}">
+        <button
+            type="submit"
+            class="btn btn-primary"
+            {% if not preview.can_confirm %}disabled{% endif %}
+        >
+            {{ t('csv_import_confirm') }}
+        </button>
+    </form>
+</div>
 {% endblock %}

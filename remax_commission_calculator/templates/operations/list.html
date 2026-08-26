@@ -198,34 +198,34 @@
 
     {% if operations %}
     <div class="table-wrapper">
-        <table>
+        <table class="table-dense">
             <thead>
                 <tr>
-                    <th>{{ t('id') }}</th>
+                    <th class="col-secondary">{{ t('id') }}</th>
                     <th>{{ t('date') }}</th>
                     <th>{{ t('status') }}</th>
                     <th>{{ t('agent') }}</th>
                     <th>{{ t('property') }}</th>
-                    <th>{{ t('currency') }}</th>
-                    <th>{{ t('original_amount') }}</th>
-                    <th>{{ t('usd_equivalent') }}</th>
+                    <th class="col-secondary">{{ t('currency') }}</th>
+                    <th class="col-secondary">{{ t('original_amount') }}</th>
+                    <th class="col-secondary">{{ t('usd_equivalent') }}</th>
                     <th>{{ t('total_commission') }}</th>
-                    <th>{{ t('actions') }}</th>
+                    <th class="col-actions">{{ t('actions') }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for operation in operations %}
                 <tr>
-                    <td>{{ operation.id }}</td>
+                    <td class="col-secondary">{{ operation.id }}</td>
                     <td>{{ operation.date }}</td>
                     <td><span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span></td>
                     <td>{{ operation.agent }}</td>
                     <td>{{ operation.property }}</td>
-                    <td>{{ operation.currency }}</td>
-                    <td class="money">{{ operation.original_amount|money(operation.currency) }}</td>
-                    <td class="money">{{ operation.sale_price|money }}</td>
+                    <td class="col-secondary">{{ operation.currency }}</td>
+                    <td class="money col-secondary">{{ operation.original_amount|money(operation.currency) }}</td>
+                    <td class="money col-secondary">{{ operation.sale_price|money }}</td>
                     <td class="money money-emphasis">{{ operation.total_commission|money }}</td>
-                    <td class="table-actions">
+                    <td class="table-actions col-actions">
                         <a
                             href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
                             class="btn btn-small btn-secondary"

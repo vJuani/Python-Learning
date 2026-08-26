@@ -324,32 +324,32 @@
     </div>
     {% if report.operations %}
     <div class="table-wrapper">
-        <table>
+        <table class="table-dense">
             <thead>
                 <tr>
-                    <th>{{ report.labels.col_id }}</th>
+                    <th class="col-secondary">{{ report.labels.col_id }}</th>
                     <th>{{ report.labels.col_date }}</th>
                     <th>{{ report.labels.col_agent }}</th>
                     <th>{{ report.labels.col_property }}</th>
                     <th>{{ report.labels.col_status }}</th>
-                    <th>{{ report.labels.col_invoiced }}</th>
-                    <th>{{ report.labels.col_currency }}</th>
-                    <th>{{ report.labels.col_original_amount }}</th>
-                    <th>{{ report.labels.col_sale_price_usd }}</th>
+                    <th class="col-secondary">{{ report.labels.col_invoiced }}</th>
+                    <th class="col-secondary">{{ report.labels.col_currency }}</th>
+                    <th class="col-secondary">{{ report.labels.col_original_amount }}</th>
+                    <th class="col-secondary">{{ report.labels.col_sale_price_usd }}</th>
                     <th>{{ report.labels.col_commission }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in report.operations %}
                 <tr>
-                    <td>{{ item.id }}</td>
+                    <td class="col-secondary">{{ item.id }}</td>
                     <td>{{ item.date }}</td>
                     <td>{{ item.agent }}</td>
                     <td>{{ item.property }}</td>
                     <td>{{ item.status_label }}</td>
-                    <td>{{ item.was_invoiced_label }}</td>
-                    <td>{{ item.currency }}</td>
-                    <td class="money">
+                    <td class="col-secondary">{{ item.was_invoiced_label }}</td>
+                    <td class="col-secondary">{{ item.currency }}</td>
+                    <td class="money col-secondary">
                         {% if item.show_fx %}
                         {{ item.currency }} {{ '%.2f'|format(item.original_amount) }}
                         <span class="field-help">FX {{ '%.4f'|format(item.exchange_rate) }}</span>
@@ -357,7 +357,7 @@
                         {{ item.original_amount|money }}
                         {% endif %}
                     </td>
-                    <td class="money">{{ item.sale_price|money }}</td>
+                    <td class="money col-secondary">{{ item.sale_price|money }}</td>
                     <td class="money">{{ item.total_commission|money }}</td>
                 </tr>
                 {% endfor %}

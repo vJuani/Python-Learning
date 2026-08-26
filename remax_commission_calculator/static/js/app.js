@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", function () {
-    var themeToggle = document.getElementById("theme-toggle");
+    var themeToggles = document.querySelectorAll(".theme-toggle");
     var root = document.documentElement;
 
     function applyTheme(theme) {
@@ -9,14 +9,14 @@ document.addEventListener("DOMContentLoaded", function () {
             root.removeAttribute("data-theme");
         }
 
-        if (themeToggle) {
+        themeToggles.forEach(function (themeToggle) {
             var label = theme === "dark"
                 ? themeToggle.getAttribute("data-label-light")
                 : themeToggle.getAttribute("data-label-dark");
 
             themeToggle.setAttribute("aria-label", label || "");
             themeToggle.setAttribute("title", label || "");
-        }
+        });
 
         try {
             localStorage.setItem("cc-theme", theme);
@@ -25,10 +25,12 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    if (themeToggle) {
-        themeToggle.addEventListener("click", function () {
-            var isDark = root.getAttribute("data-theme") === "dark";
-            applyTheme(isDark ? "light" : "dark");
+    if (themeToggles.length) {
+        themeToggles.forEach(function (themeToggle) {
+            themeToggle.addEventListener("click", function () {
+                var isDark = root.getAttribute("data-theme") === "dark";
+                applyTheme(isDark ? "light" : "dark");
+            });
         });
 
         var currentTheme = root.getAttribute("data-theme") === "dark"
@@ -39,6 +41,63 @@ document.addEventListener("DOMContentLoaded", function () {
 
     var toggle = document.querySelector(".nav-toggle");
     var nav = document.querySelector(".main-nav");
+    var shell = document.querySelector(".app-shell");
+    var sidebar = document.getElementById("app-sidebar");
+    var filtersToggle = document.getElementById("filters-toggle");
+    var filtersChip = document.getElementById("filters-active-chip");
+    var mobileMq = window.matchMedia("(max-width: 768px)");
+
+    function closeNav() {
+        if (!toggle || !nav) {
+            return;
+        }
+
+        nav.classList.remove("is-open");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.textContent = toggle.getAttribute("data-label-menu") || "Menu";
+    }
+
+    function setFiltersOpen(isOpen) {
+        if (!shell || !filtersToggle) {
+            return;
+        }
+
+        shell.classList.toggle("filters-open", isOpen);
+        filtersToggle.setAttribute(
+            "aria-expanded",
+            isOpen ? "true" : "false"
+        );
+        filtersToggle.textContent = isOpen
+            ? (filtersToggle.getAttribute("data-label-close") || "Hide filters")
+            : (filtersToggle.getAttribute("data-label-open") || "Filters");
+    }
+
+    function syncFiltersToggle() {
+        if (!shell || !sidebar || !filtersToggle) {
+            return;
+        }
+
+        var hasFilters = sidebar.children.length > 0;
+        var isMobile = mobileMq.matches;
+
+        filtersToggle.hidden = !(hasFilters && isMobile);
+
+        if (!hasFilters || !isMobile) {
+            setFiltersOpen(false);
+        }
+
+        if (filtersChip) {
+            var countEl = sidebar.querySelector(".sidebar-count");
+
+            if (hasFilters && isMobile && countEl) {
+                filtersChip.hidden = false;
+                filtersChip.textContent = countEl.textContent.trim();
+            } else {
+                filtersChip.hidden = true;
+                filtersChip.textContent = "";
+            }
+        }
+    }
 
     if (toggle && nav) {
         var menuLabel = toggle.getAttribute("data-label-menu") || "Menu";
@@ -48,7 +107,30 @@ document.addEventListener("DOMContentLoaded", function () {
             var isOpen = nav.classList.toggle("is-open");
             toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
             toggle.textContent = isOpen ? closeLabel : menuLabel;
+
+            if (isOpen) {
+                setFiltersOpen(false);
+            }
         });
+    }
+
+    if (filtersToggle && shell) {
+        filtersToggle.addEventListener("click", function () {
+            var nextOpen = !shell.classList.contains("filters-open");
+            setFiltersOpen(nextOpen);
+
+            if (nextOpen) {
+                closeNav();
+            }
+        });
+    }
+
+    syncFiltersToggle();
+
+    if (typeof mobileMq.addEventListener === "function") {
+        mobileMq.addEventListener("change", syncFiltersToggle);
+    } else if (typeof mobileMq.addListener === "function") {
+        mobileMq.addListener(syncFiltersToggle);
     }
 
     document.querySelectorAll("details.nav-dropdown").forEach(function (dropdown) {
@@ -85,6 +167,8 @@ document.addEventListener("DOMContentLoaded", function () {
         document.querySelectorAll("details.nav-dropdown[open]").forEach(function (dropdown) {
             dropdown.open = false;
         });
+        closeNav();
+        setFiltersOpen(false);
     });
 
     var currencySelect = document.getElementById("currency");

@@ -47,11 +47,11 @@
         <h3>{{ t('team_section_title') }}</h3>
     </div>
     <div class="table-wrapper">
-        <table>
+        <table class="table-dense">
             <thead>
                 <tr>
                     <th>{{ t('name') }}</th>
-                    <th>{{ t('agent_type') }}</th>
+                    <th class="col-secondary">{{ t('agent_type') }}</th>
                     <th>{{ t('team_ops_approved') }}</th>
                     <th>{{ t('team_production') }}</th>
                     <th>{{ t('team_income_for_leader') }}</th>
@@ -69,7 +69,7 @@
                         {{ row.agent.name }}
                         {% endif %}
                     </td>
-                    <td>
+                    <td class="col-secondary">
                         <span class="type-tag badge-{{ row.agent.type|lower }}">{{ row.agent.type }}</span>
                     </td>
                     <td>{{ row.operations_count }}</td>
@@ -101,26 +101,24 @@
     <div class="panel-header">
         <h3>{{ t('wallet_section_title') }}</h3>
     </div>
-    <ul class="summary-list">
-        <li>
-            {{ t('wallet_own_commissions') }}:
-            {{ wallet_totals.own_commission|money }}
-        </li>
-        <li>
-            {{ t('wallet_team_income') }}:
-            {{ wallet_totals.team_leader_income|money }}
-        </li>
-        <li>
-            {{ t('wallet_adjustments') }}:
-            {{ (wallet_totals.adjustment + wallet_totals.reversal)|money }}
-        </li>
-        <li>
-            <strong>
-                {{ t('wallet_total') }}:
-                {{ wallet_totals.total|money }}
-            </strong>
-        </li>
-    </ul>
+    <div class="stats-grid wallet-stats-grid">
+        <div class="stat-card">
+            <span class="stat-label">{{ t('wallet_own_commissions') }}</span>
+            <strong class="stat-value money">{{ wallet_totals.own_commission|money }}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">{{ t('wallet_team_income') }}</span>
+            <strong class="stat-value money">{{ wallet_totals.team_leader_income|money }}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">{{ t('wallet_adjustments') }}</span>
+            <strong class="stat-value money">{{ (wallet_totals.adjustment + wallet_totals.reversal)|money }}</strong>
+        </div>
+        <div class="stat-card stat-card-accent">
+            <span class="stat-label">{{ t('wallet_total') }}</span>
+            <strong class="stat-value money">{{ wallet_totals.total|money }}</strong>
+        </div>
+    </div>
 </section>
 
 <section class="panel">
@@ -129,12 +127,12 @@
     </div>
     {% if wallet_movements %}
     <div class="table-wrapper">
-        <table>
+        <table class="table-dense">
             <thead>
                 <tr>
                     <th>{{ t('wallet_date') }}</th>
-                    <th>{{ t('wallet_reference') }}</th>
-                    <th>{{ t('wallet_source_agent') }}</th>
+                    <th class="col-secondary">{{ t('wallet_reference') }}</th>
+                    <th class="col-secondary">{{ t('wallet_source_agent') }}</th>
                     <th>{{ t('wallet_movement_type') }}</th>
                     <th>{{ t('wallet_amount') }}</th>
                 </tr>
@@ -143,7 +141,7 @@
                 {% for mov in wallet_movements %}
                 <tr>
                     <td>{{ mov.created_at }}</td>
-                    <td>
+                    <td class="col-secondary">
                         {% if mov.operation_id %}
                         <a href="{{ url_for('operations_detail', operation_id=mov.operation_id) }}">
                             {{ mov.reference or ('COM-%06d'|format(mov.operation_id)) }}
@@ -152,7 +150,7 @@
                         {{ mov.reference or '—' }}
                         {% endif %}
                     </td>
-                    <td>{{ mov.source_agent_name or '—' }}</td>
+                    <td class="col-secondary">{{ mov.source_agent_name or '—' }}</td>
                     <td>{{ t('wallet_type_' ~ mov.movement_type) }}</td>
                     <td class="money">
                         {% if mov.amount >= 0 %}+{% endif %}
