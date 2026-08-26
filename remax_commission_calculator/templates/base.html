@@ -36,7 +36,7 @@
     {% endif %}
     {% block extra_css %}{% endblock %}
 </head>
-<body class="{% if current_user or guest_access %}has-app-rail{% endif %}">
+<body class="{% if current_user or guest_access %}has-app-rail{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
     <aside class="app-rail" aria-label="{{ t('nav_aria') }}">
         <div class="app-rail-top">
@@ -294,6 +294,48 @@
                 </nav>
             </div>
 
+            <div class="header-zone header-zone-right">
+                <div class="header-tools header-tools-desktop">
+                    <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
+                        <a
+                            href="{{ url_for('set_language', language='es') }}"
+                            class="lang-link{% if current_language == 'es' %} active{% endif %}"
+                        >ES</a>
+                        <a
+                            href="{{ url_for('set_language', language='en') }}"
+                            class="lang-link{% if current_language == 'en' %} active{% endif %}"
+                        >EN</a>
+                    </div>
+                    <button
+                        type="button"
+                        class="theme-toggle"
+                        aria-label="{{ t('theme_toggle_dark') }}"
+                        data-label-dark="{{ t('theme_toggle_dark') }}"
+                        data-label-light="{{ t('theme_toggle_light') }}"
+                        title="{{ t('theme_toggle_dark') }}"
+                    >
+                        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path
+                                d="M21 14.5A8.5 8.5 0 0 1 9.5 3 6.5 6.5 0 1 0 21 14.5Z"
+                                stroke="currentColor"
+                                stroke-width="1.75"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+                        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.75" />
+                            <path
+                                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+                                stroke="currentColor"
+                                stroke-width="1.75"
+                                stroke-linecap="round"
+                            />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            {% else %}
             <div class="header-zone header-zone-right">
                 <div class="header-tools header-tools-desktop">
                     <div class="language-switcher" role="group" aria-label="{{ t('language') }}">

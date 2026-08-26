@@ -21,8 +21,8 @@
     <div class="page-actions">
         <a
             href="{{ url_for('properties_detail', property_id=property_data.id) }}"
-            class="btn btn-secondary"
-        >{{ t('back') }}</a>
+            class="btn btn-secondary btn-back"
+        ><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
 </section>
 
@@ -112,7 +112,7 @@
             <button type="submit" class="btn btn-primary">{% if is_edit %}{{ t('save_changes') }}{% else %}{{ t('listing_save') }}{% endif %}</button>
             <a
                 href="{{ url_for('properties_detail', property_id=property_data.id) }}"
-                class="btn btn-secondary"
+                class="btn btn-ghost"
             >{{ t('cancel') }}</a>
         </div>
     </form>

@@ -16,8 +16,7 @@
     </div>
 
     <div class="page-actions">
-        <a href="{{ url_for('users_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
+        <a href="{{ url_for('users_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
 </section>
 
@@ -107,8 +106,7 @@
             <button type="submit" class="btn btn-primary">
                 {% if is_edit %}{{ t('save_changes') }}{% else %}{{ t('create_user') }}{% endif %}
             </button>
-            <a href="{{ url_for('users_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
-            <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
+            <a href="{{ url_for('users_list') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
         </div>
     </form>
 </section>

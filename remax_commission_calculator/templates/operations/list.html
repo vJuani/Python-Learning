@@ -161,7 +161,6 @@
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ t('operations_title') }}</h2>
-        <p class="results-meta">{{ t('results_found', count=operation_count) }}</p>
     </div>
 
     <div class="page-actions">
@@ -193,8 +192,8 @@
 {% endif %}
 
 <section class="panel panel-list">
-    <div class="panel-header hide-mobile">
-        <h3>{{ t('operation_list') }}</h3>
+    <div class="panel-header">
+        <h3 class="hide-mobile">{{ t('operation_list') }}</h3>
         <p class="results-meta">{{ t('results_found', count=operation_count) }}</p>
     </div>
 
@@ -317,5 +316,7 @@
         </p>
     </div>
     {% endif %}
+
+    {% include "_pagination.html" %}
 </section>
 {% endblock %}

@@ -406,8 +406,9 @@ class PropertyExternalListingsTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Ver", response.data)
-        self.assertIn(b'id="property-agent-options"', response.data)
-        self.assertIn(b'list="property-agent-options"', response.data)
+        self.assertIn(b'id="agent"', response.data)
+        self.assertIn(b'name="agent"', response.data)
+        self.assertIn(b"<select", response.data)
 
     def test_listing_visible_after_property_approval(self):
         pending_property_id = add_property(

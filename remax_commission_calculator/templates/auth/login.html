@@ -49,7 +49,10 @@
         </form>
 
         <div class="auth-links">
-            <a href="{{ url_for('register') }}" class="btn btn-secondary">{{ t('register_button') }}</a>
+            <p class="auth-register-prompt">
+                {{ t('login_no_account') }}
+                <a href="{{ url_for('register') }}">{{ t('login_create_account') }}</a>
+            </p>
             <p class="field-help">{{ t('guest_access_login_help') }}</p>
         </div>
     </div>

@@ -115,7 +115,6 @@
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ t('properties_title') }}</h2>
-        <p class="results-meta">{{ t('results_found', count=property_count) }}</p>
     </div>
 
     <div class="page-actions">
@@ -130,11 +129,6 @@
     <div class="panel-header">
         <h3 class="hide-mobile">{{ t('property_list') }}</h3>
         <p class="results-meta">{{ t('results_found', count=property_count) }}</p>
-        {% if pagination %}
-        <p class="results-meta results-meta-page-size hide-mobile">
-            {{ t('pagination_per_page', count=pagination.per_page) }}
-        </p>
-        {% endif %}
     </div>
 
     {% if properties %}

@@ -9,6 +9,7 @@ from modules.pagination import (
     build_page_numbers,
     paginate_list,
     parse_page,
+    parse_per_page,
 )
 
 
@@ -21,6 +22,14 @@ class PaginationTests(unittest.TestCase):
         self.assertEqual(parse_page("0"), 1)
         self.assertEqual(parse_page("abc"), 1)
         self.assertEqual(parse_page(None), 1)
+
+    def test_parse_per_page_allows_known_sizes(self):
+        self.assertEqual(parse_per_page("15"), 15)
+        self.assertEqual(parse_per_page("30"), 30)
+        self.assertEqual(parse_per_page("50"), 50)
+        self.assertEqual(parse_per_page("99"), DEFAULT_PER_PAGE)
+        self.assertEqual(parse_per_page("abc"), DEFAULT_PER_PAGE)
+        self.assertEqual(parse_per_page(None), DEFAULT_PER_PAGE)
 
     def test_paginate_list_slices_and_summarizes(self):
         items = list(range(1, 24))

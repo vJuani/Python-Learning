@@ -175,7 +175,7 @@
 </section>
 {% endif %}
 
-<section class="stats-grid" aria-label="{{ report.labels.title }}">
+<section class="stats-grid saas-kpi-grid" aria-label="{{ report.labels.title }}">
     <article class="stat-card stat-card-accent">
         <span class="stat-label">{{ report.labels.operations_count }}</span>
         <strong class="stat-value">{{ report.metrics.operations_count }}</strong>
@@ -247,9 +247,10 @@
             <h4>{{ report.labels.chart_agent_ranking }}</h4>
             <canvas id="chart-agent-ranking" aria-label="{{ report.labels.chart_agent_ranking }}"></canvas>
         </div>
-        <div class="report-chart-card">
+        <div class="report-chart-card report-chart-card--status">
             <h4>{{ report.labels.chart_status }}</h4>
             <canvas id="chart-status" aria-label="{{ report.labels.chart_status }}"></canvas>
+            <ul id="chart-status-legend" class="chart-status-legend" aria-live="polite"></ul>
         </div>
     </div>
 </section>
@@ -281,8 +282,8 @@
             </article>
             {% endfor %}
         </div>
-        <div class="table-wrapper hide-mobile">
-            <table class="table-dense">
+        <div class="table-wrapper hide-mobile table-scroll-auto">
+            <table class="table-dense table-fit">
                 <thead>
                     <tr>
                         <th>{{ report.labels.col_rank }}</th>

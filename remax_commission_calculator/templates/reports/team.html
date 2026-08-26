@@ -87,12 +87,12 @@
         <a
             href="{{ url_for('team_report_pdf', team_leader_id=report.leader.id, **request.args) }}"
             class="btn btn-secondary"
-        >PDF</a>
+        >{{ t('export_pdf') }}</a>
         <a
             href="{{ url_for('team_report_xlsx', team_leader_id=report.leader.id, **request.args) }}"
             class="btn btn-secondary"
-        >Excel</a>
-        <a href="{{ url_for('agents_detail', agent_id=report.leader.id) }}" class="btn btn-ghost">{{ t('back') }}</a>
+        >{{ t('export_excel') }}</a>
+        <a href="{{ url_for('agents_detail', agent_id=report.leader.id) }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
 </section>
 
@@ -108,7 +108,7 @@
     <div class="panel-header">
         <h3>{{ t('team_report_metrics') }}</h3>
     </div>
-    <div class="stats-grid">
+    <div class="stats-grid stats-grid-3">
         <div class="stat-card">
             <span class="stat-label">{{ report.labels.team_production }}</span>
             <strong class="stat-value money">{{ report.metrics.team_production|money }}</strong>

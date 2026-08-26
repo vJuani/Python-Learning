@@ -144,8 +144,10 @@ from modules.properties import (
 )
 
 from modules.pagination import (
+    ALLOWED_PER_PAGE,
     DEFAULT_PER_PAGE,
     paginate_list,
+    parse_per_page,
 )
 
 from modules.property_external_listings import (
@@ -905,11 +907,14 @@ def get_dashboard_context(
     welcome_name = ""
 
     if user is not None:
+        first_name = (user.get("first_name") or "").strip()
+        last_name = (user.get("last_name") or "").strip()
+        visible_name = f"{first_name} {last_name}".strip()
         welcome_name = (
-            user.get("agent_name")
-            or user.get("username")
-            or ""
-        ).strip()
+            visible_name
+            or (user.get("agent_name") or "").strip()
+            or (user.get("username") or "").strip()
+        )
     elif is_guest_session():
         welcome_name = translate("role_guest", language=language)
 
@@ -3841,16 +3846,22 @@ def properties_list():
     )
 
     property_count = len(properties)
+    per_page = parse_per_page(
+        request.args.get("per_page"),
+        default=DEFAULT_PER_PAGE,
+    )
     pagination = paginate_list(
         properties,
         page=request.args.get("page", 1),
-        per_page=DEFAULT_PER_PAGE,
+        per_page=per_page,
     )
     pagination_params = {
         key: value
         for key, value in filters.items()
         if value
     }
+    if per_page != DEFAULT_PER_PAGE:
+        pagination_params["per_page"] = per_page
 
     return render_template(
         "properties/list.html",
@@ -3867,6 +3878,8 @@ def properties_list():
         pagination_endpoint="properties_list",
         pagination_params=pagination_params,
         pagination_summary_key="pagination_showing_properties",
+        pagination_per_page_options=ALLOWED_PER_PAGE,
+        show_per_page_selector=True,
     )
 
 
@@ -4533,12 +4546,30 @@ def operations_list():
         filters
     )
 
+    operation_count = len(operations)
+    per_page = parse_per_page(
+        request.args.get("per_page"),
+        default=DEFAULT_PER_PAGE,
+    )
+    pagination = paginate_list(
+        operations,
+        page=request.args.get("page", 1),
+        per_page=per_page,
+    )
+    pagination_params = {
+        key: value
+        for key, value in filters.items()
+        if value
+    }
+    if per_page != DEFAULT_PER_PAGE:
+        pagination_params["per_page"] = per_page
+
     return render_template(
         "operations/list.html",
-        operations=operations,
+        operations=pagination["items"],
         filters=filters,
         filter_errors=localize_form_errors(filter_errors),
-        operation_count=len(operations),
+        operation_count=operation_count,
         can_create_operations=can_create_operations(
             organization_id
         ),
@@ -4547,7 +4578,13 @@ def operations_list():
         agents=filter_agents if not scope_blocked else [],
         filters_active=has_active_operation_filters(
             parsed_filters
-        )
+        ),
+        pagination=pagination,
+        pagination_endpoint="operations_list",
+        pagination_params=pagination_params,
+        pagination_summary_key="pagination_showing_operations",
+        pagination_per_page_options=ALLOWED_PER_PAGE,
+        show_per_page_selector=True,
     )
 
 

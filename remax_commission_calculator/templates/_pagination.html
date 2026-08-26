@@ -1,45 +1,77 @@
 {# Expects: pagination dict, pagination_endpoint, pagination_params dict #}
 {% if pagination and pagination.total > 0 %}
 <nav class="pagination" aria-label="{{ t('pagination_nav') }}">
-    <p class="pagination-summary">
-        {{ t(
-            pagination_summary_key,
-            start=pagination.start_index,
-            end=pagination.end_index,
-            total=pagination.total
-        ) }}
-    </p>
-
-    <div class="pagination-controls">
-        {% if pagination.has_prev %}
-        <a
-            class="pagination-btn"
-            href="{{ url_for(pagination_endpoint, page=pagination.prev_page, **pagination_params) }}"
-        >{{ t('pagination_prev') }}</a>
-        {% else %}
-        <span class="pagination-btn is-disabled" aria-disabled="true">{{ t('pagination_prev') }}</span>
+    <div class="pagination-bar">
+        {% if show_per_page_selector and pagination_per_page_options %}
+        <form
+            class="pagination-per-page"
+            method="get"
+            action="{{ url_for(pagination_endpoint) }}"
+        >
+            {% for key, value in pagination_params.items() %}
+                {% if key != 'per_page' and key != 'page' %}
+                <input type="hidden" name="{{ key }}" value="{{ value }}">
+                {% endif %}
+            {% endfor %}
+            <label for="pagination-per-page">{{ t('pagination_per_page_label') }}</label>
+            <select
+                id="pagination-per-page"
+                name="per_page"
+                class="form-input"
+                onchange="this.form.submit()"
+            >
+                {% for option in pagination_per_page_options %}
+                <option
+                    value="{{ option }}"
+                    {% if pagination.per_page == option %}selected{% endif %}
+                >{{ option }}</option>
+                {% endfor %}
+            </select>
+        </form>
         {% endif %}
 
-        {% for page_number in pagination.page_numbers %}
-            {% if page_number is none %}
-            <span class="pagination-ellipsis" aria-hidden="true">…</span>
-            {% elif page_number == pagination.page %}
-            <span class="pagination-page is-active" aria-current="page">{{ page_number }}</span>
-            {% else %}
-            <a
-                class="pagination-page"
-                href="{{ url_for(pagination_endpoint, page=page_number, **pagination_params) }}"
-            >{{ page_number }}</a>
-            {% endif %}
-        {% endfor %}
+        <p class="pagination-summary">
+            {{ t(
+                pagination_summary_key,
+                start=pagination.start_index,
+                end=pagination.end_index,
+                total=pagination.total
+            ) }}
+        </p>
 
-        {% if pagination.has_next %}
-        <a
-            class="pagination-btn"
-            href="{{ url_for(pagination_endpoint, page=pagination.next_page, **pagination_params) }}"
-        >{{ t('pagination_next') }}</a>
-        {% else %}
-        <span class="pagination-btn is-disabled" aria-disabled="true">{{ t('pagination_next') }}</span>
+        {% if pagination.total_pages > 1 %}
+        <div class="pagination-controls">
+            {% if pagination.has_prev %}
+            <a
+                class="pagination-btn"
+                href="{{ url_for(pagination_endpoint, page=pagination.prev_page, **pagination_params) }}"
+            >{{ t('pagination_prev') }}</a>
+            {% else %}
+            <span class="pagination-btn is-disabled" aria-disabled="true">{{ t('pagination_prev') }}</span>
+            {% endif %}
+
+            {% for page_number in pagination.page_numbers %}
+                {% if page_number is none %}
+                <span class="pagination-ellipsis" aria-hidden="true">…</span>
+                {% elif page_number == pagination.page %}
+                <span class="pagination-page is-active" aria-current="page">{{ page_number }}</span>
+                {% else %}
+                <a
+                    class="pagination-page"
+                    href="{{ url_for(pagination_endpoint, page=page_number, **pagination_params) }}"
+                >{{ page_number }}</a>
+                {% endif %}
+            {% endfor %}
+
+            {% if pagination.has_next %}
+            <a
+                class="pagination-btn"
+                href="{{ url_for(pagination_endpoint, page=pagination.next_page, **pagination_params) }}"
+            >{{ t('pagination_next') }}</a>
+            {% else %}
+            <span class="pagination-btn is-disabled" aria-disabled="true">{{ t('pagination_next') }}</span>
+            {% endif %}
+        </div>
         {% endif %}
     </div>
 </nav>

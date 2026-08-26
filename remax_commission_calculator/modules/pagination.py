@@ -4,6 +4,7 @@ from __future__ import annotations
 
 
 DEFAULT_PER_PAGE = 15
+ALLOWED_PER_PAGE = (15, 30, 50)
 
 
 def parse_page(raw_value, default=1):
@@ -13,6 +14,22 @@ def parse_page(raw_value, default=1):
         return default
 
     return page if page > 0 else default
+
+
+def parse_per_page(
+    raw_value,
+    default=DEFAULT_PER_PAGE,
+    allowed=ALLOWED_PER_PAGE,
+):
+    try:
+        per_page = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+
+    if per_page in allowed:
+        return per_page
+
+    return default
 
 
 def build_page_numbers(current_page, total_pages, window=2):

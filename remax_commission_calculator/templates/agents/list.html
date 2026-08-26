@@ -83,11 +83,11 @@
                 <a
                     href="{{ url_for('agents_detail', agent_id=agent.id) }}"
                     class="entity-card-cta"
-                >{{ t('view') }}</a>
+                >{{ t('view') }} →</a>
                 {% if is_admin() %}
                 <a
                     href="{{ url_for('agents_edit', agent_id=agent.id) }}"
-                    class="entity-card-cta"
+                    class="btn btn-small btn-outline"
                 >{{ t('edit') }}</a>
                 {% endif %}
             </div>

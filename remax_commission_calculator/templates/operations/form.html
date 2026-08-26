@@ -10,8 +10,7 @@
     </div>
 
     <div class="page-actions">
-        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
+        <a href="{{ url_for('operations_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
 </section>
 
@@ -228,8 +227,7 @@
             {% if show_submit_for_approval %}
             <button type="submit" name="action" value="submit" class="btn btn-edit">{{ t('submit_for_approval') }}</button>
             {% endif %}
-            <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
-            <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
+            <a href="{{ url_for('operations_list') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
         </div>
     </form>
 </section>

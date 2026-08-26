@@ -875,39 +875,66 @@ a {
     padding: 0.68rem 0.8rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    background: var(--surface);
+    background-color: var(--surface);
     color: var(--text);
     font: inherit;
     font-size: 0.95rem;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* Unified select: never use background shorthand (resets repeat → tiled arrows). */
 select.form-input,
+.sidebar-filter-form select,
 .sidebar-filter-form select.form-input,
 .report-field select,
-.report-field select.form-input {
-    appearance: none;
+.report-field select.form-input,
+.form-group select,
+.agent-form select,
+select.ui-select {
     -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
     background-color: var(--surface);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%235b6b7c' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.85rem center;
-    background-size: 0.75rem;
+    background-size: 0.75rem 0.5rem;
     padding-right: 2.35rem;
     cursor: pointer;
+    color: var(--text);
+}
+
+select.form-input::-ms-expand,
+.sidebar-filter-form select::-ms-expand,
+.report-field select::-ms-expand,
+.form-group select::-ms-expand,
+.agent-form select::-ms-expand,
+select.ui-select::-ms-expand {
+    display: none;
 }
 
 [data-theme="dark"] select.form-input,
+[data-theme="dark"] .sidebar-filter-form select,
 [data-theme="dark"] .sidebar-filter-form select.form-input,
 [data-theme="dark"] .report-field select,
-[data-theme="dark"] .report-field select.form-input {
+[data-theme="dark"] .report-field select.form-input,
+[data-theme="dark"] .form-group select,
+[data-theme="dark"] .agent-form select,
+[data-theme="dark"] select.ui-select {
     background-color: var(--surface);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%2393a0b8' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.85rem center;
+    background-size: 0.75rem 0.5rem;
+    color: var(--text);
     color-scheme: dark;
 }
 
 [data-theme="dark"] select.form-input option,
+[data-theme="dark"] .sidebar-filter-form select option,
 [data-theme="dark"] .report-field select option,
+[data-theme="dark"] .form-group select option,
+[data-theme="dark"] .agent-form select option,
 [data-theme="dark"] select option {
     background-color: #151f33;
     color: #e8eefc;
@@ -917,9 +944,14 @@ select.form-input,
 [data-theme="dark"] .report-field select option:checked,
 [data-theme="dark"] select option:checked,
 [data-theme="dark"] select.form-input option:hover,
-[data-theme="dark"] .report-field select option:hover {
+[data-theme="dark"] .report-field select option:hover,
+[data-theme="dark"] select option:hover {
     background-color: #1e3a5f;
     color: #ffffff;
+}
+
+[hidden] {
+    display: none !important;
 }
 
 .form-input:hover {
@@ -1006,6 +1038,11 @@ select.form-input,
     margin-top: 0.35rem;
     color: var(--text-muted);
     font-size: 0.82rem;
+}
+
+.field-help[hidden],
+#reports-charts-fallback[hidden] {
+    display: none !important;
 }
 
 .filter-form {
@@ -1196,6 +1233,10 @@ select.form-input,
     margin-bottom: 1.2rem;
 }
 
+.stats-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .stat-card {
     background: var(--surface);
     border: 1px solid var(--border-soft);
@@ -1326,6 +1367,21 @@ table.table-dense {
     min-width: 36rem;
 }
 
+table.table-fit {
+    min-width: 0;
+    width: 100%;
+}
+
+@media (min-width: 1025px) {
+    .table-wrapper.table-scroll-auto {
+        overflow-x: visible;
+    }
+
+    .table-wrapper.table-scroll-auto table.table-dense {
+        min-width: 0;
+    }
+}
+
 thead {
     background: var(--table-head-bg);
     color: var(--table-head-text);
@@ -1356,9 +1412,17 @@ tbody tr:hover {
 
 td.actions,
 .table-actions {
-    display: flex;
-    gap: 0.45rem;
-    flex-wrap: wrap;
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+td.col-actions {
+    width: 1%;
     white-space: nowrap;
 }
 
@@ -1511,27 +1575,22 @@ thead .col-actions {
     background: rgba(255, 255, 255, 0.04);
 }
 
-[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-input:not(select),
 [data-theme="dark"] .nav-search-input {
-    background: var(--surface);
-    color: var(--text);
-    border-color: var(--border);
-}
-
-[data-theme="dark"] select.form-input {
     background-color: var(--surface);
     color: var(--text);
     border-color: var(--border);
 }
 
 [data-theme="dark"] .form-input:hover,
-[data-theme="dark"] select.form-input:hover {
+[data-theme="dark"] select.form-input:hover,
+[data-theme="dark"] .report-field select:hover {
     border-color: #4b5f82;
 }
 
 [data-theme="dark"] .form-input option,
 [data-theme="dark"] select.form-input option {
-    background: #151f33;
+    background-color: #151f33;
     color: #e8eefc;
 }
 
@@ -1625,6 +1684,124 @@ thead .col-actions {
 .auth-card {
     width: min(420px, 100%);
     margin-bottom: 0;
+}
+
+body.is-auth-page .site-brand {
+    display: none;
+}
+
+body.is-auth-page .site-header {
+    min-height: 3.25rem;
+    border-bottom: 1px solid var(--border-soft);
+}
+
+body.is-auth-page .header-grid {
+    justify-content: flex-end;
+}
+
+body.is-auth-page .app-main-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+body.is-auth-page .flash-messages {
+    width: min(420px, 100%);
+    margin-bottom: 0.75rem;
+}
+
+body.is-auth-page .flash-message {
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.65rem;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+body.is-auth-page .site-footer {
+    opacity: 0.55;
+    padding: 0.45rem 0 0.65rem;
+}
+
+.auth-links {
+    margin-top: 1.25rem;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.auth-register-prompt {
+    margin: 0;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+}
+
+.auth-register-prompt a {
+    color: var(--accent-ink);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.auth-register-prompt a:hover {
+    text-decoration: underline;
+}
+
+.color-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.color-picker-row .form-input {
+    flex: 1 1 auto;
+}
+
+.color-picker-swatch {
+    width: 2.55rem;
+    height: 2.55rem;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+.color-picker-swatch::-webkit-color-swatch-wrapper {
+    padding: 0.2rem;
+}
+
+.color-picker-swatch::-webkit-color-swatch {
+    border: none;
+    border-radius: 0.35rem;
+}
+
+.pagination-per-page {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.pagination-per-page label {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.pagination-per-page select {
+    width: auto;
+    min-width: 5.5rem;
+    min-height: 2.25rem;
+    padding: 0.35rem 2rem 0.35rem 0.65rem;
+}
+
+.vat-calc-form {
+    width: min(560px, 100%);
+    margin-inline: auto;
+}
+
+.vat-calc-form .panel {
+    margin-bottom: 1rem;
 }
 
 .auth-header {
@@ -1768,13 +1945,14 @@ thead .col-actions {
 /* Footer */
 .site-footer {
     margin-top: auto;
-    padding: 0.65rem 0 0.85rem;
+    padding: 0.45rem 0 0.55rem;
     color: var(--text-muted);
     border-top: 1px solid var(--border-soft);
     background: transparent;
-    font-size: 0.78rem;
-    line-height: 1.35;
-    transition: background 0.35s ease;
+    font-size: 0.72rem;
+    line-height: 1.3;
+    opacity: 0.72;
+    transition: background 0.35s ease, opacity 0.2s ease;
 }
 
 .footer-content {
@@ -2020,11 +2198,17 @@ a.dashboard-quick-card:hover {
     font-weight: 600;
 }
 
+.report-field select {
+    /* Keep unified chevron; only tint the fill. */
+    background-color: var(--bg-soft);
+    padding-right: 2.35rem;
+}
+
 .report-field input[type="month"],
 .report-field input[type="date"],
 .report-field input[type="text"],
 .report-field input.form-input {
-    background: var(--bg-soft);
+    background-color: var(--bg-soft);
 }
 
 .report-field select:focus,
@@ -2077,15 +2261,71 @@ a.dashboard-quick-card:hover {
 
 .report-chart-card canvas {
     width: 100% !important;
-    max-height: 260px;
+    max-height: 220px;
+}
+
+.report-chart-card--status {
+    display: grid;
+    gap: 0.75rem;
+    align-content: start;
+}
+
+.report-chart-card--status canvas {
+    max-height: 180px;
+    max-width: 220px;
+    margin-inline: auto;
+}
+
+.chart-status-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.35rem;
+}
+
+.chart-status-legend li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.86rem;
+    color: var(--text-muted);
+}
+
+.chart-status-legend .legend-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.chart-status-legend .legend-swatch {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+.chart-status-legend .legend-value {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 [data-theme="dark"] .report-field select,
 [data-theme="dark"] .report-field input {
-    background: var(--surface);
+    background-color: var(--surface);
     color: var(--text);
     border-color: var(--border);
     color-scheme: dark;
+}
+
+[data-theme="dark"] .report-field select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%2393a0b8' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.85rem center;
+    background-size: 0.75rem 0.5rem;
 }
 
 [data-theme="dark"] .report-field select option {
@@ -2599,6 +2839,15 @@ a.dashboard-quick-card:hover {
     border-top: 1px solid var(--border-soft);
 }
 
+.pagination-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    width: 100%;
+    justify-content: space-between;
+}
+
 .pagination-summary {
     margin: 0;
     color: var(--text-muted);
@@ -2865,7 +3114,14 @@ a.dashboard-quick-card:hover {
         grid-template-columns: 1fr;
     }
 
-    .stats-grid {
+    .stats-grid,
+    .stats-grid-3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (min-width: 481px) and (max-width: 900px) {
+    .stats-grid-3 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
@@ -3471,11 +3727,30 @@ a.dashboard-quick-card:hover {
         letter-spacing: 0.03em;
     }
 
-    .sidebar-filter-form .form-input,
-    .sidebar-filter-form select.form-input {
+    .sidebar-filter-form .form-input:not(select),
+    .sidebar-filter-form select.form-input,
+    .sidebar-filter-form select {
         min-height: 2.7rem;
         border-radius: 10px;
-        background: var(--bg-soft);
+        background-color: var(--bg-soft);
+    }
+
+    .sidebar-filter-form select.form-input,
+    .sidebar-filter-form select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%235b6b7c' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.85rem center;
+        background-size: 0.75rem 0.5rem;
+        padding-right: 2.35rem;
+    }
+
+    [data-theme="dark"] .sidebar-filter-form select.form-input,
+    [data-theme="dark"] .sidebar-filter-form select {
+        background-color: var(--surface);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75L6 6.25L10.5 1.75' stroke='%2393a0b8' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.85rem center;
+        background-size: 0.75rem 0.5rem;
     }
 
     .sidebar-filter-actions {
@@ -3836,7 +4111,9 @@ a.dashboard-quick-card:hover {
     }
 
     .entity-card-footer-actions {
-        justify-content: flex-start;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         gap: 1rem;
         padding-top: 0.2rem;
         border-top: 1px solid var(--border-soft);
