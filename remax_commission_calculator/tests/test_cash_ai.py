@@ -21,7 +21,7 @@ from modules.cash_ai_service import (
     confirm_ai_draft,
     start_ai_analysis,
 )
-from modules.cash_treasury import get_balances
+from modules.cash_treasury import get_balances, set_opening_balances
 from modules.config import apply_config
 from modules.database import (
     add_agent,
@@ -30,6 +30,9 @@ from modules.database import (
     create_tables,
     get_cash_movement,
     list_cash_movements,
+)
+from modules.database.cash_ai_drafts_repository import (
+    get_cash_ai_draft,
 )
 from web_app import app
 
@@ -205,9 +208,20 @@ class CashAiTests(unittest.TestCase):
         from modules.cash_treasury import (
             validate_movement_payload,
         )
+        from modules.cash_treasury import set_opening_balances
 
-        png = _png_bytes()
-        # First confirmed movement with hash
+        org = add_organization("Cash Dup Org")
+        admin = add_user(
+            "cash_dup_admin",
+            hash_password("Password1"),
+            ROLE_ADMIN,
+            org,
+        )
+        set_opening_balances(
+            org,
+            amounts_by_currency={"ARS": "100000"},
+            user_id=admin,
+        )
         values = validate_movement_payload(
             {
                 "movement_type": "expense",
@@ -220,25 +234,16 @@ class CashAiTests(unittest.TestCase):
                 "notes": "",
             }
         )[1]
-        # Seed balance
-        from modules.cash_treasury import set_opening_balances
-
-        set_opening_balances(
-            self.org,
-            amounts_by_currency={"ARS": "100000"},
-            user_id=self.admin,
-        )
         first = confirm_movement(
-            self.org,
+            org,
             values,
-            user_id=self.admin,
+            user_id=admin,
             source="ai",
             attachment_hash="abc123hash",
             merchant="Librería XYZ",
         )
         self.assertIsNotNone(first)
 
-        # Draft with same hash should surface duplicates
         from modules.database.cash_ai_drafts_repository import (
             STATUS_REVIEW,
             create_cash_ai_draft,
@@ -250,15 +255,15 @@ class CashAiTests(unittest.TestCase):
         )
 
         draft_id = create_cash_ai_draft(
-            self.org,
-            created_by_user_id=self.admin,
+            org,
+            created_by_user_id=admin,
             confirm_token="tok-dup-1",
             status=STATUS_REVIEW,
             attachment_hash="abc123hash",
         )
         update_cash_ai_draft(
             draft_id,
-            self.org,
+            org,
             draft_payload={
                 "movement_type": "expense",
                 "currency": "ARS",
@@ -276,16 +281,128 @@ class CashAiTests(unittest.TestCase):
             fields_needing_review=[],
             confidence="high",
         )
-        draft = get_cash_ai_draft(draft_id, self.org)
-        duplicates = find_potential_duplicates(
-            self.org,
-            draft,
-        )
+        draft = get_cash_ai_draft(draft_id, org)
+        duplicates = find_potential_duplicates(org, draft)
         self.assertTrue(duplicates)
         self.assertEqual(
             duplicates[0]["id"],
             first["id"],
         )
+
+    def test_confirm_post_creates_movement_and_redirects(self):
+        set_opening_balances(
+            self.org,
+            amounts_by_currency={"ARS": "100000"},
+            user_id=self.admin,
+        )
+        draft = start_ai_analysis(
+            self.org,
+            user_id=self.admin,
+            user_context_text=(
+                "Egreso de 25000 pesos por productos de "
+                "limpieza, pagado por transferencia."
+            ),
+        )
+        self.assertEqual(draft["status"], "review")
+        before = get_balances(self.org)["ARS"]
+
+        self._login("cash_ai_admin")
+        response = self.client.post(
+            f"/cash/ai/{draft['id']}",
+            data={
+                "action": "confirm",
+                "confirm_token": draft["confirm_token"],
+                "movement_type": "expense",
+                "currency": "ARS",
+                "amount": "25000",
+                "category": "cleaning",
+                "description": "Productos de limpieza",
+                "merchant": "",
+                "payment_method": "transfer",
+                "receipt_number": "",
+                "movement_date": "2026-08-26",
+                "notes": "",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/cash/", response.headers["Location"])
+
+        updated = get_cash_ai_draft(draft["id"], self.org)
+        self.assertEqual(updated["status"], "confirmed")
+        self.assertIsNotNone(updated["confirmed_movement_id"])
+
+        movement = get_cash_movement(
+            updated["confirmed_movement_id"],
+            self.org,
+        )
+        self.assertEqual(movement["source"], "ai")
+        self.assertEqual(
+            movement["created_by_user_id"],
+            self.admin,
+        )
+        self.assertEqual(
+            movement["organization_id"],
+            self.org,
+        )
+        self.assertAlmostEqual(
+            get_balances(self.org)["ARS"],
+            before - 25000,
+            places=2,
+        )
+
+        # Double submit is idempotent.
+        again = self.client.post(
+            f"/cash/ai/{draft['id']}",
+            data={
+                "action": "confirm",
+                "confirm_token": draft["confirm_token"],
+                "movement_type": "expense",
+                "currency": "ARS",
+                "amount": "25000",
+                "category": "cleaning",
+                "description": "Productos de limpieza",
+                "payment_method": "transfer",
+                "movement_date": "2026-08-26",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(again.status_code, 302)
+        same = get_cash_ai_draft(draft["id"], self.org)
+        self.assertEqual(
+            same["confirmed_movement_id"],
+            updated["confirmed_movement_id"],
+        )
+
+    def test_confirm_without_action_defaults_does_not_create(self):
+        """Regression: disabled submit button dropped action=confirm."""
+        draft = start_ai_analysis(
+            self.org,
+            user_id=self.admin,
+            user_context_text=(
+                "Egreso de 1000 pesos en limpieza, transferencia."
+            ),
+        )
+        self._login("cash_ai_admin")
+        # Simulate missing action (old buggy browser submit).
+        response = self.client.post(
+            f"/cash/ai/{draft['id']}",
+            data={
+                "confirm_token": draft["confirm_token"],
+                "movement_type": "expense",
+                "currency": "ARS",
+                "amount": "1000",
+                "category": "cleaning",
+                "description": "Limpieza",
+                "payment_method": "transfer",
+                "movement_date": "2026-08-26",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 200)
+        updated = get_cash_ai_draft(draft["id"], self.org)
+        self.assertEqual(updated["status"], "review")
+        self.assertIsNone(updated.get("confirmed_movement_id"))
 
 
 if __name__ == "__main__":

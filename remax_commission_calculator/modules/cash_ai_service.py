@@ -4,12 +4,14 @@ Cash AI orchestration: analyze → draft → confirm via cash_treasury.
 
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import date
 
 from modules.cash_ai_provider import (
     CashAiProviderError,
     extract_cash_draft_from_provider,
+    get_cash_ai_config_status,
     get_cash_ai_provider_name,
 )
 from modules.cash_receipts import (
@@ -47,7 +49,10 @@ from modules.database.cash_treasury_repository import (
     find_duplicate_cash_movements,
 )
 from modules.database.tenant import require_organization_id
+from modules.config import get_private_upload_root
 
+
+logger = logging.getLogger(__name__)
 
 PAYMENT_UNDETERMINED = "undetermined"
 
@@ -61,6 +66,50 @@ class CashAiError(Exception):
         super().__init__(message_key)
         self.message_key = message_key
         self.kwargs = kwargs
+
+
+def map_provider_error(error):
+    """Map provider failures to UI keys; keep stage in kwargs."""
+    message = str(error)
+    stage = getattr(error, "stage", None) or "provider"
+    details = getattr(error, "details", None) or {}
+
+    if message == "missing_openai_api_key":
+        ui_key = "cash_ai_err_not_configured"
+    elif message == "openai_invalid_response":
+        ui_key = "cash_ai_err_provider_parse_failed"
+    else:
+        ui_key = "cash_ai_err_provider_failed"
+
+    logger.error(
+        "cash_ai stage=%s provider_error=%s details=%s",
+        stage,
+        message,
+        details,
+    )
+
+    return CashAiError(
+        ui_key,
+        stage=stage,
+        provider_error=message,
+        details=details,
+    )
+
+
+def log_cash_ai_runtime_config():
+    status = get_cash_ai_config_status()
+    logger.info(
+        "cash_ai config provider_configured=%s provider=%s "
+        "model_configured=%s model=%s "
+        "openai_api_key_present=%s private_upload_root=%s",
+        status["provider_configured"],
+        status["provider"],
+        status["model_configured"],
+        status["model"],
+        status["openai_api_key_present"],
+        get_private_upload_root(),
+    )
+    return status
 
 
 def _normalize_confidence(raw):
@@ -141,16 +190,28 @@ def _normalize_extraction(raw):
 
     aliases = {
         "efectivo": "cash",
+        "cash": "cash",
         "transferencia": "transfer",
+        "transferencia bancaria": "transfer",
+        "transfer bancaria": "transfer",
+        "transfer": "transfer",
+        "banco": "transfer",
         "tarjeta": "card",
+        "card": "card",
         "debito": "debit",
         "débito": "debit",
+        "debit": "debit",
         "credito": "credit",
         "crédito": "credit",
+        "credit": "credit",
         "mercado pago": "wallet",
         "mercadopago": "wallet",
+        "mercado_pago": "wallet",
+        "mp": "wallet",
         "billetera": "wallet",
+        "wallet": "wallet",
         "otro": "other",
+        "other": "other",
         "sin determinar": PAYMENT_UNDETERMINED,
         "unknown": PAYMENT_UNDETERMINED,
         "undetermined": PAYMENT_UNDETERMINED,
@@ -206,6 +267,7 @@ def start_ai_analysis(
     organization_id = require_organization_id(
         organization_id
     )
+    log_cash_ai_runtime_config()
     context = (user_context_text or "").strip()
     has_file = bool(
         file_storage is not None
@@ -224,6 +286,10 @@ def start_ai_analysis(
         try:
             payload = validate_receipt_upload(file_storage)
         except CashReceiptError as error:
+            logger.warning(
+                "cash_ai stage=receipt_validated_failed key=%s",
+                error.message_key,
+            )
             raise CashAiError(error.message_key) from error
 
         image_bytes, image_type = prepare_image_for_ai(
@@ -239,15 +305,44 @@ def start_ai_analysis(
         status=STATUS_PROCESSING,
         provider=get_cash_ai_provider_name(),
     )
-
-    attachment = None
+    logger.info(
+        "cash_ai stage=draft_created draft_id=%s "
+        "has_image=%s context_len=%s",
+        draft_id,
+        image_bytes is not None,
+        len(context),
+    )
 
     if payload is not None:
-        attachment = save_receipt_bytes(
+        try:
+            attachment = save_receipt_bytes(
+                organization_id,
+                payload=payload,
+                draft_id=draft_id,
+            )
+        except CashReceiptError as error:
+            update_cash_ai_draft(
+                draft_id,
+                organization_id,
+                status=STATUS_FAILED,
+                error_message_key=error.message_key,
+            )
+            raise CashAiError(error.message_key) from error
+
+        # Prove Gunicorn process can re-read what we saved.
+        saved_path = absolute_receipt_path(
+            attachment["relative_path"],
             organization_id,
-            payload=payload,
-            draft_id=draft_id,
         )
+        reread = saved_path.read_bytes()
+        logger.info(
+            "cash_ai stage=receipt_reread_ok path_exists=%s "
+            "reread_size=%s matches_upload=%s",
+            saved_path.is_file(),
+            len(reread),
+            len(reread) == payload["size"],
+        )
+
         update_cash_ai_draft(
             draft_id,
             organization_id,
@@ -269,14 +364,15 @@ def start_ai_analysis(
             language=language,
         )
         normalized = _normalize_extraction(raw)
-    except CashAiProviderError:
+    except CashAiProviderError as error:
+        mapped = map_provider_error(error)
         update_cash_ai_draft(
             draft_id,
             organization_id,
             status=STATUS_FAILED,
-            error_message_key="cash_ai_err_provider_failed",
+            error_message_key=mapped.message_key,
         )
-        raise CashAiError("cash_ai_err_provider_failed")
+        raise mapped from error
 
     update_cash_ai_draft(
         draft_id,
@@ -288,6 +384,13 @@ def start_ai_analysis(
         ],
         confidence=normalized["confidence"],
         error_message_key="",
+    )
+    logger.info(
+        "cash_ai stage=draft_ready draft_id=%s "
+        "confidence=%s review_fields=%s",
+        draft_id,
+        normalized.get("confidence"),
+        normalized.get("fields_needing_review"),
     )
 
     return get_cash_ai_draft(draft_id, organization_id)
@@ -338,14 +441,15 @@ def retry_ai_analysis(
             language=language,
         )
         normalized = _normalize_extraction(raw)
-    except CashAiProviderError:
+    except CashAiProviderError as error:
+        mapped = map_provider_error(error)
         update_cash_ai_draft(
             draft_id,
             organization_id,
             status=STATUS_FAILED,
-            error_message_key="cash_ai_err_provider_failed",
+            error_message_key=mapped.message_key,
         )
-        raise CashAiError("cash_ai_err_provider_failed")
+        raise mapped from error
 
     update_cash_ai_draft(
         draft_id,
@@ -510,18 +614,26 @@ def find_potential_duplicates(organization_id, draft):
             )
         )
 
+    merchant = (payload.get("merchant") or "").strip()
+    receipt_number = (
+        payload.get("receipt_number") or ""
+    ).strip()
+
+    # Require a second signal beyond amount+currency+date
+    # to avoid false positives that block confirm.
     if (
         payload.get("amount")
         and payload.get("currency")
         and payload.get("movement_date")
+        and (merchant or receipt_number)
     ):
         similar = find_duplicate_cash_movements(
             organization_id,
             amount=payload["amount"],
             currency=payload["currency"],
             movement_date=payload["movement_date"],
-            merchant=payload.get("merchant"),
-            receipt_number=payload.get("receipt_number"),
+            merchant=merchant or None,
+            receipt_number=receipt_number or None,
         )
         existing_ids = {item["id"] for item in matches}
         for item in similar:
@@ -543,13 +655,44 @@ def confirm_ai_draft(
     organization_id = require_organization_id(
         organization_id
     )
+    logger.info(
+        "cash_ai.confirm_received draft_id=%s "
+        "user_id=%s acknowledge_duplicates=%s "
+        "token_present=%s",
+        draft_id,
+        user_id,
+        acknowledge_duplicates,
+        bool(confirm_token),
+    )
+
     draft = get_cash_ai_draft(draft_id, organization_id)
 
     if draft is None:
+        logger.warning(
+            "cash_ai.confirm_failed stage=draft_loaded "
+            "reason=not_found draft_id=%s",
+            draft_id,
+        )
         raise CashAiError("cash_ai_err_draft_not_found")
 
+    logger.info(
+        "cash_ai.draft_loaded draft_id=%s status=%s",
+        draft_id,
+        draft.get("status"),
+    )
+
     if draft["confirm_token"] != confirm_token:
+        logger.warning(
+            "cash_ai.confirm_failed stage=confirm_token_valid "
+            "draft_id=%s",
+            draft_id,
+        )
         raise CashAiError("cash_ai_err_invalid_token")
+
+    logger.info(
+        "cash_ai.confirm_token_valid draft_id=%s",
+        draft_id,
+    )
 
     if draft["status"] == STATUS_CONFIRMED:
         if draft.get("confirmed_movement_id"):
@@ -557,6 +700,12 @@ def confirm_ai_draft(
                 get_cash_movement,
             )
 
+            logger.info(
+                "cash_ai.confirm_idempotent draft_id=%s "
+                "movement_id=%s",
+                draft_id,
+                draft["confirmed_movement_id"],
+            )
             return get_cash_movement(
                 draft["confirmed_movement_id"],
                 organization_id,
@@ -573,6 +722,11 @@ def confirm_ai_draft(
     payload = draft.get("draft_payload") or {}
 
     if payload.get("payment_method") == PAYMENT_UNDETERMINED:
+        logger.warning(
+            "cash_ai.confirm_failed stage=validation "
+            "reason=payment_undetermined draft_id=%s",
+            draft_id,
+        )
         raise CashAiError("cash_ai_err_payment_required")
 
     if not acknowledge_duplicates:
@@ -581,6 +735,12 @@ def confirm_ai_draft(
             draft,
         )
         if duplicates:
+            logger.info(
+                "cash_ai.confirm_blocked_duplicate "
+                "draft_id=%s count=%s",
+                draft_id,
+                len(duplicates),
+            )
             raise CashAiError(
                 "cash_ai_err_possible_duplicate",
                 duplicates=duplicates,
@@ -604,29 +764,72 @@ def confirm_ai_draft(
     errors, values = validate_movement_payload(form)
 
     if errors:
-        raise CashAiError(errors[0])
+        logger.warning(
+            "cash_ai.confirm_failed stage=validation_passed "
+            "draft_id=%s errors=%s payload=%s",
+            draft_id,
+            errors,
+            {
+                "movement_type": form["movement_type"],
+                "currency": form["currency"],
+                "amount": form["amount"],
+                "category": form["category"],
+                "payment_method": form["payment_method"],
+                "movement_date": form["movement_date"],
+            },
+        )
+        raise CashAiError(
+            errors[0],
+            validation_errors=errors,
+        )
+
+    logger.info(
+        "cash_ai.validation_passed draft_id=%s",
+        draft_id,
+    )
 
     values["merchant"] = payload.get("merchant")
     values["receipt_number"] = payload.get("receipt_number")
-
     source_reference = json_source_reference(draft)
 
-    movement = confirm_movement(
-        organization_id,
-        values,
-        user_id=user_id,
-        source="ai",
-        source_reference=source_reference,
-        attachment_path=draft.get("attachment_path"),
-        attachment_hash=draft.get("attachment_hash"),
-        attachment_content_type=draft.get(
-            "attachment_content_type"
-        ),
-        attachment_original_name=draft.get(
-            "attachment_original_name"
-        ),
-        merchant=payload.get("merchant"),
-        receipt_number=payload.get("receipt_number"),
+    logger.info(
+        "cash_ai.cash_service_called draft_id=%s",
+        draft_id,
+    )
+
+    try:
+        movement = confirm_movement(
+            organization_id,
+            values,
+            user_id=user_id,
+            source="ai",
+            source_reference=source_reference,
+            attachment_path=draft.get("attachment_path"),
+            attachment_hash=draft.get("attachment_hash"),
+            attachment_content_type=draft.get(
+                "attachment_content_type"
+            ),
+            attachment_original_name=draft.get(
+                "attachment_original_name"
+            ),
+            merchant=payload.get("merchant"),
+            receipt_number=payload.get("receipt_number"),
+        )
+    except CashTreasuryError as error:
+        logger.warning(
+            "cash_ai.confirm_failed stage=cash_service "
+            "draft_id=%s error=%s",
+            draft_id,
+            error.message_key,
+        )
+        raise
+
+    logger.info(
+        "cash_ai.movement_created draft_id=%s "
+        "movement_id=%s display_id=%s",
+        draft_id,
+        movement["id"],
+        movement.get("display_id"),
     )
 
     update_cash_ai_draft(
@@ -634,6 +837,12 @@ def confirm_ai_draft(
         organization_id,
         status=STATUS_CONFIRMED,
         confirmed_movement_id=movement["id"],
+    )
+    logger.info(
+        "cash_ai.draft_marked_confirmed draft_id=%s "
+        "movement_id=%s",
+        draft_id,
+        movement["id"],
     )
 
     return movement

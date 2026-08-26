@@ -176,6 +176,7 @@ from modules.cash_ai_service import (
     PAYMENT_UNDETERMINED,
     build_review_context,
     confirm_ai_draft,
+    log_cash_ai_runtime_config,
     retry_ai_analysis,
     start_ai_analysis,
     update_draft_from_form,
@@ -6105,6 +6106,7 @@ def cash_opening_balance():
 def _cash_ai_review_template(organization_id, draft, **extra):
     context = build_review_context(organization_id, draft)
     force_duplicates = extra.pop("force_duplicates", None)
+    errors = extra.pop("errors", None) or []
     context.update(extra)
 
     if force_duplicates is not None:
@@ -6117,6 +6119,7 @@ def _cash_ai_review_template(organization_id, draft, **extra):
             "income_categories": INCOME_CATEGORIES,
             "expense_categories": EXPENSE_CATEGORIES,
             "payment_undetermined": PAYMENT_UNDETERMINED,
+            "errors": errors,
         }
     )
     return render_template("cash/ai_review.html", **context)
@@ -6143,6 +6146,14 @@ def cash_ai_new():
         "",
     ).strip()
     file_storage = request.files.get("receipt")
+    log_cash_ai_runtime_config()
+    app.logger.info(
+        "cash_ai stage=upload_post has_file=%s "
+        "filename=%r context_len=%s",
+        bool(file_storage and file_storage.filename),
+        getattr(file_storage, "filename", None),
+        len(context_text),
+    )
 
     try:
         draft = start_ai_analysis(
@@ -6153,6 +6164,11 @@ def cash_ai_new():
             language=get_current_language(),
         )
     except CashAiError as error:
+        app.logger.warning(
+            "cash_ai stage=upload_failed key=%s stage_detail=%s",
+            error.message_key,
+            error.kwargs.get("stage"),
+        )
         return render_template(
             "cash/ai_upload.html",
             form_values={
@@ -6190,6 +6206,14 @@ def cash_ai_review(draft_id):
         )
 
     action = request.form.get("action", "save")
+    app.logger.info(
+        "cash_ai.confirm_received draft_id=%s action=%r "
+        "token_present=%s acknowledge=%s",
+        draft_id,
+        action,
+        bool(request.form.get("confirm_token")),
+        request.form.get("acknowledge_duplicates"),
+    )
     form_values = {
         "movement_type": request.form.get(
             "movement_type",
@@ -6247,6 +6271,22 @@ def cash_ai_review(draft_id):
             editing=True,
         )
 
+    if action != "confirm":
+        app.logger.warning(
+            "cash_ai.confirm_failed draft_id=%s "
+            "reason=unknown_action action=%r",
+            draft_id,
+            action,
+        )
+        flash_i18n("cash_ai_err_confirm_action", "error")
+        return _cash_ai_review_template(
+            organization_id,
+            draft,
+            errors=localize_form_errors(
+                ["cash_ai_err_confirm_action"]
+            ),
+        )
+
     acknowledge = (
         request.form.get("acknowledge_duplicates") == "1"
     )
@@ -6270,6 +6310,10 @@ def cash_ai_review(draft_id):
                 draft_id,
                 form_values,
             )
+            flash_i18n(
+                "cash_ai_err_possible_duplicate",
+                "error",
+            )
             return _cash_ai_review_template(
                 organization_id,
                 draft,
@@ -6277,8 +6321,18 @@ def cash_ai_review(draft_id):
                     "duplicates"
                 )
                 or [],
+                errors=localize_form_errors(
+                    ["cash_ai_err_possible_duplicate"]
+                ),
             )
 
+        app.logger.warning(
+            "cash_ai.confirm_failed draft_id=%s key=%s "
+            "stage=%s",
+            draft_id,
+            error.message_key,
+            error.kwargs.get("stage"),
+        )
         flash_i18n(error.message_key, "error")
         draft = get_cash_ai_draft(
             draft_id,
@@ -6288,8 +6342,18 @@ def cash_ai_review(draft_id):
             organization_id,
             draft,
             editing=True,
+            errors=localize_form_errors(
+                error.kwargs.get("validation_errors")
+                or [error.message_key]
+            ),
         )
     except CashTreasuryError as error:
+        app.logger.warning(
+            "cash_ai.confirm_failed draft_id=%s "
+            "treasury_key=%s",
+            draft_id,
+            error.message_key,
+        )
         flash_i18n(error.message_key, "error")
         draft = get_cash_ai_draft(
             draft_id,
@@ -6299,8 +6363,17 @@ def cash_ai_review(draft_id):
             organization_id,
             draft,
             editing=True,
+            errors=localize_form_errors(
+                [error.message_key]
+            ),
         )
 
+    app.logger.info(
+        "cash_ai.redirect_success draft_id=%s "
+        "movement_id=%s",
+        draft_id,
+        movement["id"],
+    )
     flash_i18n("cash_ai_confirmed", "success")
     return redirect(
         url_for(

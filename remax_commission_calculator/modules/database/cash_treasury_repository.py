@@ -798,10 +798,16 @@ def find_duplicate_cash_movements(
                 for row in cursor.fetchall()
             )
 
+        has_second_signal = bool(
+            (merchant or "").strip()
+            or (receipt_number or "").strip()
+        )
+
         if (
             amount is not None
             and currency
             and movement_date
+            and has_second_signal
         ):
             clauses = [
                 "m.organization_id = ?",

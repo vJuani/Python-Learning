@@ -5,6 +5,7 @@ Private cash receipt / ticket storage under PRIVATE_UPLOAD_ROOT.
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 from io import BytesIO
 from pathlib import Path
@@ -13,6 +14,8 @@ from werkzeug.utils import secure_filename
 
 from modules.config import get_private_upload_root
 
+
+logger = logging.getLogger(__name__)
 
 MAX_RECEIPT_BYTES = 8 * 1024 * 1024
 AI_MAX_EDGE_PX = 1600
@@ -26,6 +29,12 @@ ALLOWED_EXTENSIONS = {
 }
 
 ALLOWED_CONTENT_TYPES = set(ALLOWED_EXTENSIONS.values())
+
+EXTENSION_FOR_MIME = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
 
 
 class CashReceiptError(Exception):
@@ -77,7 +86,7 @@ def absolute_receipt_path(relative_path, organization_id):
     return candidate
 
 
-def _detect_content_type(header_bytes, extension):
+def detect_image_content_type(header_bytes):
     if header_bytes.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
 
@@ -91,7 +100,38 @@ def _detect_content_type(header_bytes, extension):
     ):
         return "image/webp"
 
-    return ALLOWED_EXTENSIONS.get(extension)
+    return None
+
+
+def inspect_image_bytes(raw_bytes):
+    """Return Pillow open diagnostics without mutating bytes."""
+    info = {
+        "pillow_available": False,
+        "pillow_ok": False,
+        "width": None,
+        "height": None,
+        "format": None,
+        "mode": None,
+    }
+
+    try:
+        from PIL import Image
+    except ImportError:
+        return info
+
+    info["pillow_available"] = True
+
+    try:
+        image = Image.open(BytesIO(raw_bytes))
+        image.load()
+        info["pillow_ok"] = True
+        info["width"], info["height"] = image.size
+        info["format"] = image.format
+        info["mode"] = image.mode
+    except Exception as error:
+        info["pillow_error"] = type(error).__name__
+
+    return info
 
 
 def validate_receipt_upload(file_storage):
@@ -102,14 +142,25 @@ def validate_receipt_upload(file_storage):
     ):
         raise CashReceiptError("cash_ai_err_file_required")
 
-    original = secure_filename(file_storage.filename or "")
+    client_filename = file_storage.filename or ""
+    original = secure_filename(client_filename)
     extension = Path(original).suffix.lower()
+    declared = (file_storage.mimetype or "").lower().strip()
 
-    if extension not in ALLOWED_EXTENSIONS:
-        raise CashReceiptError("cash_ai_err_file_type")
+    logger.info(
+        "cash_ai stage=receipt_received filename=%r "
+        "secure_filename=%r declared_mime=%r",
+        client_filename,
+        original,
+        declared or None,
+    )
 
     raw = file_storage.read()
-    file_storage.stream.seek(0)
+
+    try:
+        file_storage.stream.seek(0)
+    except Exception:
+        pass
 
     if not raw:
         raise CashReceiptError("cash_ai_err_file_empty")
@@ -117,29 +168,70 @@ def validate_receipt_upload(file_storage):
     if len(raw) > MAX_RECEIPT_BYTES:
         raise CashReceiptError("cash_ai_err_file_too_large")
 
-    detected = _detect_content_type(raw[:32], extension)
+    detected = detect_image_content_type(raw[:32])
+
+    if detected is None and extension in ALLOWED_EXTENSIONS:
+        # Fallback only when magic bytes are unknown.
+        detected = ALLOWED_EXTENSIONS[extension]
 
     if detected not in ALLOWED_CONTENT_TYPES:
+        logger.warning(
+            "cash_ai stage=receipt_validated_failed "
+            "reason=bad_magic size=%s ext=%r declared=%r",
+            len(raw),
+            extension,
+            declared or None,
+        )
         raise CashReceiptError("cash_ai_err_file_type")
 
-    declared = (file_storage.mimetype or "").lower()
-
+    # Prefer magic-bytes MIME over browser-declared MIME.
+    # Declared types like image/x-png must not block valid PNGs.
     if (
         declared
         and declared not in ALLOWED_CONTENT_TYPES
         and declared != "application/octet-stream"
     ):
-        raise CashReceiptError("cash_ai_err_file_type")
+        logger.info(
+            "cash_ai stage=receipt_validated "
+            "ignored_declared_mime=%r using_detected=%r",
+            declared,
+            detected,
+        )
+
+    if extension not in ALLOWED_EXTENSIONS:
+        extension = EXTENSION_FOR_MIME[detected]
+        if not original:
+            original = f"receipt{extension}"
+        elif not Path(original).suffix:
+            original = f"{original}{extension}"
+
+    if extension == ".jpeg":
+        extension = ".jpg"
 
     digest = hashlib.sha256(raw).hexdigest()
+    image_info = inspect_image_bytes(raw)
+
+    logger.info(
+        "cash_ai stage=receipt_validated size=%s "
+        "detected_mime=%s sha256_prefix=%s pillow_ok=%s "
+        "dims=%sx%s format=%s",
+        len(raw),
+        detected,
+        digest[:12],
+        image_info.get("pillow_ok"),
+        image_info.get("width"),
+        image_info.get("height"),
+        image_info.get("format"),
+    )
 
     return {
         "bytes": raw,
         "content_type": detected,
-        "extension": extension if extension != ".jpeg" else ".jpg",
+        "extension": extension,
         "original_filename": original or f"receipt{extension}",
         "sha256": digest,
         "size": len(raw),
+        "image_info": image_info,
     }
 
 
@@ -163,6 +255,20 @@ def save_receipt_bytes(
         get_private_upload_root().resolve()
     ).as_posix()
 
+    exists = absolute.is_file()
+    size_on_disk = absolute.stat().st_size if exists else 0
+
+    logger.info(
+        "cash_ai stage=receipt_saved relative=%s "
+        "exists=%s size_on_disk=%s",
+        relative,
+        exists,
+        size_on_disk,
+    )
+
+    if not exists or size_on_disk <= 0:
+        raise CashReceiptError("cash_ai_err_file_empty")
+
     return {
         "relative_path": relative,
         "stored_name": stored_name,
@@ -170,6 +276,7 @@ def save_receipt_bytes(
         "original_filename": payload["original_filename"],
         "sha256": payload["sha256"],
         "size": payload["size"],
+        "absolute_path": str(absolute),
     }
 
 
@@ -177,24 +284,38 @@ def prepare_image_for_ai(raw_bytes, content_type):
     """
     Optionally downscale large images before sending to the model.
     Original on disk is never mutated.
+    Returns (bytes, mime) suitable for data-URL embedding — never a path.
     """
     try:
         from PIL import Image
     except ImportError:
+        logger.info(
+            "cash_ai stage=receipt_read_for_ai "
+            "pillow_missing passthrough_mime=%s size=%s",
+            content_type,
+            len(raw_bytes),
+        )
         return raw_bytes, content_type
 
     try:
         image = Image.open(BytesIO(raw_bytes))
         image.load()
-    except Exception:
+    except Exception as error:
+        logger.warning(
+            "cash_ai stage=receipt_read_for_ai "
+            "pillow_open_failed error=%s passthrough",
+            type(error).__name__,
+        )
         return raw_bytes, content_type
+
+    source_format = image.format
+    width, height = image.size
 
     if image.mode not in ("RGB", "L"):
         image = image.convert("RGB")
     elif image.mode == "L":
         image = image.convert("RGB")
 
-    width, height = image.size
     longest = max(width, height)
 
     if longest > AI_MAX_EDGE_PX:
@@ -214,7 +335,19 @@ def prepare_image_for_ai(raw_bytes, content_type):
         quality=AI_JPEG_QUALITY,
         optimize=True,
     )
-    return buffer.getvalue(), "image/jpeg"
+    prepared = buffer.getvalue()
+
+    logger.info(
+        "cash_ai stage=receipt_read_for_ai "
+        "source_format=%s source_dims=%sx%s "
+        "prepared_mime=image/jpeg prepared_size=%s",
+        source_format,
+        width,
+        height,
+        len(prepared),
+    )
+
+    return prepared, "image/jpeg"
 
 
 def delete_receipt_file(relative_path, organization_id):

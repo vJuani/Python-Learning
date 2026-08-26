@@ -13,6 +13,14 @@
     </div>
 </section>
 
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
 {% if draft.status == 'failed' %}
 <section class="panel">
     <p class="flash-message flash-error">{{ t(draft.error_message_key or 'cash_ai_err_provider_failed') }}</p>
@@ -106,6 +114,11 @@
                 <dt>{{ t('cash_balance_after') }}</dt>
                 <dd class="money money-emphasis">{{ preview.balance_after|money(preview.currency) }}</dd>
             </div>
+            {% elif preview_error %}
+            <div>
+                <dt>{{ t('cash_balance_after') }}</dt>
+                <dd class="flash-message flash-error">{{ t(preview_error) }}</dd>
+            </div>
             {% endif %}
         </dl>
 
@@ -119,6 +132,7 @@
         {% endif %}
 
         <form method="post" action="{{ url_for('cash_ai_review', draft_id=draft.id) }}" class="agent-form" data-cash-ai-confirm>
+            <input type="hidden" name="action" value="confirm" data-cash-ai-action>
             <input type="hidden" name="confirm_token" value="{{ draft.confirm_token }}">
             <input type="hidden" name="movement_type" value="{{ payload.movement_type or '' }}">
             <input type="hidden" name="currency" value="{{ payload.currency or '' }}">
@@ -134,11 +148,11 @@
             <input type="hidden" name="acknowledge_duplicates" value="1">
             {% endif %}
             <div class="form-actions cash-ai-form-actions">
-                <button type="submit" name="action" value="edit" class="btn btn-secondary">{{ t('cash_ai_edit') }}</button>
+                <button type="submit" class="btn btn-secondary" data-cash-ai-set-action="edit">{{ t('cash_ai_edit') }}</button>
                 {% if duplicates %}
-                <button type="submit" name="action" value="confirm" class="btn btn-primary" data-cash-ai-confirm-btn>{{ t('cash_ai_continue_anyway') }}</button>
+                <button type="submit" class="btn btn-primary" data-cash-ai-set-action="confirm" data-cash-ai-confirm-btn>{{ t('cash_ai_continue_anyway') }}</button>
                 {% else %}
-                <button type="submit" name="action" value="confirm" class="btn btn-primary" data-cash-ai-confirm-btn>{{ t('cash_ai_confirm') }}</button>
+                <button type="submit" class="btn btn-primary" data-cash-ai-set-action="confirm" data-cash-ai-confirm-btn>{{ t('cash_ai_confirm') }}</button>
                 {% endif %}
             </div>
         </form>
@@ -150,6 +164,7 @@
     </div>
     {% else %}
     <form method="post" action="{{ url_for('cash_ai_review', draft_id=draft.id) }}" class="agent-form" data-cash-ai-confirm>
+        <input type="hidden" name="action" value="confirm" data-cash-ai-action>
         <input type="hidden" name="confirm_token" value="{{ draft.confirm_token }}">
         {% if duplicates %}
         <input type="hidden" name="acknowledge_duplicates" value="1">
@@ -219,8 +234,8 @@
         </div>
 
         <div class="form-actions cash-ai-form-actions">
-            <button type="submit" name="action" value="save" class="btn btn-secondary">{{ t('save') }}</button>
-            <button type="submit" name="action" value="confirm" class="btn btn-primary" data-cash-ai-confirm-btn>{{ t('cash_ai_confirm') }}</button>
+            <button type="submit" class="btn btn-secondary" data-cash-ai-set-action="save">{{ t('save') }}</button>
+            <button type="submit" class="btn btn-primary" data-cash-ai-set-action="confirm" data-cash-ai-confirm-btn>{{ t('cash_ai_confirm') }}</button>
         </div>
     </form>
     {% endif %}
@@ -230,9 +245,22 @@
 (function () {
     var forms = document.querySelectorAll("[data-cash-ai-confirm]");
     forms.forEach(function (form) {
+        var actionInput = form.querySelector("[data-cash-ai-action]");
+        form.querySelectorAll("[data-cash-ai-set-action]").forEach(function (button) {
+            button.addEventListener("click", function () {
+                if (actionInput) {
+                    actionInput.value = button.getAttribute("data-cash-ai-set-action") || "confirm";
+                }
+            });
+        });
         form.addEventListener("submit", function () {
-            var btn = form.querySelector("[data-cash-ai-confirm-btn]");
-            if (btn) btn.disabled = true;
+            // Disable AFTER the browser has queued field values.
+            // Never disable the only control carrying name=action.
+            window.setTimeout(function () {
+                form.querySelectorAll("button[type='submit']").forEach(function (btn) {
+                    btn.disabled = true;
+                });
+            }, 0);
         });
     });
 })();
