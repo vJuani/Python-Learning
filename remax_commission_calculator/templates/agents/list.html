@@ -9,9 +9,9 @@
         <p class="results-meta">{{ t('results_found', count=agent_count) }}</p>
     </div>
 
-    <div class="page-actions">
+    <div class="page-actions page-actions-stack">
         {% if is_admin() %}
-        <a href="{{ url_for('agents_new') }}" class="btn btn-primary">{{ t('new_agent') }}</a>
+        <a href="{{ url_for('agents_new') }}" class="btn btn-primary">+ {{ t('new_agent') }}</a>
         {% endif %}
         <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
@@ -59,7 +59,7 @@
 </section>
 
 <section class="panel panel-list">
-    <div class="panel-header hide-mobile">
+    <div class="panel-header">
         <h3>{{ t('agent_list') }}</h3>
     </div>
 

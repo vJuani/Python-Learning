@@ -27,18 +27,22 @@
 {% if dashboard.metrics %}
 <section class="stats-grid saas-kpi-grid" aria-label="{{ dashboard.labels.summary_title }}">
     <div class="stat-card">
+        <span class="stat-icon stat-icon-check" aria-hidden="true"></span>
         <span class="stat-label">{{ dashboard.labels.approved_ops }}</span>
         <strong class="stat-value">{{ dashboard.metrics.approved_operations }}</strong>
     </div>
     <div class="stat-card">
+        <span class="stat-icon stat-icon-money" aria-hidden="true"></span>
         <span class="stat-label">{{ dashboard.labels.commission }}</span>
         <strong class="stat-value money">{{ dashboard.metrics.total_commission|money }}</strong>
     </div>
     <div class="stat-card">
+        <span class="stat-icon stat-icon-chart" aria-hidden="true"></span>
         <span class="stat-label">{{ dashboard.labels.volume }}</span>
         <strong class="stat-value money">{{ dashboard.metrics.volume_usd|money }}</strong>
     </div>
     <div class="stat-card">
+        <span class="stat-icon stat-icon-home" aria-hidden="true"></span>
         <span class="stat-label">{{ dashboard.labels.properties_active }}</span>
         <strong class="stat-value">{{ dashboard.metrics.properties_active }}</strong>
     </div>
@@ -137,21 +141,21 @@
         {% if ranking %}
         <div class="entity-card-list hide-desktop">
             {% for item in ranking %}
-            <article class="entity-card">
-                <div class="entity-card-top">
-                    <span class="entity-external-id">#{{ item.rank }}</span>
+            {% set rank_parts = item.agent_name.split() %}
+            <article class="entity-card entity-card-ranking">
+                <div class="entity-card-heading">
+                    <div class="entity-card-agent-main">
+                        <span class="rank-badge{% if item.rank == 1 %} rank-badge-top{% endif %}">{{ item.rank }}</span>
+                        <span class="entity-avatar" aria-hidden="true">
+                            {{ rank_parts[0][0:1]|upper }}{% if rank_parts|length > 1 %}{{ rank_parts[1][0:1]|upper }}{% endif %}
+                        </span>
+                        <div class="entity-card-heading-text">
+                            <h4 class="entity-card-title">{{ item.agent_name }}</h4>
+                            <span class="entity-card-meta">{{ item.operations_count }} {{ t('dashboard_col_ops') }}</span>
+                        </div>
+                    </div>
+                    <strong class="money money-emphasis">{{ item.total_commission|money }}</strong>
                 </div>
-                <h4 class="entity-card-title">{{ item.agent_name }}</h4>
-                <dl class="entity-card-metrics">
-                    <div>
-                        <dt>{{ t('dashboard_col_ops') }}</dt>
-                        <dd>{{ item.operations_count }}</dd>
-                    </div>
-                    <div>
-                        <dt>{{ t('dashboard_col_commission') }}</dt>
-                        <dd class="money">{{ item.total_commission|money }}</dd>
-                    </div>
-                </dl>
             </article>
             {% endfor %}
         </div>

@@ -174,14 +174,21 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        var hasInlineMobileFilters = !!document.querySelector(
+            ".mobile-inline-filters"
+        );
         var hasFilters = sidebar.children.length > 0
             && !sidebar.classList.contains("is-empty")
             && !sidebar.hasAttribute("hidden");
         var isMobile = mobileMq.matches;
 
-        filtersToggle.hidden = !(hasFilters && isMobile);
+        filtersToggle.hidden = !(
+            hasFilters
+            && isMobile
+            && !hasInlineMobileFilters
+        );
 
-        if (!hasFilters || !isMobile) {
+        if (!hasFilters || !isMobile || hasInlineMobileFilters) {
             setFiltersOpen(false);
         }
     }

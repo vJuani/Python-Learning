@@ -36,7 +36,7 @@
     {% endif %}
     {% block extra_css %}{% endblock %}
 </head>
-<body class="{% if current_user or guest_access %}has-app-rail{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend') %} is-auth-page{% endif %}">
+<body class="{% if current_user or guest_access %}has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
     <aside class="app-rail" aria-label="{{ t('nav_aria') }}">
         <div class="app-rail-top">
@@ -99,83 +99,86 @@
 
             {% if current_user or guest_access %}
             <nav id="main-nav" class="main-nav header-zone header-zone-center" aria-label="{{ t('nav_aria') }}">
+                <div class="mobile-drawer-brand hide-desktop">
+                    <div class="mobile-drawer-brand-text">
+                        <strong>{{ t('app_title') }}</strong>
+                        <span>{{ t('app_slogan') }}</span>
+                    </div>
+                </div>
+
                 <div class="main-nav-links">
                     {% include "_app_nav_links.html" %}
                 </div>
 
                 <div class="main-nav-tools main-nav-tools-mobile">
-                    {% include "_nav_meta.html" %}
-
-                    <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
-                        <a
-                            href="{{ url_for('set_language', language='es') }}"
-                            class="lang-link{% if current_language == 'es' %} active{% endif %}"
-                        >ES</a>
-                        <a
-                            href="{{ url_for('set_language', language='en') }}"
-                            class="lang-link{% if current_language == 'en' %} active{% endif %}"
-                        >EN</a>
+                    <div class="mobile-drawer-section">
+                        {% include "_nav_meta.html" %}
                     </div>
 
-                    <button
-                        type="button"
-                        class="theme-toggle"
-                        aria-label="{{ t('theme_toggle_dark') }}"
-                        data-label-dark="{{ t('theme_toggle_dark') }}"
-                        data-label-light="{{ t('theme_toggle_light') }}"
-                        title="{{ t('theme_toggle_dark') }}"
-                    >
-                        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path
-                                d="M21 14.5A8.5 8.5 0 0 1 9.5 3 6.5 6.5 0 1 0 21 14.5Z"
-                                stroke="currentColor"
-                                stroke-width="1.75"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            />
-                        </svg>
-                        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.75" />
-                            <path
-                                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
-                                stroke="currentColor"
-                                stroke-width="1.75"
-                                stroke-linecap="round"
-                            />
-                        </svg>
-                    </button>
+                    <div class="mobile-drawer-section mobile-drawer-prefs">
+                        <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
+                            <a
+                                href="{{ url_for('set_language', language='es') }}"
+                                class="lang-link{% if current_language == 'es' %} active{% endif %}"
+                            >ES</a>
+                            <a
+                                href="{{ url_for('set_language', language='en') }}"
+                                class="lang-link{% if current_language == 'en' %} active{% endif %}"
+                            >EN</a>
+                        </div>
 
-                    <div class="header-account header-account-mobile">
+                        <button
+                            type="button"
+                            class="theme-toggle theme-toggle-row"
+                            aria-label="{{ t('theme_toggle_dark') }}"
+                            data-label-dark="{{ t('theme_toggle_dark') }}"
+                            data-label-light="{{ t('theme_toggle_light') }}"
+                            title="{{ t('theme_toggle_dark') }}"
+                        >
+                            <span class="theme-toggle-row-label">{{ t('theme_dark_label') }}</span>
+                            <span class="theme-switch" aria-hidden="true"></span>
+                            <svg class="icon-moon visually-hidden" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path
+                                    d="M21 14.5A8.5 8.5 0 0 1 9.5 3 6.5 6.5 0 1 0 21 14.5Z"
+                                    stroke="currentColor"
+                                    stroke-width="1.75"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
+                            <svg class="icon-sun visually-hidden" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.75" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="mobile-drawer-section mobile-drawer-user">
                         {% if current_user %}
-                        <details class="nav-dropdown nav-account-dropdown">
-                            <summary class="nav-user nav-account-toggle" title="{{ t('logged_in_as') }}">
-                                <strong class="nav-user-name">{{ current_user.username }}</strong>
-                                <span class="nav-user-role">{{ t('role_' ~ current_user.role) }}</span>
-                                {% if current_user.agent_name %}
-                                <span class="nav-user-agent">{{ current_user.agent_name }}</span>
+                        {% set drawer_first = (current_user.first_name or '').strip() %}
+                        {% set drawer_last = (current_user.last_name or '').strip() %}
+                        {% set drawer_name = (drawer_first ~ ' ' ~ drawer_last).strip() or current_user.username %}
+                        {% set drawer_parts = drawer_name.split() %}
+                        <div class="mobile-drawer-user-card">
+                            <span class="entity-avatar mobile-drawer-avatar" aria-hidden="true">
+                                {{ drawer_parts[0][0:1]|upper }}{% if drawer_parts|length > 1 %}{{ drawer_parts[1][0:1]|upper }}{% endif %}
+                            </span>
+                            <div class="mobile-drawer-user-text">
+                                <strong>{{ drawer_name }}</strong>
+                                {% if organization_display_name %}
+                                <span>{{ organization_display_name }}</span>
                                 {% endif %}
-                            </summary>
-                            <div class="nav-dropdown-menu" role="menu">
-                                {% if can_manage_users() %}
-                                <a
-                                    href="{{ url_for('organization_settings') }}"
-                                    class="nav-dropdown-item{% if request.endpoint == 'organization_settings' %} active{% endif %}"
-                                    role="menuitem"
-                                >{{ t('nav_organization_settings') }}</a>
-                                {% endif %}
-                                <a
-                                    href="{{ url_for('logout') }}"
-                                    class="nav-dropdown-item"
-                                    role="menuitem"
-                                >{{ t('logout') }}</a>
                             </div>
-                        </details>
+                        </div>
+                        <a href="{{ url_for('logout') }}" class="mobile-drawer-logout">{{ t('logout') }}</a>
                         {% else %}
-                        <span class="nav-user" title="{{ t('logged_in_as') }}">
-                            <strong class="nav-user-name">{{ t('role_guest') }}</strong>
-                            <span class="nav-user-role">{{ t('guest_read_only') }}</span>
-                        </span>
-                        <a href="{{ url_for('logout') }}" class="btn btn-small btn-secondary">{{ t('logout') }}</a>
+                        <div class="mobile-drawer-user-card">
+                            <span class="entity-avatar mobile-drawer-avatar" aria-hidden="true">G</span>
+                            <div class="mobile-drawer-user-text">
+                                <strong>{{ t('role_guest') }}</strong>
+                                <span>{{ t('guest_read_only') }}</span>
+                            </div>
+                        </div>
+                        <a href="{{ url_for('logout') }}" class="mobile-drawer-logout">{{ t('logout') }}</a>
                         {% endif %}
                     </div>
                 </div>
@@ -428,6 +431,8 @@
         </div>
     </footer>
     </div>
+
+    {% include "_mobile_bottom_nav.html" %}
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block extra_js %}{% endblock %}

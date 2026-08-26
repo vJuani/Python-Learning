@@ -158,21 +158,72 @@
 {% endblock %}
 
 {% block content %}
-<section class="page-header">
+<section class="page-header page-header-ops">
     <div class="page-header-text">
         <h2>{{ t('operations_title') }}</h2>
+        <p class="results-meta">{{ t('results_found', count=operation_count) }}</p>
     </div>
 
-    <div class="page-actions">
+    <div class="page-actions page-actions-split">
         {% if can_write() %}
         {% if can_create_operations %}
-        <a href="{{ url_for('operations_new') }}" class="btn btn-primary">{{ t('new_operation') }}</a>
+        <a href="{{ url_for('operations_new') }}" class="btn btn-primary">+ {{ t('new_operation') }}</a>
         {% else %}
-        <span class="btn btn-secondary disabled-hint">{{ t('new_operation') }}</span>
+        <span class="btn btn-secondary disabled-hint">+ {{ t('new_operation') }}</span>
         {% endif %}
         {% endif %}
         <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
+</section>
+
+<section class="panel mobile-inline-filters hide-desktop">
+    <form class="mobile-inline-filters-form" method="get" action="{{ url_for('operations_list') }}">
+        <div class="form-group">
+            <label class="visually-hidden" for="mobile-ops-search">{{ t('search') }}</label>
+            <input
+                type="search"
+                id="mobile-ops-search"
+                name="property"
+                class="form-input"
+                placeholder="{{ t('operations_mobile_search_placeholder') }}"
+                value="{{ filters.property }}"
+            >
+        </div>
+        <div class="mobile-inline-filters-row">
+            <div class="form-group">
+                <label for="mobile-ops-agent">{{ t('agent') }}</label>
+                <select id="mobile-ops-agent" name="agent" class="form-input">
+                    <option value="">{{ t('all_agents') }}</option>
+                    {% for agent in agents %}
+                    <option
+                        value="{{ agent.name }}"
+                        {% if filters.agent == agent.name %}selected{% endif %}
+                    >{{ agent.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="mobile-ops-jurisdiction">{{ t('jurisdiction') }}</label>
+                <select id="mobile-ops-jurisdiction" name="jurisdiction" class="form-input">
+                    <option value="">{{ t('all_jurisdictions') }}</option>
+                    {% for jurisdiction in jurisdictions %}
+                    <option
+                        value="{{ jurisdiction }}"
+                        {% if filters.jurisdiction == jurisdiction %}selected{% endif %}
+                    >{{ jurisdiction }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        {% if filters.operation_id %}<input type="hidden" name="operation_id" value="{{ filters.operation_id }}">{% endif %}
+        {% if filters.min_amount %}<input type="hidden" name="min_amount" value="{{ filters.min_amount }}">{% endif %}
+        {% if filters.max_amount %}<input type="hidden" name="max_amount" value="{{ filters.max_amount }}">{% endif %}
+        {% if filters.date_from %}<input type="hidden" name="date_from" value="{{ filters.date_from }}">{% endif %}
+        {% if filters.date_to %}<input type="hidden" name="date_to" value="{{ filters.date_to }}">{% endif %}
+        {% if filters.was_invoiced %}<input type="hidden" name="was_invoiced" value="{{ filters.was_invoiced }}">{% endif %}
+        {% if filters.status %}<input type="hidden" name="status" value="{{ filters.status }}">{% endif %}
+        <button type="submit" class="btn btn-primary btn-block">{{ t('sidebar_apply_filters') }}</button>
+    </form>
 </section>
 
 {% if can_write() and not can_create_operations %}
@@ -192,14 +243,14 @@
 {% endif %}
 
 <section class="panel panel-list">
-    <div class="panel-header">
-        <h3 class="hide-mobile">{{ t('operation_list') }}</h3>
-        <p class="results-meta">{{ t('results_found', count=operation_count) }}</p>
+    <div class="panel-header hide-mobile">
+        <h3>{{ t('operation_list') }}</h3>
     </div>
 
     {% if operations %}
     <div class="entity-card-list hide-desktop">
         {% for operation in operations %}
+        {% set agent_parts = operation.agent.split() %}
         <article class="entity-card entity-card-operation">
             <div class="entity-card-heading">
                 <div class="entity-card-heading-text">
@@ -210,11 +261,23 @@
                 </div>
                 <span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span>
             </div>
-            <p class="entity-card-subtitle">{{ operation.agent }}</p>
-            <dl class="entity-card-metrics">
+            <dl class="entity-card-metrics entity-card-metrics-ops">
+                <div>
+                    <dt>{{ t('agent') }}</dt>
+                    <dd class="entity-agent-inline">
+                        <span class="entity-avatar entity-avatar-sm" aria-hidden="true">
+                            {{ agent_parts[0][0:1]|upper }}{% if agent_parts|length > 1 %}{{ agent_parts[1][0:1]|upper }}{% endif %}
+                        </span>
+                        {{ operation.agent }}
+                    </dd>
+                </div>
                 <div>
                     <dt>{{ t('property_value_label') }}</dt>
                     <dd class="money">{{ operation.sale_price|money }}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('date') }}</dt>
+                    <dd>{% if operation.date %}{{ operation.date|short_date }}{% else %}—{% endif %}</dd>
                 </div>
                 <div>
                     <dt>{{ t('total_commission_label') }}</dt>
@@ -222,9 +285,6 @@
                 </div>
             </dl>
             <div class="entity-card-footer">
-                <p class="entity-card-meta">
-                    {% if operation.date %}{{ operation.date|short_date }}{% endif %}
-                </p>
                 <a
                     href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
                     class="btn btn-small btn-outline entity-card-cta-btn"

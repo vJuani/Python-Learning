@@ -49,42 +49,51 @@
         <div class="form-row">
             <div class="form-group">
                 <label for="operation_amount">{{ t('vat_calc_operation_amount') }}</label>
-                <input
-                    type="text"
-                    inputmode="decimal"
-                    id="operation_amount"
-                    name="operation_amount"
-                    class="form-input"
-                    value="{{ form_values.operation_amount }}"
-                    required
-                >
+                <div class="input-with-affix">
+                    <span class="input-affix" aria-hidden="true">$</span>
+                    <input
+                        type="text"
+                        inputmode="decimal"
+                        id="operation_amount"
+                        name="operation_amount"
+                        class="form-input"
+                        value="{{ form_values.operation_amount }}"
+                        required
+                    >
+                </div>
             </div>
         </div>
 
         <div class="form-row">
             <div class="form-group">
                 <label for="buyer_rate">{{ t('vat_calc_buyer_rate') }}</label>
-                <input
-                    type="text"
-                    inputmode="decimal"
-                    id="buyer_rate"
-                    name="buyer_rate"
-                    class="form-input"
-                    value="{{ form_values.buyer_rate }}"
-                    required
-                >
+                <div class="input-with-affix">
+                    <span class="input-affix" aria-hidden="true">%</span>
+                    <input
+                        type="text"
+                        inputmode="decimal"
+                        id="buyer_rate"
+                        name="buyer_rate"
+                        class="form-input"
+                        value="{{ form_values.buyer_rate }}"
+                        required
+                    >
+                </div>
             </div>
             <div class="form-group">
                 <label for="seller_rate">{{ t('vat_calc_seller_rate') }}</label>
-                <input
-                    type="text"
-                    inputmode="decimal"
-                    id="seller_rate"
-                    name="seller_rate"
-                    class="form-input"
-                    value="{{ form_values.seller_rate }}"
-                    required
-                >
+                <div class="input-with-affix">
+                    <span class="input-affix" aria-hidden="true">%</span>
+                    <input
+                        type="text"
+                        inputmode="decimal"
+                        id="seller_rate"
+                        name="seller_rate"
+                        class="form-input"
+                        value="{{ form_values.seller_rate }}"
+                        required
+                    >
+                </div>
             </div>
         </div>
 
@@ -140,7 +149,7 @@
             <button type="submit" class="btn btn-primary">{{ t('vat_calc_submit') }}</button>
             <a
                 href="{% if form_values.operation_id %}{{ url_for('vat_calculator', operation_id=form_values.operation_id) }}{% else %}{{ url_for('vat_calculator') }}{% endif %}"
-                class="btn btn-ghost"
+                class="btn btn-secondary"
             >{{ t('vat_calc_clear') }}</a>
         </div>
     </section>
