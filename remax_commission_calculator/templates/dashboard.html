@@ -18,32 +18,35 @@
         {% if organization_display_name %}
         <p class="dashboard-welcome-org">{{ organization_display_name }}</p>
         {% endif %}
+        {% if dashboard.period_label %}
+        <p class="dashboard-period-chip">{{ dashboard.period_label }}</p>
+        {% endif %}
     </div>
 </section>
 
 {% if dashboard.metrics %}
-<section class="stats-grid" aria-label="{{ t('operations_of_month') }}">
+<section class="stats-grid saas-kpi-grid" aria-label="{{ dashboard.labels.summary_title }}">
     <div class="stat-card">
-        <span class="stat-label">{{ dashboard.labels.approved_ops if dashboard.labels.approved_ops else t('operations_of_month') }}</span>
+        <span class="stat-label">{{ dashboard.labels.approved_ops }}</span>
         <strong class="stat-value">{{ dashboard.metrics.approved_operations }}</strong>
     </div>
     <div class="stat-card">
-        <span class="stat-label">{{ dashboard.labels.commission if dashboard.labels.commission else t('commission_of_month') }}</span>
+        <span class="stat-label">{{ dashboard.labels.commission }}</span>
         <strong class="stat-value money">{{ dashboard.metrics.total_commission|money }}</strong>
     </div>
     <div class="stat-card">
-        <span class="stat-label">{{ dashboard.labels.volume if dashboard.labels.volume else t('volume_of_month') }}</span>
+        <span class="stat-label">{{ dashboard.labels.volume }}</span>
         <strong class="stat-value money">{{ dashboard.metrics.volume_usd|money }}</strong>
     </div>
     <div class="stat-card">
-        <span class="stat-label">{{ dashboard.labels.properties_active if dashboard.labels.properties_active else t('properties_active_kpi') }}</span>
+        <span class="stat-label">{{ dashboard.labels.properties_active }}</span>
         <strong class="stat-value">{{ dashboard.metrics.properties_active }}</strong>
     </div>
 </section>
 {% endif %}
 
 {% if team_block %}
-<section class="panel" aria-label="{{ team_block.labels.title }}">
+<section class="panel panel-spaced" aria-label="{{ team_block.labels.title }}">
     <div class="panel-header">
         <h3>{{ team_block.labels.title }}</h3>
         <a
@@ -71,4 +74,186 @@
     </div>
 </section>
 {% endif %}
+
+{% set monthly_series = dashboard.report.monthly_series if dashboard.report else [] %}
+{% set ranking = dashboard.agent_ranking or [] %}
+{% set recent_ops = (dashboard.report.operations if dashboard.report else [])[:8] %}
+
+<div class="dashboard-grid panel-spaced">
+    <section class="panel">
+        <div class="panel-header">
+            <h3>{{ t('dashboard_monthly_summary') }}</h3>
+        </div>
+        {% if monthly_series %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>{{ t('dashboard_col_month') }}</th>
+                        <th>{{ t('dashboard_col_ops') }}</th>
+                        <th>{{ t('dashboard_col_volume') }}</th>
+                        <th>{{ t('dashboard_col_commission') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in monthly_series %}
+                    <tr>
+                        <td>{{ item.month }}</td>
+                        <td>{{ item.operations_count }}</td>
+                        <td class="money">{{ item.volume_usd|money }}</td>
+                        <td class="money">{{ item.total_commission|money }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p class="empty-state-title">{{ dashboard.labels.empty_period_title }}</p>
+            <p class="empty-state-text">{{ dashboard.labels.empty_period_text }}</p>
+        </div>
+        {% endif %}
+    </section>
+
+    {% if dashboard.show_ranking %}
+    <section class="panel">
+        <div class="panel-header">
+            <h3>{{ dashboard.labels.ranking_title }}</h3>
+        </div>
+        {% if ranking %}
+        <div class="entity-card-list hide-desktop">
+            {% for item in ranking %}
+            <article class="entity-card">
+                <div class="entity-card-top">
+                    <span class="entity-external-id">#{{ item.rank }}</span>
+                </div>
+                <h4 class="entity-card-title">{{ item.agent_name }}</h4>
+                <dl class="entity-card-metrics">
+                    <div>
+                        <dt>{{ t('dashboard_col_ops') }}</dt>
+                        <dd>{{ item.operations_count }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ t('dashboard_col_commission') }}</dt>
+                        <dd class="money">{{ item.total_commission|money }}</dd>
+                    </div>
+                </dl>
+            </article>
+            {% endfor %}
+        </div>
+        <div class="table-wrapper hide-mobile">
+            <table>
+                <thead>
+                    <tr>
+                        <th>{{ dashboard.labels.col_rank }}</th>
+                        <th>{{ dashboard.labels.col_agent }}</th>
+                        <th>{{ t('dashboard_col_ops') }}</th>
+                        <th>{{ dashboard.labels.col_commission }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in ranking %}
+                    <tr>
+                        <td>{{ item.rank }}</td>
+                        <td>{{ item.agent_name }}</td>
+                        <td>{{ item.operations_count }}</td>
+                        <td class="money">{{ item.total_commission|money }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p class="empty-state-title">{{ dashboard.labels.empty_ranking_title }}</p>
+            <p class="empty-state-text">{{ dashboard.labels.empty_ranking_text }}</p>
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
+</div>
+
+<section class="panel panel-spaced">
+    <div class="panel-header">
+        <h3>{{ t('dashboard_recent_operations') }}</h3>
+        <a href="{{ url_for('operations_list') }}" class="btn btn-small btn-secondary">{{ t('nav_operations') }}</a>
+    </div>
+
+    {% if recent_ops %}
+    <div class="entity-card-list hide-desktop">
+        {% for operation in recent_ops %}
+        <article class="entity-card">
+            <div class="entity-card-top">
+                {% if operation.property_external_id %}
+                <span class="entity-external-id">#{{ operation.property_external_id }}</span>
+                {% endif %}
+                <span class="badge status-{{ operation.status }}">{{ operation.status_label }}</span>
+            </div>
+            <h4 class="entity-card-title">{{ operation.property }}</h4>
+            <p class="entity-card-subtitle">{{ operation.agent }}</p>
+            <dl class="entity-card-metrics">
+                <div>
+                    <dt>{{ t('property_value_label') }}</dt>
+                    <dd class="money">{{ operation.sale_price|money }}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('total_commission_label') }}</dt>
+                    <dd class="money money-emphasis">{{ operation.total_commission|money }}</dd>
+                </div>
+            </dl>
+            <p class="entity-card-meta">
+                {% if operation.date %}{{ operation.date|short_date }}{% endif %}
+            </p>
+            {% if operation.db_id %}
+            <div class="entity-card-actions">
+                <a
+                    href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
+                    class="btn btn-small btn-secondary"
+                >{{ t('view_operation') }} →</a>
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+
+    <div class="table-wrapper hide-mobile">
+        <table class="table-dense">
+            <thead>
+                <tr>
+                    <th>{{ t('property') }}</th>
+                    <th>{{ t('agent') }}</th>
+                    <th>{{ t('property_value_label') }}</th>
+                    <th>{{ t('total_commission_label') }}</th>
+                    <th>{{ t('status') }}</th>
+                    <th>{{ t('date') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for operation in recent_ops %}
+                <tr>
+                    <td>
+                        <div class="cell-stack">
+                            <strong>{{ operation.property }}</strong>
+                            {% if operation.property_external_id %}
+                            <span class="entity-external-id">#{{ operation.property_external_id }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>{{ operation.agent }}</td>
+                    <td class="money">{{ operation.sale_price|money }}</td>
+                    <td class="money">{{ operation.total_commission|money }}</td>
+                    <td><span class="badge status-{{ operation.status }}">{{ operation.status_label }}</span></td>
+                    <td>{% if operation.date %}{{ operation.date|short_date }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p class="empty-state-title">{{ t('empty_operations_title') }}</p>
+        <p class="empty-state-text">{{ t('empty_operations_hint') }}</p>
+    </div>
+    {% endif %}
+</section>
 {% endblock %}

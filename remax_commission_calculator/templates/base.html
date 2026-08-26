@@ -33,7 +33,36 @@
     {% endif %}
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="{% if current_user or guest_access %}has-app-rail{% endif %}">
+    {% if current_user or guest_access %}
+    <aside class="app-rail" aria-label="{{ t('nav_aria') }}">
+        <a href="{{ url_for('dashboard') }}" class="app-rail-brand">
+            <span class="site-brand-logo-shell">
+                <img
+                    src="{% if organization_logo_url %}{{ organization_logo_url }}{% else %}{{ url_for('static', filename='images/logo-horizontal.png') }}{% endif %}"
+                    alt="{{ t('app_title') }}"
+                    class="site-brand-logo"
+                >
+            </span>
+        </a>
+        <nav class="app-rail-nav">
+            {% include "_app_nav_links.html" %}
+        </nav>
+        <div class="app-rail-footer">
+            {% if current_user %}
+            <div class="app-rail-user">
+                <strong>{{ current_user.username }}</strong>
+                <span>{{ t('role_' ~ current_user.role) }}</span>
+            </div>
+            <a href="{{ url_for('logout') }}" class="nav-link app-nav-link">{{ t('logout') }}</a>
+            {% else %}
+            <a href="{{ url_for('logout') }}" class="nav-link app-nav-link">{{ t('logout') }}</a>
+            {% endif %}
+        </div>
+    </aside>
+    {% endif %}
+
+    <div class="app-frame">
     <header class="site-header">
         <div class="header-grid">
             <div class="header-zone header-zone-left">
@@ -54,76 +83,7 @@
             {% if current_user or guest_access %}
             <nav id="main-nav" class="main-nav header-zone header-zone-center" aria-label="{{ t('nav_aria') }}">
                 <div class="main-nav-links">
-                    {% if is_admin() %}
-                    {% set people_active = (
-                        request.endpoint
-                        and (
-                            request.endpoint.startswith('agents_')
-                            or request.endpoint.startswith('users_')
-                        )
-                    ) %}
-                    <details class="nav-dropdown{% if people_active %} is-active{% endif %}">
-                        <summary
-                            class="nav-link nav-dropdown-toggle{% if people_active %} active{% endif %}"
-                        >{{ t('nav_people') }}</summary>
-                        <div class="nav-dropdown-menu" role="menu">
-                            <a
-                                href="{{ url_for('agents_list') }}"
-                                class="nav-dropdown-item{% if request.endpoint and request.endpoint.startswith('agents_') %} active{% endif %}"
-                                role="menuitem"
-                            >{{ t('nav_agents') }}</a>
-                            <a
-                                href="{{ url_for('users_list') }}"
-                                class="nav-dropdown-item{% if request.endpoint and request.endpoint.startswith('users_') %} active{% endif %}"
-                                role="menuitem"
-                            >{{ t('nav_users') }}</a>
-                        </div>
-                    </details>
-                    {% endif %}
-                    <a
-                        href="{{ url_for('properties_list') }}"
-                        class="nav-link{% if request.endpoint and request.endpoint.startswith('properties_') %} active{% endif %}"
-                    >{{ t('nav_properties') }}</a>
-                    <a
-                        href="{{ url_for('operations_list') }}"
-                        class="nav-link{% if request.endpoint and request.endpoint.startswith('operations_') %} active{% endif %}"
-                    >{{ t('nav_operations') }}</a>
-                    {% set reports_active = (
-                        request.endpoint
-                        and (
-                            request.endpoint.startswith('reports_')
-                            or request.endpoint.startswith('team_report')
-                        )
-                    ) %}
-                    <details class="nav-dropdown{% if reports_active %} is-active{% endif %}">
-                        <summary
-                            class="nav-link nav-dropdown-toggle{% if reports_active %} active{% endif %}"
-                        >{{ t('nav_reports') }}</summary>
-                        <div class="nav-dropdown-menu" role="menu">
-                            <a
-                                href="{{ url_for('reports_index') }}"
-                                class="nav-dropdown-item{% if request.endpoint and request.endpoint.startswith('reports_') %} active{% endif %}"
-                                role="menuitem"
-                            >{{ t('nav_reports_operations') }}</a>
-                            {% if can_manage_users() %}
-                            <a
-                                href="{{ url_for('team_report') }}"
-                                class="nav-dropdown-item{% if request.endpoint and request.endpoint.startswith('team_report') %} active{% endif %}"
-                                role="menuitem"
-                            >{{ t('nav_team_report') }}</a>
-                            {% elif is_agent() and current_user and current_user.agent_id %}
-                            <a
-                                href="{{ url_for('team_report', team_leader_id=current_user.agent_id) }}"
-                                class="nav-dropdown-item{% if request.endpoint and request.endpoint.startswith('team_report') %} active{% endif %}"
-                                role="menuitem"
-                            >{{ t('nav_team_report') }}</a>
-                            {% endif %}
-                        </div>
-                    </details>
-                    <a
-                        href="{{ url_for('vat_calculator') }}"
-                        class="nav-link{% if request.endpoint == 'vat_calculator' %} active{% endif %}"
-                    >{{ t('nav_vat_calculator') }}</a>
+                    {% include "_app_nav_links.html" %}
                 </div>
 
                 <div class="main-nav-tools main-nav-tools-mobile">
@@ -391,6 +351,7 @@
             {% endif %}
         </div>
     </footer>
+    </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block extra_js %}{% endblock %}

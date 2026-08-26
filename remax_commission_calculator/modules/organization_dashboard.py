@@ -522,6 +522,11 @@ def empty_organization_dashboard(language="es"):
             "approved": 0,
             "rejected": 0,
         },
+        "report": {
+            "monthly_series": [],
+            "operations": [],
+            "agent_ranking": [],
+        },
         "quick_links": [
             {
                 "key": "uninvoiced",

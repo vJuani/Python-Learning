@@ -620,6 +620,10 @@ def _operation_rows(operations, language):
                     operation.get("office_total") or 0
                 ),
                 "show_fx": currency != "USD",
+                "db_id": operation.get("db_id"),
+                "property_external_id": operation.get(
+                    "property_external_id"
+                ),
             }
         )
 

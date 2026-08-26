@@ -49,12 +49,5 @@
         </div>
     </details>
     {% endif %}
-
-    {% if is_agent() and current_user and current_user.agent_id %}
-    <a
-        href="{{ url_for('my_wallet') }}"
-        class="nav-link{% if request.endpoint in ('my_wallet', 'agents_detail') %} active{% endif %}"
-    >{{ t('nav_my_wallet') }}</a>
-    {% endif %}
 </div>
 {% endif %}

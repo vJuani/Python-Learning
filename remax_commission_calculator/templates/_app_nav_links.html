@@ -1,0 +1,57 @@
+{# Shared primary navigation — used by desktop rail and mobile menu. #}
+<a
+    href="{{ url_for('dashboard') }}"
+    class="nav-link app-nav-link{% if request.endpoint == 'dashboard' %} active{% endif %}"
+>{{ t('nav_dashboard') }}</a>
+
+{% if is_admin() %}
+<a
+    href="{{ url_for('agents_list') }}"
+    class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('agents_') %} active{% endif %}"
+>{{ t('nav_agents') }}</a>
+<a
+    href="{{ url_for('users_list') }}"
+    class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('users_') %} active{% endif %}"
+>{{ t('nav_users') }}</a>
+{% endif %}
+
+<a
+    href="{{ url_for('properties_list') }}"
+    class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('properties_') %} active{% endif %}"
+>{{ t('nav_properties') }}</a>
+<a
+    href="{{ url_for('operations_list') }}"
+    class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('operations_') %} active{% endif %}"
+>{{ t('nav_operations') }}</a>
+<a
+    href="{{ url_for('vat_calculator') }}"
+    class="nav-link app-nav-link{% if request.endpoint == 'vat_calculator' %} active{% endif %}"
+>{{ t('nav_vat_calculator') }}</a>
+
+{% if is_agent() and current_user and current_user.agent_id %}
+<a
+    href="{{ url_for('my_wallet') }}"
+    class="nav-link app-nav-link{% if request.endpoint in ('my_wallet', 'agents_detail') %} active{% endif %}"
+>{{ t('nav_my_wallet') }}</a>
+{% endif %}
+
+<a
+    href="{{ url_for('reports_index') }}"
+    class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('reports_') %} active{% endif %}"
+>{{ t('nav_reports') }}</a>
+
+{% if can_manage_users() %}
+<a
+    href="{{ url_for('team_report') }}"
+    class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('team_report') %} active{% endif %}"
+>{{ t('nav_team_report') }}</a>
+<a
+    href="{{ url_for('organization_settings') }}"
+    class="nav-link app-nav-link{% if request.endpoint == 'organization_settings' %} active{% endif %}"
+>{{ t('nav_organization_settings') }}</a>
+{% elif is_agent() and current_user and current_user.agent_id %}
+<a
+    href="{{ url_for('team_report', team_leader_id=current_user.agent_id) }}"
+    class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('team_report') %} active{% endif %}"
+>{{ t('nav_team_report') }}</a>
+{% endif %}
