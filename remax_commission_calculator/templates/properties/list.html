@@ -122,7 +122,7 @@
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ t('properties_title') }}</h2>
-        <p>{{ t('properties_subtitle') }}</p>
+        <p class="results-meta">{{ t('results_found', count=property_count) }}</p>
     </div>
 
     <div class="page-actions">
@@ -133,56 +133,50 @@
     </div>
 </section>
 
-<section class="panel">
-    <div class="panel-header">
+<section class="panel panel-list">
+    <div class="panel-header hide-mobile">
         <h3>{{ t('property_list') }}</h3>
     </div>
 
     {% if properties %}
     <div class="entity-card-list hide-desktop">
         {% for property_data in properties %}
-        <article class="entity-card">
-            <div class="entity-card-top">
-                {% if property_data.external_id %}
-                <span class="entity-external-id">#{{ property_data.external_id }}</span>
-                {% endif %}
-                <span class="badge badge-soft">{{ t('property_status_' ~ (property_data.status or 'approved')) }}</span>
+        <article class="entity-card entity-card-property">
+            <div class="entity-card-heading">
+                <div class="entity-card-heading-text">
+                    <h4 class="entity-card-title">{{ property_data.address }}</h4>
+                    {% if property_data.external_id %}
+                    <span class="entity-external-id">#{{ property_data.external_id }}</span>
+                    {% endif %}
+                </div>
+                <span class="entity-card-chevron" aria-hidden="true"></span>
             </div>
-            <h4 class="entity-card-title">{{ property_data.address }}</h4>
             <p class="entity-card-subtitle">{{ property_data.agent_name or '—' }}</p>
-            <dl class="entity-card-metrics">
-                <div>
-                    <dt>{{ t('property_value_label') }}</dt>
-                    <dd class="money">
-                        {% if property_data.listing_price is not none %}
-                        {{ property_data.listing_price|money }}
-                        {% else %}
-                        —
-                        {% endif %}
-                    </dd>
-                </div>
-                <div>
-                    <dt>{{ t('jurisdiction') }}</dt>
-                    <dd>
-                        <span class="type-tag badge-{{ property_data.jurisdiction|lower }}">{{ property_data.jurisdiction }}</span>
-                    </dd>
-                </div>
-            </dl>
-            {% if property_data.status == 'rejected' and property_data.rejection_reason %}
-            <p class="entity-card-meta field-help">{{ property_data.rejection_reason }}</p>
-            {% endif %}
-            <div class="entity-card-actions">
+            <p class="entity-card-price money">
+                {% if property_data.listing_price is not none %}
+                {{ property_data.listing_price|money }}
+                {% else %}
+                —
+                {% endif %}
+            </p>
+            <div class="entity-card-footer">
+                <span class="badge badge-soft">{{ t('property_status_' ~ (property_data.status or 'approved')) }}</span>
                 <a
                     href="{{ url_for('properties_detail', property_id=property_data.id) }}"
-                    class="btn btn-small btn-secondary"
-                >{{ t('view') }}</a>
-                {% if can_write() %}
+                    class="entity-card-cta"
+                >{{ t('view_property') }} →</a>
+            </div>
+            {% if can_write() %}
+            <div class="entity-card-actions">
                 <a
                     href="{{ url_for('properties_edit', property_id=property_data.id) }}"
                     class="btn btn-small btn-edit"
                 >{{ t('edit') }}</a>
-                {% endif %}
             </div>
+            {% endif %}
+            {% if property_data.status == 'rejected' and property_data.rejection_reason %}
+            <p class="entity-card-meta field-help">{{ property_data.rejection_reason }}</p>
+            {% endif %}
         </article>
         {% endfor %}
     </div>

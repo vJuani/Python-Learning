@@ -182,14 +182,16 @@
     {% if recent_ops %}
     <div class="entity-card-list hide-desktop">
         {% for operation in recent_ops %}
-        <article class="entity-card">
-            <div class="entity-card-top">
-                {% if operation.property_external_id %}
-                <span class="entity-external-id">#{{ operation.property_external_id }}</span>
-                {% endif %}
+        <article class="entity-card entity-card-operation">
+            <div class="entity-card-heading">
+                <div class="entity-card-heading-text">
+                    <h4 class="entity-card-title">{{ operation.property }}</h4>
+                    {% if operation.property_external_id %}
+                    <span class="entity-external-id">#{{ operation.property_external_id }}</span>
+                    {% endif %}
+                </div>
                 <span class="badge status-{{ operation.status }}">{{ operation.status_label }}</span>
             </div>
-            <h4 class="entity-card-title">{{ operation.property }}</h4>
             <p class="entity-card-subtitle">{{ operation.agent }}</p>
             <dl class="entity-card-metrics">
                 <div>
@@ -201,17 +203,17 @@
                     <dd class="money money-emphasis">{{ operation.total_commission|money }}</dd>
                 </div>
             </dl>
-            <p class="entity-card-meta">
-                {% if operation.date %}{{ operation.date|short_date }}{% endif %}
-            </p>
-            {% if operation.db_id %}
-            <div class="entity-card-actions">
+            <div class="entity-card-footer">
+                <p class="entity-card-meta">
+                    {% if operation.date %}{{ operation.date|short_date }}{% endif %}
+                </p>
+                {% if operation.db_id %}
                 <a
                     href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
-                    class="btn btn-small btn-secondary"
+                    class="btn btn-small btn-outline entity-card-cta-btn"
                 >{{ t('view_operation') }} →</a>
+                {% endif %}
             </div>
-            {% endif %}
         </article>
         {% endfor %}
     </div>

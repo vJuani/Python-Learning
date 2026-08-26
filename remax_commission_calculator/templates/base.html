@@ -187,10 +187,13 @@
                     class="nav-toggle"
                     aria-expanded="false"
                     aria-controls="main-nav"
+                    aria-label="{{ t('nav_menu') }}"
+                    title="{{ t('nav_menu') }}"
                     data-label-menu="{{ t('nav_menu') }}"
                     data-label-close="{{ t('nav_close') }}"
                 >
-                    {{ t('nav_menu') }}
+                    <span class="nav-toggle-bars" aria-hidden="true"></span>
+                    <span class="visually-hidden nav-toggle-label">{{ t('nav_menu') }}</span>
                 </button>
 
                 <div class="header-tools header-tools-desktop">

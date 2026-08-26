@@ -117,14 +117,41 @@ document.addEventListener("DOMContentLoaded", function () {
     var filtersToggle = document.getElementById("filters-toggle");
     var mobileMq = window.matchMedia("(max-width: 768px)");
 
-    function closeNav() {
+    function setNavToggleOpen(isOpen) {
         if (!toggle || !nav) {
             return;
         }
 
-        nav.classList.remove("is-open");
-        toggle.setAttribute("aria-expanded", "false");
-        toggle.textContent = toggle.getAttribute("data-label-menu") || "Menu";
+        nav.classList.toggle("is-open", isOpen);
+        toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+
+        var label = isOpen
+            ? (toggle.getAttribute("data-label-close") || "Close")
+            : (toggle.getAttribute("data-label-menu") || "Menu");
+        var labelNode = toggle.querySelector(".nav-toggle-label");
+
+        toggle.setAttribute("aria-label", label);
+        toggle.setAttribute("title", label);
+        toggle.classList.toggle("is-open", isOpen);
+
+        if (labelNode) {
+            labelNode.textContent = label;
+        }
+    }
+
+    function closeNav() {
+        setNavToggleOpen(false);
+    }
+
+    if (toggle && nav) {
+        toggle.addEventListener("click", function () {
+            var isOpen = !nav.classList.contains("is-open");
+            setNavToggleOpen(isOpen);
+
+            if (isOpen) {
+                setFiltersOpen(false);
+            }
+        });
     }
 
     function setFiltersOpen(isOpen) {
@@ -159,19 +186,12 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    if (toggle && nav) {
-        var menuLabel = toggle.getAttribute("data-label-menu") || "Menu";
-        var closeLabel = toggle.getAttribute("data-label-close") || "Close";
+    syncFiltersToggle();
 
-        toggle.addEventListener("click", function () {
-            var isOpen = nav.classList.toggle("is-open");
-            toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-            toggle.textContent = isOpen ? closeLabel : menuLabel;
-
-            if (isOpen) {
-                setFiltersOpen(false);
-            }
-        });
+    if (typeof mobileMq.addEventListener === "function") {
+        mobileMq.addEventListener("change", syncFiltersToggle);
+    } else if (typeof mobileMq.addListener === "function") {
+        mobileMq.addListener(syncFiltersToggle);
     }
 
     if (filtersToggle && shell) {
@@ -183,14 +203,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 closeNav();
             }
         });
-    }
-
-    syncFiltersToggle();
-
-    if (typeof mobileMq.addEventListener === "function") {
-        mobileMq.addEventListener("change", syncFiltersToggle);
-    } else if (typeof mobileMq.addListener === "function") {
-        mobileMq.addListener(syncFiltersToggle);
     }
 
     document.querySelectorAll("details.nav-dropdown").forEach(function (dropdown) {

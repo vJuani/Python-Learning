@@ -66,15 +66,23 @@
     {% if agents %}
     <div class="entity-card-list hide-desktop">
         {% for agent in agents %}
-        <article class="entity-card">
-            <div class="entity-card-top">
-                <h4 class="entity-card-title">{{ agent.name }}</h4>
+        <article class="entity-card entity-card-agent">
+            <div class="entity-card-heading">
+                <div class="entity-card-heading-text">
+                    <h4 class="entity-card-title">{{ agent.name }}</h4>
+                </div>
                 <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
             </div>
-            <div class="entity-card-actions">
-                <a href="{{ url_for('agents_detail', agent_id=agent.id) }}" class="btn btn-small btn-secondary">{{ t('view') }}</a>
+            <div class="entity-card-footer">
+                <a
+                    href="{{ url_for('agents_detail', agent_id=agent.id) }}"
+                    class="entity-card-cta"
+                >{{ t('view') }} →</a>
                 {% if is_admin() %}
-                <a href="{{ url_for('agents_edit', agent_id=agent.id) }}" class="btn btn-small btn-edit">{{ t('edit') }}</a>
+                <a
+                    href="{{ url_for('agents_edit', agent_id=agent.id) }}"
+                    class="btn btn-small btn-edit"
+                >{{ t('edit') }}</a>
                 {% endif %}
             </div>
         </article>
