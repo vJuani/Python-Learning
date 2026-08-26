@@ -46,7 +46,8 @@ OPERATIONS_BASE_QUERY = """
         operations.created_by_user_id,
         operations.reviewed_by_user_id,
         operations.reviewed_at,
-        operations.invoice_full_commission
+        operations.invoice_full_commission,
+        properties.external_id
 
     FROM operations
 
@@ -70,6 +71,10 @@ def build_operation_dict(rows):
 
         if original_amount is None:
             original_amount = row[9]
+
+        external_id = None
+        if len(row) > 30 and row[30]:
+            external_id = str(row[30]).strip() or None
 
         operations.append({
             "db_id": row[0],
@@ -106,6 +111,7 @@ def build_operation_dict(rows):
                 row[29] if len(row) > 29 and row[29]
                 else "no"
             ),
+            "property_external_id": external_id,
         })
 
     return operations

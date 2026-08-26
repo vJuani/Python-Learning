@@ -252,14 +252,34 @@
 </section>
 {% endif %}
 
-<div class="dashboard-grid">
-    <section class="panel">
+<div class="dashboard-grid section-gap">
+    <section class="panel panel-spaced">
         <div class="panel-header">
             <h3>{{ report.labels.ranking_title }}</h3>
         </div>
         {% if report.agent_ranking %}
-        <div class="table-wrapper">
-            <table>
+        <div class="entity-card-list hide-desktop">
+            {% for item in report.agent_ranking %}
+            <article class="entity-card">
+                <div class="entity-card-top">
+                    <span class="entity-external-id">#{{ item.rank }}</span>
+                </div>
+                <h4 class="entity-card-title">{{ item.agent_name }}</h4>
+                <dl class="entity-card-metrics">
+                    <div>
+                        <dt>{{ report.labels.col_operations }}</dt>
+                        <dd>{{ item.operations_count }}</dd>
+                    </div>
+                    <div>
+                        <dt>{{ report.labels.col_commission }}</dt>
+                        <dd class="money">{{ item.total_commission|money }}</dd>
+                    </div>
+                </dl>
+            </article>
+            {% endfor %}
+        </div>
+        <div class="table-wrapper hide-mobile">
+            <table class="table-dense">
                 <thead>
                     <tr>
                         <th>{{ report.labels.col_rank }}</th>
@@ -285,13 +305,13 @@
         {% endif %}
     </section>
 
-    <section class="panel">
+    <section class="panel panel-spaced">
         <div class="panel-header">
             <h3>{{ report.labels.monthly_title }}</h3>
         </div>
         {% if report.monthly_series %}
         <div class="table-wrapper">
-            <table>
+            <table class="table-dense">
                 <thead>
                     <tr>
                         <th>{{ report.labels.col_month }}</th>
@@ -318,7 +338,7 @@
     </section>
 </div>
 
-<section class="panel">
+<section class="panel panel-spaced">
     <div class="panel-header">
         <h3>{{ report.labels.operations_title }}</h3>
     </div>

@@ -158,6 +158,7 @@ def run_sync(integration: dict) -> SyncResult:
                         external_property.listing_purpose
                     ),
                     last_synced_at=synced_at,
+                    external_id=external_property.external_id,
                 )
                 result.properties_created += 1
 
@@ -206,6 +207,7 @@ def run_sync(integration: dict) -> SyncResult:
                         external_property.listing_purpose
                     ),
                     last_synced_at=synced_at,
+                    external_id=external_property.external_id,
                 )
                 result.properties_updated += 1
 

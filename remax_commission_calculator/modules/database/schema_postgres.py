@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v1"
+POSTGRES_SCHEMA_VERSION = "postgres_v2"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -108,6 +108,7 @@ SCHEMA_STATEMENTS = (
         listing_price {_MONEY},
         listing_purpose TEXT,
         last_synced_at TEXT,
+        external_id TEXT,
         status TEXT NOT NULL DEFAULT 'approved',
         rejection_reason TEXT,
         reviewed_by_user_id BIGINT,
@@ -745,6 +746,45 @@ def create_postgres_schema():
     try:
         for statement in SCHEMA_STATEMENTS:
             cursor.execute(statement)
+
+        cursor.execute(
+            """
+            ALTER TABLE properties
+            ADD COLUMN IF NOT EXISTS external_id TEXT
+            """
+        )
+
+        cursor.execute(
+            """
+            UPDATE properties
+            SET external_id = (
+                SELECT pel.external_id
+                FROM property_external_listings AS pel
+                WHERE pel.property_id = properties.id
+                    AND pel.organization_id
+                        = properties.organization_id
+                    AND pel.external_id IS NOT NULL
+                    AND BTRIM(pel.external_id) <> ''
+                ORDER BY pel.id
+                LIMIT 1
+            )
+            WHERE external_id IS NULL
+                OR BTRIM(external_id) = ''
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_properties_org_external_id
+            ON properties (
+                organization_id,
+                external_id
+            )
+            WHERE external_id IS NOT NULL
+                AND external_id <> ''
+            """
+        )
 
         if not _schema_version_applied(
             cursor,

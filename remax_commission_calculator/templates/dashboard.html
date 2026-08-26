@@ -3,7 +3,7 @@
 {% block title %}{{ dashboard.labels.title }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
-<section class="dashboard-welcome dashboard-welcome-only" aria-label="{{ dashboard.labels.welcome.format(name=dashboard.welcome_name) }}">
+<section class="dashboard-welcome" aria-label="{{ t('dashboard_hello', name=dashboard.welcome_name) }}">
     <div class="dashboard-welcome-brand">
         <span class="dashboard-welcome-logo-shell">
             <img
@@ -14,13 +14,33 @@
         </span>
     </div>
     <div class="dashboard-welcome-text">
-        <h1>{{ dashboard.labels.welcome.format(name=dashboard.welcome_name) }}</h1>
-        <p class="dashboard-welcome-app">{{ dashboard.labels.welcome_to.format(app=t('app_title')) }}</p>
+        <h1>{{ t('dashboard_hello', name=dashboard.welcome_name) }}</h1>
         {% if organization_display_name %}
         <p class="dashboard-welcome-org">{{ organization_display_name }}</p>
         {% endif %}
     </div>
 </section>
+
+{% if dashboard.metrics %}
+<section class="stats-grid" aria-label="{{ t('operations_of_month') }}">
+    <div class="stat-card">
+        <span class="stat-label">{{ dashboard.labels.approved_ops if dashboard.labels.approved_ops else t('operations_of_month') }}</span>
+        <strong class="stat-value">{{ dashboard.metrics.approved_operations }}</strong>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">{{ dashboard.labels.commission if dashboard.labels.commission else t('commission_of_month') }}</span>
+        <strong class="stat-value money">{{ dashboard.metrics.total_commission|money }}</strong>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">{{ dashboard.labels.volume if dashboard.labels.volume else t('volume_of_month') }}</span>
+        <strong class="stat-value money">{{ dashboard.metrics.volume_usd|money }}</strong>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">{{ dashboard.labels.properties_active if dashboard.labels.properties_active else t('properties_active_kpi') }}</span>
+        <strong class="stat-value">{{ dashboard.metrics.properties_active }}</strong>
+    </div>
+</section>
+{% endif %}
 
 {% if team_block %}
 <section class="panel" aria-label="{{ team_block.labels.title }}">

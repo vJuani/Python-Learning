@@ -44,7 +44,6 @@ document.addEventListener("DOMContentLoaded", function () {
     var shell = document.querySelector(".app-shell");
     var sidebar = document.getElementById("app-sidebar");
     var filtersToggle = document.getElementById("filters-toggle");
-    var filtersChip = document.getElementById("filters-active-chip");
     var mobileMq = window.matchMedia("(max-width: 768px)");
 
     function closeNav() {
@@ -77,25 +76,15 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        var hasFilters = sidebar.children.length > 0;
+        var hasFilters = sidebar.children.length > 0
+            && !sidebar.classList.contains("is-empty")
+            && !sidebar.hasAttribute("hidden");
         var isMobile = mobileMq.matches;
 
         filtersToggle.hidden = !(hasFilters && isMobile);
 
         if (!hasFilters || !isMobile) {
             setFiltersOpen(false);
-        }
-
-        if (filtersChip) {
-            var countEl = sidebar.querySelector(".sidebar-count");
-
-            if (hasFilters && isMobile && countEl) {
-                filtersChip.hidden = false;
-                filtersChip.textContent = countEl.textContent.trim();
-            } else {
-                filtersChip.hidden = true;
-                filtersChip.textContent = "";
-            }
         }
     }
 
@@ -353,4 +342,146 @@ document.addEventListener("DOMContentLoaded", function () {
             );
         });
     });
+
+    function initAutocomplete(form) {
+        var input = form.querySelector("[data-autocomplete-input]");
+        var list = form.querySelector("[data-autocomplete-list]");
+        var suggestUrl = form.getAttribute("data-suggest-url");
+        var minChars = parseInt(form.getAttribute("data-min-chars") || "1", 10);
+        var debounceMs = parseInt(form.getAttribute("data-debounce-ms") || "250", 10);
+        var emptyLabel = form.getAttribute("data-empty-label") || "";
+        var debounceTimer = null;
+        var activeIndex = -1;
+        var items = [];
+
+        if (!input || !list || !suggestUrl) {
+            return;
+        }
+
+        function closeList() {
+            list.hidden = true;
+            list.innerHTML = "";
+            input.setAttribute("aria-expanded", "false");
+            activeIndex = -1;
+            items = [];
+        }
+
+        function openList() {
+            list.hidden = false;
+            input.setAttribute("aria-expanded", "true");
+        }
+
+        function selectItem(item) {
+            input.value = item.name;
+            closeList();
+            form.submit();
+        }
+
+        function renderItems(nextItems) {
+            items = nextItems || [];
+            list.innerHTML = "";
+            activeIndex = -1;
+
+            if (!items.length) {
+                var empty = document.createElement("li");
+                empty.className = "autocomplete-empty";
+                empty.textContent = emptyLabel;
+                empty.setAttribute("role", "presentation");
+                list.appendChild(empty);
+                openList();
+                return;
+            }
+
+            items.forEach(function (item, index) {
+                var option = document.createElement("li");
+                option.className = "autocomplete-option";
+                option.setAttribute("role", "option");
+                option.setAttribute("id", "ac-opt-" + index);
+                option.textContent = item.name;
+                option.addEventListener("mousedown", function (event) {
+                    event.preventDefault();
+                    selectItem(item);
+                });
+                list.appendChild(option);
+            });
+
+            openList();
+        }
+
+        function fetchSuggestions(query) {
+            if (query.length < minChars) {
+                closeList();
+                return;
+            }
+
+            var url = suggestUrl + (suggestUrl.indexOf("?") >= 0 ? "&" : "?") + "q=" + encodeURIComponent(query);
+
+            fetch(url, {
+                headers: { "Accept": "application/json" },
+                credentials: "same-origin"
+            }).then(function (response) {
+                if (!response.ok) {
+                    throw new Error("suggest failed");
+                }
+                return response.json();
+            }).then(function (data) {
+                if (input.value.trim() !== query) {
+                    return;
+                }
+                renderItems(Array.isArray(data) ? data : []);
+            }).catch(function () {
+                closeList();
+            });
+        }
+
+        input.addEventListener("input", function () {
+            var query = input.value.trim();
+            window.clearTimeout(debounceTimer);
+            debounceTimer = window.setTimeout(function () {
+                fetchSuggestions(query);
+            }, debounceMs);
+        });
+
+        input.addEventListener("keydown", function (event) {
+            if (list.hidden) {
+                if (event.key === "ArrowDown" && input.value.trim().length >= minChars) {
+                    fetchSuggestions(input.value.trim());
+                }
+                return;
+            }
+
+            var options = list.querySelectorAll(".autocomplete-option");
+
+            if (event.key === "Escape") {
+                closeList();
+                return;
+            }
+
+            if (event.key === "ArrowDown") {
+                event.preventDefault();
+                activeIndex = Math.min(activeIndex + 1, options.length - 1);
+            } else if (event.key === "ArrowUp") {
+                event.preventDefault();
+                activeIndex = Math.max(activeIndex - 1, 0);
+            } else if (event.key === "Enter" && activeIndex >= 0 && items[activeIndex]) {
+                event.preventDefault();
+                selectItem(items[activeIndex]);
+                return;
+            } else {
+                return;
+            }
+
+            options.forEach(function (option, index) {
+                option.classList.toggle("is-active", index === activeIndex);
+            });
+        });
+
+        document.addEventListener("click", function (event) {
+            if (!form.contains(event.target)) {
+                closeList();
+            }
+        });
+    }
+
+    document.querySelectorAll("[data-autocomplete]").forEach(initAutocomplete);
 });

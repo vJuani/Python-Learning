@@ -292,7 +292,8 @@ class OrganizationDashboardTests(unittest.TestCase):
         )
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Bienvenido", response.data)
+        self.assertIn(b"Hola, dash_admin", response.data)
+        self.assertIn(b"USD 4.500,00", response.data)
 
 
 if __name__ == "__main__":

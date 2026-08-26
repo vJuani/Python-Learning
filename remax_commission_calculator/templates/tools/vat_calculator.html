@@ -31,7 +31,7 @@
 {% endif %}
 
 <form
-    class="agent-form"
+    class="agent-form vat-calc-form"
     method="post"
     action="{{ url_for('vat_calculator') }}"
 >
@@ -88,48 +88,52 @@
             </div>
         </div>
 
-        <fieldset class="form-group">
+        <fieldset class="segmented-field">
             <legend>{{ t('vat_calc_tip_label') }}</legend>
-            <label class="choice-row">
-                <input
-                    type="radio"
-                    name="tip"
-                    value="buyer"
-                    {% if form_values.tip == 'buyer' %}checked{% endif %}
-                >
-                {{ t('vat_calc_tip_buyer') }}
-            </label>
-            <label class="choice-row">
-                <input
-                    type="radio"
-                    name="tip"
-                    value="seller"
-                    {% if form_values.tip == 'seller' %}checked{% endif %}
-                >
-                {{ t('vat_calc_tip_seller') }}
-            </label>
+            <div class="segmented-control">
+                <label class="segmented-option">
+                    <input
+                        type="radio"
+                        name="tip"
+                        value="buyer"
+                        {% if form_values.tip == 'buyer' %}checked{% endif %}
+                    >
+                    {{ t('vat_calc_tip_buyer_short') }}
+                </label>
+                <label class="segmented-option">
+                    <input
+                        type="radio"
+                        name="tip"
+                        value="seller"
+                        {% if form_values.tip == 'seller' %}checked{% endif %}
+                    >
+                    {{ t('vat_calc_tip_seller_short') }}
+                </label>
+            </div>
         </fieldset>
 
-        <fieldset class="form-group">
+        <fieldset class="segmented-field">
             <legend>{{ t('vat_calc_mode_label') }}</legend>
-            <label class="choice-row">
-                <input
-                    type="radio"
-                    name="mode"
-                    value="minimum_vat"
-                    {% if form_values.mode == 'minimum_vat' %}checked{% endif %}
-                >
-                {{ t('vat_calc_mode_minimum') }}
-            </label>
-            <label class="choice-row">
-                <input
-                    type="radio"
-                    name="mode"
-                    value="commission_plus_vat"
-                    {% if form_values.mode == 'commission_plus_vat' %}checked{% endif %}
-                >
-                {{ t('vat_calc_mode_plus') }}
-            </label>
+            <div class="segmented-control">
+                <label class="segmented-option">
+                    <input
+                        type="radio"
+                        name="mode"
+                        value="minimum_vat"
+                        {% if form_values.mode == 'minimum_vat' %}checked{% endif %}
+                    >
+                    {{ t('vat_calc_mode_min_short') }}
+                </label>
+                <label class="segmented-option">
+                    <input
+                        type="radio"
+                        name="mode"
+                        value="commission_plus_vat"
+                        {% if form_values.mode == 'commission_plus_vat' %}checked{% endif %}
+                    >
+                    {{ t('vat_calc_mode_plus_short') }}
+                </label>
+            </div>
         </fieldset>
 
         <div class="form-actions">

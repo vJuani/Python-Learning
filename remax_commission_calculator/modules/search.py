@@ -10,6 +10,8 @@ from modules.database import (
     search_operations_by_property
 )
 
+import unicodedata
+
 
 def normalize_query(query):
     if query is None:
@@ -18,41 +20,68 @@ def normalize_query(query):
     return query.strip()
 
 
-def matches_partial_text(value, query_lower):
-    return query_lower in str(value).lower()
+def fold_text(value):
+    """Case/accent-insensitive fold for search matching."""
+    text = str(value or "")
+    normalized = unicodedata.normalize("NFD", text)
+    without_marks = "".join(
+        char for char in normalized
+        if unicodedata.category(char) != "Mn"
+    )
+    return " ".join(without_marks.lower().split())
 
 
-def search_agents(query, organization_id):
+def matches_partial_text(value, query_folded):
+    if not query_folded:
+        return False
+    return query_folded in fold_text(value)
+
+
+def search_agents(query, organization_id, limit=None):
+    """Search agents by name/type — not by internal ID."""
     search_query = normalize_query(query)
 
     if search_query == "":
         return []
 
-    query_lower = search_query.lower()
+    query_folded = fold_text(search_query)
     results = []
 
     for agent in get_agents(organization_id):
-        if (
-            search_query.isdigit()
-            and agent["id"] == int(search_query)
-        ):
+        if matches_partial_text(agent["name"], query_folded):
             results.append(agent)
-            continue
+        elif matches_partial_text(agent["type"], query_folded):
+            results.append(agent)
 
-        if matches_partial_text(
-            agent["name"],
-            query_lower
-        ):
-            results.append(agent)
-            continue
+        if limit is not None and len(results) >= limit:
+            break
 
-        if matches_partial_text(
-            agent["type"],
-            query_lower
-        ):
-            results.append(agent)
+    if limit is not None:
+        return results[:limit]
 
     return results
+
+
+def suggest_agents(query, organization_id, limit=8):
+    """Autocomplete suggestions ranked by name prefix match."""
+    search_query = normalize_query(query)
+
+    if len(fold_text(search_query)) < 1:
+        return []
+
+    query_folded = fold_text(search_query)
+    scored = []
+
+    for agent in get_agents(organization_id):
+        name_folded = fold_text(agent["name"])
+        if query_folded not in name_folded:
+            continue
+
+        score = 0 if name_folded.startswith(query_folded) else 1
+        scored.append((score, agent["name"].lower(), agent))
+
+    scored.sort(key=lambda item: (item[0], item[1]))
+    return [item[2] for item in scored[:limit]]
 
 
 def search_properties(query, organization_id):
@@ -64,7 +93,7 @@ def search_properties(query, organization_id):
     properties = get_properties(organization_id)
     operations = get_operations(organization_id)
     filtered_ids = set()
-    query_lower = search_query.lower()
+    query_folded = fold_text(search_query)
 
     for property_data in properties:
         property_id = property_data["id"]
@@ -76,16 +105,28 @@ def search_properties(query, organization_id):
             filtered_ids.add(property_id)
             continue
 
+        external_id = (property_data.get("external_id") or "").strip()
+        if external_id and fold_text(external_id) == query_folded:
+            filtered_ids.add(property_id)
+            continue
+
         if matches_partial_text(
             property_data["address"],
-            query_lower
+            query_folded
+        ):
+            filtered_ids.add(property_id)
+            continue
+
+        if matches_partial_text(
+            property_data.get("agent_name") or "",
+            query_folded
         ):
             filtered_ids.add(property_id)
             continue
 
         if matches_partial_text(
             property_data["jurisdiction"],
-            query_lower
+            query_folded
         ):
             filtered_ids.add(property_id)
 
@@ -94,7 +135,7 @@ def search_properties(query, organization_id):
 
         agent_match = matches_partial_text(
             operation["agent"],
-            query_lower
+            query_folded
         )
 
         price_match = (
@@ -118,7 +159,7 @@ def search_properties(query, organization_id):
 def operation_matches_query(
     operation,
     search_query,
-    query_lower
+    query_folded
 ):
     if (
         search_query.isdigit()
@@ -133,6 +174,7 @@ def operation_matches_query(
         operation["agent_type"],
         operation["property"],
         operation["property_id"],
+        operation.get("property_external_id") or "",
         operation["jurisdiction"],
         operation["was_invoiced"],
         f"{operation['sale_price']:.2f}",
@@ -149,7 +191,7 @@ def operation_matches_query(
     for value in searchable_values:
         if matches_partial_text(
             value,
-            query_lower
+            query_folded
         ):
             return True
 
@@ -163,7 +205,7 @@ def search_operations(query, organization_id):
         return []
 
     matched_operations = {}
-    query_lower = search_query.lower()
+    query_folded = fold_text(search_query)
 
     for operation in search_operations_by_id(
         search_query,
@@ -205,7 +247,7 @@ def search_operations(query, organization_id):
         if operation_matches_query(
             operation,
             search_query,
-            query_lower
+            query_folded
         ):
             matched_operations[
                 operation["db_id"]

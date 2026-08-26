@@ -346,16 +346,19 @@
     </header>
 
     <div class="app-shell">
+        {% set sidebar_html %}{% block sidebar %}{% endblock %}{% endset %}
         <aside
             id="app-sidebar"
-            class="app-sidebar"
+            class="app-sidebar{% if not (sidebar_html|trim) %} is-empty{% endif %}"
             aria-label="{{ t('sidebar_filters') }}"
+            {% if not (sidebar_html|trim) %}hidden{% endif %}
         >
-            {% block sidebar %}{% endblock %}
+            {{ sidebar_html }}
         </aside>
 
         <main class="app-main">
             <div class="app-main-inner">
+                {% if sidebar_html|trim %}
                 <div class="filters-toolbar">
                     <button
                         type="button"
@@ -369,8 +372,8 @@
                     >
                         {{ t('filters_open') }}
                     </button>
-                    <span class="filters-active-chip" id="filters-active-chip" hidden></span>
                 </div>
+                {% endif %}
                 {% include "_flash_messages.html" %}
                 {% block content %}{% endblock %}
             </div>

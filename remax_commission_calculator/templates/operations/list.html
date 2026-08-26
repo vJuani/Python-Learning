@@ -171,7 +171,7 @@
         <span class="btn btn-secondary disabled-hint">{{ t('new_operation') }}</span>
         {% endif %}
         {% endif %}
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
 </section>
 
@@ -194,51 +194,89 @@
 <section class="panel">
     <div class="panel-header">
         <h3>{{ t('operation_list') }}</h3>
+        <p class="results-meta">{{ t('results_found', count=operation_count) }}</p>
     </div>
 
     {% if operations %}
-    <div class="table-wrapper">
+    <div class="entity-card-list hide-desktop">
+        {% for operation in operations %}
+        <article class="entity-card">
+            <div class="entity-card-top">
+                {% if operation.property_external_id %}
+                <span class="entity-external-id">#{{ operation.property_external_id }}</span>
+                {% endif %}
+                <span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span>
+            </div>
+            <h4 class="entity-card-title">{{ operation.property }}</h4>
+            <p class="entity-card-subtitle">{{ operation.agent }}</p>
+            <dl class="entity-card-metrics">
+                <div>
+                    <dt>{{ t('property_value_label') }}</dt>
+                    <dd class="money">{{ operation.sale_price|money }}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('total_commission_label') }}</dt>
+                    <dd class="money money-emphasis">{{ operation.total_commission|money }}</dd>
+                </div>
+            </dl>
+            <p class="entity-card-meta">
+                {% if operation.date %}{{ operation.date|short_date }}{% endif %}
+            </p>
+            <div class="entity-card-actions">
+                <a
+                    href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
+                    class="btn btn-small btn-secondary"
+                >{{ t('view_operation') }} →</a>
+                {% if is_admin() or (is_agent() and operation.status in ['draft', 'rejected']) %}
+                <a
+                    href="{{ url_for('operations_edit', operation_id=operation.db_id) }}"
+                    class="btn btn-small btn-edit"
+                >{{ t('edit') }}</a>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    <div class="table-wrapper hide-mobile">
         <table class="table-dense">
             <thead>
                 <tr>
-                    <th class="col-secondary">{{ t('id') }}</th>
-                    <th>{{ t('date') }}</th>
-                    <th>{{ t('status') }}</th>
-                    <th>{{ t('agent') }}</th>
                     <th>{{ t('property') }}</th>
-                    <th class="col-secondary">{{ t('currency') }}</th>
-                    <th class="col-secondary">{{ t('original_amount') }}</th>
-                    <th class="col-secondary">{{ t('usd_equivalent') }}</th>
-                    <th>{{ t('total_commission') }}</th>
+                    <th>{{ t('agent') }}</th>
+                    <th>{{ t('property_value_label') }}</th>
+                    <th>{{ t('total_commission_label') }}</th>
+                    <th>{{ t('status') }}</th>
+                    <th>{{ t('date') }}</th>
                     <th class="col-actions">{{ t('actions') }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for operation in operations %}
                 <tr>
-                    <td class="col-secondary">{{ operation.id }}</td>
-                    <td>{{ operation.date }}</td>
-                    <td><span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span></td>
+                    <td>
+                        <div class="cell-stack">
+                            <strong>{{ operation.property }}</strong>
+                            {% if operation.property_external_id %}
+                            <span class="entity-external-id">#{{ operation.property_external_id }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
                     <td>{{ operation.agent }}</td>
-                    <td>{{ operation.property }}</td>
-                    <td class="col-secondary">{{ operation.currency }}</td>
-                    <td class="money col-secondary">{{ operation.original_amount|money(operation.currency) }}</td>
-                    <td class="money col-secondary">{{ operation.sale_price|money }}</td>
+                    <td class="money">{{ operation.sale_price|money }}</td>
                     <td class="money money-emphasis">{{ operation.total_commission|money }}</td>
+                    <td><span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span></td>
+                    <td>{% if operation.date %}{{ operation.date|short_date }}{% endif %}</td>
                     <td class="table-actions col-actions">
                         <a
                             href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
                             class="btn btn-small btn-secondary"
-                        >
-                            {{ t('view') }}
-                        </a>
+                        >{{ t('view') }}</a>
                         {% if is_admin() or (is_agent() and operation.status in ['draft', 'rejected']) %}
                         <a
                             href="{{ url_for('operations_edit', operation_id=operation.db_id) }}"
                             class="btn btn-small btn-edit"
-                        >
-                            {{ t('edit') }}
-                        </a>
+                        >{{ t('edit') }}</a>
                         {% endif %}
                     </td>
                 </tr>
@@ -254,7 +292,7 @@
             {% elif filters_active %}
             {{ t('no_operations_match_filters') }}
             {% elif can_create_operations %}
-            {{ t('no_operations_found') }}
+            {{ t('empty_operations_title') }}
             {% else %}
             {{ t('no_operations_yet') }}
             {% endif %}
@@ -266,6 +304,7 @@
             {{ t('adjust_filters') }}
             {% elif not can_write() %}
             {% elif can_create_operations %}
+            {{ t('empty_operations_hint') }}
             <a href="{{ url_for('operations_new') }}">{{ t('create_first_operation') }}</a>
             {% else %}
             {{ t('create_agent_property_first') }}

@@ -2,6 +2,7 @@ from flask import (
     Flask,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -92,6 +93,7 @@ from modules.database import (
 from modules.formatting import (
     format_money,
     format_number,
+    format_short_date,
     convert_from_usd
 )
 
@@ -158,7 +160,8 @@ from modules.property_external_listings import (
 
 from modules.search import (
     global_search,
-    search_agents
+    search_agents,
+    suggest_agents,
 )
 
 from modules.operations import (
@@ -461,6 +464,14 @@ def number_filter(amount, decimals=2):
         amount,
         language=get_current_language(),
         decimals=decimals
+    )
+
+
+@app.template_filter("short_date")
+def short_date_filter(value):
+    return format_short_date(
+        value,
+        language=get_current_language()
     )
 
 
@@ -3245,6 +3256,26 @@ def agents_list():
         search_query=search_query,
         agent_count=len(agents)
     )
+
+
+@app.route("/api/agents/suggest")
+@admin_required
+def agents_suggest():
+    organization_id = require_user_organization()
+    query = request.args.get("q", "").strip()
+    suggestions = suggest_agents(
+        query,
+        organization_id,
+        limit=8,
+    )
+    return jsonify([
+        {
+            "id": agent["id"],
+            "name": agent["name"],
+            "type": agent["type"],
+        }
+        for agent in suggestions
+    ])
 
 
 @app.route(

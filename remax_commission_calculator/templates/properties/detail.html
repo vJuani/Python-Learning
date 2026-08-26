@@ -5,8 +5,19 @@
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>{{ property_display_id }}</h2>
-        <p>{{ t('property_detail_subtitle') }}</p>
+        <h2>{{ property_data.address }}</h2>
+        {% if property_data.external_id %}
+        <span class="entity-external-id">#{{ property_data.external_id }}</span>
+        {% endif %}
+        {% if property_data.listing_price is not none %}
+        <p class="entity-hero-price money money-emphasis">{{ property_data.listing_price|money }}</p>
+        {% endif %}
+        <p class="entity-hero-meta">
+            <span class="type-tag badge-{{ property_data.jurisdiction|lower }}">{{ property_data.jurisdiction }}</span>
+            <span>{{ property_data.agent_name or '—' }}</span>
+            <span class="badge badge-soft">{{ t('property_status_' ~ (property_data.status or 'approved')) }}</span>
+        </p>
+        <p class="field-help">{{ t('property_detail_subtitle') }}</p>
     </div>
 
     <div class="page-actions">
@@ -16,7 +27,7 @@
             class="btn btn-edit"
         >{{ t('edit') }}</a>
         {% endif %}
-        <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        <a href="{{ url_for('properties_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
 </section>
 
@@ -27,22 +38,10 @@
     </div>
 
     <dl class="access-detail property-detail-grid">
-        <dt>{{ t('address') }}</dt>
-        <dd>{{ property_data.address }}</dd>
-        <dt>{{ t('jurisdiction') }}</dt>
-        <dd>{{ property_data.jurisdiction }}</dd>
         <dt>{{ t('property_type') }}</dt>
         <dd>
             {% if property_data.property_type %}
             {{ t('property_type_' ~ property_data.property_type) }}
-            {% else %}
-            —
-            {% endif %}
-        </dd>
-        <dt>{{ t('property_listing_price') }}</dt>
-        <dd>
-            {% if property_data.listing_price is not none %}
-            {{ property_data.listing_price|money }}
             {% else %}
             —
             {% endif %}
@@ -57,8 +56,16 @@
         </dd>
         <dt>{{ t('agent') }}</dt>
         <dd>{{ property_data.agent_name or '—' }}</dd>
-        <dt>{{ t('status') }}</dt>
-        <dd>{{ t('property_status_' ~ (property_data.status or 'approved')) }}</dd>
+        <dt>{{ t('jurisdiction') }}</dt>
+        <dd>{{ property_data.jurisdiction }}</dd>
+        <dt>{{ t('property_listing_price') }}</dt>
+        <dd>
+            {% if property_data.listing_price is not none %}
+            {{ property_data.listing_price|money }}
+            {% else %}
+            —
+            {% endif %}
+        </dd>
     </dl>
 
     {% if property_data.status == 'rejected' and property_data.rejection_reason %}
@@ -108,28 +115,50 @@
 
     {% if related_operations %}
     <div class="table-wrapper">
-        <table>
+        <table class="table-dense">
             <thead>
                 <tr>
                     <th>{{ t('id') }}</th>
                     <th>{{ t('operation_date') }}</th>
                     <th>{{ t('status') }}</th>
-                    <th>{{ t('actions') }}</th>
+                    <th>{{ t('sale_price') }}</th>
+                    <th>{{ t('total_commission') }}</th>
+                    <th class="col-actions">{{ t('actions') }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for operation in related_operations %}
                 <tr>
                     <td>{{ operation.id }}</td>
-                    <td>{{ operation.operation_date }}</td>
+                    <td>
+                        {% if operation.date %}
+                        {{ operation.date|short_date }}
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
                     <td>
                         <span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span>
                     </td>
-                    <td class="table-actions">
+                    <td class="money">
+                        {% if operation.sale_price is defined and operation.sale_price is not none %}
+                        {{ operation.sale_price|money }}
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                    <td class="money">
+                        {% if operation.total_commission is defined and operation.total_commission is not none %}
+                        {{ operation.total_commission|money }}
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                    <td class="table-actions col-actions">
                         <a
                             href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
                             class="btn btn-small btn-secondary"
-                        >{{ t('property_view') }}</a>
+                        >{{ t('view') }}</a>
                     </td>
                 </tr>
                 {% endfor %}

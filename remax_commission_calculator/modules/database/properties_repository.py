@@ -23,6 +23,10 @@ def _now_iso():
 
 
 def _build_property_dict(row):
+    external_id = None
+    if len(row) > 16 and row[16]:
+        external_id = str(row[16]).strip() or None
+
     return {
         "id": row[0],
         "address": row[1],
@@ -40,6 +44,7 @@ def _build_property_dict(row):
         "listing_price": row[13] if len(row) > 13 else None,
         "listing_purpose": row[14] if len(row) > 14 else None,
         "last_synced_at": row[15] if len(row) > 15 else None,
+        "external_id": external_id,
     }
 
 
@@ -60,7 +65,8 @@ PROPERTIES_BASE_QUERY = """
         properties.property_type,
         properties.listing_price,
         properties.listing_purpose,
-        properties.last_synced_at
+        properties.last_synced_at,
+        properties.external_id
     FROM properties
     LEFT JOIN agents
         ON properties.agent_id = agents.id
@@ -195,6 +201,7 @@ def add_property(
     listing_price=None,
     listing_purpose=None,
     last_synced_at=None,
+    external_id=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -215,6 +222,10 @@ def add_property(
     if status == STATUS_PENDING and submitted_at is None:
         submitted_at = now
 
+    cleaned_external_id = None
+    if external_id is not None:
+        cleaned_external_id = str(external_id).strip() or None
+
     property_id = execute_insert(
         cursor,
         """
@@ -229,9 +240,10 @@ def add_property(
             property_type,
             listing_price,
             listing_purpose,
-            last_synced_at
+            last_synced_at,
+            external_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             address,
@@ -245,6 +257,7 @@ def add_property(
             listing_price,
             listing_purpose,
             last_synced_at,
+            cleaned_external_id,
         )
     )
 
@@ -324,6 +337,7 @@ def update_property_from_sync(
     listing_price=None,
     listing_purpose=None,
     last_synced_at=None,
+    external_id=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -331,6 +345,10 @@ def update_property_from_sync(
 
     if last_synced_at is None:
         last_synced_at = _now_iso()
+
+    cleaned_external_id = None
+    if external_id is not None:
+        cleaned_external_id = str(external_id).strip() or None
 
     connection = get_connection()
     cursor = connection.cursor()
@@ -352,7 +370,8 @@ def update_property_from_sync(
             property_type = ?,
             listing_price = ?,
             listing_purpose = ?,
-            last_synced_at = ?
+            last_synced_at = ?,
+            external_id = COALESCE(?, external_id)
         WHERE id = ?
             AND organization_id = ?
         """,
@@ -364,6 +383,7 @@ def update_property_from_sync(
             listing_price,
             listing_purpose,
             last_synced_at,
+            cleaned_external_id,
             property_id,
             organization_id,
         ),

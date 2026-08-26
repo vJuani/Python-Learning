@@ -129,7 +129,7 @@
         {% if can_write() %}
         <a href="{{ url_for('properties_new') }}" class="btn btn-primary">{{ t('new_property') }}</a>
         {% endif %}
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
 </section>
 
@@ -139,13 +139,61 @@
     </div>
 
     {% if properties %}
-    <div class="table-wrapper">
-        <table>
+    <div class="entity-card-list hide-desktop">
+        {% for property_data in properties %}
+        <article class="entity-card">
+            <div class="entity-card-top">
+                {% if property_data.external_id %}
+                <span class="entity-external-id">#{{ property_data.external_id }}</span>
+                {% endif %}
+                <span class="badge badge-soft">{{ t('property_status_' ~ (property_data.status or 'approved')) }}</span>
+            </div>
+            <h4 class="entity-card-title">{{ property_data.address }}</h4>
+            <p class="entity-card-subtitle">{{ property_data.agent_name or '—' }}</p>
+            <dl class="entity-card-metrics">
+                <div>
+                    <dt>{{ t('property_value_label') }}</dt>
+                    <dd class="money">
+                        {% if property_data.listing_price is not none %}
+                        {{ property_data.listing_price|money }}
+                        {% else %}
+                        —
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt>{{ t('jurisdiction') }}</dt>
+                    <dd>
+                        <span class="type-tag badge-{{ property_data.jurisdiction|lower }}">{{ property_data.jurisdiction }}</span>
+                    </dd>
+                </div>
+            </dl>
+            {% if property_data.status == 'rejected' and property_data.rejection_reason %}
+            <p class="entity-card-meta field-help">{{ property_data.rejection_reason }}</p>
+            {% endif %}
+            <div class="entity-card-actions">
+                <a
+                    href="{{ url_for('properties_detail', property_id=property_data.id) }}"
+                    class="btn btn-small btn-secondary"
+                >{{ t('view') }}</a>
+                {% if can_write() %}
+                <a
+                    href="{{ url_for('properties_edit', property_id=property_data.id) }}"
+                    class="btn btn-small btn-edit"
+                >{{ t('edit') }}</a>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    <div class="table-wrapper hide-mobile">
+        <table class="table-dense">
             <thead>
                 <tr>
-                    <th class="col-secondary">{{ t('id') }}</th>
-                    <th>{{ t('address') }}</th>
-                    <th>{{ t('jurisdiction') }}</th>
+                    <th>{{ t('property') }}</th>
+                    <th>{{ t('agent') }}</th>
+                    <th>{{ t('property_value_label') }}</th>
                     <th>{{ t('status') }}</th>
                     <th class="col-actions">{{ t('actions') }}</th>
                 </tr>
@@ -153,10 +201,21 @@
             <tbody>
                 {% for property_data in properties %}
                 <tr>
-                    <td class="col-secondary">{{ property_data.id }}</td>
-                    <td>{{ property_data.address }}</td>
                     <td>
-                        <span class="type-tag badge-{{ property_data.jurisdiction|lower }}">{{ property_data.jurisdiction }}</span>
+                        <div class="cell-stack">
+                            <strong>{{ property_data.address }}</strong>
+                            {% if property_data.external_id %}
+                            <span class="entity-external-id">#{{ property_data.external_id }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>{{ property_data.agent_name or '—' }}</td>
+                    <td class="money">
+                        {% if property_data.listing_price is not none %}
+                        {{ property_data.listing_price|money }}
+                        {% else %}
+                        —
+                        {% endif %}
                     </td>
                     <td>
                         <span class="badge badge-soft">{{ t('property_status_' ~ (property_data.status or 'approved')) }}</span>
@@ -168,14 +227,12 @@
                         <a
                             href="{{ url_for('properties_detail', property_id=property_data.id) }}"
                             class="btn btn-small btn-secondary"
-                        >{{ t('property_view') }}</a>
+                        >{{ t('view') }}</a>
                         {% if can_write() %}
                         <a
                             href="{{ url_for('properties_edit', property_id=property_data.id) }}"
                             class="btn btn-small btn-edit"
-                        >
-                            {{ t('edit') }}
-                        </a>
+                        >{{ t('edit') }}</a>
                         {% endif %}
                     </td>
                 </tr>
@@ -199,8 +256,11 @@
             {{ t('correct_errors_retry') }}
             {% elif filters_active %}
             {{ t('adjust_filters') }}
-            {% elif can_write() %}
+            {% else %}
+            {{ t('empty_properties_hint') }}
+            {% if can_write() %}
             <a href="{{ url_for('properties_new') }}">{{ t('create_first_property') }}</a>
+            {% endif %}
             {% endif %}
         </p>
     </div>

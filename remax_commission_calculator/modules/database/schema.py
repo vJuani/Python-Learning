@@ -1336,6 +1336,53 @@ def _rebuild_organization_integrations_for_csv_upload(cursor):
     cursor.execute("PRAGMA foreign_keys = ON")
 
 
+def _migrate_property_external_id(cursor):
+    """Add nullable properties.external_id (RE/MAX MLSID mirror)."""
+    if not _table_exists(cursor, "properties"):
+        return
+
+    if not _column_exists(cursor, "properties", "external_id"):
+        cursor.execute(
+            """
+            ALTER TABLE properties
+            ADD COLUMN external_id TEXT
+            """
+        )
+
+    if _table_exists(cursor, "property_external_listings"):
+        cursor.execute(
+            """
+            UPDATE properties
+            SET external_id = (
+                SELECT pel.external_id
+                FROM property_external_listings AS pel
+                WHERE pel.property_id = properties.id
+                    AND pel.organization_id
+                        = properties.organization_id
+                    AND pel.external_id IS NOT NULL
+                    AND TRIM(pel.external_id) != ''
+                ORDER BY pel.id
+                LIMIT 1
+            )
+            WHERE external_id IS NULL
+                OR TRIM(external_id) = ''
+            """
+        )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_properties_org_external_id
+        ON properties (
+            organization_id,
+            external_id
+        )
+        WHERE external_id IS NOT NULL
+            AND external_id != ''
+        """
+    )
+
+
 def _migrate_agent_teams_and_wallet(cursor):
     if _table_exists(cursor, "agents"):
         if not _column_exists(
@@ -1907,6 +1954,7 @@ def migrate_schema():
         _migrate_property_and_operation_requirements(cursor)
         _migrate_organization_integrations(cursor)
         _migrate_agent_teams_and_wallet(cursor)
+        _migrate_property_external_id(cursor)
 
         _validate_migration(
             cursor,
@@ -1994,6 +2042,7 @@ def create_tables():
             listing_price REAL,
             listing_purpose TEXT,
             last_synced_at TEXT,
+            external_id TEXT,
 
             FOREIGN KEY (organization_id)
                 REFERENCES organizations(id)

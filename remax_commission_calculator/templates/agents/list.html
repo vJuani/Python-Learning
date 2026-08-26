@@ -2,48 +2,60 @@
 
 {% block title %}{{ t('agents_title') }} | {{ t('app_title') }}{% endblock %}
 
-{% block sidebar %}
-<div class="sidebar-panel">
-    <h3 class="sidebar-title">{{ t('search_agents') }}</h3>
-
-    <form class="sidebar-filter-form search-form" method="get" action="{{ url_for('agents_list') }}">
-        <div class="form-group">
-            <label for="agent-search-q">{{ t('search_by_id_or_name') }}</label>
-            <input
-                type="text"
-                id="agent-search-q"
-                name="q"
-                class="form-input"
-                placeholder="{{ t('search_by_id_or_name') }}"
-                value="{{ search_query }}"
-            >
-        </div>
-
-        <div class="sidebar-filter-actions">
-            <button type="submit" class="btn btn-primary btn-block">{{ t('search') }}</button>
-            {% if search_query %}
-            <a href="{{ url_for('agents_list') }}" class="btn btn-secondary btn-block">{{ t('clear') }}</a>
-            {% endif %}
-        </div>
-    </form>
-
-    <p class="sidebar-count">{{ agent_count }} {{ t('found') }}</p>
-</div>
-{% endblock %}
-
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ t('agents_title') }}</h2>
-        <p>{{ t('agents_subtitle') }}</p>
+        <p class="results-meta">{{ t('results_found', count=agent_count) }}</p>
     </div>
 
     <div class="page-actions">
         {% if is_admin() %}
         <a href="{{ url_for('agents_new') }}" class="btn btn-primary">{{ t('new_agent') }}</a>
         {% endif %}
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
+</section>
+
+<section class="panel panel-search">
+    <form
+        class="autocomplete-form"
+        method="get"
+        action="{{ url_for('agents_list') }}"
+        data-autocomplete="agents"
+        data-suggest-url="{{ url_for('agents_suggest') }}"
+        data-min-chars="1"
+        data-debounce-ms="250"
+        data-empty-label="{{ t('no_agent_suggestions') }}"
+        autocomplete="off"
+    >
+        <div class="form-group autocomplete-field">
+            <label for="agent-search-q">{{ t('search_agent') }}</label>
+            <input
+                type="search"
+                id="agent-search-q"
+                name="q"
+                class="form-input"
+                placeholder="{{ t('search_agent_placeholder') }}"
+                value="{{ search_query }}"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="agent-suggest-list"
+                data-autocomplete-input
+            >
+            <ul
+                id="agent-suggest-list"
+                class="autocomplete-list"
+                role="listbox"
+                hidden
+                data-autocomplete-list
+            ></ul>
+        </div>
+        {% if search_query %}
+        <a href="{{ url_for('agents_list') }}" class="btn btn-secondary btn-inline">{{ t('clear') }}</a>
+        {% endif %}
+    </form>
 </section>
 
 <section class="panel">
@@ -52,38 +64,49 @@
     </div>
 
     {% if agents %}
-    <div class="table-wrapper">
+    <div class="entity-card-list hide-desktop">
+        {% for agent in agents %}
+        <article class="entity-card">
+            <div class="entity-card-top">
+                <h4 class="entity-card-title">{{ agent.name }}</h4>
+                <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
+            </div>
+            <div class="entity-card-actions">
+                <a href="{{ url_for('agents_detail', agent_id=agent.id) }}" class="btn btn-small btn-secondary">{{ t('view') }}</a>
+                {% if is_admin() %}
+                <a href="{{ url_for('agents_edit', agent_id=agent.id) }}" class="btn btn-small btn-edit">{{ t('edit') }}</a>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    <div class="table-wrapper hide-mobile">
         <table>
             <thead>
                 <tr>
-                    <th>{{ t('id') }}</th>
                     <th>{{ t('name') }}</th>
                     <th>{{ t('type') }}</th>
-                    <th>{{ t('actions') }}</th>
+                    <th class="col-actions">{{ t('actions') }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for agent in agents %}
                 <tr>
-                    <td>{{ agent.id }}</td>
                     <td>{{ agent.name }}</td>
                     <td>
                         <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
                     </td>
-                    <td class="table-actions">
+                    <td class="table-actions col-actions">
                         <a
                             href="{{ url_for('agents_detail', agent_id=agent.id) }}"
                             class="btn btn-small btn-secondary"
-                        >
-                            {{ t('view') }}
-                        </a>
+                        >{{ t('view') }}</a>
                         {% if is_admin() %}
                         <a
                             href="{{ url_for('agents_edit', agent_id=agent.id) }}"
                             class="btn btn-small btn-edit"
-                        >
-                            {{ t('edit') }}
-                        </a>
+                        >{{ t('edit') }}</a>
                         {% endif %}
                     </td>
                 </tr>
@@ -97,12 +120,10 @@
             {% if search_query %}{{ t('no_agents_match') }}{% else %}{{ t('no_agents_title') }}{% endif %}
         </p>
         <p class="empty-state-text">
-            {% if not search_query %}
-            {% if is_admin() %}
+            {% if search_query %}
+            {{ t('empty_agents_hint') }}
+            {% elif is_admin() %}
             <a href="{{ url_for('agents_new') }}">{{ t('create_first_agent') }}</a>
-            {% endif %}
-            {% else %}
-            {{ t('try_another_search') }}
             {% endif %}
         </p>
     </div>
