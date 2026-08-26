@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('cash_new') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('cash_new') }}</h2>
+        <p>{{ t('cash_subtitle') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('cash_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="panel">
+    <form class="agent-form" method="post" action="{{ url_for('cash_new') }}">
+        <div class="form-group">
+            <label for="movement_type">{{ t('cash_movement_type') }}</label>
+            <select id="movement_type" name="movement_type" class="form-input" required>
+                <option value="income" {% if form_values.movement_type == 'income' %}selected{% endif %}>{{ t('cash_type_income') }}</option>
+                <option value="expense" {% if form_values.movement_type == 'expense' %}selected{% endif %}>{{ t('cash_type_expense') }}</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="currency">{{ t('cash_currency') }}</label>
+            <select id="currency" name="currency" class="form-input" required>
+                {% for currency in currencies %}
+                <option value="{{ currency }}" {% if form_values.currency == currency %}selected{% endif %}>{{ currency }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="amount">{{ t('cash_amount') }}</label>
+            <input type="text" id="amount" name="amount" class="form-input" value="{{ form_values.amount }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="category">{{ t('cash_category') }}</label>
+            <select id="category" name="category" class="form-input" required>
+                <option value="">{{ t('select_type') }}</option>
+                <optgroup label="{{ t('cash_type_income') }}">
+                    {% for category in income_categories %}
+                    <option value="{{ category }}" {% if form_values.category == category %}selected{% endif %}>{{ t('cash_cat_' ~ category) }}</option>
+                    {% endfor %}
+                </optgroup>
+                <optgroup label="{{ t('cash_type_expense') }}">
+                    {% for category in expense_categories %}
+                    <option value="{{ category }}" {% if form_values.category == category %}selected{% endif %}>{{ t('cash_cat_' ~ category) }}</option>
+                    {% endfor %}
+                </optgroup>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="description">{{ t('cash_description') }}</label>
+            <input type="text" id="description" name="description" class="form-input" value="{{ form_values.description }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="payment_method">{{ t('cash_payment_method') }}</label>
+            <select id="payment_method" name="payment_method" class="form-input" required>
+                {% for method in payment_methods %}
+                <option value="{{ method }}" {% if form_values.payment_method == method %}selected{% endif %}>{{ t('cash_pay_' ~ method) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="movement_date">{{ t('cash_movement_date') }}</label>
+            <input type="date" id="movement_date" name="movement_date" class="form-input" value="{{ form_values.movement_date }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="notes">{{ t('cash_notes') }}</label>
+            <textarea id="notes" name="notes" class="form-input" rows="3">{{ form_values.notes }}</textarea>
+        </div>
+
+        {% if preview %}
+        <div class="panel panel-nested">
+            <h3>{{ t('cash_preview') }}</h3>
+            <dl class="detail-grid">
+                <div>
+                    <dt>{{ t('cash_balance_before') }}</dt>
+                    <dd class="money">{{ preview.balance_before|money(preview.currency) }}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('cash_amount') }}</dt>
+                    <dd class="money">{{ preview.amount|money(preview.currency) }}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('cash_balance_after') }}</dt>
+                    <dd class="money money-emphasis">{{ preview.balance_after|money(preview.currency) }}</dd>
+                </div>
+            </dl>
+        </div>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" name="action" value="preview" class="btn btn-secondary">{{ t('cash_preview') }}</button>
+            {% if preview %}
+            <button type="submit" name="action" value="save" class="btn btn-primary">{{ t('cash_confirm_save') }}</button>
+            {% endif %}
+        </div>
+    </form>
+</section>
+{% endblock %}

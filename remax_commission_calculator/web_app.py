@@ -70,6 +70,7 @@ from modules.database import (
     delete_user,
     get_agent_record,
     get_agents,
+    get_cash_movement,
     get_operation_record,
     get_organization_settings,
     get_properties,
@@ -148,6 +149,26 @@ from modules.pagination import (
     DEFAULT_PER_PAGE,
     paginate_list,
     parse_per_page,
+)
+
+from modules.cash_treasury import (
+    CASH_PER_PAGE_OPTIONS,
+    CURRENCIES as CASH_CURRENCIES,
+    DEFAULT_CASH_PER_PAGE,
+    EXPENSE_CATEGORIES,
+    INCOME_CATEGORIES,
+    PAYMENT_METHODS as CASH_PAYMENT_METHODS,
+    TYPE_INCOME,
+    CashTreasuryError,
+    build_cash_kpis,
+    categories_for_type,
+    confirm_movement,
+    filter_movements,
+    get_balances,
+    preview_movement,
+    reverse_movement,
+    set_opening_balances,
+    validate_movement_payload,
 )
 
 from modules.property_external_listings import (
@@ -5693,6 +5714,378 @@ def operations_delete(operation_id):
         url_for("operations_list")
     )
 
+
+def _cash_form_context(form_values=None, errors=None, preview=None):
+    form_values = form_values or {
+        "movement_type": TYPE_INCOME,
+        "currency": "ARS",
+        "amount": "",
+        "category": "",
+        "description": "",
+        "payment_method": "cash",
+        "movement_date": date.today().isoformat(),
+        "notes": "",
+    }
+
+    return {
+        "form_values": form_values,
+        "errors": errors or [],
+        "preview": preview,
+        "currencies": CASH_CURRENCIES,
+        "payment_methods": CASH_PAYMENT_METHODS,
+        "income_categories": INCOME_CATEGORIES,
+        "expense_categories": EXPENSE_CATEGORIES,
+        "categories": categories_for_type(
+            form_values.get("movement_type") or TYPE_INCOME
+        ),
+    }
+
+
+@app.route("/cash")
+@admin_required
+def cash_list():
+    organization_id = require_user_organization()
+    filters = {
+        "q": request.args.get("q", "").strip(),
+        "currency": request.args.get(
+            "currency",
+            "",
+        ).strip().upper(),
+        "movement_type": request.args.get(
+            "movement_type",
+            "",
+        ).strip(),
+        "category": request.args.get(
+            "category",
+            "",
+        ).strip(),
+        "payment_method": request.args.get(
+            "payment_method",
+            "",
+        ).strip(),
+        "user_id": request.args.get(
+            "user_id",
+            "",
+        ).strip(),
+        "date_from": request.args.get(
+            "date_from",
+            "",
+        ).strip(),
+        "date_to": request.args.get(
+            "date_to",
+            "",
+        ).strip(),
+        "status": request.args.get(
+            "status",
+            "",
+        ).strip(),
+    }
+
+    filter_args = dict(filters)
+
+    if filter_args.get("user_id"):
+        try:
+            filter_args["user_id"] = int(
+                filter_args["user_id"]
+            )
+        except ValueError:
+            filter_args["user_id"] = None
+    else:
+        filter_args["user_id"] = None
+
+    if filter_args.get("currency") not in CASH_CURRENCIES:
+        filter_args["currency"] = None
+
+    movements = filter_movements(
+        organization_id,
+        filter_args,
+    )
+    kpis = build_cash_kpis(organization_id)
+    per_page = parse_per_page(
+        request.args.get("per_page"),
+        default=DEFAULT_CASH_PER_PAGE,
+        allowed=CASH_PER_PAGE_OPTIONS,
+    )
+    pagination = paginate_list(
+        movements,
+        page=request.args.get("page", 1),
+        per_page=per_page,
+    )
+    pagination_params = {
+        key: value
+        for key, value in filters.items()
+        if value
+    }
+
+    if per_page != DEFAULT_CASH_PER_PAGE:
+        pagination_params["per_page"] = per_page
+
+    filters_active = any(filters.values())
+
+    return render_template(
+        "cash/list.html",
+        movements=pagination["items"],
+        filters=filters,
+        kpis=kpis,
+        movement_count=len(movements),
+        currencies=CASH_CURRENCIES,
+        payment_methods=CASH_PAYMENT_METHODS,
+        income_categories=INCOME_CATEGORIES,
+        expense_categories=EXPENSE_CATEGORIES,
+        users=get_users(organization_id),
+        filters_active=filters_active,
+        pagination=pagination,
+        pagination_endpoint="cash_list",
+        pagination_params=pagination_params,
+        pagination_summary_key="pagination_showing_cash",
+        pagination_per_page_options=CASH_PER_PAGE_OPTIONS,
+        show_per_page_selector=True,
+    )
+
+
+@app.route(
+    "/cash/new",
+    methods=["GET", "POST"],
+)
+@admin_required
+def cash_new():
+    organization_id = require_user_organization()
+    current_user = get_current_user()
+
+    if request.method == "GET":
+        return render_template(
+            "cash/form.html",
+            **_cash_form_context(),
+        )
+
+    form_values = {
+        "movement_type": request.form.get(
+            "movement_type",
+            "",
+        ).strip(),
+        "currency": request.form.get(
+            "currency",
+            "",
+        ).strip().upper(),
+        "amount": request.form.get("amount", "").strip(),
+        "category": request.form.get(
+            "category",
+            "",
+        ).strip(),
+        "description": request.form.get(
+            "description",
+            "",
+        ).strip(),
+        "payment_method": request.form.get(
+            "payment_method",
+            "",
+        ).strip(),
+        "movement_date": request.form.get(
+            "movement_date",
+            "",
+        ).strip(),
+        "notes": request.form.get("notes", "").strip(),
+    }
+    action = request.form.get("action", "preview")
+    errors, values = validate_movement_payload(form_values)
+
+    if errors:
+        return render_template(
+            "cash/form.html",
+            **_cash_form_context(
+                form_values,
+                localize_form_errors(errors),
+            ),
+        )
+
+    try:
+        preview = preview_movement(
+            organization_id,
+            values,
+        )
+    except CashTreasuryError as error:
+        return render_template(
+            "cash/form.html",
+            **_cash_form_context(
+                form_values,
+                localize_form_errors(
+                    [error.message_key]
+                ),
+            ),
+        )
+
+    if action == "preview":
+        return render_template(
+            "cash/form.html",
+            **_cash_form_context(
+                form_values,
+                preview=preview,
+            ),
+        )
+
+    try:
+        movement = confirm_movement(
+            organization_id,
+            values,
+            user_id=current_user["id"],
+        )
+    except CashTreasuryError as error:
+        return render_template(
+            "cash/form.html",
+            **_cash_form_context(
+                form_values,
+                localize_form_errors(
+                    [error.message_key]
+                ),
+                preview=preview,
+            ),
+        )
+
+    flash_i18n("cash_saved", "success")
+
+    return redirect(
+        url_for(
+            "cash_detail",
+            movement_id=movement["id"],
+        )
+    )
+
+
+@app.route("/cash/<int:movement_id>")
+@admin_required
+def cash_detail(movement_id):
+    organization_id = require_user_organization()
+    movement = get_cash_movement(
+        movement_id,
+        organization_id,
+    )
+
+    if movement is None:
+        abort(404)
+
+    original = None
+
+    if movement.get("reversal_of_movement_id"):
+        original = get_cash_movement(
+            movement["reversal_of_movement_id"],
+            organization_id,
+        )
+
+    return render_template(
+        "cash/detail.html",
+        movement=movement,
+        original=original,
+        balances=get_balances(organization_id),
+    )
+
+
+@app.route(
+    "/cash/<int:movement_id>/reverse",
+    methods=["POST"],
+)
+@admin_required
+def cash_reverse(movement_id):
+    organization_id = require_user_organization()
+    current_user = get_current_user()
+    reason = request.form.get(
+        "reversal_reason",
+        "",
+    ).strip()
+
+    try:
+        reverse_movement(
+            organization_id,
+            movement_id,
+            user_id=current_user["id"],
+            reason=reason,
+        )
+    except CashTreasuryError as error:
+        flash_i18n(error.message_key, "error")
+        return redirect(
+            url_for(
+                "cash_detail",
+                movement_id=movement_id,
+            )
+        )
+
+    flash_i18n("cash_reversed", "success")
+
+    return redirect(
+        url_for(
+            "cash_detail",
+            movement_id=movement_id,
+        )
+    )
+
+
+@app.route(
+    "/cash/opening-balance",
+    methods=["GET", "POST"],
+)
+@admin_required
+def cash_opening_balance():
+    organization_id = require_user_organization()
+    current_user = get_current_user()
+    balances = get_balances(organization_id)
+    form_values = {
+        "amount_ars": "",
+        "amount_usd": "",
+        "movement_date": date.today().isoformat(),
+    }
+
+    if request.method == "POST":
+        form_values = {
+            "amount_ars": request.form.get(
+                "amount_ars",
+                "",
+            ).strip(),
+            "amount_usd": request.form.get(
+                "amount_usd",
+                "",
+            ).strip(),
+            "movement_date": request.form.get(
+                "movement_date",
+                "",
+            ).strip() or date.today().isoformat(),
+        }
+
+        try:
+            from modules.cash_treasury import (
+                parse_cash_date,
+            )
+
+            movement_date = parse_cash_date(
+                form_values["movement_date"]
+            ) or date.today()
+            set_opening_balances(
+                organization_id,
+                amounts_by_currency={
+                    "ARS": form_values["amount_ars"],
+                    "USD": form_values["amount_usd"],
+                },
+                user_id=current_user["id"],
+                movement_date=movement_date,
+            )
+        except CashTreasuryError as error:
+            return render_template(
+                "cash/opening.html",
+                form_values=form_values,
+                balances=balances,
+                errors=localize_form_errors(
+                    [error.message_key]
+                ),
+            )
+
+        flash_i18n("cash_opening_saved", "success")
+
+        return redirect(url_for("cash_list"))
+
+    return render_template(
+        "cash/opening.html",
+        form_values=form_values,
+        balances=balances,
+        errors=[],
+    )
 
 
 if __name__ == "__main__":

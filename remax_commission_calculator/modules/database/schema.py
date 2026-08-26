@@ -1840,6 +1840,118 @@ def _migrate_organization_integrations(cursor):
     )
 
 
+def _migrate_cash_treasury(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cash_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            currency TEXT NOT NULL,
+            cached_balance REAL NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+
+            CHECK (currency IN ('USD', 'ARS')),
+            UNIQUE (organization_id, currency)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cash_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            movement_number INTEGER NOT NULL,
+            movement_type TEXT NOT NULL,
+            currency TEXT NOT NULL,
+            amount REAL NOT NULL,
+            category TEXT NOT NULL,
+            description TEXT NOT NULL,
+            payment_method TEXT NOT NULL,
+            movement_date TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            created_by_user_id INTEGER,
+            updated_at TEXT,
+            updated_by_user_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'confirmed',
+            notes TEXT,
+            attachment_path TEXT,
+            source TEXT NOT NULL DEFAULT 'manual',
+            source_reference TEXT,
+            reversal_of_movement_id INTEGER,
+            reversal_reason TEXT,
+            balance_before REAL NOT NULL,
+            balance_after REAL NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (created_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (updated_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (reversal_of_movement_id)
+                REFERENCES cash_movements(id)
+                ON DELETE SET NULL,
+
+            CHECK (
+                movement_type IN (
+                    'income',
+                    'expense',
+                    'adjustment',
+                    'opening_balance',
+                    'reversal'
+                )
+            ),
+            CHECK (currency IN ('USD', 'ARS')),
+            CHECK (amount > 0),
+            CHECK (
+                status IN ('confirmed', 'reversed')
+            ),
+            UNIQUE (organization_id, movement_number)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_cash_movements_org_date
+        ON cash_movements (
+            organization_id,
+            movement_date,
+            id
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_cash_movements_org_currency
+        ON cash_movements (
+            organization_id,
+            currency,
+            status
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_cash_accounts_org
+        ON cash_accounts (organization_id)
+        """
+    )
+
+
 def migrate_schema(create_backup=True):
     # Commit external_id before the bulk transaction so a later
     # rollback cannot drop the column on an existing Railway DB.
@@ -2054,6 +2166,7 @@ def migrate_schema(create_backup=True):
         _migrate_organization_integrations(cursor)
         _migrate_agent_teams_and_wallet(cursor)
         _migrate_property_external_id(cursor)
+        _migrate_cash_treasury(cursor)
 
         _validate_migration(
             cursor,

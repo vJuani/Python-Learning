@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('cash_opening_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('cash_opening_title') }}</h2>
+        <p>{{ t('cash_opening_help') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('cash_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="panel">
+    <dl class="detail-grid">
+        <div>
+            <dt>{{ t('cash_balance_ars') }}</dt>
+            <dd class="money">{{ balances.ARS|money('ARS') }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('cash_balance_usd') }}</dt>
+            <dd class="money">{{ balances.USD|money('USD') }}</dd>
+        </div>
+    </dl>
+</section>
+
+<section class="panel">
+    <form class="agent-form" method="post" action="{{ url_for('cash_opening_balance') }}">
+        <div class="form-group">
+            <label for="amount_ars">{{ t('cash_opening_ars') }}</label>
+            <input type="text" id="amount_ars" name="amount_ars" class="form-input" value="{{ form_values.amount_ars }}">
+        </div>
+        <div class="form-group">
+            <label for="amount_usd">{{ t('cash_opening_usd') }}</label>
+            <input type="text" id="amount_usd" name="amount_usd" class="form-input" value="{{ form_values.amount_usd }}">
+        </div>
+        <div class="form-group">
+            <label for="movement_date">{{ t('cash_movement_date') }}</label>
+            <input type="date" id="movement_date" name="movement_date" class="form-input" value="{{ form_values.movement_date }}" required>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{{ t('cash_save_opening') }}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

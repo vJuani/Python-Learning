@@ -40,6 +40,8 @@ MIGRATION_TABLE_ORDER: tuple[str, ...] = (
     "csv_import_batches",
     "integration_sync_runs",
     "agent_wallet_movements",
+    "cash_accounts",
+    "cash_movements",
 )
 
 # Columns with explicit identity that need setval after load.
@@ -59,12 +61,15 @@ IDENTITY_TABLES: tuple[tuple[str, str], ...] = (
     ("organization_integrations", "id"),
     ("integration_sync_runs", "id"),
     ("agent_wallet_movements", "id"),
+    ("cash_accounts", "id"),
+    ("cash_movements", "id"),
 )
 
 # Insert first with these self-FK columns forced to NULL, then UPDATE.
 DEFERRED_SELF_FK: dict[str, tuple[str, ...]] = {
     "agents": ("team_leader_agent_id",),
     "agent_wallet_movements": ("related_movement_id",),
+    "cash_movements": ("reversal_of_movement_id",),
 }
 
 MONEY_COLUMNS: dict[str, frozenset[str]] = {
@@ -91,6 +96,12 @@ MONEY_COLUMNS: dict[str, frozenset[str]] = {
         "seller_side_commission_percent",
     }),
     "agent_wallet_movements": frozenset({"amount"}),
+    "cash_accounts": frozenset({"cached_balance"}),
+    "cash_movements": frozenset({
+        "amount",
+        "balance_before",
+        "balance_after",
+    }),
 }
 
 FLAG_COLUMNS: dict[str, frozenset[str]] = {

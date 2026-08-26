@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v2"
+POSTGRES_SCHEMA_VERSION = "postgres_v3"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -677,6 +677,96 @@ SCHEMA_STATEMENTS = (
         operation_id
     )
     """,
+    f"""
+    CREATE TABLE IF NOT EXISTS cash_accounts (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        currency TEXT NOT NULL,
+        cached_balance {_MONEY} NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+
+        CHECK (currency IN ('USD', 'ARS')),
+        UNIQUE (organization_id, currency)
+    )
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS cash_movements (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        movement_number INTEGER NOT NULL,
+        movement_type TEXT NOT NULL,
+        currency TEXT NOT NULL,
+        amount {_MONEY} NOT NULL,
+        category TEXT NOT NULL,
+        description TEXT NOT NULL,
+        payment_method TEXT NOT NULL,
+        movement_date TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        created_by_user_id BIGINT,
+        updated_at TEXT,
+        updated_by_user_id BIGINT,
+        status TEXT NOT NULL DEFAULT 'confirmed',
+        notes TEXT,
+        attachment_path TEXT,
+        source TEXT NOT NULL DEFAULT 'manual',
+        source_reference TEXT,
+        reversal_of_movement_id BIGINT,
+        reversal_reason TEXT,
+        balance_before {_MONEY} NOT NULL,
+        balance_after {_MONEY} NOT NULL,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+        FOREIGN KEY (created_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+        FOREIGN KEY (updated_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+        FOREIGN KEY (reversal_of_movement_id)
+            REFERENCES cash_movements(id)
+            ON DELETE SET NULL,
+
+        CHECK (
+            movement_type IN (
+                'income',
+                'expense',
+                'adjustment',
+                'opening_balance',
+                'reversal'
+            )
+        ),
+        CHECK (currency IN ('USD', 'ARS')),
+        CHECK (amount > 0),
+        CHECK (status IN ('confirmed', 'reversed')),
+        UNIQUE (organization_id, movement_number)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_cash_movements_org_date
+    ON cash_movements (
+        organization_id,
+        movement_date,
+        id
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_cash_movements_org_currency
+    ON cash_movements (
+        organization_id,
+        currency,
+        status
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_cash_accounts_org
+    ON cash_accounts (organization_id)
+    """,
 )
 
 
@@ -699,6 +789,8 @@ POSTGRES_TABLES = (
     "csv_import_batches",
     "integration_sync_runs",
     "agent_wallet_movements",
+    "cash_accounts",
+    "cash_movements",
 )
 
 

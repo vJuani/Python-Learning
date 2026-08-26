@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}{{ movement.display_id }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('cash_detail_title') }}</h2>
+        <p>
+            <strong>{{ movement.display_id }}</strong>
+            ·
+            <span class="badge status-{{ movement.status }}">{{ t('cash_status_' ~ movement.status) }}</span>
+        </p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('cash_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <dl class="detail-grid">
+        <div>
+            <dt>{{ t('cash_movement_type') }}</dt>
+            <dd>{{ t('cash_type_' ~ movement.movement_type) }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('cash_amount') }}</dt>
+            <dd class="money money-emphasis">{{ movement.amount|money(movement.currency) }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('cash_category') }}</dt>
+            <dd>{{ t('cash_cat_' ~ movement.category) }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('cash_payment_method') }}</dt>
+            <dd>{{ t('cash_pay_' ~ movement.payment_method) }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('cash_description') }}</dt>
+            <dd>{{ movement.description }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('cash_movement_date') }}</dt>
+            <dd>{{ movement.movement_date|short_date }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('cash_created_by') }}</dt>
+            <dd>{{ movement.created_by_username or '—' }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('cash_balance_before') }}</dt>
+            <dd class="money">{{ movement.balance_before|money(movement.currency) }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('cash_balance_after') }}</dt>
+            <dd class="money">{{ movement.balance_after|money(movement.currency) }}</dd>
+        </div>
+        {% if movement.notes %}
+        <div>
+            <dt>{{ t('cash_notes') }}</dt>
+            <dd>{{ movement.notes }}</dd>
+        </div>
+        {% endif %}
+        {% if original %}
+        <div>
+            <dt>{{ t('cash_reversal_of') }}</dt>
+            <dd>
+                <a href="{{ url_for('cash_detail', movement_id=original.id) }}">{{ original.display_id }}</a>
+            </dd>
+        </div>
+        {% endif %}
+        {% if movement.reversal_reason %}
+        <div>
+            <dt>{{ t('cash_reversal_reason') }}</dt>
+            <dd>{{ movement.reversal_reason }}</dd>
+        </div>
+        {% endif %}
+    </dl>
+</section>
+
+{% if movement.status == 'confirmed' and movement.movement_type != 'reversal' %}
+<section class="panel">
+    <h3>{{ t('cash_reverse') }}</h3>
+    <p>{{ t('cash_reversal_reason_help') }}</p>
+    <form method="post" action="{{ url_for('cash_reverse', movement_id=movement.id) }}" class="agent-form">
+        <div class="form-group">
+            <label for="reversal_reason">{{ t('cash_reversal_reason') }}</label>
+            <textarea id="reversal_reason" name="reversal_reason" class="form-input" rows="3" required></textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-danger">{{ t('cash_reverse') }}</button>
+        </div>
+    </form>
+</section>
+{% endif %}
+{% endblock %}
