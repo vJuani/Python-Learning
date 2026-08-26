@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('cash_ai_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('cash_ai_title') }}</h2>
+        <p>{{ t('cash_ai_help') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('cash_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="panel cash-ai-upload-panel">
+    <form
+        class="agent-form cash-ai-upload-form"
+        method="post"
+        action="{{ url_for('cash_ai_new') }}"
+        enctype="multipart/form-data"
+        data-cash-ai-form
+    >
+        <div class="form-group">
+            <label for="receipt">{{ t('cash_ai_receipt_label') }}</label>
+            <input
+                type="file"
+                id="receipt"
+                name="receipt"
+                class="form-input"
+                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                capture="environment"
+            >
+            <small class="field-help">{{ t('cash_ai_receipt_help') }}</small>
+        </div>
+
+        <div class="form-group">
+            <label for="user_context_text">{{ t('cash_ai_context_label') }}</label>
+            <textarea
+                id="user_context_text"
+                name="user_context_text"
+                class="form-input"
+                rows="4"
+                placeholder="{{ t('cash_ai_context_placeholder') }}"
+            >{{ form_values.user_context_text }}</textarea>
+        </div>
+
+        <div class="form-actions cash-ai-form-actions">
+            <button
+                type="submit"
+                class="btn btn-primary btn-block"
+                data-cash-ai-submit
+            >{{ t('cash_ai_analyze') }}</button>
+            <a href="{{ url_for('cash_new') }}" class="btn btn-secondary btn-block">{{ t('cash_ai_manual_fallback') }}</a>
+        </div>
+        <p class="field-help cash-ai-analyzing hide" data-cash-ai-loading>{{ t('cash_ai_analyzing') }}</p>
+    </form>
+</section>
+
+<script>
+(function () {
+    var form = document.querySelector("[data-cash-ai-form]");
+    if (!form) return;
+    var button = form.querySelector("[data-cash-ai-submit]");
+    var loading = form.querySelector("[data-cash-ai-loading]");
+    form.addEventListener("submit", function () {
+        if (button) {
+            button.disabled = true;
+        }
+        if (loading) {
+            loading.classList.remove("hide");
+        }
+    });
+})();
+</script>
+{% endblock %}

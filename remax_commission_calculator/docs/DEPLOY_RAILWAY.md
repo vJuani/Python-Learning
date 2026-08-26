@@ -66,6 +66,16 @@ upload a `.env` file.
 | `DATABASE_PATH` | `/data/commission.db` |
 | `PRIVATE_UPLOAD_ROOT` | `/data/uploads` |
 
+### Cash AI (Caja v2, optional)
+
+| Variable | Staging value |
+|----------|----------------|
+| `CASH_AI_PROVIDER` | `openai` (use `mock` only for tests) |
+| `CASH_AI_MODEL` | `gpt-4o-mini` (or `gpt-4o` for better vision) |
+| `OPENAI_API_KEY` | Railway secret (never commit) |
+
+Receipt images are stored under `PRIVATE_UPLOAD_ROOT/organizations/<org>/cash/receipts/` on the volume.
+
 Leave `UPLOAD_DIR` unset for this first staging so logos stay under
 `static/uploads` (servable by Flask). Those logo files are **not** on the
 volume unless you later persist that path; private docs and SQLite are.

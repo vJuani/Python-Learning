@@ -5,11 +5,16 @@
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>{{ t('cash_detail_title') }}</h2>
-        <p>
-            <strong>{{ movement.display_id }}</strong>
-            ·
+        <h2>{{ movement.display_id }}</h2>
+        <p class="cash-detail-meta">
             <span class="badge status-{{ movement.status }}">{{ t('cash_status_' ~ movement.status) }}</span>
+            {% if movement.source == 'ai' %}
+            <span class="badge badge-ai">{{ t('cash_source_ai_short') }}</span>
+            {% endif %}
+            <span class="cash-detail-amount money money-emphasis">
+                {% if movement.movement_type == 'expense' %}-{% else %}+{% endif %}
+                {{ movement.amount|money(movement.currency) }}
+            </span>
         </p>
     </div>
     <div class="page-actions">
@@ -17,65 +22,107 @@
     </div>
 </section>
 
-<section class="panel">
-    <dl class="detail-grid">
-        <div>
-            <dt>{{ t('cash_movement_type') }}</dt>
-            <dd>{{ t('cash_type_' ~ movement.movement_type) }}</dd>
+<section class="panel cash-detail-card">
+    <table class="table-dense cash-detail-table">
+        <tbody>
+            <tr>
+                <th scope="row">{{ t('cash_movement_type') }}</th>
+                <td>{{ t('cash_type_' ~ movement.movement_type) }}</td>
+            </tr>
+            <tr>
+                <th scope="row">{{ t('cash_category') }}</th>
+                <td>{{ t('cash_cat_' ~ movement.category) }}</td>
+            </tr>
+            <tr>
+                <th scope="row">{{ t('cash_payment_method') }}</th>
+                <td>{{ t('cash_pay_' ~ movement.payment_method) }}</td>
+            </tr>
+            {% if movement.merchant %}
+            <tr>
+                <th scope="row">{{ t('cash_merchant') }}</th>
+                <td>{{ movement.merchant }}</td>
+            </tr>
+            {% endif %}
+            {% if movement.receipt_number %}
+            <tr>
+                <th scope="row">{{ t('cash_receipt_number') }}</th>
+                <td>{{ movement.receipt_number }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <th scope="row">{{ t('cash_movement_date') }}</th>
+                <td>{{ movement.movement_date|short_date }}</td>
+            </tr>
+            <tr>
+                <th scope="row">{{ t('cash_created_by') }}</th>
+                <td>{{ movement.created_by_username or '—' }}</td>
+            </tr>
+            <tr>
+                <th scope="row">{{ t('cash_balance_before') }}</th>
+                <td class="money">{{ movement.balance_before|money(movement.currency) }}</td>
+            </tr>
+            <tr>
+                <th scope="row">{{ t('cash_balance_after') }}</th>
+                <td class="money">{{ movement.balance_after|money(movement.currency) }}</td>
+            </tr>
+            {% if original %}
+            <tr>
+                <th scope="row">{{ t('cash_reversal_of') }}</th>
+                <td>
+                    <a href="{{ url_for('cash_detail', movement_id=original.id) }}">{{ original.display_id }}</a>
+                </td>
+            </tr>
+            {% endif %}
+            {% if movement.reversal_reason %}
+            <tr>
+                <th scope="row">{{ t('cash_reversal_reason') }}</th>
+                <td>{{ movement.reversal_reason }}</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <div class="cash-detail-block">
+        <h3>{{ t('cash_description') }}</h3>
+        <p>{{ movement.description }}</p>
+    </div>
+
+    {% if movement.notes %}
+    <div class="cash-detail-block">
+        <h3>{{ t('cash_notes') }}</h3>
+        <p>{{ movement.notes }}</p>
+    </div>
+    {% endif %}
+
+    {% if movement.attachment_path %}
+    <div class="cash-detail-block cash-receipt-block">
+        <h3>{{ t('cash_receipt') }}</h3>
+        <a
+            href="{{ url_for('cash_receipt', movement_id=movement.id) }}"
+            class="cash-receipt-thumb"
+            target="_blank"
+            rel="noopener"
+        >
+            <img
+                src="{{ url_for('cash_receipt', movement_id=movement.id) }}"
+                alt="{{ t('cash_receipt') }}"
+                loading="lazy"
+            >
+        </a>
+        <div class="form-actions">
+            <a
+                href="{{ url_for('cash_receipt', movement_id=movement.id) }}"
+                class="btn btn-secondary btn-small"
+                target="_blank"
+                rel="noopener"
+            >{{ t('cash_receipt_view') }}</a>
+            <a
+                href="{{ url_for('cash_receipt', movement_id=movement.id, download=1) }}"
+                class="btn btn-outline btn-small"
+            >{{ t('cash_receipt_open') }}</a>
         </div>
-        <div>
-            <dt>{{ t('cash_amount') }}</dt>
-            <dd class="money money-emphasis">{{ movement.amount|money(movement.currency) }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('cash_category') }}</dt>
-            <dd>{{ t('cash_cat_' ~ movement.category) }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('cash_payment_method') }}</dt>
-            <dd>{{ t('cash_pay_' ~ movement.payment_method) }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('cash_description') }}</dt>
-            <dd>{{ movement.description }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('cash_movement_date') }}</dt>
-            <dd>{{ movement.movement_date|short_date }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('cash_created_by') }}</dt>
-            <dd>{{ movement.created_by_username or '—' }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('cash_balance_before') }}</dt>
-            <dd class="money">{{ movement.balance_before|money(movement.currency) }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('cash_balance_after') }}</dt>
-            <dd class="money">{{ movement.balance_after|money(movement.currency) }}</dd>
-        </div>
-        {% if movement.notes %}
-        <div>
-            <dt>{{ t('cash_notes') }}</dt>
-            <dd>{{ movement.notes }}</dd>
-        </div>
-        {% endif %}
-        {% if original %}
-        <div>
-            <dt>{{ t('cash_reversal_of') }}</dt>
-            <dd>
-                <a href="{{ url_for('cash_detail', movement_id=original.id) }}">{{ original.display_id }}</a>
-            </dd>
-        </div>
-        {% endif %}
-        {% if movement.reversal_reason %}
-        <div>
-            <dt>{{ t('cash_reversal_reason') }}</dt>
-            <dd>{{ movement.reversal_reason }}</dd>
-        </div>
-        {% endif %}
-    </dl>
+    </div>
+    {% endif %}
 </section>
 
 {% if movement.status == 'confirmed' and movement.movement_type != 'reversal' %}

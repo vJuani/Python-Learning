@@ -170,6 +170,20 @@ from modules.cash_treasury import (
     set_opening_balances,
     validate_movement_payload,
 )
+from modules.cash_ai_service import (
+    AI_PAYMENT_METHODS,
+    CashAiError,
+    PAYMENT_UNDETERMINED,
+    build_review_context,
+    confirm_ai_draft,
+    retry_ai_analysis,
+    start_ai_analysis,
+    update_draft_from_form,
+)
+from modules.cash_receipts import absolute_receipt_path
+from modules.database.cash_ai_drafts_repository import (
+    get_cash_ai_draft,
+)
 
 from modules.property_external_listings import (
     PROVIDER_OTHER,
@@ -6085,6 +6099,316 @@ def cash_opening_balance():
         form_values=form_values,
         balances=balances,
         errors=[],
+    )
+
+
+def _cash_ai_review_template(organization_id, draft, **extra):
+    context = build_review_context(organization_id, draft)
+    force_duplicates = extra.pop("force_duplicates", None)
+    context.update(extra)
+
+    if force_duplicates is not None:
+        context["duplicates"] = force_duplicates
+
+    context.update(
+        {
+            "currencies": CASH_CURRENCIES,
+            "payment_methods": AI_PAYMENT_METHODS,
+            "income_categories": INCOME_CATEGORIES,
+            "expense_categories": EXPENSE_CATEGORIES,
+            "payment_undetermined": PAYMENT_UNDETERMINED,
+        }
+    )
+    return render_template("cash/ai_review.html", **context)
+
+
+@app.route(
+    "/cash/ai",
+    methods=["GET", "POST"],
+)
+@admin_required
+def cash_ai_new():
+    organization_id = require_user_organization()
+    current_user = get_current_user()
+
+    if request.method == "GET":
+        return render_template(
+            "cash/ai_upload.html",
+            form_values={"user_context_text": ""},
+            errors=[],
+        )
+
+    context_text = request.form.get(
+        "user_context_text",
+        "",
+    ).strip()
+    file_storage = request.files.get("receipt")
+
+    try:
+        draft = start_ai_analysis(
+            organization_id,
+            user_id=current_user["id"],
+            user_context_text=context_text,
+            file_storage=file_storage,
+            language=get_current_language(),
+        )
+    except CashAiError as error:
+        return render_template(
+            "cash/ai_upload.html",
+            form_values={
+                "user_context_text": context_text,
+            },
+            errors=localize_form_errors(
+                [error.message_key]
+            ),
+        )
+
+    return redirect(
+        url_for(
+            "cash_ai_review",
+            draft_id=draft["id"],
+        )
+    )
+
+
+@app.route(
+    "/cash/ai/<int:draft_id>",
+    methods=["GET", "POST"],
+)
+@admin_required
+def cash_ai_review(draft_id):
+    organization_id = require_user_organization()
+    draft = get_cash_ai_draft(draft_id, organization_id)
+
+    if draft is None:
+        abort(404)
+
+    if request.method == "GET":
+        return _cash_ai_review_template(
+            organization_id,
+            draft,
+        )
+
+    action = request.form.get("action", "save")
+    form_values = {
+        "movement_type": request.form.get(
+            "movement_type",
+            "",
+        ).strip(),
+        "currency": request.form.get(
+            "currency",
+            "",
+        ).strip().upper(),
+        "amount": request.form.get("amount", "").strip(),
+        "category": request.form.get(
+            "category",
+            "",
+        ).strip(),
+        "description": request.form.get(
+            "description",
+            "",
+        ).strip(),
+        "merchant": request.form.get(
+            "merchant",
+            "",
+        ).strip(),
+        "payment_method": request.form.get(
+            "payment_method",
+            "",
+        ).strip(),
+        "receipt_number": request.form.get(
+            "receipt_number",
+            "",
+        ).strip(),
+        "movement_date": request.form.get(
+            "movement_date",
+            "",
+        ).strip(),
+        "notes": request.form.get("notes", "").strip(),
+    }
+
+    if action == "save":
+        draft = update_draft_from_form(
+            organization_id,
+            draft_id,
+            form_values,
+        )
+        flash_i18n("cash_ai_draft_updated", "success")
+        return _cash_ai_review_template(
+            organization_id,
+            draft,
+            editing=True,
+        )
+
+    if action == "edit":
+        return _cash_ai_review_template(
+            organization_id,
+            draft,
+            editing=True,
+        )
+
+    acknowledge = (
+        request.form.get("acknowledge_duplicates") == "1"
+    )
+
+    try:
+        movement = confirm_ai_draft(
+            organization_id,
+            draft_id,
+            user_id=get_current_user()["id"],
+            confirm_token=request.form.get(
+                "confirm_token",
+                "",
+            ),
+            form_values=form_values,
+            acknowledge_duplicates=acknowledge,
+        )
+    except CashAiError as error:
+        if error.message_key == "cash_ai_err_possible_duplicate":
+            draft = update_draft_from_form(
+                organization_id,
+                draft_id,
+                form_values,
+            )
+            return _cash_ai_review_template(
+                organization_id,
+                draft,
+                force_duplicates=error.kwargs.get(
+                    "duplicates"
+                )
+                or [],
+            )
+
+        flash_i18n(error.message_key, "error")
+        draft = get_cash_ai_draft(
+            draft_id,
+            organization_id,
+        )
+        return _cash_ai_review_template(
+            organization_id,
+            draft,
+            editing=True,
+        )
+    except CashTreasuryError as error:
+        flash_i18n(error.message_key, "error")
+        draft = get_cash_ai_draft(
+            draft_id,
+            organization_id,
+        )
+        return _cash_ai_review_template(
+            organization_id,
+            draft,
+            editing=True,
+        )
+
+    flash_i18n("cash_ai_confirmed", "success")
+    return redirect(
+        url_for(
+            "cash_detail",
+            movement_id=movement["id"],
+        )
+    )
+
+
+@app.route(
+    "/cash/ai/<int:draft_id>/retry",
+    methods=["POST"],
+)
+@admin_required
+def cash_ai_retry(draft_id):
+    organization_id = require_user_organization()
+
+    try:
+        draft = retry_ai_analysis(
+            organization_id,
+            draft_id,
+            language=get_current_language(),
+        )
+    except CashAiError as error:
+        flash_i18n(error.message_key, "error")
+        draft = get_cash_ai_draft(
+            draft_id,
+            organization_id,
+        )
+        if draft is None:
+            return redirect(url_for("cash_ai_new"))
+        return _cash_ai_review_template(
+            organization_id,
+            draft,
+        )
+
+    return redirect(
+        url_for(
+            "cash_ai_review",
+            draft_id=draft["id"],
+        )
+    )
+
+
+@app.route("/cash/<int:movement_id>/receipt")
+@admin_required
+def cash_receipt(movement_id):
+    organization_id = require_user_organization()
+    movement = get_cash_movement(
+        movement_id,
+        organization_id,
+    )
+
+    if movement is None or not movement.get(
+        "attachment_path"
+    ):
+        abort(404)
+
+    path = absolute_receipt_path(
+        movement["attachment_path"],
+        organization_id,
+    )
+
+    if not path.is_file():
+        abort(404)
+
+    return send_file(
+        path,
+        mimetype=(
+            movement.get("attachment_content_type")
+            or "application/octet-stream"
+        ),
+        download_name=(
+            movement.get("attachment_original_name")
+            or path.name
+        ),
+        as_attachment=request.args.get("download") == "1",
+    )
+
+
+@app.route("/cash/ai/<int:draft_id>/receipt")
+@admin_required
+def cash_ai_draft_receipt(draft_id):
+    organization_id = require_user_organization()
+    draft = get_cash_ai_draft(draft_id, organization_id)
+
+    if draft is None or not draft.get("attachment_path"):
+        abort(404)
+
+    path = absolute_receipt_path(
+        draft["attachment_path"],
+        organization_id,
+    )
+
+    if not path.is_file():
+        abort(404)
+
+    return send_file(
+        path,
+        mimetype=(
+            draft.get("attachment_content_type")
+            or "application/octet-stream"
+        ),
+        download_name=(
+            draft.get("attachment_original_name")
+            or path.name
+        ),
+        as_attachment=request.args.get("download") == "1",
     )
 
 

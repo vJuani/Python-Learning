@@ -42,6 +42,7 @@ MIGRATION_TABLE_ORDER: tuple[str, ...] = (
     "agent_wallet_movements",
     "cash_accounts",
     "cash_movements",
+    "cash_ai_drafts",
 )
 
 # Columns with explicit identity that need setval after load.
@@ -63,6 +64,7 @@ IDENTITY_TABLES: tuple[tuple[str, str], ...] = (
     ("agent_wallet_movements", "id"),
     ("cash_accounts", "id"),
     ("cash_movements", "id"),
+    ("cash_ai_drafts", "id"),
 )
 
 # Insert first with these self-FK columns forced to NULL, then UPDATE.

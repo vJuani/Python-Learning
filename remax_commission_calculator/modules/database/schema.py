@@ -1951,6 +1951,94 @@ def _migrate_cash_treasury(cursor):
         """
     )
 
+    for column_name, column_sql in (
+        ("merchant", "TEXT"),
+        ("receipt_number", "TEXT"),
+        ("attachment_hash", "TEXT"),
+        ("attachment_content_type", "TEXT"),
+        ("attachment_original_name", "TEXT"),
+    ):
+        if not _column_exists(
+            cursor,
+            "cash_movements",
+            column_name,
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE cash_movements
+                ADD COLUMN {column_name} {column_sql}
+                """
+            )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_cash_movements_attachment_hash
+        ON cash_movements (
+            organization_id,
+            attachment_hash
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cash_ai_drafts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            created_by_user_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'processing',
+            user_context_text TEXT,
+            attachment_path TEXT,
+            attachment_hash TEXT,
+            attachment_content_type TEXT,
+            attachment_original_name TEXT,
+            confirm_token TEXT NOT NULL,
+            confirmed_movement_id INTEGER,
+            error_message_key TEXT,
+            confidence TEXT,
+            provider TEXT,
+            draft_json TEXT,
+            fields_needing_review_json TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (created_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (confirmed_movement_id)
+                REFERENCES cash_movements(id)
+                ON DELETE SET NULL,
+
+            CHECK (
+                status IN (
+                    'processing',
+                    'review',
+                    'confirmed',
+                    'failed',
+                    'discarded'
+                )
+            ),
+            UNIQUE (organization_id, confirm_token)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_cash_ai_drafts_org_status
+        ON cash_ai_drafts (
+            organization_id,
+            status,
+            id
+        )
+        """
+    )
+
 
 def migrate_schema(create_backup=True):
     # Commit external_id before the bulk transaction so a later

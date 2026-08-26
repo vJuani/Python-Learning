@@ -318,6 +318,14 @@ def confirm_movement(
     values,
     *,
     user_id,
+    source="manual",
+    source_reference=None,
+    attachment_path=None,
+    attachment_hash=None,
+    attachment_content_type=None,
+    attachment_original_name=None,
+    merchant=None,
+    receipt_number=None,
 ):
     preview = preview_movement(organization_id, values)
 
@@ -334,6 +342,17 @@ def confirm_movement(
             created_by_user_id=user_id,
             notes=preview["notes"] or None,
             signed_delta=preview["signed_delta"],
+            source=source,
+            source_reference=source_reference,
+            attachment_path=attachment_path,
+            attachment_hash=attachment_hash,
+            attachment_content_type=attachment_content_type,
+            attachment_original_name=attachment_original_name,
+            merchant=merchant or values.get("merchant"),
+            receipt_number=(
+                receipt_number
+                or values.get("receipt_number")
+            ),
         )
     except ValueError as error:
         if str(error) == "insufficient_balance":

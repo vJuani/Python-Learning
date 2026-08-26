@@ -4785,3 +4785,84 @@ a.dashboard-quick-card:hover {
         padding-bottom: 0;
     }
 }
+
+/* Cash AI / treasury detail */
+.cash-page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+.cash-ai-cta {
+    min-height: 44px;
+}
+.badge-ai,
+.badge-review {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    vertical-align: middle;
+}
+.badge-ai {
+    background: rgba(16, 185, 129, 0.15);
+    color: #047857;
+}
+.badge-review {
+    background: rgba(245, 158, 11, 0.18);
+    color: #92400e;
+}
+.cash-detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+.cash-detail-amount {
+    font-size: 1.25rem;
+}
+.cash-detail-table th {
+    width: 40%;
+    color: var(--text-muted, #64748b);
+    font-weight: 500;
+}
+.cash-detail-block {
+    margin-top: 1rem;
+}
+.cash-receipt-thumb {
+    display: inline-block;
+    max-width: 160px;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+}
+.cash-receipt-thumb img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+.cash-ai-form-actions {
+    display: grid;
+    gap: 0.75rem;
+}
+.cash-ai-analyzing {
+    margin-top: 0.75rem;
+}
+.cash-duplicate-list {
+    margin: 0.75rem 0 0;
+    padding-left: 1.1rem;
+}
+@media (max-width: 480px) {
+    .cash-page-actions {
+        width: 100%;
+    }
+    .cash-page-actions .btn {
+        flex: 1 1 100%;
+        text-align: center;
+    }
+    .cash-ai-cta {
+        order: -1;
+    }
+}

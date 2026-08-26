@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v3"
+POSTGRES_SCHEMA_VERSION = "postgres_v4"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -718,6 +718,11 @@ SCHEMA_STATEMENTS = (
         reversal_reason TEXT,
         balance_before {_MONEY} NOT NULL,
         balance_after {_MONEY} NOT NULL,
+        merchant TEXT,
+        receipt_number TEXT,
+        attachment_hash TEXT,
+        attachment_content_type TEXT,
+        attachment_original_name TEXT,
 
         FOREIGN KEY (organization_id)
             REFERENCES organizations(id)
@@ -767,6 +772,64 @@ SCHEMA_STATEMENTS = (
     CREATE INDEX IF NOT EXISTS idx_cash_accounts_org
     ON cash_accounts (organization_id)
     """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_cash_movements_attachment_hash
+    ON cash_movements (
+        organization_id,
+        attachment_hash
+    )
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS cash_ai_drafts (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        created_by_user_id BIGINT,
+        status TEXT NOT NULL DEFAULT 'processing',
+        user_context_text TEXT,
+        attachment_path TEXT,
+        attachment_hash TEXT,
+        attachment_content_type TEXT,
+        attachment_original_name TEXT,
+        confirm_token TEXT NOT NULL,
+        confirmed_movement_id BIGINT,
+        error_message_key TEXT,
+        confidence TEXT,
+        provider TEXT,
+        draft_json TEXT,
+        fields_needing_review_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+        FOREIGN KEY (created_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+        FOREIGN KEY (confirmed_movement_id)
+            REFERENCES cash_movements(id)
+            ON DELETE SET NULL,
+
+        CHECK (
+            status IN (
+                'processing',
+                'review',
+                'confirmed',
+                'failed',
+                'discarded'
+            )
+        ),
+        UNIQUE (organization_id, confirm_token)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_cash_ai_drafts_org_status
+    ON cash_ai_drafts (
+        organization_id,
+        status,
+        id
+    )
+    """,
 )
 
 
@@ -791,6 +854,7 @@ POSTGRES_TABLES = (
     "agent_wallet_movements",
     "cash_accounts",
     "cash_movements",
+    "cash_ai_drafts",
 )
 
 
@@ -875,6 +939,32 @@ def create_postgres_schema():
             )
             WHERE external_id IS NOT NULL
                 AND external_id <> ''
+            """
+        )
+
+        for column_name, column_sql in (
+            ("merchant", "TEXT"),
+            ("receipt_number", "TEXT"),
+            ("attachment_hash", "TEXT"),
+            ("attachment_content_type", "TEXT"),
+            ("attachment_original_name", "TEXT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE cash_movements
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_cash_movements_attachment_hash
+            ON cash_movements (
+                organization_id,
+                attachment_hash
+            )
             """
         )
 

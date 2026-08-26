@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('cash_ai_review_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('cash_ai_review_title') }}</h2>
+        <p>{{ t('cash_ai_review_help') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('cash_ai_new') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    </div>
+</section>
+
+{% if draft.status == 'failed' %}
+<section class="panel">
+    <p class="flash-message flash-error">{{ t(draft.error_message_key or 'cash_ai_err_provider_failed') }}</p>
+    <div class="form-actions">
+        <form method="post" action="{{ url_for('cash_ai_retry', draft_id=draft.id) }}">
+            <button type="submit" class="btn btn-primary">{{ t('cash_ai_retry') }}</button>
+        </form>
+        <a href="{{ url_for('cash_new') }}" class="btn btn-secondary">{{ t('cash_ai_manual_fallback') }}</a>
+    </div>
+</section>
+{% endif %}
+
+{% if duplicates %}
+<section class="panel cash-duplicate-warning">
+    <h3>{{ t('cash_ai_duplicate_title') }}</h3>
+    <p>{{ t('cash_ai_duplicate_help') }}</p>
+    <ul class="cash-duplicate-list">
+        {% for item in duplicates %}
+        <li>
+            <a href="{{ url_for('cash_detail', movement_id=item.id) }}">{{ item.display_id }}</a>
+            · {{ item.movement_date|short_date }}
+            · {{ item.amount|money(item.currency) }}
+            · {{ item.description }}
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<section class="panel cash-ai-review-panel">
+    {% if not editing %}
+    <div class="cash-ai-summary">
+        <p class="cash-detail-amount money money-emphasis">
+            {{ t('cash_type_' ~ (payload.movement_type or 'expense')) }}
+            ·
+            {% if payload.amount and payload.currency %}
+            {{ payload.amount|money(payload.currency) }}
+            {% else %}
+            —
+            {% endif %}
+        </p>
+        <dl class="detail-grid">
+            <div>
+                <dt>{{ t('cash_merchant') }}</dt>
+                <dd>
+                    {{ payload.merchant or '—' }}
+                    {% if 'merchant' in review_fields %}<span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>{{ t('cash_category') }}</dt>
+                <dd>
+                    {% if payload.category %}{{ t('cash_cat_' ~ payload.category) }}{% else %}—{% endif %}
+                    {% if 'category' in review_fields %}<span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>{{ t('cash_description') }}</dt>
+                <dd>
+                    {{ payload.description or '—' }}
+                    {% if 'description' in review_fields %}<span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>{{ t('cash_payment_method') }}</dt>
+                <dd>
+                    {% if payload.payment_method %}{{ t('cash_pay_' ~ payload.payment_method) }}{% else %}—{% endif %}
+                    {% if 'payment_method' in review_fields %}<span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>{{ t('cash_movement_date') }}</dt>
+                <dd>
+                    {% if payload.movement_date %}{{ payload.movement_date|short_date }}{% else %}—{% endif %}
+                    {% if 'movement_date' in review_fields %}<span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>{{ t('cash_currency') }}</dt>
+                <dd>
+                    {{ payload.currency or '—' }}
+                    {% if 'currency' in review_fields %}<span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}
+                </dd>
+            </div>
+            {% if preview %}
+            <div>
+                <dt>{{ t('cash_balance_before') }}</dt>
+                <dd class="money">{{ preview.balance_before|money(preview.currency) }}</dd>
+            </div>
+            <div>
+                <dt>{{ t('cash_balance_after') }}</dt>
+                <dd class="money money-emphasis">{{ preview.balance_after|money(preview.currency) }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+
+        {% if draft.attachment_path %}
+        <div class="cash-receipt-block">
+            <h3>{{ t('cash_receipt') }}</h3>
+            <a href="{{ url_for('cash_ai_draft_receipt', draft_id=draft.id) }}" class="cash-receipt-thumb" target="_blank" rel="noopener">
+                <img src="{{ url_for('cash_ai_draft_receipt', draft_id=draft.id) }}" alt="{{ t('cash_receipt') }}" loading="lazy">
+            </a>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('cash_ai_review', draft_id=draft.id) }}" class="agent-form" data-cash-ai-confirm>
+            <input type="hidden" name="confirm_token" value="{{ draft.confirm_token }}">
+            <input type="hidden" name="movement_type" value="{{ payload.movement_type or '' }}">
+            <input type="hidden" name="currency" value="{{ payload.currency or '' }}">
+            <input type="hidden" name="amount" value="{{ payload.amount if payload.amount is not none else '' }}">
+            <input type="hidden" name="category" value="{{ payload.category or '' }}">
+            <input type="hidden" name="description" value="{{ payload.description or '' }}">
+            <input type="hidden" name="merchant" value="{{ payload.merchant or '' }}">
+            <input type="hidden" name="payment_method" value="{{ payload.payment_method or '' }}">
+            <input type="hidden" name="receipt_number" value="{{ payload.receipt_number or '' }}">
+            <input type="hidden" name="movement_date" value="{{ payload.movement_date or '' }}">
+            <input type="hidden" name="notes" value="{{ payload.notes or '' }}">
+            {% if duplicates %}
+            <input type="hidden" name="acknowledge_duplicates" value="1">
+            {% endif %}
+            <div class="form-actions cash-ai-form-actions">
+                <button type="submit" name="action" value="edit" class="btn btn-secondary">{{ t('cash_ai_edit') }}</button>
+                {% if duplicates %}
+                <button type="submit" name="action" value="confirm" class="btn btn-primary" data-cash-ai-confirm-btn>{{ t('cash_ai_continue_anyway') }}</button>
+                {% else %}
+                <button type="submit" name="action" value="confirm" class="btn btn-primary" data-cash-ai-confirm-btn>{{ t('cash_ai_confirm') }}</button>
+                {% endif %}
+            </div>
+        </form>
+        {% if duplicates %}
+        <p class="field-help">
+            <a href="{{ url_for('cash_detail', movement_id=duplicates[0].id) }}">{{ t('cash_ai_review_existing') }}</a>
+        </p>
+        {% endif %}
+    </div>
+    {% else %}
+    <form method="post" action="{{ url_for('cash_ai_review', draft_id=draft.id) }}" class="agent-form" data-cash-ai-confirm>
+        <input type="hidden" name="confirm_token" value="{{ draft.confirm_token }}">
+        {% if duplicates %}
+        <input type="hidden" name="acknowledge_duplicates" value="1">
+        {% endif %}
+
+        <div class="form-group">
+            <label for="movement_type">{{ t('cash_movement_type') }}</label>
+            <select id="movement_type" name="movement_type" class="form-input" required>
+                <option value="income" {% if payload.movement_type == 'income' %}selected{% endif %}>{{ t('cash_type_income') }}</option>
+                <option value="expense" {% if payload.movement_type == 'expense' %}selected{% endif %}>{{ t('cash_type_expense') }}</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="currency">{{ t('cash_currency') }}{% if 'currency' in review_fields %} <span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}</label>
+            <select id="currency" name="currency" class="form-input" required>
+                {% for currency in currencies %}
+                <option value="{{ currency }}" {% if payload.currency == currency %}selected{% endif %}>{{ currency }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="amount">{{ t('cash_amount') }}{% if 'amount' in review_fields %} <span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}</label>
+            <input type="text" id="amount" name="amount" class="form-input" value="{{ payload.amount if payload.amount is not none else '' }}" required>
+        </div>
+        <div class="form-group">
+            <label for="category">{{ t('cash_category') }}{% if 'category' in review_fields %} <span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}</label>
+            <select id="category" name="category" class="form-input" required>
+                <optgroup label="{{ t('cash_type_income') }}">
+                    {% for category in income_categories %}
+                    <option value="{{ category }}" {% if payload.category == category %}selected{% endif %}>{{ t('cash_cat_' ~ category) }}</option>
+                    {% endfor %}
+                </optgroup>
+                <optgroup label="{{ t('cash_type_expense') }}">
+                    {% for category in expense_categories %}
+                    <option value="{{ category }}" {% if payload.category == category %}selected{% endif %}>{{ t('cash_cat_' ~ category) }}</option>
+                    {% endfor %}
+                </optgroup>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="description">{{ t('cash_description') }}</label>
+            <input type="text" id="description" name="description" class="form-input" value="{{ payload.description or '' }}" required>
+        </div>
+        <div class="form-group">
+            <label for="merchant">{{ t('cash_merchant') }}</label>
+            <input type="text" id="merchant" name="merchant" class="form-input" value="{{ payload.merchant or '' }}">
+        </div>
+        <div class="form-group">
+            <label for="payment_method">{{ t('cash_payment_method') }}{% if 'payment_method' in review_fields %} <span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}</label>
+            <select id="payment_method" name="payment_method" class="form-input" required>
+                {% for method in payment_methods %}
+                <option value="{{ method }}" {% if payload.payment_method == method %}selected{% endif %}>{{ t('cash_pay_' ~ method) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="receipt_number">{{ t('cash_receipt_number') }}</label>
+            <input type="text" id="receipt_number" name="receipt_number" class="form-input" value="{{ payload.receipt_number or '' }}">
+        </div>
+        <div class="form-group">
+            <label for="movement_date">{{ t('cash_movement_date') }}{% if 'movement_date' in review_fields %} <span class="badge badge-review">{{ t('cash_ai_review_flag') }}</span>{% endif %}</label>
+            <input type="date" id="movement_date" name="movement_date" class="form-input" value="{{ payload.movement_date or '' }}" required>
+        </div>
+        <div class="form-group">
+            <label for="notes">{{ t('cash_notes') }}</label>
+            <textarea id="notes" name="notes" class="form-input" rows="3">{{ payload.notes or '' }}</textarea>
+        </div>
+
+        <div class="form-actions cash-ai-form-actions">
+            <button type="submit" name="action" value="save" class="btn btn-secondary">{{ t('save') }}</button>
+            <button type="submit" name="action" value="confirm" class="btn btn-primary" data-cash-ai-confirm-btn>{{ t('cash_ai_confirm') }}</button>
+        </div>
+    </form>
+    {% endif %}
+</section>
+
+<script>
+(function () {
+    var forms = document.querySelectorAll("[data-cash-ai-confirm]");
+    forms.forEach(function (form) {
+        form.addEventListener("submit", function () {
+            var btn = form.querySelector("[data-cash-ai-confirm-btn]");
+            if (btn) btn.disabled = true;
+        });
+    });
+})();
+</script>
+{% endblock %}

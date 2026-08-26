@@ -109,9 +109,10 @@
         <h2>{{ t('cash_title') }}</h2>
         <p>{{ t('cash_subtitle') }}</p>
     </div>
-    <div class="page-actions">
+    <div class="page-actions cash-page-actions">
         <a href="{{ url_for('cash_opening_balance') }}" class="btn btn-secondary">{{ t('cash_opening') }}</a>
-        <a href="{{ url_for('cash_new') }}" class="btn btn-primary">{{ t('cash_new') }}</a>
+        <a href="{{ url_for('cash_new') }}" class="btn btn-secondary">{{ t('cash_new') }}</a>
+        <a href="{{ url_for('cash_ai_new') }}" class="btn btn-primary cash-ai-cta">{{ t('cash_ai_cta') }}</a>
     </div>
 </section>
 
@@ -156,7 +157,12 @@
         <article class="entity-card">
             <div class="entity-card-heading">
                 <div class="entity-card-heading-text">
-                    <h4 class="entity-card-title">{{ movement.display_id }}</h4>
+                    <h4 class="entity-card-title">
+                        {{ movement.display_id }}
+                        {% if movement.source == 'ai' %}
+                        <span class="badge badge-ai">{{ t('cash_source_ai_short') }}</span>
+                        {% endif %}
+                    </h4>
                     <p>{{ movement.description }}</p>
                 </div>
                 <span class="badge status-{{ movement.status }}">{{ t('cash_status_' ~ movement.status) }}</span>
@@ -203,7 +209,12 @@
             <tbody>
                 {% for movement in movements %}
                 <tr>
-                    <td><strong>{{ movement.display_id }}</strong></td>
+                    <td>
+                        <strong>{{ movement.display_id }}</strong>
+                        {% if movement.source == 'ai' %}
+                        <span class="badge badge-ai" title="{{ t('cash_source_ai') }}">{{ t('cash_source_ai_short') }}</span>
+                        {% endif %}
+                    </td>
                     <td>{{ movement.movement_date|short_date }}</td>
                     <td>{{ t('cash_type_' ~ movement.movement_type) }}</td>
                     <td>{{ movement.description }}</td>

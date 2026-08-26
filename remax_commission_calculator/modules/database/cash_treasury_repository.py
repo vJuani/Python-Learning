@@ -66,9 +66,12 @@ def _build_movement_dict(row):
         "reversal_reason": row[20],
         "balance_before": float(row[21] or 0),
         "balance_after": float(row[22] or 0),
-        "created_by_username": (
-            row[23] if len(row) > 23 else None
-        ),
+        "merchant": row[23],
+        "receipt_number": row[24],
+        "attachment_hash": row[25],
+        "attachment_content_type": row[26],
+        "attachment_original_name": row[27],
+        "created_by_username": row[28],
         "display_id": (
             f"CAJ-{int(row[2]):06d}"
             if row[2] is not None
@@ -102,6 +105,11 @@ MOVEMENTS_BASE_QUERY = """
         m.reversal_reason,
         m.balance_before,
         m.balance_after,
+        m.merchant,
+        m.receipt_number,
+        m.attachment_hash,
+        m.attachment_content_type,
+        m.attachment_original_name,
         u.username
     FROM cash_movements AS m
     LEFT JOIN users AS u
@@ -344,6 +352,11 @@ def create_cash_movement_atomic(
     source="manual",
     source_reference=None,
     attachment_path=None,
+    attachment_hash=None,
+    attachment_content_type=None,
+    attachment_original_name=None,
+    merchant=None,
+    receipt_number=None,
     signed_delta=None,
     allow_negative=False,
 ):
@@ -483,11 +496,17 @@ def create_cash_movement_atomic(
                 source,
                 source_reference,
                 balance_before,
-                balance_after
+                balance_after,
+                merchant,
+                receipt_number,
+                attachment_hash,
+                attachment_content_type,
+                attachment_original_name
             )
             VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                'confirmed', ?, ?, ?, ?, ?, ?
+                'confirmed', ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?
             )
             """,
             (
@@ -508,6 +527,11 @@ def create_cash_movement_atomic(
                 source_reference,
                 balance_before,
                 balance_after,
+                merchant,
+                receipt_number,
+                attachment_hash,
+                attachment_content_type,
+                attachment_original_name,
             ),
         )
 
@@ -729,5 +753,101 @@ def reverse_cash_movement_atomic(
     except Exception:
         connection.rollback()
         raise
+    finally:
+        connection.close()
+
+
+def find_duplicate_cash_movements(
+    organization_id,
+    *,
+    attachment_hash=None,
+    amount=None,
+    currency=None,
+    movement_date=None,
+    merchant=None,
+    receipt_number=None,
+    limit=10,
+):
+    """Find confirmed movements that look like duplicates."""
+    organization_id = require_organization_id(
+        organization_id
+    )
+    matches = []
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        if attachment_hash:
+            cursor.execute(
+                MOVEMENTS_BASE_QUERY
+                + """
+                WHERE m.organization_id = ?
+                    AND m.status = 'confirmed'
+                    AND m.attachment_hash = ?
+                ORDER BY m.id DESC
+                LIMIT ?
+                """,
+                (
+                    organization_id,
+                    attachment_hash,
+                    int(limit),
+                ),
+            )
+            matches.extend(
+                _build_movement_dict(row)
+                for row in cursor.fetchall()
+            )
+
+        if (
+            amount is not None
+            and currency
+            and movement_date
+        ):
+            clauses = [
+                "m.organization_id = ?",
+                "m.status = 'confirmed'",
+                "m.currency = ?",
+                "m.movement_date = ?",
+                "ABS(m.amount - ?) < 0.01",
+            ]
+            params = [
+                organization_id,
+                currency,
+                movement_date,
+                float(amount),
+            ]
+
+            if merchant:
+                clauses.append(
+                    "LOWER(COALESCE(m.merchant, '')) = ?"
+                )
+                params.append(merchant.strip().lower())
+
+            if receipt_number:
+                clauses.append(
+                    "LOWER(COALESCE(m.receipt_number, '')) = ?"
+                )
+                params.append(
+                    receipt_number.strip().lower()
+                )
+
+            params.append(int(limit))
+            cursor.execute(
+                MOVEMENTS_BASE_QUERY
+                + " WHERE "
+                + " AND ".join(clauses)
+                + """
+                ORDER BY m.id DESC
+                LIMIT ?
+                """,
+                params,
+            )
+            existing = {item["id"] for item in matches}
+            for row in cursor.fetchall():
+                item = _build_movement_dict(row)
+                if item["id"] not in existing:
+                    matches.append(item)
+
+        return matches[:limit]
     finally:
         connection.close()
