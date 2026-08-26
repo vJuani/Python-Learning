@@ -2493,11 +2493,11 @@ a.dashboard-quick-card:hover {
     .main-nav {
         flex-direction: column;
         align-items: stretch;
-        gap: 0.55rem;
+        gap: 0.35rem;
         flex-wrap: nowrap;
         width: 100%;
         max-width: 100%;
-        padding: 0.25rem 0 0.75rem;
+        padding: 0.15rem 0 0.35rem;
     }
 
     .main-nav-links,
@@ -2511,7 +2511,7 @@ a.dashboard-quick-card:hover {
         padding-left: 0;
         margin-left: 0;
         flex-wrap: nowrap;
-        gap: 0.35rem;
+        gap: 0.2rem;
     }
 
     .main-nav-tools-mobile {
@@ -2532,7 +2532,7 @@ a.dashboard-quick-card:hover {
     .main-nav-tools-mobile .theme-toggle {
         align-self: stretch;
         justify-content: center;
-        min-height: 2.5rem;
+        min-height: 2.05rem;
     }
 
     .header-account-mobile {
@@ -2574,7 +2574,7 @@ a.dashboard-quick-card:hover {
 
     .nav-link {
         border-radius: var(--radius-sm);
-        padding: 0.75rem 0.85rem;
+        padding: 0.45rem 0.65rem;
         background: var(--bg-soft);
         white-space: normal;
         flex-shrink: 1;
@@ -4303,42 +4303,50 @@ a.dashboard-quick-card:hover {
     .main-nav.is-open {
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
-        padding: 0.75rem;
-        border-radius: 14px;
+        gap: 0.35rem;
+        padding: 0.5rem 0.55rem 0.55rem;
+        border-radius: 12px;
         background: var(--surface);
         border: 1px solid var(--border);
         box-shadow: var(--shadow);
-        max-height: calc(100vh - 4.5rem);
-        overflow-y: auto;
+        max-height: calc(100dvh - var(--header-height, 54px) - 4.75rem - env(safe-area-inset-bottom, 0px));
+        overflow: hidden;
     }
 
     .main-nav-links {
-        gap: 0.2rem;
+        gap: 0.08rem;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-right: 0.1rem;
     }
 
     .main-nav-links .nav-link,
     .main-nav-links .app-nav-link {
-        padding: 0.78rem 0.85rem;
-        border-radius: 10px;
-        font-size: 0.95rem;
+        padding: 0.42rem 0.65rem;
+        border-radius: 8px;
+        font-size: 0.86rem;
         font-weight: 650;
         background: transparent;
+        min-height: 0;
+        line-height: 1.25;
     }
 
     .main-nav-tools-mobile {
-        gap: 0.65rem;
-        padding-top: 0.55rem;
+        gap: 0.35rem;
+        padding-top: 0.35rem;
         border-top: 1px solid var(--border-soft);
+        flex: 0 0 auto;
     }
 
     .main-nav-tools-mobile .language-switcher {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 0.4rem;
+        gap: 0.3rem;
         width: 100%;
-        padding: 0.25rem;
-        border-radius: 12px;
+        padding: 0.18rem;
+        border-radius: 10px;
         background: var(--bg-soft);
         border: 1px solid var(--border-soft);
     }
@@ -4347,8 +4355,9 @@ a.dashboard-quick-card:hover {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 2.35rem;
-        border-radius: 9px;
+        min-height: 1.9rem;
+        border-radius: 8px;
+        font-size: 0.8rem;
         font-weight: 800;
         text-decoration: none;
     }
@@ -4360,8 +4369,8 @@ a.dashboard-quick-card:hover {
 
     .main-nav-tools-mobile .theme-toggle {
         width: 100%;
-        min-height: 2.55rem;
-        border-radius: 10px;
+        min-height: 2.1rem;
+        border-radius: 8px;
         justify-content: center;
     }
 
@@ -4443,26 +4452,27 @@ a.dashboard-quick-card:hover {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 0.75rem;
-        padding: 0.35rem 0.35rem 0.75rem;
+        gap: 0.5rem;
+        padding: 0.15rem 0.2rem 0.4rem;
         border-bottom: 1px solid var(--border-soft);
-        margin-bottom: 0.35rem;
+        margin-bottom: 0.15rem;
+        flex: 0 0 auto;
     }
 
     .mobile-drawer-brand-text {
         display: grid;
-        gap: 0.15rem;
+        gap: 0.08rem;
         min-width: 0;
     }
 
     .mobile-drawer-brand-text strong {
-        font-size: 0.82rem;
+        font-size: 0.72rem;
         letter-spacing: 0.02em;
         text-transform: uppercase;
     }
 
     .mobile-drawer-brand-text span {
-        font-size: 0.68rem;
+        font-size: 0.6rem;
         color: var(--accent);
         font-weight: 700;
         letter-spacing: 0.04em;
@@ -4470,13 +4480,13 @@ a.dashboard-quick-card:hover {
     }
 
     .mobile-drawer-section {
-        padding: 0.55rem 0;
+        padding: 0.3rem 0;
         border-top: 1px solid var(--border-soft);
     }
 
     .mobile-drawer-prefs {
         display: grid;
-        gap: 0.55rem;
+        gap: 0.35rem;
     }
 
     .theme-toggle-row {
@@ -4485,9 +4495,9 @@ a.dashboard-quick-card:hover {
         justify-content: space-between;
         gap: 0.75rem;
         width: 100%;
-        min-height: 2.55rem;
-        padding: 0.45rem 0.7rem;
-        border-radius: 10px;
+        min-height: 2.05rem;
+        padding: 0.3rem 0.6rem;
+        border-radius: 8px;
         border: 1px solid var(--border-soft);
         background: var(--bg-soft);
         color: var(--text);
@@ -4495,14 +4505,14 @@ a.dashboard-quick-card:hover {
     }
 
     .theme-toggle-row-label {
-        font-size: 0.9rem;
+        font-size: 0.82rem;
         font-weight: 600;
     }
 
     .theme-switch {
         position: relative;
-        width: 2.55rem;
-        height: 1.45rem;
+        width: 2.3rem;
+        height: 1.3rem;
         border-radius: 999px;
         background: #64748b;
         flex: 0 0 auto;
@@ -4512,10 +4522,10 @@ a.dashboard-quick-card:hover {
     .theme-switch::after {
         content: "";
         position: absolute;
-        top: 0.15rem;
-        left: 0.15rem;
-        width: 1.15rem;
-        height: 1.15rem;
+        top: 0.12rem;
+        left: 0.12rem;
+        width: 1.05rem;
+        height: 1.05rem;
         border-radius: 999px;
         background: #fff;
         transition: transform 0.2s ease;
@@ -4526,41 +4536,58 @@ a.dashboard-quick-card:hover {
     }
 
     [data-theme="dark"] .theme-switch::after {
-        transform: translateX(1.1rem);
+        transform: translateX(1rem);
     }
 
     .mobile-drawer-user-card {
         display: flex;
         align-items: center;
-        gap: 0.7rem;
-        padding: 0.65rem 0.7rem;
-        border-radius: 12px;
+        gap: 0.55rem;
+        padding: 0.45rem 0.55rem;
+        border-radius: 10px;
         background: var(--bg-soft);
         border: 1px solid var(--border-soft);
     }
 
     .mobile-drawer-user-text {
         display: grid;
-        gap: 0.1rem;
+        gap: 0.05rem;
         min-width: 0;
     }
 
     .mobile-drawer-user-text strong {
-        font-size: 0.92rem;
+        font-size: 0.84rem;
     }
 
     .mobile-drawer-user-text span {
-        font-size: 0.78rem;
+        font-size: 0.72rem;
         color: var(--text-muted);
     }
 
     .mobile-drawer-logout {
         display: inline-flex;
-        margin-top: 0.65rem;
+        margin-top: 0.4rem;
         color: #f87171;
         font-weight: 700;
         text-decoration: none;
-        font-size: 0.92rem;
+        font-size: 0.84rem;
+    }
+
+    .mobile-drawer-avatar {
+        width: 1.85rem;
+        height: 1.85rem;
+        font-size: 0.68rem;
+    }
+
+    .main-nav-tools-mobile .header-nav-meta {
+        gap: 0.35rem;
+    }
+
+    .main-nav-tools-mobile .nav-bell-link,
+    .main-nav-tools-mobile .nav-dropdown-toggle {
+        min-height: 2.05rem;
+        padding: 0.35rem 0.65rem;
+        font-size: 0.86rem;
     }
 
     .page-actions-split {
