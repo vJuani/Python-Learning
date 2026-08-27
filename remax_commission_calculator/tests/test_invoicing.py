@@ -39,7 +39,6 @@ from modules.invoicing import (
     cancel_invoice,
     confirm_draft,
     create_draft_for_side,
-    group_pending_by_operation,
     list_pending_operations,
     set_party_invoice_amount,
 )
@@ -539,17 +538,147 @@ class InvoicingV2Tests(unittest.TestCase):
             "20-99887766-5",
         )
 
-    def test_group_pending_both_sides(self):
+    def test_billing_pending_list_one_card_per_side(self):
         op_id = self._make_ready_operation(
             sides=("buyer", "seller"),
         )
-        pending = list_pending_operations(self.org_a)
-        grouped = group_pending_by_operation(pending)
-        match = next(
-            g for g in grouped if g["db_id"] == op_id
+        self._login("bill_agent_a")
+        response = self.client.get("/billing?tab=pending")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("Facturar al comprador", body)
+        self.assertIn("Facturar al vendedor", body)
+        self.assertNotIn(
+            f'>{self.t("billing_facturar")}<',
+            body,
         )
-        self.assertIn("buyer", match["sides"])
-        self.assertIn("seller", match["sides"])
+        self.assertEqual(
+            body.count(
+                f"/billing/operations/{op_id}/buyer/prepare"
+            ),
+            1,
+        )
+        self.assertEqual(
+            body.count(
+                f"/billing/operations/{op_id}/seller/prepare"
+            ),
+            1,
+        )
+
+    def test_billing_pending_buyer_flow(self):
+        op_id = self._make_ready_operation(sides=("buyer",))
+        self._login("bill_agent_a")
+        prepare_url = (
+            f"/billing/operations/{op_id}/buyer/prepare"
+        )
+        response = self.client.get(
+            prepare_url,
+            follow_redirects=False,
+        )
+        self.assertNotIn(
+            "/operations/",
+            response.headers.get("Location", ""),
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("Revisar factura", body)
+        self.assertIn("Crear borrador", body)
+        self.assertIn("7.850.000,00", body)
+
+        response = self.client.post(
+            f"/billing/operations/{op_id}/buyer/new",
+            data={"issuer_mode": "agent"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/billing/", response.headers["Location"])
+
+    def test_billing_pending_seller_flow(self):
+        op_id = self._make_ready_operation(sides=("seller",))
+        self._login("bill_agent_a")
+        prepare_url = (
+            f"/billing/operations/{op_id}/seller/prepare"
+        )
+        response = self.client.get(
+            prepare_url,
+            follow_redirects=False,
+        )
+        self.assertNotIn(
+            "/operations/",
+            response.headers.get("Location", ""),
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("Revisar factura", body)
+        self.assertIn("6.500.000,00", body)
+
+    def test_billing_missing_cuit_shows_form_not_operations(
+        self,
+    ):
+        op_id = add_operation(
+            "27/08/2026",
+            self.agent_a,
+            self.property_a,
+            "no",
+            0,
+            200000,
+            3,
+            6000,
+            5400,
+            600,
+            2700,
+            2700,
+            0,
+            2700,
+            self.org_a,
+        )
+        ensure_parties_for_operation(self.org_a, op_id)
+        set_operation_party_client_fields(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            client_legal_name="Juan Perez",
+            client_tax_condition="consumidor_final",
+            client_fiscal_address="Cliente 123",
+        )
+        set_party_invoice_amount(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            "7850000",
+            "ARS",
+            "1307.50",
+            self.admin_a,
+            notify=False,
+        )
+        self._login("bill_agent_a")
+        response = self.client.get(
+            f"/billing/operations/{op_id}/buyer/prepare",
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("Falta un dato", body)
+        self.assertIn("CUIT de Juan Perez", body)
+        self.assertIn("/billing/operations/", body)
+
+    def test_billing_legacy_new_from_operation_stays_in_billing(
+        self,
+    ):
+        op_id = self._make_ready_operation(sides=("buyer",))
+        self._login("bill_agent_a")
+        response = self.client.get(
+            f"/billing/operations/{op_id}/new",
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        location = response.headers.get("Location", "")
+        self.assertIn("/billing", location)
+        self.assertNotIn("/operations/", location)
+
+    @staticmethod
+    def t(key):
+        return TRANSLATIONS["es"][key]
 
 
 if __name__ == "__main__":

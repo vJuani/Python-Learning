@@ -71,7 +71,6 @@ from modules.invoicing import (
     get_invoice,
     get_next_missing_client_field,
     get_operation_sides_state,
-    group_pending_by_operation,
     list_invoices,
     list_pending_operations,
     org_billing_ready,
@@ -201,10 +200,30 @@ def register_billing_routes(app, *, helpers):
                 return redirect(
                     url_for("billing_issuers")
                 )
+            if error.message_key in (
+                "invoice_err_client_incomplete",
+                "invoice_err_party_client_incomplete",
+            ):
+                missing_field = get_next_missing_client_field(
+                    party
+                )
+                if missing_field:
+                    return render_template(
+                        "billing/missing_client.html",
+                        operation=operation,
+                        side=side,
+                        party=party,
+                        missing_field=missing_field,
+                        tax_conditions=TAX_CONDITIONS,
+                        client_name=(
+                            party.get("client_legal_name")
+                            or operation.get("property")
+                        ),
+                    )
             return redirect(
                 url_for(
-                    "operations_detail",
-                    operation_id=operation_id,
+                    "billing_list",
+                    tab="pending",
                 )
             )
 
@@ -282,11 +301,9 @@ def register_billing_routes(app, *, helpers):
         elif filters["status"]:
             list_kwargs["status"] = filters["status"]
 
-        pending_grouped = group_pending_by_operation(
-            list_pending_operations(
-                organization_id,
-                agent_id=agent_scope,
-            )
+        pending_items = list_pending_operations(
+            organization_id,
+            agent_id=agent_scope,
         )
 
         ai_message = session.pop("billing_ai_message", None)
@@ -306,7 +323,7 @@ def register_billing_routes(app, *, helpers):
                 organization_id,
                 agent_id=agent_scope,
             ),
-            pending_grouped=pending_grouped,
+            pending_items=pending_items,
             tab=tab,
             filters=filters,
             agents=(
@@ -493,12 +510,12 @@ def register_billing_routes(app, *, helpers):
     )
     @login_required
     def billing_new_from_operation(operation_id):
-        """Legacy URL: send user back to operation sides."""
+        """Legacy URL: keep users in billing, not operation detail."""
         require_billing_user()
         return redirect(
             url_for(
-                "operations_detail",
-                operation_id=operation_id,
+                "billing_list",
+                tab="pending",
             )
         )
 

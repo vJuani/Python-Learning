@@ -4875,15 +4875,23 @@ a.dashboard-quick-card:hover {
 }
 .kpi-card {
     padding: 0.85rem 1rem;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    border-radius: 0.75rem;
-    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
 }
 .kpi-label {
     display: block;
     font-size: 0.8rem;
-    opacity: 0.75;
+    color: var(--text-muted);
     margin-bottom: 0.35rem;
+}
+.billing-kpi-grid {
+    margin-bottom: 1.2rem;
+}
+.billing-kpi-grid .stat-value.billing-kpi-muted {
+    font-size: 1.1rem;
+    color: var(--text-muted);
 }
 .billing-card-list {
     display: grid;
@@ -4891,8 +4899,10 @@ a.dashboard-quick-card:hover {
 }
 .billing-card {
     padding: 1rem;
-    border: 1px solid rgba(15, 23, 42, 0.1);
-    border-radius: 0.75rem;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
     display: grid;
     gap: 0.35rem;
 }
@@ -5082,7 +5092,7 @@ a.dashboard-quick-card:hover {
 }
 
 .billing-kpi-muted {
-    opacity: 0.65;
+    color: var(--text-muted);
 }
 
 .billing-tabs {
@@ -5095,13 +5105,16 @@ a.dashboard-quick-card:hover {
 .billing-tab {
     padding: 0.45rem 0.85rem;
     border-radius: 999px;
-    border: 1px solid rgba(15, 23, 42, 0.12);
+    border: 1px solid var(--border-soft);
+    background: var(--surface);
+    color: var(--text);
     text-decoration: none;
 }
 
 .billing-tab.is-active {
-    background: var(--accent-soft, rgba(59, 130, 246, 0.12));
-    border-color: var(--accent, #2563eb);
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-ink);
 }
 
 .billing-search-bar {
@@ -5124,9 +5137,19 @@ a.dashboard-quick-card:hover {
 }
 
 .billing-pending-card {
-    border: 1px solid rgba(15, 23, 42, 0.1);
-    border-radius: 12px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
     padding: 1rem;
+    display: grid;
+    gap: 0.35rem;
+}
+
+.billing-pending-meta,
+.billing-pending-agent {
+    color: var(--text-muted);
+    margin: 0;
 }
 
 .billing-pending-actions {

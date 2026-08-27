@@ -17,7 +17,7 @@
     <h3>{{ operation.property }}</h3>
     <p class="billing-prepare-side">{{ t('billing_side_' ~ side) }}</p>
     <p class="money billing-prepare-amount">
-        {{ preview.currency }} {{ '%.2f'|format(preview.total_amount) }}
+        {{ preview.total_amount | money(preview.currency) }}
     </p>
 
     <dl class="billing-prepare-dl">

@@ -47,11 +47,23 @@
     {% endif %}
 </section>
 
-<section class="billing-kpi-compact">
-    <span>{{ t('billing_kpi_pending') }}: <strong>{{ kpis.pending }}</strong></span>
-    <span>{{ t('billing_kpi_drafts') }}: <strong>{{ kpis.drafts }}</strong></span>
-    <span>{{ t('billing_kpi_ready') }}: <strong>{{ kpis.ready_to_issue }}</strong></span>
-    <span class="billing-kpi-muted">{{ t('billing_kpi_drafts_total') }}: {{ '%.2f'|format(kpis.total_month) }}</span>
+<section class="stats-grid billing-kpi-grid">
+    <article class="stat-card">
+        <span class="stat-label">{{ t('billing_kpi_pending') }}</span>
+        <strong class="stat-value">{{ kpis.pending }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ t('billing_kpi_drafts') }}</span>
+        <strong class="stat-value">{{ kpis.drafts }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ t('billing_kpi_ready') }}</span>
+        <strong class="stat-value">{{ kpis.ready_to_issue }}</strong>
+    </article>
+    <article class="stat-card">
+        <span class="stat-label">{{ t('billing_kpi_drafts_total') }}</span>
+        <strong class="stat-value billing-kpi-muted">{{ kpis.total_month | money('ARS') }}</strong>
+    </article>
 </section>
 
 <form class="billing-search-bar" method="get" action="{{ url_for('billing_list') }}">
@@ -88,41 +100,30 @@
 </nav>
 
 {% if tab == 'pending' %}
-<section class="panel">
+<section class="panel billing-pending-panel">
     <div class="panel-header"><h3>{{ t('billing_kpi_pending') }}</h3></div>
-    {% if pending_grouped %}
+    {% if pending_items %}
     <div class="billing-pending-grid">
-        {% for group in pending_grouped %}
+        {% for item in pending_items %}
         <article class="billing-pending-card">
-            <h4>{{ group.property }}</h4>
+            <h4>{{ item.property }}</h4>
             <p class="billing-pending-meta">
-                {{ group.id }}
-                {% if group.property_external_id %} · #{{ group.property_external_id }}{% endif %}
-                {% if is_staff and group.agent %} · {{ group.agent }}{% endif %}
+                {{ item.id }} · {{ t('billing_side_' ~ item.side) }}
             </p>
-            {% set seller = group.sides.get('seller') %}
-            {% set buyer = group.sides.get('buyer') %}
-            {% if seller %}
-            <p class="money billing-side-amount">
-                {{ t('billing_side_seller') }}:
-                {{ seller.invoice_currency or 'ARS' }}
-                {{ '%.2f'|format(seller.invoice_amount or 0) }}
-            </p>
+            {% if is_staff and item.agent %}
+            <p class="billing-pending-agent">{{ item.agent }}</p>
+            {% elif not is_staff and item.agent %}
+            <p class="billing-pending-agent">{{ item.agent }}</p>
             {% endif %}
-            {% if buyer %}
-            <p class="money billing-side-amount">
-                {{ t('billing_side_buyer') }}:
-                {{ buyer.invoice_currency or 'ARS' }}
-                {{ '%.2f'|format(buyer.invoice_amount or 0) }}
+            <p class="money billing-pending-amount">
+                {{ item.invoice_amount | money(item.invoice_currency or 'ARS') }}
             </p>
-            {% endif %}
+            <span class="badge badge-soft">{{ t('billing_status_pending') }}</span>
             <div class="billing-pending-actions">
-                {% if seller %}
-                <a class="btn btn-primary" href="{{ url_for('billing_prepare', operation_id=group.db_id, side='seller') }}">{{ t('billing_invoice_seller') }}</a>
-                {% endif %}
-                {% if buyer %}
-                <a class="btn btn-primary" href="{{ url_for('billing_prepare', operation_id=group.db_id, side='buyer') }}">{{ t('billing_invoice_buyer') }}</a>
-                {% endif %}
+                <a
+                    class="btn btn-primary"
+                    href="{{ url_for('billing_prepare', operation_id=item.db_id, side=item.side) }}"
+                >{{ t('billing_invoice_' ~ item.side) }} →</a>
             </div>
         </article>
         {% endfor %}
@@ -140,7 +141,7 @@
         <article class="billing-card">
             <h4>{{ inv.invoice_number_internal }}</h4>
             <p>{{ inv.property_address or '' }} · {{ inv.operation_display_id }}</p>
-            <p class="money">{{ inv.currency }} {{ '%.2f'|format(inv.total_amount) }}</p>
+            <p class="money">{{ inv.total_amount | money(inv.currency) }}</p>
             <span class="badge">{{ t('billing_status_' ~ inv.status) }}</span>
             <a class="btn btn-secondary" href="{{ url_for('billing_detail', invoice_id=inv.id) }}">{{ t('billing_view_invoice') }}</a>
         </article>
@@ -166,7 +167,7 @@
                     <td>{{ inv.invoice_number_internal }}</td>
                     {% if is_staff %}<td>{{ inv.agent_name }}</td>{% endif %}
                     <td>{{ inv.property_address }} · {{ inv.operation_display_id }}</td>
-                    <td>{{ inv.currency }} {{ '%.2f'|format(inv.total_amount) }}</td>
+                    <td>{{ inv.total_amount | money(inv.currency) }}</td>
                     <td>{{ t('billing_status_' ~ inv.status) }}</td>
                     <td><a href="{{ url_for('billing_detail', invoice_id=inv.id) }}">{{ t('billing_view_invoice') }}</a></td>
                 </tr>
