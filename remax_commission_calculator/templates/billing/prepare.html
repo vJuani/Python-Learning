@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('billing_prepare_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('billing_prepare_title') }}</h2>
+        <p class="badge">{{ t('billing_non_fiscal_badge') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('billing_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel billing-prepare-panel">
+    <h3>{{ operation.property }}</h3>
+    <p class="billing-prepare-side">{{ t('billing_side_' ~ side) }}</p>
+    <p class="money billing-prepare-amount">
+        {{ preview.currency }} {{ '%.2f'|format(preview.total_amount) }}
+    </p>
+
+    <dl class="billing-prepare-dl">
+        <div>
+            <dt>{{ t('billing_issuer') }}</dt>
+            <dd>
+                {{ preview.issuer_name }}<br>
+                <span class="field-help">{{ preview.issuer_tax_id }}</span>
+            </dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_party_client') }}</dt>
+            <dd>
+                {{ preview.recipient_name }}<br>
+                <span class="field-help">{{ preview.recipient_tax_id }}</span>
+            </dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_concept') }}</dt>
+            <dd>{{ preview.description }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_issue_date') }}</dt>
+            <dd>{{ preview.issue_date }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_payment_condition') }}</dt>
+            <dd>{{ t('billing_pay_' ~ preview.payment_condition) }}</dd>
+        </div>
+    </dl>
+
+    <form method="post" action="{{ url_for('billing_new_for_side', operation_id=operation.db_id, side=side) }}" class="form-actions">
+        <input type="hidden" name="issuer_mode" value="{{ issuer_mode }}">
+        {% if issuer_profile_id %}
+        <input type="hidden" name="issuer_profile_id" value="{{ issuer_profile_id }}">
+        {% endif %}
+        <button type="submit" class="btn btn-primary">{{ t('billing_create_draft') }}</button>
+    </form>
+
+    {% if is_staff %}
+    <details class="billing-more-options">
+        <summary>{{ t('billing_more_options') }}</summary>
+        <p class="field-help">
+            <a href="{{ url_for('billing_new_for_side', operation_id=operation.db_id, side=side) }}?advanced=1">{{ t('billing_edit') }}</a>
+            ·
+            <a href="{{ url_for('billing_issuers') }}">{{ t('billing_change_issuer') }}</a>
+        </p>
+    </details>
+    {% else %}
+    <p class="field-help">
+        <a href="{{ url_for('billing_agent_profile_self') }}">{{ t('billing_change_issuer') }}</a>
+    </p>
+    {% endif %}
+</section>
+{% endblock %}

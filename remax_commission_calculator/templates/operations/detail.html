@@ -124,125 +124,38 @@
         <h3>{{ t('billing_vat_section') }}</h3>
     </div>
 
-    {% if total_commission %}
-    <p>
-        <strong>{{ t('billing_operation_total_commission') }}:</strong>
-        {{ operation.currency or 'USD' }}
-        {{ '%.2f'|format(total_commission) }}
+    <p class="field-help">
+        <a href="{{ url_for('billing_list') }}">✨ {{ t('billing_ai_title') }}</a>
     </p>
-    {% endif %}
 
     {% for side_key in ['buyer', 'seller'] %}
     {% set side = sides_state.get(side_key) if sides_state else none %}
     {% if side and side.party and side.party.is_participating %}
-    <article class="billing-side-block">
+    <article class="billing-side-block billing-side-compact">
         <h4>{{ t('billing_side_' ~ side_key) }}</h4>
         <p>
-            <strong>{{ t('billing_party_client') }}:</strong>
-            {{ side.party.client_legal_name or '—' }}
-            {% if side.party.client_tax_id %} · {{ side.party.client_tax_id }}{% endif %}
-        </p>
-        <p>
-            <strong>{{ t('billing_commission_percent') }}:</strong>
-            {{ side.party.commission_percent or 0 }}%
-            ·
-            <strong>{{ t('billing_commission_amount') }}:</strong>
-            {{ operation.currency or 'USD' }}
-            {{ '%.2f'|format(side.party.commission_amount or 0) }}
-        </p>
-        {% if side.party.invoice_amount %}
-        <p>
-            <strong>{{ t('billing_amount') }}:</strong>
-            {{ side.party.invoice_currency or 'ARS' }}
-            {{ '%.2f'|format(side.party.invoice_amount) }}
-            {% if side.party.billing_enabled %}
-            · <span class="badge">{{ t('billing_ready_to_invoice') }}</span>
+            {% if side.can_create_draft %}
+            {{ t('billing_status_pending') }}
+            {% elif side.invoices %}
+            {{ t('billing_status_' ~ side.invoices[0].status) }}
+            {% else %}
+            {{ t('billing_amount_pending') }}
             {% endif %}
         </p>
-        {% else %}
-        <p>{{ t('billing_amount_pending') }}</p>
-        {% endif %}
-
-        {% if side.invoices %}
-        <ul>
-            {% for inv in side.invoices %}
-            <li>
-                {{ inv.issuer_name }} · {{ t('billing_status_' ~ inv.status) }}
-                · <a href="{{ url_for('billing_detail', invoice_id=inv.id) }}">{{ inv.invoice_number_internal }}</a>
-            </li>
-            {% endfor %}
-        </ul>
+        {% if side.party.invoice_amount %}
+        <p class="money">{{ side.party.invoice_currency or 'ARS' }} {{ '%.2f'|format(side.party.invoice_amount) }}</p>
         {% endif %}
 
         {% if can_create_invoice and side.can_create_draft %}
-        <a
-            class="btn btn-primary"
-            href="{{ url_for('billing_new_for_side', operation_id=operation.db_id, side=side_key) }}"
-        >{{ t('billing_invoice_' ~ side_key) }}</a>
+        <a class="btn btn-primary" href="{{ url_for('billing_prepare', operation_id=operation.db_id, side=side_key) }}">{{ t('billing_invoice_' ~ side_key) }}</a>
+        {% elif side.invoices %}
+        <a class="btn btn-secondary" href="{{ url_for('billing_detail', invoice_id=side.invoices[0].id) }}">{{ t('billing_view_invoice') }}</a>
         {% endif %}
 
         {% if can_set_invoice_amount %}
         <details class="billing-side-edit">
-            <summary>{{ t('billing_edit_client') }} / {{ t('billing_set_amount_title') }}</summary>
-            <form
-                method="post"
-                action="{{ url_for('operations_set_party_client', operation_id=operation.db_id, side=side_key) }}"
-                class="agent-form"
-            >
-                <div class="form-group">
-                    <label>{{ t('billing_legal_name') }}</label>
-                    <input name="client_legal_name" class="form-input" value="{{ side.party.client_legal_name }}">
-                </div>
-                <div class="form-group">
-                    <label>{{ t('billing_tax_id') }}</label>
-                    <input name="client_tax_id" class="form-input" value="{{ side.party.client_tax_id }}">
-                </div>
-                <div class="form-group">
-                    <label>{{ t('billing_tax_condition') }}</label>
-                    <select name="client_tax_condition" class="form-input">
-                        <option value=""></option>
-                        {% for tc in tax_conditions %}
-                        <option value="{{ tc }}" {% if side.party.client_tax_condition == tc %}selected{% endif %}>{{ t('billing_tax_' ~ tc) }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>{{ t('billing_fiscal_address') }}</label>
-                    <input name="client_fiscal_address" class="form-input" value="{{ side.party.client_fiscal_address }}">
-                </div>
-                <div class="form-group">
-                    <label>{{ t('billing_email') }}</label>
-                    <input name="client_email" class="form-input" value="{{ side.party.client_email }}">
-                </div>
-                <button type="submit" class="btn btn-secondary">{{ t('billing_edit_client') }}</button>
-            </form>
-
-            <form
-                method="post"
-                action="{{ url_for('operations_set_party_invoice_amount', operation_id=operation.db_id, side=side_key) }}"
-                class="agent-form"
-            >
-                <div class="form-group">
-                    <label>{{ t('billing_amount') }}</label>
-                    <input name="invoice_amount" class="form-input" value="{{ side.party.invoice_amount or '' }}" required>
-                </div>
-                <div class="form-group">
-                    <label>{{ t('billing_currency') }}</label>
-                    <select name="invoice_currency" class="form-input">
-                        <option value="ARS" {% if (side.party.invoice_currency or 'ARS') == 'ARS' %}selected{% endif %}>ARS</option>
-                        <option value="USD" {% if side.party.invoice_currency == 'USD' %}selected{% endif %}>USD</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>{{ t('billing_exchange_rate') }}</label>
-                    <input name="invoice_exchange_rate" class="form-input" value="{{ side.party.invoice_exchange_rate or '' }}">
-                </div>
-                <input type="hidden" name="enable_billing" value="1">
-                <button type="submit" class="btn btn-primary">{{ t('billing_set_amount') }} / {{ t('billing_enable_side') }}</button>
-            </form>
-            <p class="field-help">
-                <a href="{{ url_for('vat_calculator', operation_id=operation.db_id) }}">{{ t('billing_calculate_vat') }}</a>
-            </p>
+            <summary>{{ t('billing_more_options') }}</summary>
+            <p class="field-help"><a href="{{ url_for('vat_calculator', operation_id=operation.db_id) }}">{{ t('billing_calculate_vat') }}</a></p>
         </details>
         {% endif %}
     </article>

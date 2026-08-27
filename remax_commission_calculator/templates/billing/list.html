@@ -2,124 +2,151 @@
 
 {% block title %}{{ t('billing_title') }} | {{ t('app_title') }}{% endblock %}
 
-{% block sidebar %}
-{% if is_staff %}
-<div class="sidebar-panel">
-    <h3 class="sidebar-title">{{ t('sidebar_filters') }}</h3>
-    <form class="sidebar-filter-form filter-form" method="get" action="{{ url_for('billing_list') }}">
-        <div class="form-group">
-            <label for="q">{{ t('search') }}</label>
-            <input type="text" id="q" name="q" class="form-input" value="{{ filters.q }}">
-        </div>
-        <div class="form-group">
-            <label for="agent_id">{{ t('billing_filter_agent') }}</label>
-            <select id="agent_id" name="agent_id" class="form-input">
-                <option value="">{{ t('all') if t('all') != 'all' else '—' }}</option>
-                {% for agent in agents %}
-                <option value="{{ agent.id }}" {% if filters.agent_id == agent.id|string %}selected{% endif %}>{{ agent.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="status">{{ t('billing_filter_status') }}</label>
-            <select id="status" name="status" class="form-input">
-                <option value=""></option>
-                {% for st in ['draft', 'ready_to_issue', 'issued', 'error', 'cancelled'] %}
-                <option value="{{ st }}" {% if filters.status == st %}selected{% endif %}>{{ t('billing_status_' ~ st) }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="operation_id">{{ t('billing_filter_operation') }}</label>
-            <input type="text" id="operation_id" name="operation_id" class="form-input" value="{{ filters.operation_id }}">
-        </div>
-        <button type="submit" class="btn btn-primary">{{ t('search') }}</button>
-    </form>
-</div>
-{% endif %}
-{% endblock %}
-
 {% block content %}
-<section class="page-header">
+<section class="page-header billing-page-header">
     <div class="page-header-text">
-        <h2>{% if is_staff %}{{ t('billing_title') }}{% else %}{{ t('billing_my_invoices') }}{% endif %}</h2>
-        <p>{% if is_staff %}{{ t('billing_subtitle_staff') }}{% else %}{{ t('billing_subtitle_agent') }}{% endif %}</p>
+        <h2>{{ t('billing_title') }}</h2>
+        <p>{{ t('billing_subtitle_simple') }}</p>
     </div>
     <div class="page-actions">
         {% if not is_staff %}
-        <a href="{{ url_for('billing_agent_profile_self') }}" class="btn btn-secondary">{{ t('billing_profile_title') }}</a>
+        <a href="{{ url_for('billing_agent_profile_self') }}" class="btn btn-secondary btn-sm">{{ t('billing_profile_title') }}</a>
         {% else %}
-        <a href="{{ url_for('organization_settings') }}" class="btn btn-secondary">{{ t('billing_org_billing_title') }}</a>
+        <a href="{{ url_for('billing_issuers') }}" class="btn btn-secondary btn-sm">{{ t('billing_issuers_title') }}</a>
         {% endif %}
     </div>
 </section>
 
-<section class="panel kpi-row">
-    <div class="kpi-card"><span class="kpi-label">{{ t('billing_kpi_pending') }}</span><strong>{{ kpis.pending }}</strong></div>
-    <div class="kpi-card"><span class="kpi-label">{{ t('billing_kpi_drafts') }}</span><strong>{{ kpis.drafts }}</strong></div>
-    <div class="kpi-card"><span class="kpi-label">{{ t('billing_kpi_ready') }}</span><strong>{{ kpis.ready_to_issue }}</strong></div>
-    <div class="kpi-card"><span class="kpi-label">{{ t('billing_kpi_total_month') }}</span><strong>{{ '%.2f'|format(kpis.total_month) }}</strong></div>
+<section class="panel billing-ai-panel">
+    <h3 class="billing-ai-title">✨ {{ t('billing_ai_title') }}</h3>
+    <form method="post" action="{{ url_for('billing_ai_prepare') }}" class="billing-ai-form">
+        <input
+            type="text"
+            name="prompt"
+            class="form-input billing-ai-input"
+            placeholder="{{ t('billing_ai_placeholder') }}"
+            autocomplete="off"
+        >
+        <button type="submit" class="btn btn-primary">{{ t('billing_ai_prepare') }}</button>
+    </form>
+    <p class="field-help billing-ai-examples">{{ t('billing_ai_examples') }}</p>
+    {% if session.get('billing_ai_operation') %}
+    <p class="field-help">{{ t('billing_ai_context_operation') }}: {{ session.billing_ai_operation }}</p>
+    {% endif %}
+    {% if ai_message %}
+    <p class="billing-ai-feedback">{{ t(ai_message) }}</p>
+    {% endif %}
+    {% if ai_options %}
+    <ul class="billing-ai-options">
+        {% for opt in ai_options %}
+        <li>
+            <a href="{{ url_for('billing_ai_select_operation', operation_id=opt.operation_id) }}">{{ opt.label }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
 </section>
 
+<section class="billing-kpi-compact">
+    <span>{{ t('billing_kpi_pending') }}: <strong>{{ kpis.pending }}</strong></span>
+    <span>{{ t('billing_kpi_drafts') }}: <strong>{{ kpis.drafts }}</strong></span>
+    <span>{{ t('billing_kpi_ready') }}: <strong>{{ kpis.ready_to_issue }}</strong></span>
+    <span class="billing-kpi-muted">{{ t('billing_kpi_drafts_total') }}: {{ '%.2f'|format(kpis.total_month) }}</span>
+</section>
+
+<form class="billing-search-bar" method="get" action="{{ url_for('billing_list') }}">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <input
+        type="search"
+        name="q"
+        class="form-input"
+        placeholder="{{ t('billing_search_placeholder') }}"
+        value="{{ filters.q }}"
+    >
+    {% if is_staff %}
+    <details class="billing-filters-details">
+        <summary>{{ t('billing_filters') }}</summary>
+        <div class="billing-filters-grid">
+            <select name="agent_id" class="form-input">
+                <option value="">{{ t('billing_filter_agent') }}</option>
+                {% for agent in agents %}
+                <option value="{{ agent.id }}" {% if filters.agent_id == agent.id|string %}selected{% endif %}>{{ agent.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" name="operation_id" class="form-input" placeholder="{{ t('billing_filter_operation') }}" value="{{ filters.operation_id }}">
+        </div>
+    </details>
+    {% endif %}
+    <button type="submit" class="btn btn-secondary btn-sm">{{ t('search') }}</button>
+</form>
+
+<nav class="billing-tabs" aria-label="{{ t('billing_title') }}">
+    <a href="{{ url_for('billing_list', tab='pending', q=filters.q) }}" class="billing-tab {% if tab == 'pending' %}is-active{% endif %}">{{ t('billing_tab_pending') }}</a>
+    <a href="{{ url_for('billing_list', tab='draft', q=filters.q) }}" class="billing-tab {% if tab == 'draft' %}is-active{% endif %}">{{ t('billing_tab_drafts') }}</a>
+    <a href="{{ url_for('billing_list', tab='ready', q=filters.q) }}" class="billing-tab {% if tab == 'ready' %}is-active{% endif %}">{{ t('billing_tab_ready') }}</a>
+    <a href="{{ url_for('billing_list', tab='issued', q=filters.q) }}" class="billing-tab {% if tab == 'issued' %}is-active{% endif %}">{{ t('billing_tab_issued') }}</a>
+</nav>
+
+{% if tab == 'pending' %}
 <section class="panel">
     <div class="panel-header"><h3>{{ t('billing_kpi_pending') }}</h3></div>
-    {% if pending_operations %}
-    <div class="billing-card-list mobile-only">
-        {% for op in pending_operations %}
-        <article class="billing-card">
-            <h4>{{ op.property }}</h4>
-            <p>{{ op.id }} · {{ t('billing_side_' ~ op.side) }}</p>
-            <p class="money">{{ op.invoice_currency or 'ARS' }} {{ '%.2f'|format(op.invoice_amount or 0) }}</p>
-            <span class="badge">{{ t('billing_status_pending') }}</span>
-            <a class="btn btn-primary" href="{{ url_for('billing_new_for_side', operation_id=op.db_id, side=op.side) }}">{{ t('billing_invoice_' ~ op.side) }} →</a>
+    {% if pending_grouped %}
+    <div class="billing-pending-grid">
+        {% for group in pending_grouped %}
+        <article class="billing-pending-card">
+            <h4>{{ group.property }}</h4>
+            <p class="billing-pending-meta">
+                {{ group.id }}
+                {% if group.property_external_id %} · #{{ group.property_external_id }}{% endif %}
+                {% if is_staff and group.agent %} · {{ group.agent }}{% endif %}
+            </p>
+            {% set seller = group.sides.get('seller') %}
+            {% set buyer = group.sides.get('buyer') %}
+            {% if seller %}
+            <p class="money billing-side-amount">
+                {{ t('billing_side_seller') }}:
+                {{ seller.invoice_currency or 'ARS' }}
+                {{ '%.2f'|format(seller.invoice_amount or 0) }}
+            </p>
+            {% endif %}
+            {% if buyer %}
+            <p class="money billing-side-amount">
+                {{ t('billing_side_buyer') }}:
+                {{ buyer.invoice_currency or 'ARS' }}
+                {{ '%.2f'|format(buyer.invoice_amount or 0) }}
+            </p>
+            {% endif %}
+            <div class="billing-pending-actions">
+                {% if seller %}
+                <a class="btn btn-primary" href="{{ url_for('billing_prepare', operation_id=group.db_id, side='seller') }}">{{ t('billing_invoice_seller') }}</a>
+                {% endif %}
+                {% if buyer %}
+                <a class="btn btn-primary" href="{{ url_for('billing_prepare', operation_id=group.db_id, side='buyer') }}">{{ t('billing_invoice_buyer') }}</a>
+                {% endif %}
+            </div>
         </article>
         {% endfor %}
-    </div>
-    <div class="table-wrap desktop-only">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>{{ t('billing_operation') }}</th>
-                    {% if is_staff %}<th>{{ t('billing_agent') }}</th>{% endif %}
-                    <th>{{ t('billing_amount') }}</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for op in pending_operations %}
-                <tr>
-                    <td>{{ op.property }} · {{ op.id }}</td>
-                    {% if is_staff %}<td>{{ op.agent }}</td>{% endif %}
-                    <td>{{ op.invoice_currency or 'ARS' }} {{ '%.2f'|format(op.invoice_amount or 0) }}</td>
-                    <td><a href="{{ url_for('billing_new_from_operation', operation_id=op.db_id) }}">{{ t('billing_facturar') }}</a></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
     </div>
     {% else %}
     <p class="empty-state">{{ t('billing_empty_pending') }}</p>
     {% endif %}
 </section>
-
+{% else %}
 <section class="panel">
     <div class="panel-header"><h3>{{ t('billing_invoice') }}</h3></div>
     {% if invoices %}
-    <div class="billing-card-list mobile-only">
+    <div class="billing-card-list billing-invoices-mobile">
         {% for inv in invoices %}
         <article class="billing-card">
             <h4>{{ inv.invoice_number_internal }}</h4>
-            <p>{{ inv.property_address or '' }}</p>
+            <p>{{ inv.property_address or '' }} · {{ inv.operation_display_id }}</p>
             <p class="money">{{ inv.currency }} {{ '%.2f'|format(inv.total_amount) }}</p>
             <span class="badge">{{ t('billing_status_' ~ inv.status) }}</span>
-            {% if inv.status != 'issued' %}
-            <p class="field-help">{{ t('billing_non_fiscal_badge') }}</p>
-            {% endif %}
-            <a class="btn btn-secondary" href="{{ url_for('billing_detail', invoice_id=inv.id) }}">{{ t('billing_view_invoice') }} →</a>
+            <a class="btn btn-secondary" href="{{ url_for('billing_detail', invoice_id=inv.id) }}">{{ t('billing_view_invoice') }}</a>
         </article>
         {% endfor %}
     </div>
-    <div class="table-wrap desktop-only">
+    <div class="table-wrap billing-invoices-desktop">
         <table class="data-table">
             <thead>
                 <tr>
@@ -151,4 +178,5 @@
     <p class="empty-state">{% if is_staff %}{{ t('billing_empty_invoices_staff') }}{% else %}{{ t('billing_empty_invoices_agent') }}{% endif %}</p>
     {% endif %}
 </section>
+{% endif %}
 {% endblock %}

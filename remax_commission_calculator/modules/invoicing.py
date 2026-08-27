@@ -237,6 +237,79 @@ def party_client_ready(party):
     return len(missing) == 0, missing
 
 
+CLIENT_FIELD_PRIORITY = (
+    "client_tax_id",
+    "client_tax_condition",
+    "client_legal_name",
+    "client_fiscal_address",
+)
+
+CLIENT_FIELD_TO_I18N = {
+    "client_tax_id": "billing_missing_client_tax_id",
+    "client_tax_condition": "billing_missing_client_tax_condition",
+    "client_legal_name": "billing_missing_client_legal_name",
+    "client_fiscal_address": "billing_missing_client_fiscal_address",
+}
+
+
+def get_next_missing_client_field(party):
+    """Return the first missing client field key, or None."""
+    _ready, missing = party_client_ready(party)
+    if not missing:
+        return None
+
+    missing_set = set(missing)
+    for field_name in CLIENT_FIELD_PRIORITY:
+        i18n_key = CLIENT_FIELD_TO_I18N[field_name]
+        if i18n_key in missing_set:
+            return field_name
+    return None
+
+
+def default_issuer_mode_for_user(user, settings):
+    from modules.auth import ROLE_ADMIN, ROLE_AGENT
+
+    if user.get("role") == ROLE_AGENT:
+        return ISSUER_MODE_AGENT
+    if settings.get("office_can_invoice") and settings.get(
+        "default_issuer_profile_id"
+    ):
+        return ISSUER_MODE_OFFICE
+    return ISSUER_MODE_AGENT
+
+
+def group_pending_by_operation(pending_operations):
+    grouped = {}
+
+    for item in pending_operations:
+        op_id = item.get("db_id")
+        if op_id is None:
+            continue
+
+        if op_id not in grouped:
+            grouped[op_id] = {
+                "db_id": op_id,
+                "id": item.get("id"),
+                "property": item.get("property"),
+                "agent": item.get("agent"),
+                "property_external_id": item.get(
+                    "property_external_id"
+                ),
+                "sides": {},
+            }
+
+        grouped[op_id]["sides"][item["side"]] = {
+            "side": item["side"],
+            "invoice_amount": item.get("invoice_amount"),
+            "invoice_currency": item.get(
+                "invoice_currency"
+            ),
+            "party": item.get("party"),
+        }
+
+    return list(grouped.values())
+
+
 def operation_has_invoice_amount(operation):
     amount = operation.get("invoice_amount")
     if amount is None:
@@ -1245,6 +1318,22 @@ def list_pending_operations(
         )
         params.append(issuer_key)
         params.extend(ACTIVE_STATUSES)
+    else:
+        placeholders = ", ".join("?" for _ in ACTIVE_STATUSES)
+        clauses.append(
+            f"""
+            NOT EXISTS (
+                SELECT 1 FROM invoices
+                WHERE invoices.organization_id
+                    = op.organization_id
+                  AND invoices.operation_id
+                    = op.operation_id
+                  AND invoices.side = op.party_role
+                  AND invoices.status IN ({placeholders})
+            )
+            """
+        )
+        params.extend(ACTIVE_STATUSES)
 
     connection = get_connection()
     cursor = connection.cursor()
@@ -1323,6 +1412,9 @@ __all__ = [
     "agent_billing_ready",
     "issuer_profile_ready",
     "party_client_ready",
+    "get_next_missing_client_field",
+    "default_issuer_mode_for_user",
+    "group_pending_by_operation",
     "issuer_key_for_agent",
     "issuer_key_for_profile",
     "set_operation_invoice_amount",

@@ -25,6 +25,7 @@ from modules.database import (
     create_tables,
     ensure_parties_for_operation,
     get_operation_record,
+    get_operation_party,
     set_operation_party_client_fields,
     update_organization_billing_fields,
     upsert_agent_billing_profile,
@@ -38,6 +39,8 @@ from modules.invoicing import (
     cancel_invoice,
     confirm_draft,
     create_draft_for_side,
+    group_pending_by_operation,
+    list_pending_operations,
     set_party_invoice_amount,
 )
 from web_app import app
@@ -448,6 +451,105 @@ class InvoicingV2Tests(unittest.TestCase):
 
         again = get_invoice(self.org_a, inv["id"])
         self.assertAlmostEqual(again["total_amount"], 7850000)
+
+    def test_billing_prepare_route(self):
+        op_id = self._make_ready_operation()
+        self._login("bill_agent_a")
+        response = self.client.get(
+            f"/billing/operations/{op_id}/buyer/prepare"
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("Revisar factura", body)
+        self.assertIn("Hubac 4702", body)
+        self.assertIn("Crear borrador", body)
+
+    def test_billing_ai_prepare_redirect(self):
+        op_id = self._make_ready_operation()
+        self._login("bill_agent_a")
+        response = self.client.post(
+            "/billing/ai/prepare",
+            data={
+                "prompt": (
+                    f"Facturá COM-{op_id:06d} al comprador"
+                ),
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            f"/billing/operations/{op_id}/buyer/prepare",
+            response.headers.get("Location", ""),
+        )
+
+    def test_billing_cuit_persisted(self):
+        op_id = add_operation(
+            "27/08/2026",
+            self.agent_a,
+            self.property_a,
+            "no",
+            0,
+            200000,
+            3,
+            6000,
+            5400,
+            600,
+            2700,
+            2700,
+            0,
+            2700,
+            self.org_a,
+        )
+        ensure_parties_for_operation(self.org_a, op_id)
+        set_operation_party_client_fields(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            client_legal_name="Juan Perez",
+            client_tax_condition="consumidor_final",
+            client_fiscal_address="Cliente 123",
+        )
+        set_party_invoice_amount(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            "7850000",
+            "ARS",
+            "1307.50",
+            self.admin_a,
+            notify=False,
+        )
+        self._login("bill_agent_a")
+        response = self.client.post(
+            f"/billing/operations/{op_id}/buyer/client-field",
+            data={
+                "field_name": "client_tax_id",
+                "field_value": "20-99887766-5",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        party = get_operation_party(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+        )
+        self.assertEqual(
+            party.get("client_tax_id"),
+            "20-99887766-5",
+        )
+
+    def test_group_pending_both_sides(self):
+        op_id = self._make_ready_operation(
+            sides=("buyer", "seller"),
+        )
+        pending = list_pending_operations(self.org_a)
+        grouped = group_pending_by_operation(pending)
+        match = next(
+            g for g in grouped if g["db_id"] == op_id
+        )
+        self.assertIn("buyer", match["sides"])
+        self.assertIn("seller", match["sides"])
 
 
 if __name__ == "__main__":

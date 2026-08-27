@@ -5026,5 +5026,139 @@ a.dashboard-quick-card:hover {
     .operation-sides-grid {
         grid-template-columns: 1fr;
     }
+
+    .billing-invoices-desktop {
+        display: none;
+    }
+}
+
+@media (min-width: 769px) {
+    .billing-invoices-mobile {
+        display: none;
+    }
+}
+
+.mobile-only {
+    display: block;
+}
+
+.desktop-only {
+    display: none;
+}
+
+@media (min-width: 769px) {
+    .mobile-only {
+        display: none;
+    }
+
+    .desktop-only {
+        display: block;
+    }
+}
+
+.billing-ai-panel {
+    margin-bottom: 1rem;
+}
+
+.billing-ai-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.billing-ai-input {
+    flex: 1 1 220px;
+    min-height: 2.75rem;
+    font-size: 1rem;
+}
+
+.billing-kpi-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+    font-size: 0.92rem;
+}
+
+.billing-kpi-muted {
+    opacity: 0.65;
+}
+
+.billing-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+}
+
+.billing-tab {
+    padding: 0.45rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    text-decoration: none;
+}
+
+.billing-tab.is-active {
+    background: var(--accent-soft, rgba(59, 130, 246, 0.12));
+    border-color: var(--accent, #2563eb);
+}
+
+.billing-search-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    align-items: center;
+}
+
+.billing-pending-grid {
+    display: grid;
+    gap: 0.75rem;
+}
+
+@media (min-width: 769px) {
+    .billing-pending-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+}
+
+.billing-pending-card {
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 12px;
+    padding: 1rem;
+}
+
+.billing-pending-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.billing-prepare-dl {
+    display: grid;
+    gap: 0.75rem;
+    margin: 1rem 0;
+}
+
+.billing-prepare-dl div {
+    display: grid;
+    gap: 0.15rem;
+}
+
+.billing-prepare-amount {
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.billing-side-compact {
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.billing-side-compact:last-child {
+    border-bottom: none;
 }
 
