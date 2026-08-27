@@ -4974,15 +4974,128 @@ a.dashboard-quick-card:hover {
     gap: 1rem;
 }
 
-.operation-side-card {
-    border: 1px solid rgba(15, 23, 42, 0.1);
-    border-radius: 12px;
+.operation-data-panel .operation-summary-bar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
     padding: 1rem;
-    background: rgba(255, 255, 255, 0.5);
+    margin-bottom: 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.operation-summary-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.operation-summary-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.operation-summary-value {
+    font-size: 1.15rem;
+    color: var(--text);
+}
+
+.operation-summary-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.operation-sides-heading {
+    margin: 0 0 0.75rem;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.operation-sides-stack {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.operation-side-card {
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    padding: 1rem;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.operation-side-card--active {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.operation-side-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.operation-side-card h4,
+.operation-side-row-title {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text);
+}
+
+.operation-side-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem 1rem;
+    margin: 0;
+}
+
+.operation-side-metrics div {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.operation-side-metrics dt {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.operation-side-metrics dd {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.operation-side-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: var(--surface);
 }
 
 .operation-side-card.is-inactive {
-    opacity: 0.55;
+    opacity: 1;
 }
 
 .operation-side-card h4 {
@@ -5035,6 +5148,14 @@ a.dashboard-quick-card:hover {
 @media (max-width: 768px) {
     .operation-sides-grid {
         grid-template-columns: 1fr;
+    }
+
+    .operation-data-panel .operation-summary-bar {
+        grid-template-columns: 1fr;
+    }
+
+    .operation-side-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .billing-invoices-desktop {

@@ -6,7 +6,7 @@
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ t('detail_title') }}</h2>
-        <p>{{ t('detail_subtitle') }} {{ operation.id }}.</p>
+        <p>{{ operation.id }}</p>
     </div>
 
     <div class="page-actions">
@@ -14,7 +14,6 @@
         <a href="{{ url_for('operations_edit', operation_id=operation.db_id) }}" class="btn btn-edit">{{ t('edit') }}</a>
         {% endif %}
         <a href="{{ url_for('operations_summary', operation_id=operation.db_id) }}" class="btn btn-primary">{{ t('op_summary_open') }}</a>
-        <a href="{{ url_for('vat_calculator', operation_id=operation.db_id) }}" class="btn btn-secondary">{{ t('vat_calc_open_from_operation') }}</a>
         <a href="{{ url_for('operations_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
 </section>
@@ -62,61 +61,86 @@
     {% endif %}
 </section>
 
-<section class="panel">
+<section class="panel operation-data-panel">
     <div class="panel-header">
-        <h3>{{ t('operation_creation_section') }}</h3>
+        <h3>{{ t('operation_data_section') }}</h3>
     </div>
 
-    <p>
-        <strong>{{ t('operation_value') }}:</strong>
-        {{ operation.currency or 'USD' }}
-        {{ '%.2f'|format(operation.original_amount or operation.sale_price) }}
-    </p>
-
-    {% if operation.is_referred %}
-    <p>
-        <strong>{{ t('operation_referred') }}:</strong>
-        {{ t('yes') }}
-        {% if operation.referred_side %}
-        · {{ t('operation_referred_side') }}:
-        {{ t('operation_referred_side_' ~ operation.referred_side) }}
-        {% endif %}
-    </p>
-    {% else %}
-    <p><strong>{{ t('operation_referred') }}:</strong> {{ t('no') }}</p>
-    {% endif %}
-
-    {% for side_key in ['seller', 'buyer'] %}
-    {% set side = sides_state.get(side_key) if sides_state else none %}
-    {% set party = side.party if side else none %}
-    {% set vat_side = operation.seller_vat_original if side_key == 'seller' else operation.buyer_vat_original %}
-    <article class="operation-side-card {% if not party or not party.is_participating %}is-inactive{% endif %}">
-        <h4>{{ t('operation_side_' ~ side_key) }}</h4>
-        <p>
-            <strong>{{ t('operation_participation_label') }}:</strong>
-            {% if party and party.is_participating %}
-            {{ t('operation_participating_yes') }}
-            {% else %}
-            {{ t('operation_participating_no') }}
+    <div class="operation-summary-bar">
+        <div class="operation-summary-stat">
+            <span class="operation-summary-label">{{ t('operation_value') }}</span>
+            <strong class="operation-summary-value money">
+                {{ (operation.original_amount or operation.sale_price) | money(operation.currency or 'USD') }}
+            </strong>
+        </div>
+        <div class="operation-summary-stat">
+            <span class="operation-summary-label">{{ t('operation_participation_label') }}</span>
+            <div class="operation-summary-chips">
+                {% set ns = namespace(has_participation=false) %}
+                {% for side_key in ['buyer', 'seller'] %}
+                {% set side = sides_state.get(side_key) if sides_state else none %}
+                {% set party = side.party if side else none %}
+                {% if party and party.is_participating %}
+                {% set ns.has_participation = true %}
+                <span class="badge badge-soft">{{ t('operation_referred_side_' ~ side_key) }}</span>
+                {% endif %}
+                {% endfor %}
+                {% if not ns.has_participation %}
+                <span class="badge badge-soft">{{ t('operation_summary_participation_none') }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="operation-summary-stat">
+            <span class="operation-summary-label">{{ t('operation_referred') }}</span>
+            {% if operation.is_referred %}
+            <span class="badge">{{ t('yes') }}</span>
+            {% if operation.referred_side %}
+            <span class="badge badge-soft">{{ t('operation_referred_side_' ~ operation.referred_side) }}</span>
             {% endif %}
-        </p>
+            {% else %}
+            <span class="badge badge-soft">{{ t('no') }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <h4 class="operation-sides-heading">{{ t('operation_sides_heading') }}</h4>
+
+    <div class="operation-sides-stack">
+        {% for side_key in ['buyer', 'seller'] %}
+        {% set side = sides_state.get(side_key) if sides_state else none %}
+        {% set party = side.party if side else none %}
+        {% set vat_side = operation.seller_vat_original if side_key == 'seller' else operation.buyer_vat_original %}
+        {% set op_currency = operation.currency or 'USD' %}
+
         {% if party and party.is_participating %}
-        <p>
-            <strong>{{ t('commission_rate') }}:</strong>
-            {{ party.commission_percent or 0 }}%
-            ·
-            <strong>{{ t('operation_commission_calculated') }}:</strong>
-            {{ operation.currency or 'USD' }}
-            {{ '%.2f'|format(party.commission_amount or 0) }}
-        </p>
-        <p>
-            <strong>{{ t('operation_' ~ side_key ~ '_vat') }}:</strong>
-            {{ operation.currency or 'USD' }}
-            {{ '%.2f'|format(vat_side or 0) }}
-        </p>
+        <article class="operation-side-card operation-side-card--active">
+            <div class="operation-side-card-header">
+                <h4>{{ t('operation_side_' ~ side_key) }}</h4>
+                <span class="badge">{{ t('operation_participating_yes') }}</span>
+            </div>
+            <dl class="operation-side-metrics">
+                <div>
+                    <dt>{{ t('operation_commission_label') }}</dt>
+                    <dd>{{ party.commission_percent | number(2) }}%</dd>
+                </div>
+                <div>
+                    <dt>{{ t('operation_commission_calculated') }}</dt>
+                    <dd class="money">{{ party.commission_amount | money(op_currency) }}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('operation_' ~ side_key ~ '_vat') }}</dt>
+                    <dd class="money">{{ vat_side | money(op_currency) }}</dd>
+                </div>
+            </dl>
+        </article>
+        {% else %}
+        <article class="operation-side-row">
+            <span class="operation-side-row-title">{{ t('operation_side_' ~ side_key) }}</span>
+            <span class="badge badge-soft">{{ t('operation_participating_no') }}</span>
+        </article>
         {% endif %}
-    </article>
-    {% endfor %}
+        {% endfor %}
+    </div>
 </section>
 
 <section class="panel">
@@ -143,7 +167,7 @@
             {% endif %}
         </p>
         {% if side.party.invoice_amount %}
-        <p class="money">{{ side.party.invoice_currency or 'ARS' }} {{ '%.2f'|format(side.party.invoice_amount) }}</p>
+        <p class="money">{{ side.party.invoice_amount | money(side.party.invoice_currency or 'ARS') }}</p>
         {% endif %}
 
         {% if can_create_invoice and side.can_create_draft %}
