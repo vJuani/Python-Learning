@@ -68,10 +68,10 @@
         {% for op in pending_operations %}
         <article class="billing-card">
             <h4>{{ op.property }}</h4>
-            <p>{{ op.id }}</p>
+            <p>{{ op.id }} · {{ t('billing_side_' ~ op.side) }}</p>
             <p class="money">{{ op.invoice_currency or 'ARS' }} {{ '%.2f'|format(op.invoice_amount or 0) }}</p>
             <span class="badge">{{ t('billing_status_pending') }}</span>
-            <a class="btn btn-primary" href="{{ url_for('billing_new_from_operation', operation_id=op.db_id) }}">{{ t('billing_facturar') }} →</a>
+            <a class="btn btn-primary" href="{{ url_for('billing_new_for_side', operation_id=op.db_id, side=op.side) }}">{{ t('billing_invoice_' ~ op.side) }} →</a>
         </article>
         {% endfor %}
     </div>

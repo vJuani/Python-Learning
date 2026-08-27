@@ -5,7 +5,7 @@
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>{{ t('billing_new_title') }}</h2>
+        <h2>{{ t('billing_new_title') }} — {{ t('billing_side_' ~ side) }}</h2>
         <p>{{ t('billing_internal_notice') }}</p>
     </div>
     <div class="page-actions">
@@ -18,19 +18,49 @@
     <dl class="detail-list">
         <dt>{{ t('billing_operation') }}</dt>
         <dd>{{ operation.property }} · {{ operation.id }}</dd>
+        <dt>{{ t('billing_party_client') }}</dt>
+        <dd>{{ preview.recipient_name }} · {{ preview.recipient_tax_id }}</dd>
         <dt>{{ t('billing_amount') }}</dt>
         <dd>{{ preview.currency }} {{ '%.2f'|format(preview.total_amount) }}</dd>
-        <dt>{{ t('billing_recipient') }}</dt>
-        <dd>{{ preview.recipient_name }} · {{ preview.recipient_tax_id }}</dd>
         <dt>{{ t('billing_concept') }}</dt>
         <dd>{{ preview.description }}</dd>
         <dt>{{ t('billing_service') }}</dt>
         <dd>{{ t('billing_service_services') }}</dd>
         <dt>{{ t('billing_units') }}</dt>
         <dd>{{ preview.quantity }}</dd>
+        <dt>{{ t('billing_issuer') }}</dt>
+        <dd>{{ preview.issuer_name }} · {{ preview.issuer_tax_id }}</dd>
     </dl>
 
-    <form method="post" class="agent-form" action="{{ url_for('billing_new_from_operation', operation_id=operation.db_id) }}">
+    <form method="post" class="agent-form" action="{{ url_for('billing_new_for_side', operation_id=operation.db_id, side=side) }}">
+        {% if is_staff %}
+        <div class="form-group">
+            <label>{{ t('billing_who_issues') }}</label>
+            <select name="issuer_mode" class="form-input" id="issuer_mode">
+                {% if settings.agents_can_invoice %}
+                <option value="agent" {% if issuer_mode == 'agent' %}selected{% endif %}>{{ t('billing_issuer_agent') }}</option>
+                {% endif %}
+                {% if settings.office_can_invoice %}
+                <option value="office" {% if issuer_mode == 'office' %}selected{% endif %}>{{ t('billing_issuer_office') }}</option>
+                {% endif %}
+            </select>
+        </div>
+        {% if settings.office_can_invoice and issuer_profiles %}
+        <div class="form-group">
+            <label>{{ t('billing_issuers_title') }}</label>
+            <select name="issuer_profile_id" class="form-input">
+                {% for p in issuer_profiles %}
+                <option value="{{ p.id }}" {% if issuer_profile_id == p.id %}selected{% endif %}>
+                    {{ p.display_name }} · {{ p.tax_id }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        {% else %}
+        <input type="hidden" name="issuer_mode" value="agent">
+        {% endif %}
+
         <div class="form-group">
             <label for="payment_condition">{{ t('billing_payment_condition') }}</label>
             <select id="payment_condition" name="payment_condition" class="form-input">

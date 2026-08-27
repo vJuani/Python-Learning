@@ -85,21 +85,29 @@ def build_invoice_dict(row):
         "cancelled_by_user_id": row[43],
         "cancellation_reason": row[44],
         "cash_movement_id": row[45] if len(row) > 45 else None,
+        "side": row[46] if len(row) > 46 else None,
+        "issuer_profile_id": (
+            row[47] if len(row) > 47 else None
+        ),
+        "issuer_key": row[48] if len(row) > 48 else None,
+        "recipient_party_id": (
+            row[49] if len(row) > 49 else None
+        ),
     }
 
     # Optional joined display fields (list_invoices).
-    if len(row) > 46:
-        invoice["agent_name"] = row[46]
-    if len(row) > 47:
-        invoice["property_address"] = row[47]
-    if len(row) > 48:
+    if len(row) > 50:
+        invoice["agent_name"] = row[50]
+    if len(row) > 51:
+        invoice["property_address"] = row[51]
+    if len(row) > 52:
         invoice["operation_display_id"] = (
-            f"COM-{int(row[48]):06d}"
-            if row[48] is not None
+            f"COM-{int(row[52]):06d}"
+            if row[52] is not None
             else None
         )
-    if len(row) > 49:
-        invoice["operation_date"] = row[49]
+    if len(row) > 53:
+        invoice["operation_date"] = row[53]
 
     return invoice
 
@@ -150,7 +158,11 @@ INVOICE_COLUMNS = """
         invoices.cancelled_at,
         invoices.cancelled_by_user_id,
         invoices.cancellation_reason,
-        invoices.cash_movement_id
+        invoices.cash_movement_id,
+        invoices.side,
+        invoices.issuer_profile_id,
+        invoices.issuer_key,
+        invoices.recipient_party_id
 """
 
 INVOICES_BASE_QUERY = f"""
@@ -207,6 +219,7 @@ def get_active_invoice_for_operation(
     organization_id,
     operation_id,
 ):
+    """Legacy: any active invoice for the operation."""
     organization_id = require_organization_id(
         organization_id
     )
@@ -231,6 +244,82 @@ def get_active_invoice_for_operation(
         connection.close()
 
 
+def get_active_invoice_for_side_issuer(
+    organization_id,
+    operation_id,
+    side,
+    issuer_key,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    placeholders = ", ".join("?" for _ in ACTIVE_STATUSES)
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            INVOICES_BASE_QUERY
+            + f"""
+            WHERE invoices.organization_id = ?
+                AND invoices.operation_id = ?
+                AND invoices.side = ?
+                AND invoices.issuer_key = ?
+                AND invoices.status IN ({placeholders})
+            ORDER BY invoices.id DESC
+            LIMIT 1
+            """,
+            (
+                organization_id,
+                operation_id,
+                side,
+                issuer_key,
+                *ACTIVE_STATUSES,
+            ),
+        )
+        return build_invoice_dict(cursor.fetchone())
+    finally:
+        connection.close()
+
+
+def list_invoices_for_operation(
+    organization_id,
+    operation_id,
+    side=None,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    clauses = [
+        "invoices.organization_id = ?",
+        "invoices.operation_id = ?",
+    ]
+    params = [organization_id, operation_id]
+
+    if side is not None:
+        clauses.append("invoices.side = ?")
+        params.append(side)
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            INVOICES_BASE_QUERY
+            + f"""
+            WHERE {" AND ".join(clauses)}
+            ORDER BY invoices.id DESC
+            """,
+            params,
+        )
+        return [
+            build_invoice_dict(row)
+            for row in cursor.fetchall()
+        ]
+    finally:
+        connection.close()
+
+
 def list_invoices(
     organization_id,
     *,
@@ -241,6 +330,8 @@ def list_invoices(
     date_to=None,
     invoice_type=None,
     payment_condition=None,
+    side=None,
+    issuer_key=None,
     q=None,
     limit=None,
 ):
@@ -284,6 +375,14 @@ def list_invoices(
     if payment_condition is not None:
         clauses.append("invoices.payment_condition = ?")
         params.append(payment_condition)
+
+    if side is not None:
+        clauses.append("invoices.side = ?")
+        params.append(side)
+
+    if issuer_key is not None:
+        clauses.append("invoices.issuer_key = ?")
+        params.append(issuer_key)
 
     if q:
         like = f"%{str(q).strip()}%"
@@ -421,14 +520,18 @@ def create_invoice_atomic(
                 cancelled_at,
                 cancelled_by_user_id,
                 cancellation_reason,
-                cash_movement_id
+                cash_movement_id,
+                side,
+                issuer_profile_id,
+                issuer_key,
+                recipient_party_id
             )
             VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -477,6 +580,10 @@ def create_invoice_atomic(
                 fields.get("cancelled_by_user_id"),
                 fields.get("cancellation_reason"),
                 fields.get("cash_movement_id"),
+                fields.get("side"),
+                fields.get("issuer_profile_id"),
+                fields.get("issuer_key"),
+                fields.get("recipient_party_id"),
             ),
         )
 
@@ -731,7 +838,8 @@ def count_pending_operations_to_invoice(
     agent_id=None,
 ):
     """
-    Operations with invoice_amount > 0 and no active invoice.
+    Legacy: operations with invoice_amount > 0 and no
+    active invoice. Prefer count_pending_parties_to_invoice.
     """
     organization_id = require_organization_id(
         organization_id
@@ -766,6 +874,85 @@ def count_pending_operations_to_invoice(
             f"""
             SELECT COUNT(*)
             FROM operations
+            WHERE {" AND ".join(clauses)}
+            """,
+            params,
+        )
+        row = cursor.fetchone()
+        return int(row[0] or 0)
+    finally:
+        connection.close()
+
+
+def count_pending_parties_to_invoice(
+    organization_id,
+    agent_id=None,
+):
+    """
+    Count operation parties ready to invoice.
+
+    Staff (no agent_id): participating + billing_enabled +
+    invoice_amount > 0.
+
+    Agent: same, limited to the agent's operations, and
+    without an active invoice for issuer_key=agent:{id}
+    on that operation+side.
+    """
+    organization_id = require_organization_id(
+        organization_id
+    )
+    clauses = [
+        "operation_parties.organization_id = ?",
+        "operation_parties.is_participating = 1",
+        "operation_parties.billing_enabled = 1",
+        "operation_parties.invoice_amount IS NOT NULL",
+        "operation_parties.invoice_amount > 0",
+    ]
+    params = [organization_id]
+
+    join_sql = ""
+    if agent_id is not None:
+        placeholders = ", ".join(
+            "?" for _ in ACTIVE_STATUSES
+        )
+        issuer_key = f"agent:{agent_id}"
+        join_sql = """
+            INNER JOIN operations
+                ON operations.id
+                    = operation_parties.operation_id
+                AND operations.organization_id
+                    = operation_parties.organization_id
+        """
+        clauses.append("operations.agent_id = ?")
+        params.append(agent_id)
+        clauses.append(
+            f"""
+            NOT EXISTS (
+                SELECT 1
+                FROM invoices
+                WHERE invoices.organization_id
+                    = operation_parties.organization_id
+                    AND invoices.operation_id
+                        = operation_parties.operation_id
+                    AND invoices.side
+                        = operation_parties.party_role
+                    AND invoices.issuer_key = ?
+                    AND invoices.status IN ({placeholders})
+            )
+            """
+        )
+        params.append(issuer_key)
+        params.extend(ACTIVE_STATUSES)
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM operation_parties
+            {join_sql}
             WHERE {" AND ".join(clauses)}
             """,
             params,

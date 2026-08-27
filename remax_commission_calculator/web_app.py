@@ -195,16 +195,15 @@ from modules.invoicing import (
     STATUS_READY,
     TAX_CONDITIONS,
     billing_kpis,
-    build_draft_preview_from_operation,
     cancel_invoice,
     confirm_draft,
-    create_draft_from_operation,
+    create_draft_for_side,
     generate_draft_pdf_bytes,
     get_invoice,
-    get_operation_billing_state,
+    get_operation_sides_state,
     list_invoices,
     list_pending_operations,
-    set_operation_invoice_amount,
+    set_party_invoice_amount,
     update_draft_options,
 )
 
@@ -620,6 +619,24 @@ def settings_to_form_values(settings):
         "default_payment_condition": (
             settings.get("default_payment_condition")
             or "cuenta_corriente"
+        ),
+        "default_invoice_description": (
+            settings.get("default_invoice_description")
+            or "Asesoramiento Integral de Gestión"
+        ),
+        "default_buyer_commission_percent": (
+            settings.get("default_buyer_commission_percent")
+            if settings.get(
+                "default_buyer_commission_percent"
+            ) is not None
+            else 3
+        ),
+        "default_seller_commission_percent": (
+            settings.get("default_seller_commission_percent")
+            if settings.get(
+                "default_seller_commission_percent"
+            ) is not None
+            else 3
         ),
     }
 
@@ -2650,6 +2667,15 @@ def organization_settings():
             billing_email=parsed.get("billing_email"),
             default_payment_condition=parsed.get(
                 "default_payment_condition"
+            ),
+            default_invoice_description=parsed.get(
+                "default_invoice_description"
+            ),
+            default_buyer_commission_percent=parsed.get(
+                "default_buyer_commission_percent"
+            ),
+            default_seller_commission_percent=parsed.get(
+                "default_seller_commission_percent"
             ),
         )
 
@@ -4781,10 +4807,23 @@ def operations_detail(operation_id):
         operation,
         language,
     )
-    billing_state = get_operation_billing_state(
+    sides_state = get_operation_sides_state(
         operation,
         organization_id,
+        user=get_current_user(),
     )
+    total_commission = 0.0
+    for side_info in (sides_state or {}).values():
+        party = (side_info or {}).get("party") or {}
+        if party.get("is_participating") and party.get(
+            "commission_amount"
+        ) is not None:
+            try:
+                total_commission += float(
+                    party["commission_amount"]
+                )
+            except (TypeError, ValueError):
+                pass
     can_set_invoice_amount = (
         get_guest_access() is None
         and is_admin()
@@ -4795,7 +4834,6 @@ def operations_detail(operation_id):
             is_admin()
             or is_agent()
         )
-        and billing_state.get("can_create_draft")
     )
 
     show_readiness = (
@@ -4840,9 +4878,11 @@ def operations_detail(operation_id):
         document_categories=document_categories,
         commission_lines=commission_lines,
         billing_lines=billing_lines,
-        billing_state=billing_state,
+        sides_state=sides_state,
+        total_commission=total_commission,
         can_set_invoice_amount=can_set_invoice_amount,
         can_create_invoice=can_create_invoice,
+        tax_conditions=TAX_CONDITIONS,
     )
 
 
@@ -4874,6 +4914,12 @@ def require_billing_user():
 
 
 def _flash_invoicing_error(error):
+    # One alert for incomplete profiles; list keys only in that card.
+    if error.message_key == (
+        "invoice_err_billing_profile_incomplete"
+    ):
+        flash_i18n(error.message_key, "error")
+        return
     flash_i18n(error.message_key, "error")
     for missing_key in error.missing or []:
         if isinstance(missing_key, str) and missing_key.startswith(

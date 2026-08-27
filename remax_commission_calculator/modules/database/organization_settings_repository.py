@@ -55,6 +55,44 @@ def build_settings_dict(row):
             if len(row) > 16 and row[16]
             else "cuenta_corriente"
         ),
+        "default_buyer_commission_percent": (
+            float(row[17])
+            if len(row) > 17 and row[17] is not None
+            else 3.0
+        ),
+        "default_seller_commission_percent": (
+            float(row[18])
+            if len(row) > 18 and row[18] is not None
+            else 3.0
+        ),
+        "default_invoice_description": (
+            row[19]
+            if len(row) > 19 and row[19]
+            else "Asesoramiento Integral de Gestión"
+        ),
+        "default_invoice_service_type": (
+            row[20]
+            if len(row) > 20 and row[20]
+            else "services"
+        ),
+        "default_invoice_currency": (
+            row[21]
+            if len(row) > 21 and row[21]
+            else "ARS"
+        ),
+        "agents_can_invoice": (
+            bool(row[22])
+            if len(row) > 22 and row[22] is not None
+            else True
+        ),
+        "office_can_invoice": (
+            bool(row[23])
+            if len(row) > 23 and row[23] is not None
+            else True
+        ),
+        "default_issuer_profile_id": (
+            row[24] if len(row) > 24 else None
+        ),
     }
 
 
@@ -76,7 +114,15 @@ SETTINGS_SELECT = """
             fiscal_address,
             trade_name,
             billing_email,
-            default_payment_condition
+            default_payment_condition,
+            default_buyer_commission_percent,
+            default_seller_commission_percent,
+            default_invoice_description,
+            default_invoice_service_type,
+            default_invoice_currency,
+            agents_can_invoice,
+            office_can_invoice,
+            default_issuer_profile_id
         FROM organization_settings
 """
 
@@ -217,6 +263,14 @@ def update_organization_billing_fields(
     trade_name=None,
     billing_email=None,
     default_payment_condition=None,
+    default_buyer_commission_percent=None,
+    default_seller_commission_percent=None,
+    default_invoice_description=None,
+    default_invoice_service_type=None,
+    default_invoice_currency=None,
+    agents_can_invoice=None,
+    office_can_invoice=None,
+    default_issuer_profile_id=None,
 ):
     """
     Update organization fiscal / billing profile fields.
@@ -256,6 +310,42 @@ def update_organization_billing_fields(
     if default_payment_condition is not None:
         clauses.append("default_payment_condition = ?")
         params.append(default_payment_condition.strip())
+
+    if default_buyer_commission_percent is not None:
+        clauses.append(
+            "default_buyer_commission_percent = ?"
+        )
+        params.append(default_buyer_commission_percent)
+
+    if default_seller_commission_percent is not None:
+        clauses.append(
+            "default_seller_commission_percent = ?"
+        )
+        params.append(default_seller_commission_percent)
+
+    if default_invoice_description is not None:
+        clauses.append("default_invoice_description = ?")
+        params.append(default_invoice_description.strip())
+
+    if default_invoice_service_type is not None:
+        clauses.append("default_invoice_service_type = ?")
+        params.append(default_invoice_service_type.strip())
+
+    if default_invoice_currency is not None:
+        clauses.append("default_invoice_currency = ?")
+        params.append(default_invoice_currency.strip())
+
+    if agents_can_invoice is not None:
+        clauses.append("agents_can_invoice = ?")
+        params.append(1 if agents_can_invoice else 0)
+
+    if office_can_invoice is not None:
+        clauses.append("office_can_invoice = ?")
+        params.append(1 if office_can_invoice else 0)
+
+    if default_issuer_profile_id is not None:
+        clauses.append("default_issuer_profile_id = ?")
+        params.append(default_issuer_profile_id)
 
     if not clauses:
         return

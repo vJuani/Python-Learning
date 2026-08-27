@@ -44,6 +44,8 @@ MIGRATION_TABLE_ORDER: tuple[str, ...] = (
     "cash_movements",
     "cash_ai_drafts",
     "agent_billing_profiles",
+    "billing_issuer_profiles",
+    "operation_parties",
     "invoices",
 )
 
@@ -68,6 +70,8 @@ IDENTITY_TABLES: tuple[tuple[str, str], ...] = (
     ("cash_movements", "id"),
     ("cash_ai_drafts", "id"),
     ("agent_billing_profiles", "id"),
+    ("billing_issuer_profiles", "id"),
+    ("operation_parties", "id"),
     ("invoices", "id"),
 )
 
@@ -108,13 +112,32 @@ MONEY_COLUMNS: dict[str, frozenset[str]] = {
         "balance_before",
         "balance_after",
     }),
+    "operation_parties": frozenset({
+        "commission_percent",
+        "commission_amount",
+        "invoice_amount",
+        "invoice_exchange_rate",
+    }),
 }
 
 FLAG_COLUMNS: dict[str, frozenset[str]] = {
     "organizations": frozenset({"is_active"}),
-    "organization_settings": frozenset({"registration_enabled"}),
+    "organization_settings": frozenset({
+        "registration_enabled",
+        "agents_can_invoice",
+        "office_can_invoice",
+    }),
     "users": frozenset({"is_active"}),
     "notifications": frozenset({"is_read"}),
+    "agent_billing_profiles": frozenset({"is_active"}),
+    "billing_issuer_profiles": frozenset({
+        "is_default",
+        "is_active",
+    }),
+    "operation_parties": frozenset({
+        "is_participating",
+        "billing_enabled",
+    }),
 }
 
 NULL_CHECK_COLUMNS: dict[str, tuple[str, ...]] = {

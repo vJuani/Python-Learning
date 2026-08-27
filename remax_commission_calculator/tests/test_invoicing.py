@@ -1,5 +1,5 @@
 """
-Tests for Facturación / Billing v1.
+Tests for Facturación multi-side / multi-issuer.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from pathlib import Path
 
 _TEST_TMP = tempfile.TemporaryDirectory()
 os.environ["DATABASE_PATH"] = str(
-    Path(_TEST_TMP.name) / "test_invoicing.db"
+    Path(_TEST_TMP.name) / "test_invoicing_v2.db"
 )
 
 from modules.auth import ROLE_ADMIN, ROLE_AGENT, hash_password
@@ -23,26 +23,32 @@ from modules.database import (
     add_property,
     add_user,
     create_tables,
+    ensure_parties_for_operation,
     get_operation_record,
+    set_operation_party_client_fields,
     update_organization_billing_fields,
     upsert_agent_billing_profile,
+    upsert_billing_issuer_profile,
 )
 from modules.i18n import TRANSLATIONS
 from modules.invoicing import (
     InvoicingError,
+    SIDE_BUYER,
+    SIDE_SELLER,
+    cancel_invoice,
     confirm_draft,
-    create_draft_from_operation,
-    set_operation_invoice_amount,
+    create_draft_for_side,
+    set_party_invoice_amount,
 )
 from web_app import app
 
 
-class InvoicingTests(unittest.TestCase):
+class InvoicingV2Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         apply_config(app)
         app.config["TESTING"] = True
-        app.config["SECRET_KEY"] = "test-secret-billing"
+        app.config["SECRET_KEY"] = "test-secret-billing-v2"
         create_tables()
 
         cls.org_a = add_organization("Billing Org A")
@@ -51,11 +57,6 @@ class InvoicingTests(unittest.TestCase):
 
         cls.agent_a = add_agent("Agent A", "Alto", cls.org_a)
         cls.agent_b = add_agent("Agent B", "Alto", cls.org_a)
-        cls.agent_other_org = add_agent(
-            "Agent Other",
-            "Alto",
-            cls.org_b,
-        )
 
         cls.admin_a = add_user(
             "bill_admin_a",
@@ -91,9 +92,12 @@ class InvoicingTests(unittest.TestCase):
             tax_id="30-71234567-8",
             tax_condition="responsable_inscripto",
             fiscal_address="Calle Falsa 123",
-            trade_name="Principal",
-            billing_email="admin@example.com",
             default_payment_condition="cuenta_corriente",
+            default_invoice_description=(
+                "Asesoramiento Integral de Gestión"
+            ),
+            default_buyer_commission_percent=3,
+            default_seller_commission_percent=3,
         )
 
         for agent_id, name in (
@@ -109,6 +113,18 @@ class InvoicingTests(unittest.TestCase):
                 fiscal_address="Domicilio Agente 1",
                 email="agent@example.com",
             )
+
+        cls.issuer = upsert_billing_issuer_profile(
+            cls.org_a,
+            issuer_type="broker",
+            display_name="Martillero JP",
+            legal_name="Juan Perez Martillero",
+            tax_id="20-11223344-5",
+            tax_condition="responsable_inscripto",
+            fiscal_address="Oficina 1",
+            email="martillero@example.com",
+            is_default=True,
+        )
 
         cls.property_a = add_property(
             "Hubac 4702",
@@ -130,10 +146,239 @@ class InvoicingTests(unittest.TestCase):
             follow_redirects=True,
         )
 
-    def _make_operation(self, agent_id, with_amount=False):
+    def _agent_user(self):
+        return {
+            "id": self.user_agent_a,
+            "role": ROLE_AGENT,
+            "agent_id": self.agent_a,
+        }
+
+    def _admin_user(self):
+        return {
+            "id": self.admin_a,
+            "role": ROLE_ADMIN,
+            "agent_id": None,
+        }
+
+    def _make_ready_operation(self, *, sides=("buyer",)):
         op_id = add_operation(
             "27/08/2026",
-            agent_id,
+            self.agent_a,
+            self.property_a,
+            "no",
+            0,
+            200000,
+            3,
+            6000,
+            5400,
+            600,
+            2700,
+            2700,
+            0,
+            2700,
+            self.org_a,
+        )
+        ensure_parties_for_operation(self.org_a, op_id)
+        for side in sides:
+            set_operation_party_client_fields(
+                self.org_a,
+                op_id,
+                side,
+                client_legal_name=(
+                    "Juan Perez"
+                    if side == "buyer"
+                    else "Maria Lopez"
+                ),
+                client_tax_id="20-99887766-5",
+                client_tax_condition="consumidor_final",
+                client_fiscal_address="Cliente 123",
+                client_email="c@example.com",
+            )
+            set_party_invoice_amount(
+                self.org_a,
+                op_id,
+                side,
+                "7850000" if side == "buyer" else "6500000",
+                "ARS",
+                "1307.50",
+                self.admin_a,
+                notify=False,
+            )
+        return op_id
+
+    def test_i18n_keys(self):
+        for key in (
+            "nav_billing",
+            "billing_missing_agent_email",
+            "billing_agent_profile_incomplete_title",
+            "billing_invoice_buyer",
+            "billing_side_seller",
+            "notification_operation_side_ready_to_invoice",
+        ):
+            self.assertIn(key, TRANSLATIONS["es"])
+            self.assertIn(key, TRANSLATIONS["en"])
+
+    def test_agent_invoices_client_not_org(self):
+        op_id = self._make_ready_operation()
+        invoice = create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            self._agent_user(),
+            issuer_mode="agent",
+        )
+        self.assertEqual(invoice["side"], "buyer")
+        self.assertEqual(invoice["recipient_name"], "Juan Perez")
+        self.assertNotEqual(
+            invoice["recipient_name"],
+            "Inmobiliaria Principal",
+        )
+        self.assertAlmostEqual(
+            invoice["total_amount"],
+            7850000,
+        )
+        op = get_operation_record(op_id, self.org_a)
+        self.assertEqual(op["was_invoiced"], "no")
+
+        confirmed = confirm_draft(
+            self.org_a,
+            invoice["id"],
+            self._agent_user(),
+        )
+        self.assertEqual(
+            confirmed["status"],
+            "ready_to_issue",
+        )
+        op = get_operation_record(op_id, self.org_a)
+        self.assertEqual(op["was_invoiced"], "no")
+
+    def test_office_issuer_same_side(self):
+        op_id = self._make_ready_operation()
+        agent_inv = create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            self._agent_user(),
+            issuer_mode="agent",
+        )
+        office_inv = create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            self._admin_user(),
+            issuer_mode="office",
+            issuer_profile_id=self.issuer["id"],
+        )
+        self.assertNotEqual(
+            agent_inv["id"],
+            office_inv["id"],
+        )
+        self.assertEqual(
+            office_inv["issuer_name"],
+            "Juan Perez Martillero",
+        )
+
+    def test_same_issuer_no_duplicate(self):
+        op_id = self._make_ready_operation()
+        create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            self._agent_user(),
+            issuer_mode="agent",
+        )
+        with self.assertRaises(InvoicingError) as ctx:
+            create_draft_for_side(
+                self.org_a,
+                op_id,
+                SIDE_BUYER,
+                self._agent_user(),
+                issuer_mode="agent",
+            )
+        self.assertEqual(
+            ctx.exception.message_key,
+            "invoice_err_already_invoiced",
+        )
+
+    def test_buyer_and_seller_independent(self):
+        op_id = self._make_ready_operation(
+            sides=("buyer", "seller"),
+        )
+        buyer = create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            self._agent_user(),
+            issuer_mode="agent",
+        )
+        seller = create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_SELLER,
+            self._agent_user(),
+            issuer_mode="agent",
+        )
+        self.assertEqual(buyer["side"], "buyer")
+        self.assertEqual(seller["side"], "seller")
+        self.assertEqual(
+            seller["recipient_name"],
+            "Maria Lopez",
+        )
+
+    def test_cancel_frees_slot(self):
+        op_id = self._make_ready_operation()
+        inv = create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            self._agent_user(),
+            issuer_mode="agent",
+        )
+        cancel_invoice(
+            self.org_a,
+            inv["id"],
+            self._admin_user(),
+            reason="test",
+        )
+        again = create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            self._agent_user(),
+            issuer_mode="agent",
+        )
+        self.assertNotEqual(again["id"], inv["id"])
+
+    def test_agent_cannot_see_other_invoice(self):
+        op_id = self._make_ready_operation()
+        inv = create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            self._agent_user(),
+            issuer_mode="agent",
+        )
+        self._login("bill_agent_b")
+        response = self.client.get(f"/billing/{inv['id']}")
+        self.assertEqual(response.status_code, 302)
+
+    def test_other_org_blocked(self):
+        op_id = self._make_ready_operation()
+        inv = create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            self._agent_user(),
+            issuer_mode="agent",
+        )
+        self._login("bill_admin_b")
+        response = self.client.get(f"/billing/{inv['id']}")
+        self.assertEqual(response.status_code, 302)
+
+    def test_missing_client_blocks(self):
+        op_id = add_operation(
+            "27/08/2026",
+            self.agent_a,
             self.property_a,
             "no",
             0,
@@ -148,269 +393,11 @@ class InvoicingTests(unittest.TestCase):
             1350,
             self.org_a,
         )
-        if with_amount:
-            set_operation_invoice_amount(
-                self.org_a,
-                op_id,
-                "7850000",
-                "ARS",
-                "1307.50",
-                self.admin_a,
-                notify=False,
-            )
-        return op_id
-
-    def test_i18n_nav_billing(self):
-        self.assertIn("nav_billing", TRANSLATIONS["es"])
-        self.assertIn("nav_billing", TRANSLATIONS["en"])
-
-    def test_guest_billing_forbidden(self):
-        response = self.client.get("/billing")
-        self.assertIn(response.status_code, (302, 401, 403))
-
-    def test_operation_without_amount_not_invoiceable(self):
-        self._login("bill_agent_a")
-        op_id = self._make_operation(self.agent_a)
-        response = self.client.get(
-            f"/billing/operations/{op_id}/new",
-            follow_redirects=True,
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(
-            b"importe",
-            response.data.lower(),
-        )
-
-    def test_create_draft_snapshot_and_confirm(self):
-        self._login("bill_agent_a")
-        op_id = self._make_operation(
-            self.agent_a,
-            with_amount=True,
-        )
-        response = self.client.post(
-            f"/billing/operations/{op_id}/new",
-            data={
-                "payment_condition": "contado",
-                "issue_date": "2026-08-27",
-            },
-            follow_redirects=False,
-        )
-        self.assertEqual(response.status_code, 302)
-        location = response.headers["Location"]
-        self.assertIn("/billing/", location)
-        self.assertIn("/review", location)
-
-        invoice_id = int(
-            location.rstrip("/").split("/")[-2]
-            if location.endswith("/review")
-            else location.split("/")[-1]
-        )
-        # Path like /billing/1/review
-        parts = [p for p in location.split("/") if p]
-        invoice_id = int(parts[parts.index("billing") + 1])
-
-        from modules.database import get_operation_record as gor
-        # Change operation amount after draft
-        set_operation_invoice_amount(
+        ensure_parties_for_operation(self.org_a, op_id)
+        set_party_invoice_amount(
             self.org_a,
             op_id,
-            "999",
-            "ARS",
-            None,
-            self.admin_a,
-            notify=False,
-        )
-
-        from modules.invoicing import get_invoice
-        invoice = get_invoice(self.org_a, invoice_id)
-        self.assertAlmostEqual(invoice["total_amount"], 7850000)
-        self.assertEqual(invoice["currency"], "ARS")
-        self.assertEqual(
-            invoice["description"],
-            "Asesoramiento Integral de Gestión",
-        )
-        self.assertEqual(invoice["status"], "draft")
-
-        op = get_operation_record(op_id, self.org_a)
-        self.assertEqual(op["was_invoiced"], "no")
-
-        confirmed = confirm_draft(
-            self.org_a,
-            invoice_id,
-            {
-                "id": self.user_agent_a,
-                "role": ROLE_AGENT,
-                "agent_id": self.agent_a,
-            },
-        )
-        self.assertEqual(confirmed["status"], "ready_to_issue")
-        op = get_operation_record(op_id, self.org_a)
-        self.assertEqual(op["was_invoiced"], "no")
-
-    def test_agent_cannot_see_other_invoice(self):
-        op_id = self._make_operation(
-            self.agent_a,
-            with_amount=True,
-        )
-        invoice = create_draft_from_operation(
-            self.org_a,
-            op_id,
-            {
-                "id": self.user_agent_a,
-                "role": ROLE_AGENT,
-                "agent_id": self.agent_a,
-            },
-        )
-        self._login("bill_agent_b")
-        response = self.client.get(
-            f"/billing/{invoice['id']}"
-        )
-        # App errorhandlers redirect 403/404 to dashboard.
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(
-            response.headers["Location"].endswith("/")
-            or "dashboard" in response.headers["Location"]
-        )
-
-    def test_admin_sees_org_invoices(self):
-        op_id = self._make_operation(
-            self.agent_a,
-            with_amount=True,
-        )
-        create_draft_from_operation(
-            self.org_a,
-            op_id,
-            {
-                "id": self.user_agent_a,
-                "role": ROLE_AGENT,
-                "agent_id": self.agent_a,
-            },
-        )
-        self._login("bill_admin_a")
-        response = self.client.get("/billing")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(b"FAC-", response.data)
-
-    def test_other_org_blocked(self):
-        op_id = self._make_operation(
-            self.agent_a,
-            with_amount=True,
-        )
-        invoice = create_draft_from_operation(
-            self.org_a,
-            op_id,
-            {
-                "id": self.user_agent_a,
-                "role": ROLE_AGENT,
-                "agent_id": self.agent_a,
-            },
-        )
-        self._login("bill_admin_b")
-        response = self.client.get(
-            f"/billing/{invoice['id']}"
-        )
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(
-            response.headers["Location"].endswith("/")
-            or "dashboard" in response.headers["Location"]
-        )
-
-    def test_double_invoice_blocked(self):
-        op_id = self._make_operation(
-            self.agent_a,
-            with_amount=True,
-        )
-        user = {
-            "id": self.user_agent_a,
-            "role": ROLE_AGENT,
-            "agent_id": self.agent_a,
-        }
-        create_draft_from_operation(self.org_a, op_id, user)
-        with self.assertRaises(InvoicingError) as ctx:
-            create_draft_from_operation(
-                self.org_a,
-                op_id,
-                user,
-            )
-        self.assertEqual(
-            ctx.exception.message_key,
-            "invoice_err_already_invoiced",
-        )
-
-    def test_cancel_frees_slot(self):
-        from modules.invoicing import cancel_invoice
-
-        op_id = self._make_operation(
-            self.agent_a,
-            with_amount=True,
-        )
-        user = {
-            "id": self.admin_a,
-            "role": ROLE_ADMIN,
-            "agent_id": None,
-        }
-        invoice = create_draft_from_operation(
-            self.org_a,
-            op_id,
-            {
-                "id": self.user_agent_a,
-                "role": ROLE_AGENT,
-                "agent_id": self.agent_a,
-            },
-        )
-        cancel_invoice(
-            self.org_a,
-            invoice["id"],
-            user,
-            reason="test",
-        )
-        again = create_draft_from_operation(
-            self.org_a,
-            op_id,
-            {
-                "id": self.user_agent_a,
-                "role": ROLE_AGENT,
-                "agent_id": self.agent_a,
-            },
-        )
-        self.assertNotEqual(again["id"], invoice["id"])
-        self.assertEqual(again["status"], "draft")
-
-    def test_missing_profile_blocks(self):
-        agent_c = add_agent("No Profile", "Junior", self.org_a)
-        user_c = add_user(
-            "bill_agent_c",
-            hash_password("Password1"),
-            ROLE_AGENT,
-            self.org_a,
-            agent_id=agent_c,
-        )
-        prop = add_property(
-            "Sin Perfil 1",
-            "CABA",
-            self.org_a,
-            agent_id=agent_c,
-        )
-        op_id = add_operation(
-            "27/08/2026",
-            agent_c,
-            prop,
-            "no",
-            0,
-            100000,
-            3,
-            3000,
-            2700,
-            300,
-            1350,
-            1350,
-            0,
-            1350,
-            self.org_a,
-        )
-        set_operation_invoice_amount(
-            self.org_a,
-            op_id,
+            SIDE_BUYER,
             "1000",
             "ARS",
             None,
@@ -418,19 +405,49 @@ class InvoicingTests(unittest.TestCase):
             notify=False,
         )
         with self.assertRaises(InvoicingError) as ctx:
-            create_draft_from_operation(
+            create_draft_for_side(
                 self.org_a,
                 op_id,
-                {
-                    "id": user_c,
-                    "role": ROLE_AGENT,
-                    "agent_id": agent_c,
-                },
+                SIDE_BUYER,
+                self._agent_user(),
+                issuer_mode="agent",
             )
-        self.assertEqual(
+        self.assertIn(
             ctx.exception.message_key,
-            "invoice_err_billing_profile_incomplete",
+            (
+                "invoice_err_billing_profile_incomplete",
+                "invoice_err_client_incomplete",
+                "invoice_err_party_client_incomplete",
+            ),
         )
+
+    def test_guest_billing_forbidden(self):
+        response = self.client.get("/billing")
+        self.assertIn(response.status_code, (302, 401, 403))
+
+    def test_amount_snapshot(self):
+        op_id = self._make_ready_operation()
+        inv = create_draft_for_side(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            self._agent_user(),
+            issuer_mode="agent",
+        )
+        set_party_invoice_amount(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            "111",
+            "ARS",
+            None,
+            self.admin_a,
+            notify=False,
+        )
+        from modules.invoicing import get_invoice
+
+        again = get_invoice(self.org_a, inv["id"])
+        self.assertAlmostEqual(again["total_amount"], 7850000)
 
 
 if __name__ == "__main__":

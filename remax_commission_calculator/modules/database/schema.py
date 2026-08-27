@@ -2275,6 +2275,374 @@ def _migrate_invoicing(cursor):
     )
 
 
+def _migrate_invoicing_v2(cursor):
+    """
+    Multi-office / multi-side invoicing: issuer profiles, operation
+    parties (buyer/seller), and invoice uniqueness per issuer+side.
+    """
+    for column_name, column_sql in (
+        (
+            "default_buyer_commission_percent",
+            "REAL DEFAULT 3",
+        ),
+        (
+            "default_seller_commission_percent",
+            "REAL DEFAULT 3",
+        ),
+        (
+            "default_invoice_description",
+            "TEXT DEFAULT 'Asesoramiento Integral de Gestión'",
+        ),
+        (
+            "default_invoice_service_type",
+            "TEXT DEFAULT 'services'",
+        ),
+        (
+            "default_invoice_currency",
+            "TEXT DEFAULT 'ARS'",
+        ),
+        (
+            "agents_can_invoice",
+            "INTEGER NOT NULL DEFAULT 1",
+        ),
+        (
+            "office_can_invoice",
+            "INTEGER NOT NULL DEFAULT 1",
+        ),
+        (
+            "default_issuer_profile_id",
+            "INTEGER",
+        ),
+    ):
+        if not _column_exists(
+            cursor,
+            "organization_settings",
+            column_name,
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE organization_settings
+                ADD COLUMN {column_name} {column_sql}
+                """
+            )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS billing_issuer_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            issuer_type TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            legal_name TEXT NOT NULL,
+            tax_id TEXT NOT NULL,
+            tax_condition TEXT,
+            fiscal_address TEXT,
+            email TEXT,
+            is_default INTEGER NOT NULL DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            point_of_sale TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            deactivated_at TEXT,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+
+            CHECK (
+                issuer_type IN (
+                    'organization',
+                    'broker',
+                    'other'
+                )
+            )
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_billing_issuer_profiles_org_active
+        ON billing_issuer_profiles (
+            organization_id,
+            is_active
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS operation_parties (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            operation_id INTEGER NOT NULL,
+            party_role TEXT NOT NULL,
+            is_participating INTEGER NOT NULL DEFAULT 1,
+            commission_percent REAL,
+            commission_amount REAL,
+            client_legal_name TEXT,
+            client_tax_id TEXT,
+            client_tax_condition TEXT,
+            client_fiscal_address TEXT,
+            client_email TEXT,
+            client_phone TEXT,
+            invoice_amount REAL,
+            invoice_currency TEXT,
+            invoice_exchange_rate REAL,
+            invoice_amount_set_at TEXT,
+            invoice_amount_set_by_user_id INTEGER,
+            billing_enabled INTEGER NOT NULL DEFAULT 0,
+            billing_enabled_at TEXT,
+            billing_enabled_by_user_id INTEGER,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (operation_id)
+                REFERENCES operations(id)
+                ON DELETE RESTRICT,
+
+            CHECK (
+                party_role IN ('buyer', 'seller')
+            ),
+            UNIQUE (
+                organization_id,
+                operation_id,
+                party_role
+            )
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_operation_parties_org_op
+        ON operation_parties (
+            organization_id,
+            operation_id
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_operation_parties_org_billing
+        ON operation_parties (
+            organization_id,
+            billing_enabled
+        )
+        """
+    )
+
+    if _table_exists(cursor, "invoices"):
+        for column_name, column_sql in (
+            ("side", "TEXT"),
+            ("issuer_profile_id", "INTEGER"),
+            ("issuer_key", "TEXT"),
+            ("recipient_party_id", "INTEGER"),
+        ):
+            if not _column_exists(
+                cursor,
+                "invoices",
+                column_name,
+            ):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE invoices
+                    ADD COLUMN {column_name} {column_sql}
+                    """
+                )
+
+        cursor.execute(
+            """
+            UPDATE invoices
+            SET side = 'buyer'
+            WHERE side IS NULL OR side = ''
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE invoices
+            SET issuer_key = 'agent:' || agent_id
+            WHERE issuer_key IS NULL
+                AND agent_id IS NOT NULL
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE invoices
+            SET issuer_key = 'legacy:' || id
+            WHERE issuer_key IS NULL
+            """
+        )
+
+        cursor.execute(
+            """
+            DROP INDEX IF EXISTS
+            idx_invoices_one_active_per_operation
+            """
+        )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_invoices_one_active_per_issuer_side
+            ON invoices (
+                organization_id,
+                operation_id,
+                side,
+                issuer_key
+            )
+            WHERE status IN (
+                'draft',
+                'ready_to_issue',
+                'issued',
+                'error'
+            )
+                AND issuer_key IS NOT NULL
+            """
+        )
+
+    if (
+        _table_exists(cursor, "agent_billing_profiles")
+        and not _column_exists(
+            cursor,
+            "agent_billing_profiles",
+            "is_active",
+        )
+    ):
+        cursor.execute(
+            """
+            ALTER TABLE agent_billing_profiles
+            ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1
+            """
+        )
+
+    if (
+        _table_exists(cursor, "operations")
+        and _table_exists(cursor, "operation_parties")
+    ):
+        now = datetime.utcnow().replace(
+            microsecond=0
+        ).isoformat()
+        cursor.execute(
+            """
+            SELECT
+                id,
+                organization_id,
+                commission_rate,
+                total_commission,
+                invoice_amount,
+                invoice_currency,
+                invoice_exchange_rate,
+                invoice_amount_set_at,
+                invoice_amount_set_by_user_id
+            FROM operations
+            """
+        )
+        operations = cursor.fetchall()
+
+        for (
+            operation_id,
+            organization_id,
+            commission_rate,
+            total_commission,
+            invoice_amount,
+            invoice_currency,
+            invoice_exchange_rate,
+            invoice_amount_set_at,
+            invoice_amount_set_by_user_id,
+        ) in operations:
+            cursor.execute(
+                """
+                SELECT 1
+                FROM operation_parties
+                WHERE organization_id = ?
+                    AND operation_id = ?
+                    AND party_role = 'buyer'
+                """,
+                (organization_id, operation_id),
+            )
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    """
+                    INSERT INTO operation_parties (
+                        organization_id,
+                        operation_id,
+                        party_role,
+                        is_participating,
+                        commission_percent,
+                        commission_amount,
+                        invoice_amount,
+                        invoice_currency,
+                        invoice_exchange_rate,
+                        invoice_amount_set_at,
+                        invoice_amount_set_by_user_id,
+                        billing_enabled,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (
+                        ?, ?, 'buyer', 1, ?, ?,
+                        ?, ?, ?, ?, ?, 0, ?, ?
+                    )
+                    """,
+                    (
+                        organization_id,
+                        operation_id,
+                        commission_rate,
+                        total_commission,
+                        invoice_amount,
+                        invoice_currency,
+                        invoice_exchange_rate,
+                        invoice_amount_set_at,
+                        invoice_amount_set_by_user_id,
+                        now,
+                        now,
+                    ),
+                )
+
+            cursor.execute(
+                """
+                SELECT 1
+                FROM operation_parties
+                WHERE organization_id = ?
+                    AND operation_id = ?
+                    AND party_role = 'seller'
+                """,
+                (organization_id, operation_id),
+            )
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    """
+                    INSERT INTO operation_parties (
+                        organization_id,
+                        operation_id,
+                        party_role,
+                        is_participating,
+                        commission_percent,
+                        commission_amount,
+                        billing_enabled,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (
+                        ?, ?, 'seller', 0, 0, 0, 0, ?, ?
+                    )
+                    """,
+                    (
+                        organization_id,
+                        operation_id,
+                        now,
+                        now,
+                    ),
+                )
+
+
 def migrate_schema(create_backup=True):
     # Commit external_id before the bulk transaction so a later
     # rollback cannot drop the column on an existing Railway DB.
@@ -2491,6 +2859,7 @@ def migrate_schema(create_backup=True):
         _migrate_property_external_id(cursor)
         _migrate_cash_treasury(cursor)
         _migrate_invoicing(cursor)
+        _migrate_invoicing_v2(cursor)
 
         _validate_migration(
             cursor,

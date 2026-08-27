@@ -103,3 +103,21 @@ def notify_operation_invoice_amount_ready(
         payload=payload or {},
         actor_user_id=actor_user_id,
     )
+
+
+def notify_operation_side_ready_to_invoice(
+    organization_id,
+    agent_id,
+    operation_id,
+    payload=None,
+    actor_user_id=None,
+):
+    """Notify agent that a buyer/seller side is ready to bill."""
+    return notify_agent_for_operation(
+        organization_id,
+        agent_id,
+        "operation_side_ready_to_invoice",
+        operation_id,
+        payload=payload or {},
+        actor_user_id=actor_user_id,
+    )

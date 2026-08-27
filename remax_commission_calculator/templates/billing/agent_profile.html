@@ -12,17 +12,21 @@
     </div>
 </section>
 
-{% if errors %}
-<div class="flash-messages">
-    {% for error in errors %}
-    <p class="flash-message flash-error">{{ t(error) }}</p>
-    {% endfor %}
-</div>
+{% if errors or (missing is defined and missing) %}
+<section class="panel billing-profile-alert">
+    <h3>{{ t('billing_agent_profile_incomplete_title') }}</h3>
+    <p>{{ t('billing_agent_profile_incomplete_help') }}</p>
+    <ul>
+        {% for key in (errors or missing) %}
+        <li>{{ t(key) }}</li>
+        {% endfor %}
+    </ul>
+</section>
 {% endif %}
 
 {% if not org_ready %}
-<section class="panel">
-    <p class="danger-text">{{ t('invoice_err_billing_profile_incomplete') }}</p>
+<section class="panel billing-profile-alert">
+    <h3>{{ t('invoice_err_billing_profile_incomplete') }}</h3>
     <ul>
         {% for key in org_missing %}
         <li>{{ t(key) }}</li>

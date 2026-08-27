@@ -213,6 +213,30 @@ def validate_organization_settings_form(
         "cuenta_corriente",
     ).strip() or "cuenta_corriente"
 
+    default_invoice_description = form_data.get(
+        "default_invoice_description",
+        "Asesoramiento Integral de Gestión",
+    ).strip() or "Asesoramiento Integral de Gestión"
+
+    def _parse_percent(raw, fallback=3.0):
+        text = str(raw or "").strip().replace(",", ".")
+        if not text:
+            return fallback
+        try:
+            value = float(text)
+        except (TypeError, ValueError):
+            return None
+        if value < 0 or value > 100:
+            return None
+        return value
+
+    default_buyer_commission_percent = _parse_percent(
+        form_data.get("default_buyer_commission_percent"),
+    )
+    default_seller_commission_percent = _parse_percent(
+        form_data.get("default_seller_commission_percent"),
+    )
+
     if tax_id and not validate_cuit(tax_id):
         errors.append("settings_billing_cuit_invalid")
 
@@ -229,6 +253,11 @@ def validate_organization_settings_form(
         errors.append(
             "settings_billing_payment_condition_invalid"
         )
+
+    if default_buyer_commission_percent is None:
+        errors.append("settings_billing_tax_condition_invalid")
+    if default_seller_commission_percent is None:
+        errors.append("settings_billing_tax_condition_invalid")
 
     if len(errors) > 0:
         return errors, None
@@ -248,6 +277,15 @@ def validate_organization_settings_form(
         "billing_email": billing_email,
         "default_payment_condition": (
             default_payment_condition
+        ),
+        "default_invoice_description": (
+            default_invoice_description
+        ),
+        "default_buyer_commission_percent": (
+            default_buyer_commission_percent
+        ),
+        "default_seller_commission_percent": (
+            default_seller_commission_percent
         ),
     }
 

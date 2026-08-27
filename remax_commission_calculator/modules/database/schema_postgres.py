@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v5"
+POSTGRES_SCHEMA_VERSION = "postgres_v6"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -861,6 +861,104 @@ SCHEMA_STATEMENTS = (
     ON agent_billing_profiles (organization_id)
     """,
     f"""
+    CREATE TABLE IF NOT EXISTS billing_issuer_profiles (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        issuer_type TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        legal_name TEXT NOT NULL,
+        tax_id TEXT NOT NULL,
+        tax_condition TEXT,
+        fiscal_address TEXT,
+        email TEXT,
+        is_default {_FLAG} NOT NULL DEFAULT 0,
+        is_active {_FLAG} NOT NULL DEFAULT 1,
+        point_of_sale TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deactivated_at TEXT,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+
+        CHECK (
+            issuer_type IN (
+                'organization',
+                'broker',
+                'other'
+            )
+        )
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_billing_issuer_profiles_org_active
+    ON billing_issuer_profiles (
+        organization_id,
+        is_active
+    )
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS operation_parties (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        operation_id BIGINT NOT NULL,
+        party_role TEXT NOT NULL,
+        is_participating {_FLAG} NOT NULL DEFAULT 1,
+        commission_percent {_MONEY},
+        commission_amount {_MONEY},
+        client_legal_name TEXT,
+        client_tax_id TEXT,
+        client_tax_condition TEXT,
+        client_fiscal_address TEXT,
+        client_email TEXT,
+        client_phone TEXT,
+        invoice_amount {_MONEY},
+        invoice_currency TEXT,
+        invoice_exchange_rate {_MONEY},
+        invoice_amount_set_at TEXT,
+        invoice_amount_set_by_user_id BIGINT,
+        billing_enabled {_FLAG} NOT NULL DEFAULT 0,
+        billing_enabled_at TEXT,
+        billing_enabled_by_user_id BIGINT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+        FOREIGN KEY (operation_id)
+            REFERENCES operations(id)
+            ON DELETE RESTRICT,
+
+        CHECK (
+            party_role IN ('buyer', 'seller')
+        ),
+        UNIQUE (
+            organization_id,
+            operation_id,
+            party_role
+        )
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_operation_parties_org_op
+    ON operation_parties (
+        organization_id,
+        operation_id
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_operation_parties_org_billing
+    ON operation_parties (
+        organization_id,
+        billing_enabled
+    )
+    """,
+    f"""
     CREATE TABLE IF NOT EXISTS invoices (
         id {_ID},
         organization_id BIGINT NOT NULL,
@@ -908,6 +1006,10 @@ SCHEMA_STATEMENTS = (
         cancelled_by_user_id BIGINT,
         cancellation_reason TEXT,
         cash_movement_id BIGINT,
+        side TEXT,
+        issuer_profile_id BIGINT,
+        issuer_key TEXT,
+        recipient_party_id BIGINT,
 
         FOREIGN KEY (organization_id)
             REFERENCES organizations(id)
@@ -956,20 +1058,6 @@ SCHEMA_STATEMENTS = (
             organization_id,
             invoice_number_internal
         )
-    )
-    """,
-    """
-    CREATE UNIQUE INDEX IF NOT EXISTS
-    idx_invoices_one_active_per_operation
-    ON invoices (
-        organization_id,
-        operation_id
-    )
-    WHERE status IN (
-        'draft',
-        'ready_to_issue',
-        'issued',
-        'error'
     )
     """,
     """
@@ -1025,6 +1113,8 @@ POSTGRES_TABLES = (
     "cash_movements",
     "cash_ai_drafts",
     "agent_billing_profiles",
+    "billing_issuer_profiles",
+    "operation_parties",
     "invoices",
 )
 
@@ -1165,6 +1255,38 @@ def create_postgres_schema():
                 "default_payment_condition",
                 "TEXT NOT NULL DEFAULT 'cuenta_corriente'",
             ),
+            (
+                "default_buyer_commission_percent",
+                f"{_MONEY} DEFAULT 3",
+            ),
+            (
+                "default_seller_commission_percent",
+                f"{_MONEY} DEFAULT 3",
+            ),
+            (
+                "default_invoice_description",
+                "TEXT DEFAULT 'Asesoramiento Integral de Gestión'",
+            ),
+            (
+                "default_invoice_service_type",
+                "TEXT DEFAULT 'services'",
+            ),
+            (
+                "default_invoice_currency",
+                "TEXT DEFAULT 'ARS'",
+            ),
+            (
+                "agents_can_invoice",
+                f"{_FLAG} NOT NULL DEFAULT 1",
+            ),
+            (
+                "office_can_invoice",
+                f"{_FLAG} NOT NULL DEFAULT 1",
+            ),
+            (
+                "default_issuer_profile_id",
+                "BIGINT",
+            ),
         ):
             cursor.execute(
                 f"""
@@ -1173,6 +1295,77 @@ def create_postgres_schema():
                 {column_name} {column_sql}
                 """
             )
+
+        cursor.execute(
+            """
+            ALTER TABLE agent_billing_profiles
+            ADD COLUMN IF NOT EXISTS
+            is_active SMALLINT NOT NULL DEFAULT 1
+            """
+        )
+
+        for column_name, column_sql in (
+            ("side", "TEXT"),
+            ("issuer_profile_id", "BIGINT"),
+            ("issuer_key", "TEXT"),
+            ("recipient_party_id", "BIGINT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE invoices
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        cursor.execute(
+            """
+            UPDATE invoices
+            SET side = 'buyer'
+            WHERE side IS NULL OR side = ''
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE invoices
+            SET issuer_key = 'agent:' || agent_id::text
+            WHERE issuer_key IS NULL
+                AND agent_id IS NOT NULL
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE invoices
+            SET issuer_key = 'legacy:' || id::text
+            WHERE issuer_key IS NULL
+            """
+        )
+
+        cursor.execute(
+            """
+            DROP INDEX IF EXISTS
+            idx_invoices_one_active_per_operation
+            """
+        )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_invoices_one_active_per_issuer_side
+            ON invoices (
+                organization_id,
+                operation_id,
+                side,
+                issuer_key
+            )
+            WHERE status IN (
+                'draft',
+                'ready_to_issue',
+                'issued',
+                'error'
+            )
+                AND issuer_key IS NOT NULL
+            """
+        )
 
         if not _schema_version_applied(
             cursor,

@@ -4914,18 +4914,20 @@ a.dashboard-quick-card:hover {
 .detail-list dd {
     margin: 0;
 }
-.mobile-only {
-    display: none;
+.billing-side-block {
+    margin: 1rem 0;
+    padding: 1rem 0;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
 }
-.desktop-only {
-    display: block;
+.billing-side-edit {
+    margin-top: 0.75rem;
 }
-@media (max-width: 768px) {
-    .mobile-only {
-        display: grid;
-    }
-    .desktop-only {
-        display: none !important;
-    }
+.billing-profile-alert {
+    border-left: 4px solid #b45309;
 }
+.billing-profile-alert ul {
+    margin: 0.5rem 0 0;
+    padding-left: 1.1rem;
+}
+
 

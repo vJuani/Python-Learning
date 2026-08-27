@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('billing_issuers_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('billing_issuers_title') }}</h2>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('organization_settings') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    {% for p in profiles %}
+    <article class="billing-card">
+        <h4>{{ p.display_name }} {% if p.is_default %}· {{ t('billing_ready_to_invoice') }}{% endif %}</h4>
+        <p>{{ p.issuer_type }} · {{ p.tax_id }}</p>
+        <p>{{ p.legal_name }}</p>
+        <p>{% if p.is_active %}OK{% else %}OFF{% endif %}</p>
+        {% if p.is_active %}
+        <form method="post" style="display:inline">
+            <input type="hidden" name="profile_id" value="{{ p.id }}">
+            <button name="action" value="set_default" class="btn btn-secondary">Default</button>
+            <button name="action" value="deactivate" class="btn btn-danger">Off</button>
+        </form>
+        {% endif %}
+    </article>
+    {% else %}
+    <p class="empty-state">—</p>
+    {% endfor %}
+</section>
+
+<section class="panel">
+    <h3>{{ t('billing_issuers_title') }}</h3>
+    <form method="post" class="agent-form">
+        <input type="hidden" name="action" value="save">
+        <div class="form-group">
+            <label>Type</label>
+            <select name="issuer_type" class="form-input">
+                <option value="organization">organization</option>
+                <option value="broker">broker</option>
+                <option value="other">other</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>{{ t('billing_legal_name') }}</label>
+            <input name="display_name" class="form-input" required>
+            <input name="legal_name" class="form-input" required placeholder="{{ t('billing_legal_name') }}">
+        </div>
+        <div class="form-group">
+            <label>{{ t('billing_tax_id') }}</label>
+            <input name="tax_id" class="form-input" required>
+        </div>
+        <div class="form-group">
+            <label>{{ t('billing_tax_condition') }}</label>
+            <select name="tax_condition" class="form-input">
+                {% for tc in tax_conditions %}
+                <option value="{{ tc }}">{{ t('billing_tax_' ~ tc) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>{{ t('billing_fiscal_address') }}</label>
+            <input name="fiscal_address" class="form-input">
+        </div>
+        <div class="form-group">
+            <label>{{ t('billing_email') }}</label>
+            <input name="email" class="form-input">
+        </div>
+        <label class="checkbox-label">
+            <input type="checkbox" name="is_default" value="1"> Default
+        </label>
+        <button type="submit" class="btn btn-primary">{{ t('save') }}</button>
+    </form>
+</section>
+{% endblock %}
