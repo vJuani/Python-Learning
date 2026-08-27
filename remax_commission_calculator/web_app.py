@@ -4040,8 +4040,8 @@ def properties_list():
             "jurisdiction",
             ""
         ).strip(),
-        "agent": request.args.get(
-            "agent",
+        "agent_id": request.args.get(
+            "agent_id",
             ""
         ).strip(),
         "min_price": request.args.get(
@@ -4087,7 +4087,8 @@ def properties_list():
             filter_agents = all_agents
 
     _, parsed_filters = validate_property_filters(
-        filters
+        filters,
+        organization_id=organization_id,
     )
 
     property_count = len(properties)
@@ -4722,8 +4723,8 @@ def operations_list():
             "operation_id",
             ""
         ).strip(),
-        "agent": request.args.get(
-            "agent",
+        "agent_id": request.args.get(
+            "agent_id",
             ""
         ).strip(),
         "property": request.args.get(
@@ -4788,7 +4789,8 @@ def operations_list():
             filter_agents = all_agents
 
     _, parsed_filters = validate_operation_filters(
-        filters
+        filters,
+        organization_id=organization_id,
     )
 
     operation_count = len(operations)

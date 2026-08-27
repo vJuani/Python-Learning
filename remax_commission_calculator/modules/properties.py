@@ -1,3 +1,7 @@
+from modules.filter_helpers import (
+    parse_filter_agent_id,
+    resolve_scoped_agent_id,
+)
 from modules.cli_tenant import get_cli_organization_id
 
 from modules.database import (
@@ -22,7 +26,7 @@ def empty_property_filters():
         "property_id": "",
         "address": "",
         "jurisdiction": "",
-        "agent": "",
+        "agent_id": "",
         "min_price": "",
         "max_price": ""
     }
@@ -48,13 +52,17 @@ def parse_optional_positive_float(
     return number, error
 
 
-def validate_property_filters(raw_filters):
+def validate_property_filters(
+    raw_filters,
+    *,
+    organization_id=None,
+):
     errors = []
     parsed = {
         "property_id": None,
         "address": None,
         "jurisdiction": None,
-        "agent_name": None,
+        "filter_agent_id": None,
         "min_price": None,
         "max_price": None
     }
@@ -95,13 +103,11 @@ def validate_property_filters(raw_filters):
         else:
             parsed["jurisdiction"] = jurisdiction
 
-    agent_name = raw_filters.get(
-        "agent",
-        ""
-    ).strip()
-
-    if agent_name != "":
-        parsed["agent_name"] = agent_name
+    if organization_id is not None:
+        parsed["filter_agent_id"] = parse_filter_agent_id(
+            raw_filters.get("agent_id"),
+            organization_id,
+        )
 
     min_price, min_price_error = (
         parse_optional_positive_float(
@@ -155,16 +161,22 @@ def get_filtered_properties(
     include_all_statuses=False
 ):
     errors, parsed = validate_property_filters(
-        raw_filters
+        raw_filters,
+        organization_id=organization_id,
     )
 
     if len(errors) > 0:
         return errors, []
 
+    effective_agent_id = resolve_scoped_agent_id(
+        agent_id,
+        parsed["filter_agent_id"],
+    )
+
     if not has_active_property_filters(parsed):
         return [], get_properties(
             organization_id,
-            agent_id=agent_id,
+            agent_id=effective_agent_id,
             include_all_statuses=include_all_statuses
         )
 
@@ -173,11 +185,10 @@ def get_filtered_properties(
         property_id=parsed["property_id"],
         address=parsed["address"],
         jurisdiction=parsed["jurisdiction"],
-        agent_name=parsed["agent_name"],
         min_price=parsed["min_price"],
         max_price=parsed["max_price"],
-        agent_id=agent_id,
-        include_all_statuses=include_all_statuses
+        agent_id=effective_agent_id,
+        include_all_statuses=include_all_statuses,
     )
 
     return [], properties

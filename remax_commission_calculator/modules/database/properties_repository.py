@@ -597,6 +597,8 @@ def delete_property(
 def filter_properties(
     organization_id,
     agent_id=None,
+    property_id=None,
+    address=None,
     jurisdiction=None,
     property_type=None,
     listing_purpose=None,
@@ -625,6 +627,18 @@ def filter_properties(
             "properties.agent_id = ?"
         )
         params.append(agent_id)
+
+    if property_id is not None:
+        conditions.append(
+            "properties.id = ?"
+        )
+        params.append(property_id)
+
+    if address is not None:
+        conditions.append(
+            "properties.address LIKE ?"
+        )
+        params.append(f"%{address}%")
 
     if jurisdiction is not None:
         conditions.append(

@@ -11,6 +11,11 @@ from modules.calculations import (
 
 from modules.cli_tenant import get_cli_organization_id
 
+from modules.filter_helpers import (
+    parse_filter_agent_id,
+    resolve_scoped_agent_id,
+)
+
 from modules.database import (
     add_operation,
     create_parties_for_new_operation,
@@ -1144,11 +1149,15 @@ def parse_operation_id_filter(value):
         )
 
 
-def validate_operation_filters(raw_filters):
+def validate_operation_filters(
+    raw_filters,
+    *,
+    organization_id=None,
+):
     errors = []
     parsed = {
         "operation_id": None,
-        "agent_name": None,
+        "filter_agent_id": None,
         "property_address": None,
         "min_amount": None,
         "max_amount": None,
@@ -1173,13 +1182,11 @@ def validate_operation_filters(raw_filters):
     else:
         parsed["operation_id"] = operation_id
 
-    agent_name = raw_filters.get(
-        "agent",
-        ""
-    ).strip()
-
-    if agent_name != "":
-        parsed["agent_name"] = agent_name
+    if organization_id is not None:
+        parsed["filter_agent_id"] = parse_filter_agent_id(
+            raw_filters.get("agent_id"),
+            organization_id,
+        )
 
     property_address = raw_filters.get(
         "property",
@@ -1328,16 +1335,22 @@ def get_filtered_operations(
     agent_id=None
 ):
     errors, parsed = validate_operation_filters(
-        raw_filters
+        raw_filters,
+        organization_id=organization_id,
     )
 
     if len(errors) > 0:
         return errors, []
 
+    effective_agent_id = resolve_scoped_agent_id(
+        agent_id,
+        parsed["filter_agent_id"],
+    )
+
     if not has_active_operation_filters(parsed):
         return [], db_filter_operations(
             organization_id,
-            agent_id=agent_id
+            agent_id=effective_agent_id,
         )
 
     date_from = None
@@ -1356,7 +1369,6 @@ def get_filtered_operations(
     operations = db_filter_operations(
         organization_id,
         operation_id=parsed["operation_id"],
-        agent_name=parsed["agent_name"],
         property_address=parsed[
             "property_address"
         ],
@@ -1366,7 +1378,7 @@ def get_filtered_operations(
         date_to=date_to,
         was_invoiced=parsed["was_invoiced"],
         jurisdiction=parsed["jurisdiction"],
-        agent_id=agent_id,
+        agent_id=effective_agent_id,
         status=parsed["status"]
     )
 

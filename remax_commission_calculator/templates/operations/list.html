@@ -31,13 +31,13 @@
             </div>
 
             <div class="form-group">
-                <label for="agent">{{ t('agent') }}</label>
-                <select id="agent" name="agent" class="form-input">
+                <label for="agent_id">{{ t('agent') }}</label>
+                <select id="agent_id" name="agent_id" class="form-input">
                     <option value="">{{ t('all_agents') }}</option>
                     {% for agent in agents %}
                     <option
-                        value="{{ agent.name }}"
-                        {% if filters.agent == agent.name %}selected{% endif %}
+                        value="{{ agent.id }}"
+                        {% if filters.agent_id == agent.id|string %}selected{% endif %}
                     >{{ agent.name }}</option>
                     {% endfor %}
                 </select>
@@ -191,13 +191,13 @@
         </div>
         <div class="mobile-inline-filters-row">
             <div class="form-group">
-                <label for="mobile-ops-agent">{{ t('agent') }}</label>
-                <select id="mobile-ops-agent" name="agent" class="form-input">
+                <label for="mobile-ops-agent_id">{{ t('agent') }}</label>
+                <select id="mobile-ops-agent_id" name="agent_id" class="form-input">
                     <option value="">{{ t('all_agents') }}</option>
                     {% for agent in agents %}
                     <option
-                        value="{{ agent.name }}"
-                        {% if filters.agent == agent.name %}selected{% endif %}
+                        value="{{ agent.id }}"
+                        {% if filters.agent_id == agent.id|string %}selected{% endif %}
                     >{{ agent.name }}</option>
                     {% endfor %}
                 </select>
