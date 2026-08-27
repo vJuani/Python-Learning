@@ -29,6 +29,12 @@
     class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('cash_') %} active{% endif %}"
 >{{ t('nav_cash') }}</a>
 {% endif %}
+{% if not is_guest_session() %}
+<a
+    href="{{ url_for('billing_list') }}"
+    class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('billing_') %} active{% endif %}"
+>{{ t('nav_billing') }}</a>
+{% endif %}
 <a
     href="{{ url_for('vat_calculator') }}"
     class="nav-link app-nav-link{% if request.endpoint == 'vat_calculator' %} active{% endif %}"

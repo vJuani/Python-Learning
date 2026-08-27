@@ -11,6 +11,11 @@ from modules.database.organization_settings_repository import (
     DEFAULT_CURRENCY,
     DEFAULT_TIMEZONE
 )
+from modules.invoicing import (
+    PAYMENT_CONDITIONS,
+    TAX_CONDITIONS,
+    validate_cuit,
+)
 
 
 SUPPORTED_CURRENCIES = (
@@ -188,6 +193,43 @@ def validate_organization_settings_form(
     if logo_error is not None:
         errors.append(logo_error)
 
+    legal_name = form_data.get("legal_name", "").strip()
+    tax_id = form_data.get("tax_id", "").strip()
+    tax_condition = form_data.get(
+        "tax_condition",
+        "",
+    ).strip()
+    fiscal_address = form_data.get(
+        "fiscal_address",
+        "",
+    ).strip()
+    trade_name = form_data.get("trade_name", "").strip()
+    billing_email = form_data.get(
+        "billing_email",
+        "",
+    ).strip()
+    default_payment_condition = form_data.get(
+        "default_payment_condition",
+        "cuenta_corriente",
+    ).strip() or "cuenta_corriente"
+
+    if tax_id and not validate_cuit(tax_id):
+        errors.append("settings_billing_cuit_invalid")
+
+    if (
+        tax_condition
+        and tax_condition not in TAX_CONDITIONS
+    ):
+        errors.append("settings_billing_tax_condition_invalid")
+
+    if (
+        default_payment_condition
+        not in PAYMENT_CONDITIONS
+    ):
+        errors.append(
+            "settings_billing_payment_condition_invalid"
+        )
+
     if len(errors) > 0:
         return errors, None
 
@@ -197,7 +239,16 @@ def validate_organization_settings_form(
         "default_currency": default_currency,
         "timezone": timezone,
         "accent_color": accent_color,
-        "remove_logo": remove_logo
+        "remove_logo": remove_logo,
+        "legal_name": legal_name,
+        "tax_id": tax_id,
+        "tax_condition": tax_condition,
+        "fiscal_address": fiscal_address,
+        "trade_name": trade_name,
+        "billing_email": billing_email,
+        "default_payment_condition": (
+            default_payment_condition
+        ),
     }
 
 

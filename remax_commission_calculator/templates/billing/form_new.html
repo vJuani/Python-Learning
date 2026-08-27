@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('billing_new_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('billing_new_title') }}</h2>
+        <p>{{ t('billing_internal_notice') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <p class="badge">{{ t('billing_non_fiscal_badge') }}</p>
+    <dl class="detail-list">
+        <dt>{{ t('billing_operation') }}</dt>
+        <dd>{{ operation.property }} · {{ operation.id }}</dd>
+        <dt>{{ t('billing_amount') }}</dt>
+        <dd>{{ preview.currency }} {{ '%.2f'|format(preview.total_amount) }}</dd>
+        <dt>{{ t('billing_recipient') }}</dt>
+        <dd>{{ preview.recipient_name }} · {{ preview.recipient_tax_id }}</dd>
+        <dt>{{ t('billing_concept') }}</dt>
+        <dd>{{ preview.description }}</dd>
+        <dt>{{ t('billing_service') }}</dt>
+        <dd>{{ t('billing_service_services') }}</dd>
+        <dt>{{ t('billing_units') }}</dt>
+        <dd>{{ preview.quantity }}</dd>
+    </dl>
+
+    <form method="post" class="agent-form" action="{{ url_for('billing_new_from_operation', operation_id=operation.db_id) }}">
+        <div class="form-group">
+            <label for="payment_condition">{{ t('billing_payment_condition') }}</label>
+            <select id="payment_condition" name="payment_condition" class="form-input">
+                {% for pc in payment_conditions %}
+                <option value="{{ pc }}" {% if preview.payment_condition == pc %}selected{% endif %}>{{ t('billing_pay_' ~ pc) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="issue_date">{{ t('billing_issue_date') }}</label>
+            <input type="date" id="issue_date" name="issue_date" class="form-input" value="{{ preview.issue_date }}">
+        </div>
+        <button type="submit" class="btn btn-primary">{{ t('billing_review') }}</button>
+    </form>
+</section>
+{% endblock %}

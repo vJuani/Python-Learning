@@ -114,7 +114,27 @@ from .operations_repository import (
     search_operations_by_property,
     list_operations_for_property,
     update_operation,
+    update_operation_invoice_amount,
     update_operation_status
+)
+
+from .agent_billing_profiles_repository import (
+    get_by_agent as get_agent_billing_profile,
+    upsert_profile as upsert_agent_billing_profile,
+)
+
+from .invoices_repository import (
+    ACTIVE_STATUSES as INVOICE_ACTIVE_STATUSES,
+    count_invoices_by_status,
+    count_pending_operations_to_invoice,
+    create_invoice_atomic,
+    get_active_invoice_for_operation,
+    get_invoice,
+    list_invoices,
+    next_invoice_seq,
+    sum_invoiced_amount,
+    update_invoice_fields,
+    update_invoice_status,
 )
 
 from .dashboard_repository import (
@@ -148,6 +168,7 @@ from .organization_settings_repository import (
     get_organization_settings,
     set_registration_code,
     set_registration_enabled,
+    update_organization_billing_fields,
     update_organization_settings
 )
 

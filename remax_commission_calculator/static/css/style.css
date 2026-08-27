@@ -4866,3 +4866,66 @@ a.dashboard-quick-card:hover {
         order: -1;
     }
 }
+
+/* Billing / Facturación */
+.kpi-row {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.kpi-card {
+    padding: 0.85rem 1rem;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.7);
+}
+.kpi-label {
+    display: block;
+    font-size: 0.8rem;
+    opacity: 0.75;
+    margin-bottom: 0.35rem;
+}
+.billing-card-list {
+    display: grid;
+    gap: 0.85rem;
+}
+.billing-card {
+    padding: 1rem;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 0.75rem;
+    display: grid;
+    gap: 0.35rem;
+}
+.billing-card h4 {
+    margin: 0;
+}
+.money-lg {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+.detail-list {
+    display: grid;
+    gap: 0.5rem 1rem;
+    grid-template-columns: minmax(8rem, 12rem) 1fr;
+}
+.detail-list dt {
+    opacity: 0.7;
+}
+.detail-list dd {
+    margin: 0;
+}
+.mobile-only {
+    display: none;
+}
+.desktop-only {
+    display: block;
+}
+@media (max-width: 768px) {
+    .mobile-only {
+        display: grid;
+    }
+    .desktop-only {
+        display: none !important;
+    }
+}
+

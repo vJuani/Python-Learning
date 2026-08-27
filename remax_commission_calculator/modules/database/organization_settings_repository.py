@@ -31,8 +31,54 @@ def build_settings_dict(row):
         ),
         "has_registration_code": bool(
             row[7] if len(row) > 7 else None
-        )
+        ),
+        "legal_name": (
+            row[10] if len(row) > 10 and row[10] else ""
+        ),
+        "tax_id": (
+            row[11] if len(row) > 11 and row[11] else ""
+        ),
+        "tax_condition": (
+            row[12] if len(row) > 12 and row[12] else ""
+        ),
+        "fiscal_address": (
+            row[13] if len(row) > 13 and row[13] else ""
+        ),
+        "trade_name": (
+            row[14] if len(row) > 14 and row[14] else ""
+        ),
+        "billing_email": (
+            row[15] if len(row) > 15 and row[15] else ""
+        ),
+        "default_payment_condition": (
+            row[16]
+            if len(row) > 16 and row[16]
+            else "cuenta_corriente"
+        ),
     }
+
+
+SETTINGS_SELECT = """
+        SELECT
+            organization_id,
+            display_name,
+            default_language,
+            default_currency,
+            timezone,
+            logo_path,
+            accent_color,
+            registration_code_hash,
+            registration_enabled,
+            registration_code_rotated_at,
+            legal_name,
+            tax_id,
+            tax_condition,
+            fiscal_address,
+            trade_name,
+            billing_email,
+            default_payment_condition
+        FROM organization_settings
+"""
 
 
 def get_organization_settings(organization_id):
@@ -44,19 +90,8 @@ def get_organization_settings(organization_id):
     cursor = connection.cursor()
 
     cursor.execute(
-        """
-        SELECT
-            organization_id,
-            display_name,
-            default_language,
-            default_currency,
-            timezone,
-            logo_path,
-            accent_color,
-            registration_code_hash,
-            registration_enabled,
-            registration_code_rotated_at
-        FROM organization_settings
+        SETTINGS_SELECT
+        + """
         WHERE organization_id = ?
         """,
         (
@@ -172,6 +207,82 @@ def update_organization_settings(
     connection.close()
 
 
+def update_organization_billing_fields(
+    organization_id,
+    *,
+    legal_name=None,
+    tax_id=None,
+    tax_condition=None,
+    fiscal_address=None,
+    trade_name=None,
+    billing_email=None,
+    default_payment_condition=None,
+):
+    """
+    Update organization fiscal / billing profile fields.
+    Only non-None kwargs are written.
+    """
+    organization_id = require_organization_id(
+        organization_id
+    )
+
+    clauses = []
+    params = []
+
+    if legal_name is not None:
+        clauses.append("legal_name = ?")
+        params.append(legal_name.strip())
+
+    if tax_id is not None:
+        clauses.append("tax_id = ?")
+        params.append(tax_id.strip())
+
+    if tax_condition is not None:
+        clauses.append("tax_condition = ?")
+        params.append(tax_condition.strip())
+
+    if fiscal_address is not None:
+        clauses.append("fiscal_address = ?")
+        params.append(fiscal_address.strip())
+
+    if trade_name is not None:
+        clauses.append("trade_name = ?")
+        params.append(trade_name.strip())
+
+    if billing_email is not None:
+        clauses.append("billing_email = ?")
+        params.append(billing_email.strip())
+
+    if default_payment_condition is not None:
+        clauses.append("default_payment_condition = ?")
+        params.append(default_payment_condition.strip())
+
+    if not clauses:
+        return
+
+    params.append(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        f"""
+        UPDATE organization_settings
+        SET {", ".join(clauses)}
+        WHERE organization_id = ?
+        """,
+        params,
+    )
+
+    if cursor.rowcount == 0:
+        connection.close()
+        raise ValueError(
+            "Organization settings not found"
+        )
+
+    connection.commit()
+    connection.close()
+
+
 def set_registration_code(
     organization_id,
     registration_code_hash,
@@ -242,19 +353,8 @@ def find_organization_by_registration_code_hash(code_hash):
     cursor = connection.cursor()
 
     cursor.execute(
-        """
-        SELECT
-            organization_id,
-            display_name,
-            default_language,
-            default_currency,
-            timezone,
-            logo_path,
-            accent_color,
-            registration_code_hash,
-            registration_enabled,
-            registration_code_rotated_at
-        FROM organization_settings
+        SETTINGS_SELECT
+        + """
         WHERE registration_code_hash = ?
             AND registration_enabled = 1
         """,

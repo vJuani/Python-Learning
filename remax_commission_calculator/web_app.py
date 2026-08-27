@@ -86,9 +86,12 @@ from modules.database import (
     set_registration_enabled,
     update_agent,
     update_organization_settings,
+    update_organization_billing_fields,
     update_operation_status,
     update_property,
-    update_user
+    update_user,
+    get_agent_billing_profile,
+    upsert_agent_billing_profile,
 )
 
 from modules.formatting import (
@@ -184,6 +187,25 @@ from modules.cash_ai_service import (
 from modules.cash_receipts import absolute_receipt_path
 from modules.database.cash_ai_drafts_repository import (
     get_cash_ai_draft,
+)
+from modules.invoicing import (
+    InvoicingError,
+    PAYMENT_CONDITIONS,
+    STATUS_DRAFT,
+    STATUS_READY,
+    TAX_CONDITIONS,
+    billing_kpis,
+    build_draft_preview_from_operation,
+    cancel_invoice,
+    confirm_draft,
+    create_draft_from_operation,
+    generate_draft_pdf_bytes,
+    get_invoice,
+    get_operation_billing_state,
+    list_invoices,
+    list_pending_operations,
+    set_operation_invoice_amount,
+    update_draft_options,
 )
 
 from modules.property_external_listings import (
@@ -588,7 +610,17 @@ def settings_to_form_values(settings):
         "timezone": settings["timezone"],
         "accent_color": (
             settings["accent_color"] or ""
-        )
+        ),
+        "legal_name": settings.get("legal_name") or "",
+        "tax_id": settings.get("tax_id") or "",
+        "tax_condition": settings.get("tax_condition") or "",
+        "fiscal_address": settings.get("fiscal_address") or "",
+        "trade_name": settings.get("trade_name") or "",
+        "billing_email": settings.get("billing_email") or "",
+        "default_payment_condition": (
+            settings.get("default_payment_condition")
+            or "cuenta_corriente"
+        ),
     }
 
 
@@ -2510,7 +2542,35 @@ def organization_settings():
                 "accent_color": request.form.get(
                     "accent_color",
                     ""
-                ).strip()
+                ).strip(),
+                "legal_name": request.form.get(
+                    "legal_name",
+                    ""
+                ).strip(),
+                "tax_id": request.form.get(
+                    "tax_id",
+                    ""
+                ).strip(),
+                "tax_condition": request.form.get(
+                    "tax_condition",
+                    ""
+                ).strip(),
+                "fiscal_address": request.form.get(
+                    "fiscal_address",
+                    ""
+                ).strip(),
+                "trade_name": request.form.get(
+                    "trade_name",
+                    ""
+                ).strip(),
+                "billing_email": request.form.get(
+                    "billing_email",
+                    ""
+                ).strip(),
+                "default_payment_condition": request.form.get(
+                    "default_payment_condition",
+                    "cuenta_corriente"
+                ).strip(),
             }
 
             return render_template(
@@ -2528,6 +2588,8 @@ def organization_settings():
                     else None
                 ),
                 timezones=COMMON_TIMEZONES,
+                tax_conditions=TAX_CONDITIONS,
+                payment_conditions=PAYMENT_CONDITIONS,
                 has_registration_code=current_settings.get(
                     "has_registration_code"
                 ),
@@ -2578,6 +2640,19 @@ def organization_settings():
             parsed["accent_color"]
         )
 
+        update_organization_billing_fields(
+            organization_id,
+            legal_name=parsed.get("legal_name"),
+            tax_id=parsed.get("tax_id"),
+            tax_condition=parsed.get("tax_condition"),
+            fiscal_address=parsed.get("fiscal_address"),
+            trade_name=parsed.get("trade_name"),
+            billing_email=parsed.get("billing_email"),
+            default_payment_condition=parsed.get(
+                "default_payment_condition"
+            ),
+        )
+
         session["language"] = parsed[
             "default_language"
         ]
@@ -2605,6 +2680,8 @@ def organization_settings():
             else None
         ),
         timezones=COMMON_TIMEZONES,
+        tax_conditions=TAX_CONDITIONS,
+        payment_conditions=PAYMENT_CONDITIONS,
         has_registration_code=current_settings.get(
             "has_registration_code"
         ),
@@ -3045,6 +3122,8 @@ def rotate_registration_code():
             else None
         ),
         timezones=COMMON_TIMEZONES,
+        tax_conditions=TAX_CONDITIONS,
+        payment_conditions=PAYMENT_CONDITIONS,
         has_registration_code=True,
         registration_enabled=True,
         guest_links=list_guest_accesses(
@@ -3109,6 +3188,8 @@ def manage_guest_links():
             else None
         ),
         timezones=COMMON_TIMEZONES,
+        tax_conditions=TAX_CONDITIONS,
+        payment_conditions=PAYMENT_CONDITIONS,
         has_registration_code=current_settings.get(
             "has_registration_code"
         ),
@@ -4700,6 +4781,22 @@ def operations_detail(operation_id):
         operation,
         language,
     )
+    billing_state = get_operation_billing_state(
+        operation,
+        organization_id,
+    )
+    can_set_invoice_amount = (
+        get_guest_access() is None
+        and is_admin()
+    )
+    can_create_invoice = (
+        get_guest_access() is None
+        and (
+            is_admin()
+            or is_agent()
+        )
+        and billing_state.get("can_create_draft")
+    )
 
     show_readiness = (
         is_agent()
@@ -4743,6 +4840,9 @@ def operations_detail(operation_id):
         document_categories=document_categories,
         commission_lines=commission_lines,
         billing_lines=billing_lines,
+        billing_state=billing_state,
+        can_set_invoice_amount=can_set_invoice_amount,
+        can_create_invoice=can_create_invoice,
     )
 
 
@@ -4759,6 +4859,48 @@ def _require_documents_user():
         abort(403)
 
     return user
+
+
+def require_billing_user():
+    if get_guest_access() is not None:
+        abort(403)
+
+    user = get_current_user()
+
+    if user is None:
+        abort(403)
+
+    return user
+
+
+def _flash_invoicing_error(error):
+    flash_i18n(error.message_key, "error")
+    for missing_key in error.missing or []:
+        if isinstance(missing_key, str) and missing_key.startswith(
+            "billing_missing_"
+        ):
+            flash_i18n(missing_key, "error")
+
+
+def _load_billing_invoice(organization_id, invoice_id, user):
+    try:
+        invoice = get_invoice(organization_id, invoice_id)
+        if invoice is None:
+            abort(404)
+        if is_admin(user):
+            return invoice
+        if is_agent(user) and user.get("agent_id") == invoice.get(
+            "agent_id"
+        ):
+            return invoice
+        abort(403)
+    except InvoicingError as error:
+        if error.message_key == "invoice_err_not_found":
+            abort(404)
+        if error.message_key == "invoice_err_forbidden":
+            abort(403)
+        _flash_invoicing_error(error)
+        abort(403)
 
 
 def _load_scoped_operation(operation_id, organization_id):
@@ -6483,6 +6625,21 @@ def cash_ai_draft_receipt(draft_id):
         ),
         as_attachment=request.args.get("download") == "1",
     )
+
+
+from modules.billing_routes import register_billing_routes
+
+register_billing_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "require_billing_user": require_billing_user,
+        "flash_i18n": flash_i18n,
+        "ensure_operation_scope": ensure_operation_scope,
+        "_flash_invoicing_error": _flash_invoicing_error,
+        "_load_billing_invoice": _load_billing_invoice,
+    },
+)
 
 
 if __name__ == "__main__":

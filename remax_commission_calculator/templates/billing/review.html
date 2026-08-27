@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('billing_review') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('billing_review') }}</h2>
+        <p>{{ invoice.invoice_number_internal }}</p>
+    </div>
+</section>
+
+<section class="panel">
+    <p class="badge">{{ t('billing_non_fiscal_badge') }}</p>
+    <p class="field-help">{{ t('billing_internal_notice') }}</p>
+    <dl class="detail-list">
+        <dt>{{ t('billing_issuer') }}</dt>
+        <dd>{{ invoice.issuer_name }}</dd>
+        <dt>{{ t('billing_recipient') }}</dt>
+        <dd>{{ invoice.recipient_name }}</dd>
+        <dt>{{ t('billing_concept') }}</dt>
+        <dd>{{ invoice.description }}</dd>
+        <dt>{{ t('billing_amount') }}</dt>
+        <dd>{{ invoice.currency }} {{ '%.2f'|format(invoice.total_amount) }}</dd>
+        <dt>{{ t('billing_issue_date') }}</dt>
+        <dd>{{ invoice.issue_date }}</dd>
+        <dt>{{ t('billing_payment_condition') }}</dt>
+        <dd>{{ t('billing_pay_' ~ invoice.payment_condition) }}</dd>
+    </dl>
+
+    {% if invoice.status == 'draft' %}
+    <form method="post" class="agent-form">
+        <div class="form-group">
+            <label for="payment_condition">{{ t('billing_payment_condition') }}</label>
+            <select id="payment_condition" name="payment_condition" class="form-input">
+                {% for pc in payment_conditions %}
+                <option value="{{ pc }}" {% if invoice.payment_condition == pc %}selected{% endif %}>{{ t('billing_pay_' ~ pc) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="issue_date">{{ t('billing_issue_date') }}</label>
+            <input type="date" id="issue_date" name="issue_date" class="form-input" value="{{ invoice.issue_date }}">
+        </div>
+        <div class="form-actions">
+            <button type="submit" name="action" value="edit" class="btn btn-secondary">{{ t('billing_back_edit') }}</button>
+            <button type="submit" name="action" value="confirm" class="btn btn-primary">{{ t('billing_confirm_draft') }}</button>
+        </div>
+    </form>
+    {% else %}
+    <a class="btn btn-primary" href="{{ url_for('billing_detail', invoice_id=invoice.id) }}">{{ t('billing_view_invoice') }}</a>
+    {% endif %}
+</section>
+{% endblock %}

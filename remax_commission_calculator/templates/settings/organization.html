@@ -123,6 +123,46 @@
             <small class="field-help">{{ t('settings_logo_help') }}</small>
         </div>
 
+        <h3>{{ t('billing_org_billing_title') }}</h3>
+
+        <div class="form-group">
+            <label for="legal_name">{{ t('billing_legal_name') }}</label>
+            <input type="text" id="legal_name" name="legal_name" class="form-input" value="{{ form_values.legal_name }}">
+        </div>
+        <div class="form-group">
+            <label for="tax_id">{{ t('billing_tax_id') }}</label>
+            <input type="text" id="tax_id" name="tax_id" class="form-input" value="{{ form_values.tax_id }}">
+        </div>
+        <div class="form-group">
+            <label for="tax_condition">{{ t('billing_tax_condition') }}</label>
+            <select id="tax_condition" name="tax_condition" class="form-input">
+                <option value=""></option>
+                <option value="responsable_inscripto" {% if form_values.tax_condition == 'responsable_inscripto' %}selected{% endif %}>{{ t('billing_tax_responsable_inscripto') }}</option>
+                <option value="monotributo" {% if form_values.tax_condition == 'monotributo' %}selected{% endif %}>{{ t('billing_tax_monotributo') }}</option>
+                <option value="exento" {% if form_values.tax_condition == 'exento' %}selected{% endif %}>{{ t('billing_tax_exento') }}</option>
+                <option value="consumidor_final" {% if form_values.tax_condition == 'consumidor_final' %}selected{% endif %}>{{ t('billing_tax_consumidor_final') }}</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="fiscal_address">{{ t('billing_fiscal_address') }}</label>
+            <input type="text" id="fiscal_address" name="fiscal_address" class="form-input" value="{{ form_values.fiscal_address }}">
+        </div>
+        <div class="form-group">
+            <label for="trade_name">{{ t('billing_trade_name') }}</label>
+            <input type="text" id="trade_name" name="trade_name" class="form-input" value="{{ form_values.trade_name }}">
+        </div>
+        <div class="form-group">
+            <label for="billing_email">{{ t('billing_email') }}</label>
+            <input type="email" id="billing_email" name="billing_email" class="form-input" value="{{ form_values.billing_email }}">
+        </div>
+        <div class="form-group">
+            <label for="default_payment_condition">{{ t('billing_default_payment') }}</label>
+            <select id="default_payment_condition" name="default_payment_condition" class="form-input">
+                <option value="cuenta_corriente" {% if form_values.default_payment_condition == 'cuenta_corriente' %}selected{% endif %}>{{ t('billing_pay_cuenta_corriente') }}</option>
+                <option value="contado" {% if form_values.default_payment_condition == 'contado' %}selected{% endif %}>{{ t('billing_pay_contado') }}</option>
+            </select>
+        </div>
+
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">{{ t('save') }}</button>
             <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">{{ t('cancel') }}</a>

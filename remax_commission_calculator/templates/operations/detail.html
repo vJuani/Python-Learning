@@ -79,6 +79,77 @@
     {% endif %}
 </section>
 
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('billing_title') }}</h3>
+    </div>
+
+    {% if operation.invoice_amount %}
+    <p>
+        <strong>{{ t('billing_amount') }}:</strong>
+        {{ operation.invoice_currency or 'ARS' }}
+        {{ '%.2f'|format(operation.invoice_amount) }}
+    </p>
+    {% if operation.invoice_exchange_rate %}
+    <p class="field-help">
+        {{ t('billing_exchange_rate') }}:
+        {{ '%.2f'|format(operation.invoice_exchange_rate) }}
+    </p>
+    {% endif %}
+    {% else %}
+    <p>{{ t('billing_amount_not_set') }}</p>
+    {% endif %}
+
+    {% if billing_state and billing_state.state == 'has_invoice' and billing_state.invoice %}
+    <p>{{ t('billing_already_invoiced') }}</p>
+    <a class="btn btn-primary" href="{{ url_for('billing_detail', invoice_id=billing_state.invoice.id) }}">{{ t('billing_view_invoice') }}</a>
+    {% elif can_create_invoice %}
+    <a class="btn btn-primary" href="{{ url_for('billing_new_from_operation', operation_id=operation.db_id) }}">{{ t('billing_facturar') }}</a>
+    {% endif %}
+
+    {% if can_set_invoice_amount %}
+    <form
+        method="post"
+        action="{{ url_for('operations_set_invoice_amount', operation_id=operation.db_id) }}"
+        class="agent-form"
+        style="margin-top: 1rem;"
+    >
+        <h4>{{ t('billing_set_amount_title') }}</h4>
+        <div class="form-group">
+            <label for="invoice_amount">{{ t('billing_amount') }}</label>
+            <input
+                type="text"
+                id="invoice_amount"
+                name="invoice_amount"
+                class="form-input"
+                value="{{ operation.invoice_amount or '' }}"
+                required
+            >
+        </div>
+        <div class="form-group">
+            <label for="invoice_currency">{{ t('billing_currency') }}</label>
+            <select id="invoice_currency" name="invoice_currency" class="form-input">
+                <option value="ARS" {% if (operation.invoice_currency or 'ARS') == 'ARS' %}selected{% endif %}>ARS</option>
+                <option value="USD" {% if operation.invoice_currency == 'USD' %}selected{% endif %}>USD</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="invoice_exchange_rate">{{ t('billing_exchange_rate') }}</label>
+            <input
+                type="text"
+                id="invoice_exchange_rate"
+                name="invoice_exchange_rate"
+                class="form-input"
+                value="{{ operation.invoice_exchange_rate or '' }}"
+            >
+        </div>
+        <button type="submit" class="btn btn-primary">{{ t('billing_set_amount') }}</button>
+    </form>
+    {% endif %}
+</section>
+
 <section class="panel">
     {% include "operations/_summary.html" %}
 </section>

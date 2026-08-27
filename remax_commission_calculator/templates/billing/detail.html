@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}{{ invoice.invoice_number_internal }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ invoice.invoice_number_internal }}</h2>
+        <p>
+            <span class="badge">{{ t('billing_status_' ~ invoice.status) }}</span>
+            {% if invoice.status != 'issued' %}
+            <span class="badge">{{ t('billing_non_fiscal_badge') }}</span>
+            {% endif %}
+        </p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('billing_pdf', invoice_id=invoice.id) }}" class="btn btn-secondary">{{ t('billing_download_pdf') }}</a>
+        <a href="{{ url_for('billing_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <p class="money-lg">{{ invoice.currency }} {{ '%.2f'|format(invoice.total_amount) }}</p>
+    <p class="field-help">{{ t('billing_internal_notice') }}</p>
+</section>
+
+<section class="panel">
+    <dl class="detail-list">
+        <dt>{{ t('billing_issuer') }}</dt>
+        <dd>{{ invoice.issuer_name }}<br>{{ invoice.issuer_tax_id }}</dd>
+        <dt>{{ t('billing_recipient') }}</dt>
+        <dd>{{ invoice.recipient_name }}<br>{{ invoice.recipient_tax_id }}</dd>
+        <dt>{{ t('billing_operation') }}</dt>
+        <dd>
+            {% if operation %}
+            <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}">{{ operation.property }} · {{ operation.id }}</a>
+            {% else %}
+            #{{ invoice.operation_id }}
+            {% endif %}
+        </dd>
+        <dt>{{ t('billing_concept') }}</dt>
+        <dd>{{ invoice.description }}</dd>
+        <dt>{{ t('billing_service') }}</dt>
+        <dd>{{ t('billing_service_services') }}</dd>
+        <dt>{{ t('billing_units') }}</dt>
+        <dd>{{ invoice.quantity }}</dd>
+        <dt>{{ t('billing_issue_date') }}</dt>
+        <dd>{{ invoice.issue_date }}</dd>
+        <dt>{{ t('billing_payment_condition') }}</dt>
+        <dd>{{ t('billing_pay_' ~ invoice.payment_condition) }}</dd>
+        <dt>{{ t('billing_internal_number') }}</dt>
+        <dd>{{ invoice.invoice_number_internal }}</dd>
+    </dl>
+</section>
+
+<section class="panel">
+    <div class="panel-header"><h3>{{ t('billing_audit') }}</h3></div>
+    <p>{{ t('billing_created_by') }}: #{{ invoice.created_by_user_id }} · {{ invoice.created_at }}</p>
+    {% if invoice.confirmed_at %}
+    <p>{{ t('billing_confirmed_at') }}: {{ invoice.confirmed_at }}</p>
+    {% endif %}
+</section>
+
+{% if invoice.status in ['draft', 'ready_to_issue', 'error'] %}
+<section class="panel">
+    <form method="post" action="{{ url_for('billing_cancel', invoice_id=invoice.id) }}">
+        <button type="submit" class="btn btn-danger">{{ t('billing_cancel') }}</button>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

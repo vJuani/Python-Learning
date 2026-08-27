@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v4"
+POSTGRES_SCHEMA_VERSION = "postgres_v5"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -830,6 +830,175 @@ SCHEMA_STATEMENTS = (
         id
     )
     """,
+    f"""
+    CREATE TABLE IF NOT EXISTS agent_billing_profiles (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        agent_id BIGINT NOT NULL,
+        legal_name TEXT NOT NULL,
+        tax_id TEXT NOT NULL,
+        tax_condition TEXT NOT NULL,
+        fiscal_address TEXT NOT NULL,
+        email TEXT,
+        point_of_sale TEXT,
+        allowed_invoice_types TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+        FOREIGN KEY (agent_id)
+            REFERENCES agents(id)
+            ON DELETE CASCADE,
+
+        UNIQUE (organization_id, agent_id)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_agent_billing_profiles_org
+    ON agent_billing_profiles (organization_id)
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS invoices (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        invoice_seq INTEGER NOT NULL,
+        invoice_number_internal TEXT NOT NULL,
+        operation_id BIGINT NOT NULL,
+        agent_id BIGINT NOT NULL,
+        issuer_user_id BIGINT,
+        issuer_type TEXT NOT NULL,
+        issuer_name TEXT NOT NULL,
+        issuer_tax_id TEXT NOT NULL,
+        issuer_tax_condition TEXT,
+        issuer_address TEXT,
+        recipient_name TEXT NOT NULL,
+        recipient_tax_id TEXT NOT NULL,
+        recipient_tax_condition TEXT,
+        recipient_address TEXT,
+        invoice_type TEXT NOT NULL DEFAULT 'internal',
+        service_type TEXT NOT NULL DEFAULT 'services',
+        description TEXT NOT NULL,
+        quantity {_MONEY} NOT NULL DEFAULT 1,
+        unit_price {_MONEY} NOT NULL,
+        subtotal {_MONEY} NOT NULL,
+        vat_amount {_MONEY} NOT NULL DEFAULT 0,
+        total_amount {_MONEY} NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'ARS',
+        exchange_rate {_MONEY},
+        payment_condition TEXT NOT NULL,
+        issue_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        source TEXT NOT NULL DEFAULT 'agent_operation',
+        external_invoice_number TEXT,
+        point_of_sale TEXT,
+        cae TEXT,
+        cae_expiration TEXT,
+        provider TEXT NOT NULL DEFAULT 'internal',
+        provider_reference TEXT,
+        pdf_path TEXT,
+        created_at TEXT NOT NULL,
+        created_by_user_id BIGINT,
+        confirmed_at TEXT,
+        confirmed_by_user_id BIGINT,
+        updated_at TEXT NOT NULL,
+        cancelled_at TEXT,
+        cancelled_by_user_id BIGINT,
+        cancellation_reason TEXT,
+        cash_movement_id BIGINT,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+        FOREIGN KEY (operation_id)
+            REFERENCES operations(id)
+            ON DELETE RESTRICT,
+        FOREIGN KEY (agent_id)
+            REFERENCES agents(id)
+            ON DELETE RESTRICT,
+        FOREIGN KEY (issuer_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+        FOREIGN KEY (created_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+        FOREIGN KEY (confirmed_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+        FOREIGN KEY (cancelled_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+
+        CHECK (
+            status IN (
+                'draft',
+                'ready_to_issue',
+                'issued',
+                'error',
+                'cancelled'
+            )
+        ),
+        CHECK (
+            payment_condition IN (
+                'contado',
+                'cuenta_corriente'
+            )
+        ),
+        CHECK (
+            issuer_type IN ('agent', 'admin')
+        ),
+        CHECK (quantity > 0),
+        CHECK (total_amount > 0),
+        UNIQUE (organization_id, invoice_seq),
+        UNIQUE (
+            organization_id,
+            invoice_number_internal
+        )
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS
+    idx_invoices_one_active_per_operation
+    ON invoices (
+        organization_id,
+        operation_id
+    )
+    WHERE status IN (
+        'draft',
+        'ready_to_issue',
+        'issued',
+        'error'
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_invoices_org_status
+    ON invoices (
+        organization_id,
+        status,
+        id
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_invoices_org_agent
+    ON invoices (
+        organization_id,
+        agent_id,
+        id
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_invoices_org_issue_date
+    ON invoices (
+        organization_id,
+        issue_date,
+        id
+    )
+    """,
 )
 
 
@@ -855,6 +1024,8 @@ POSTGRES_TABLES = (
     "cash_accounts",
     "cash_movements",
     "cash_ai_drafts",
+    "agent_billing_profiles",
+    "invoices",
 )
 
 
@@ -967,6 +1138,41 @@ def create_postgres_schema():
             )
             """
         )
+
+        for column_name, column_sql in (
+            ("invoice_amount", f"{_MONEY}"),
+            ("invoice_currency", "TEXT"),
+            ("invoice_exchange_rate", f"{_MONEY}"),
+            ("invoice_amount_set_at", "TEXT"),
+            ("invoice_amount_set_by_user_id", "BIGINT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE operations
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        for column_name, column_sql in (
+            ("legal_name", "TEXT"),
+            ("tax_id", "TEXT"),
+            ("tax_condition", "TEXT"),
+            ("fiscal_address", "TEXT"),
+            ("trade_name", "TEXT"),
+            ("billing_email", "TEXT"),
+            (
+                "default_payment_condition",
+                "TEXT NOT NULL DEFAULT 'cuenta_corriente'",
+            ),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE organization_settings
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
 
         if not _schema_version_applied(
             cursor,

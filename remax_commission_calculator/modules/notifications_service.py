@@ -85,3 +85,21 @@ def notify_agent_for_operation(
         payload=payload,
         actor_user_id=actor_user_id
     )
+
+
+def notify_operation_invoice_amount_ready(
+    organization_id,
+    agent_id,
+    operation_id,
+    payload=None,
+    actor_user_id=None,
+):
+    """Notify agent that invoice amount is ready to bill."""
+    return notify_agent_for_operation(
+        organization_id,
+        agent_id,
+        "operation_invoice_amount_ready",
+        operation_id,
+        payload=payload or {},
+        actor_user_id=actor_user_id,
+    )

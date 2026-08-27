@@ -2040,6 +2040,241 @@ def _migrate_cash_treasury(cursor):
     )
 
 
+def _migrate_invoicing(cursor):
+    for column_name, column_sql in (
+        ("invoice_amount", "REAL"),
+        ("invoice_currency", "TEXT"),
+        ("invoice_exchange_rate", "REAL"),
+        ("invoice_amount_set_at", "TEXT"),
+        ("invoice_amount_set_by_user_id", "INTEGER"),
+    ):
+        if not _column_exists(
+            cursor,
+            "operations",
+            column_name,
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE operations
+                ADD COLUMN {column_name} {column_sql}
+                """
+            )
+
+    for column_name, column_sql in (
+        ("legal_name", "TEXT"),
+        ("tax_id", "TEXT"),
+        ("tax_condition", "TEXT"),
+        ("fiscal_address", "TEXT"),
+        ("trade_name", "TEXT"),
+        ("billing_email", "TEXT"),
+        (
+            "default_payment_condition",
+            "TEXT NOT NULL DEFAULT 'cuenta_corriente'",
+        ),
+    ):
+        if not _column_exists(
+            cursor,
+            "organization_settings",
+            column_name,
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE organization_settings
+                ADD COLUMN {column_name} {column_sql}
+                """
+            )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS agent_billing_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            agent_id INTEGER NOT NULL,
+            legal_name TEXT NOT NULL,
+            tax_id TEXT NOT NULL,
+            tax_condition TEXT NOT NULL,
+            fiscal_address TEXT NOT NULL,
+            email TEXT,
+            point_of_sale TEXT,
+            allowed_invoice_types TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (agent_id)
+                REFERENCES agents(id)
+                ON DELETE CASCADE,
+
+            UNIQUE (organization_id, agent_id)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_agent_billing_profiles_org
+        ON agent_billing_profiles (organization_id)
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS invoices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            invoice_seq INTEGER NOT NULL,
+            invoice_number_internal TEXT NOT NULL,
+            operation_id INTEGER NOT NULL,
+            agent_id INTEGER NOT NULL,
+            issuer_user_id INTEGER,
+            issuer_type TEXT NOT NULL,
+            issuer_name TEXT NOT NULL,
+            issuer_tax_id TEXT NOT NULL,
+            issuer_tax_condition TEXT,
+            issuer_address TEXT,
+            recipient_name TEXT NOT NULL,
+            recipient_tax_id TEXT NOT NULL,
+            recipient_tax_condition TEXT,
+            recipient_address TEXT,
+            invoice_type TEXT NOT NULL DEFAULT 'internal',
+            service_type TEXT NOT NULL DEFAULT 'services',
+            description TEXT NOT NULL,
+            quantity REAL NOT NULL DEFAULT 1,
+            unit_price REAL NOT NULL,
+            subtotal REAL NOT NULL,
+            vat_amount REAL NOT NULL DEFAULT 0,
+            total_amount REAL NOT NULL,
+            currency TEXT NOT NULL DEFAULT 'ARS',
+            exchange_rate REAL,
+            payment_condition TEXT NOT NULL,
+            issue_date TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'draft',
+            source TEXT NOT NULL DEFAULT 'agent_operation',
+            external_invoice_number TEXT,
+            point_of_sale TEXT,
+            cae TEXT,
+            cae_expiration TEXT,
+            provider TEXT NOT NULL DEFAULT 'internal',
+            provider_reference TEXT,
+            pdf_path TEXT,
+            created_at TEXT NOT NULL,
+            created_by_user_id INTEGER,
+            confirmed_at TEXT,
+            confirmed_by_user_id INTEGER,
+            updated_at TEXT NOT NULL,
+            cancelled_at TEXT,
+            cancelled_by_user_id INTEGER,
+            cancellation_reason TEXT,
+            cash_movement_id INTEGER,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (operation_id)
+                REFERENCES operations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (agent_id)
+                REFERENCES agents(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (issuer_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (created_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (confirmed_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (cancelled_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+
+            CHECK (
+                status IN (
+                    'draft',
+                    'ready_to_issue',
+                    'issued',
+                    'error',
+                    'cancelled'
+                )
+            ),
+            CHECK (
+                payment_condition IN (
+                    'contado',
+                    'cuenta_corriente'
+                )
+            ),
+            CHECK (
+                issuer_type IN ('agent', 'admin')
+            ),
+            CHECK (quantity > 0),
+            CHECK (total_amount > 0),
+            UNIQUE (organization_id, invoice_seq),
+            UNIQUE (
+                organization_id,
+                invoice_number_internal
+            )
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_invoices_one_active_per_operation
+        ON invoices (
+            organization_id,
+            operation_id
+        )
+        WHERE status IN (
+            'draft',
+            'ready_to_issue',
+            'issued',
+            'error'
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_invoices_org_status
+        ON invoices (
+            organization_id,
+            status,
+            id
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_invoices_org_agent
+        ON invoices (
+            organization_id,
+            agent_id,
+            id
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_invoices_org_issue_date
+        ON invoices (
+            organization_id,
+            issue_date,
+            id
+        )
+        """
+    )
+
+
 def migrate_schema(create_backup=True):
     # Commit external_id before the bulk transaction so a later
     # rollback cannot drop the column on an existing Railway DB.
@@ -2255,6 +2490,7 @@ def migrate_schema(create_backup=True):
         _migrate_agent_teams_and_wallet(cursor)
         _migrate_property_external_id(cursor)
         _migrate_cash_treasury(cursor)
+        _migrate_invoicing(cursor)
 
         _validate_migration(
             cursor,

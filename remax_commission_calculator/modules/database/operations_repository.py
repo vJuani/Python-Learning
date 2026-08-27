@@ -47,7 +47,12 @@ OPERATIONS_BASE_QUERY = """
         operations.reviewed_by_user_id,
         operations.reviewed_at,
         operations.invoice_full_commission,
-        properties.external_id
+        properties.external_id,
+        operations.invoice_amount,
+        operations.invoice_currency,
+        operations.invoice_exchange_rate,
+        operations.invoice_amount_set_at,
+        operations.invoice_amount_set_by_user_id
 
     FROM operations
 
@@ -112,6 +117,26 @@ def build_operation_dict(rows):
                 else "no"
             ),
             "property_external_id": external_id,
+            "invoice_amount": (
+                float(row[31])
+                if len(row) > 31 and row[31] is not None
+                else None
+            ),
+            "invoice_currency": (
+                row[32] if len(row) > 32 and row[32]
+                else None
+            ),
+            "invoice_exchange_rate": (
+                float(row[33])
+                if len(row) > 33 and row[33] is not None
+                else None
+            ),
+            "invoice_amount_set_at": (
+                row[34] if len(row) > 34 else None
+            ),
+            "invoice_amount_set_by_user_id": (
+                row[35] if len(row) > 35 else None
+            ),
         })
 
     return operations
@@ -883,6 +908,59 @@ def delete_operation(
             operation_id,
             organization_id
         )
+    )
+
+    if cursor.rowcount == 0:
+        connection.close()
+        raise TenantError(
+            "Operation was not found in this organization."
+        )
+
+    connection.commit()
+    connection.close()
+
+
+def update_operation_invoice_amount(
+    operation_id,
+    organization_id,
+    amount,
+    currency,
+    exchange_rate,
+    set_at,
+    set_by_user_id,
+):
+    """
+    Set billable invoice amount on an operation.
+    Does not modify was_invoiced.
+    """
+    organization_id = require_organization_id(
+        organization_id
+    )
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        UPDATE operations
+        SET
+            invoice_amount = ?,
+            invoice_currency = ?,
+            invoice_exchange_rate = ?,
+            invoice_amount_set_at = ?,
+            invoice_amount_set_by_user_id = ?
+        WHERE id = ?
+            AND organization_id = ?
+        """,
+        (
+            amount,
+            currency,
+            exchange_rate,
+            set_at,
+            set_by_user_id,
+            operation_id,
+            organization_id,
+        ),
     )
 
     if cursor.rowcount == 0:

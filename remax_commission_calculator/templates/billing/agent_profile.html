@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('billing_profile_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('billing_profile_title') }}</h2>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('billing_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-messages">
+    {% for error in errors %}
+    <p class="flash-message flash-error">{{ t(error) }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not org_ready %}
+<section class="panel">
+    <p class="danger-text">{{ t('invoice_err_billing_profile_incomplete') }}</p>
+    <ul>
+        {% for key in org_missing %}
+        <li>{{ t(key) }}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<section class="panel">
+    <form method="post" class="agent-form">
+        <div class="form-group">
+            <label for="legal_name">{{ t('billing_legal_name') }}</label>
+            <input id="legal_name" name="legal_name" class="form-input" value="{{ form_values.legal_name }}" required>
+        </div>
+        <div class="form-group">
+            <label for="tax_id">{{ t('billing_tax_id') }}</label>
+            <input id="tax_id" name="tax_id" class="form-input" value="{{ form_values.tax_id }}" required>
+        </div>
+        <div class="form-group">
+            <label for="tax_condition">{{ t('billing_tax_condition') }}</label>
+            <select id="tax_condition" name="tax_condition" class="form-input" required>
+                {% for tc in tax_conditions %}
+                <option value="{{ tc }}" {% if form_values.tax_condition == tc %}selected{% endif %}>{{ t('billing_tax_' ~ tc) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="fiscal_address">{{ t('billing_fiscal_address') }}</label>
+            <input id="fiscal_address" name="fiscal_address" class="form-input" value="{{ form_values.fiscal_address }}" required>
+        </div>
+        <div class="form-group">
+            <label for="email">{{ t('billing_email') }}</label>
+            <input id="email" name="email" type="email" class="form-input" value="{{ form_values.email }}">
+        </div>
+        <button type="submit" class="btn btn-primary">{{ t('billing_save_profile') }}</button>
+    </form>
+</section>
+{% endblock %}
