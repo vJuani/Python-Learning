@@ -72,7 +72,10 @@ from .properties_repository import (
     delete_property,
     filter_properties,
     get_properties,
+    get_property_ids_used_in_operations,
     get_property_record,
+    is_property_available_for_operation,
+    list_available_properties_for_operation,
     update_property,
     update_property_from_sync,
     update_property_status
@@ -132,6 +135,7 @@ from .billing_issuer_profiles_repository import (
 )
 
 from .operation_parties_repository import (
+    create_parties_for_new_operation,
     ensure_parties_for_operation,
     get_parties_for_operation,
     get_party as get_operation_party,

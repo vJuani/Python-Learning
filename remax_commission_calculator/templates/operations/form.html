@@ -6,7 +6,7 @@
 <section class="page-header">
     <div class="page-header-text">
         <h2>{% if is_edit %}{{ t('edit_operation_title') }}{% else %}{{ t('new_operation_title') }}{% endif %}</h2>
-        <p>{{ t('operation_form_help') }}</p>
+        <p>{% if is_edit %}{{ t('operation_form_help') }}{% else %}{{ t('operation_new_form_help') }}{% endif %}</p>
     </div>
 
     <div class="page-actions">
@@ -35,12 +35,12 @@
         <a href="{{ url_for('properties_list') }}">{{ t('manage_properties') }}</a>.
     </p>
 </section>
-{% else %}
+{% elif is_edit %}
 <section class="panel">
     <form
         class="agent-form"
         method="post"
-        action="{% if is_edit %}{{ url_for('operations_edit', operation_id=operation_id) }}{% else %}{{ url_for('operations_new') }}{% endif %}"
+        action="{{ url_for('operations_edit', operation_id=operation_id) }}"
     >
         <div class="form-group">
             <label for="operation_date">{{ t('operation_date') }}</label>
@@ -115,24 +115,9 @@
 
         <div class="form-group">
             <label for="currency">{{ t('currency') }}</label>
-            <select
-                id="currency"
-                name="currency"
-                class="form-input"
-                required
-            >
-                <option
-                    value="USD"
-                    {% if form_values.currency == "USD" %}selected{% endif %}
-                >
-                    USD
-                </option>
-                <option
-                    value="ARS"
-                    {% if form_values.currency == "ARS" %}selected{% endif %}
-                >
-                    ARS
-                </option>
+            <select id="currency" name="currency" class="form-input" required>
+                <option value="USD" {% if form_values.currency == "USD" %}selected{% endif %}>USD</option>
+                <option value="ARS" {% if form_values.currency == "ARS" %}selected{% endif %}>ARS</option>
             </select>
         </div>
 
@@ -148,9 +133,7 @@
                 value="{{ form_values.original_amount }}"
                 required
             >
-            <small class="field-help">
-                {{ t('original_amount_help') }}
-            </small>
+            <small class="field-help">{{ t('original_amount_help') }}</small>
         </div>
 
         <div
@@ -169,9 +152,7 @@
                 value="{{ form_values.exchange_rate }}"
                 {% if form_values.currency == "ARS" %}required{% endif %}
             >
-            <small class="field-help">
-                {{ t('exchange_rate_help') }}
-            </small>
+            <small class="field-help">{{ t('exchange_rate_help') }}</small>
         </div>
 
         <div class="form-group">
@@ -231,6 +212,8 @@
         </div>
     </form>
 </section>
+{% else %}
+{% include "operations/form_new.html" %}
 {% endif %}
 
 {% if is_edit and can_delete() %}
@@ -260,5 +243,11 @@
         <button type="submit" class="btn btn-danger">{{ t('delete_operation') }}</button>
     </form>
 </section>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if not is_edit and can_create_operations %}
+<script src="{{ url_for('static', filename='js/operation_new.js') }}"></script>
 {% endif %}
 {% endblock %}

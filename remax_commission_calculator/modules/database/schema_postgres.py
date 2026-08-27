@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v6"
+POSTGRES_SCHEMA_VERSION = "postgres_v7"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -1366,6 +1366,20 @@ def create_postgres_schema():
                 AND issuer_key IS NOT NULL
             """
         )
+
+        for column_name, column_sql in (
+            ("is_referred", f"{_FLAG} NOT NULL DEFAULT 0"),
+            ("referred_side", "TEXT"),
+            ("seller_vat_original", f"{_MONEY} NOT NULL DEFAULT 0"),
+            ("buyer_vat_original", f"{_MONEY} NOT NULL DEFAULT 0"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE operations
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
 
         if not _schema_version_applied(
             cursor,

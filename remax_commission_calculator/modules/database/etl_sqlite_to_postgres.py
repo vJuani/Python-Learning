@@ -97,6 +97,8 @@ MONEY_COLUMNS: dict[str, frozenset[str]] = {
         "office_total",
         "original_amount",
         "exchange_rate",
+        "seller_vat_original",
+        "buyer_vat_original",
     }),
     "property_change_requests": frozenset({
         "proposed_listing_price",
@@ -138,6 +140,7 @@ FLAG_COLUMNS: dict[str, frozenset[str]] = {
         "is_participating",
         "billing_enabled",
     }),
+    "operations": frozenset({"is_referred"}),
 }
 
 NULL_CHECK_COLUMNS: dict[str, tuple[str, ...]] = {

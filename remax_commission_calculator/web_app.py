@@ -228,10 +228,17 @@ from modules.search import (
     suggest_agents,
 )
 
+from modules.operation_prefill import (
+    get_property_operation_prefill,
+    suggest_available_properties,
+)
+
 from modules.operations import (
     change_operation_status,
     get_filtered_operations,
+    get_new_operation_form_defaults,
     has_active_operation_filters,
+    prepare_new_operation_from_form,
     prepare_operation_from_form,
     remove_operation,
     save_calculated_operation,
@@ -1202,6 +1209,44 @@ def render_user_form(
     )
 
 
+def get_new_operation_form_values(form):
+    return {
+        "agent_id": form.get("agent_id", ""),
+        "property_id": form.get("property_id", ""),
+        "search_mode": form.get("search_mode", "agent"),
+        "currency": form.get("currency", "USD"),
+        "original_amount": form.get("original_amount", ""),
+        "exchange_rate": form.get("exchange_rate", ""),
+        "operation_date": form.get("operation_date", ""),
+        "seller_side_active": form.get("seller_side_active", ""),
+        "buyer_side_active": form.get("buyer_side_active", ""),
+        "is_referred": form.get("is_referred", ""),
+        "referred_side": form.get("referred_side", ""),
+        "seller_commission_rate": form.get(
+            "seller_commission_rate",
+            "",
+        ),
+        "buyer_commission_rate": form.get(
+            "buyer_commission_rate",
+            "",
+        ),
+        "seller_vat_amount": form.get("seller_vat_amount", "0"),
+        "buyer_vat_amount": form.get("buyer_vat_amount", "0"),
+    }
+
+
+def process_new_operation_submission(
+    form_values,
+    organization_id,
+    operation_display_id=None,
+):
+    return prepare_new_operation_from_form(
+        form_values,
+        organization_id,
+        operation_display_id=operation_display_id,
+    )
+
+
 def get_operation_form_values(form):
     return {
         "agent_id": form.get(
@@ -1375,7 +1420,10 @@ def render_operation_form(
         show_submit_for_approval=show_submit_for_approval,
         operation_readiness=operation_readiness,
         property_types=PROPERTY_TYPES,
-        lock_agent_selection=(scoped_id is not None)
+        lock_agent_selection=(scoped_id is not None),
+        org_commission_defaults=get_new_operation_form_defaults(
+            organization_id
+        ) if not is_edit else None,
     )
 
 
@@ -3431,6 +3479,60 @@ def agents_suggest():
     ])
 
 
+@app.route("/api/properties/suggest")
+@write_required
+def properties_suggest():
+    organization_id = require_user_organization()
+    query = request.args.get("q", "").strip()
+    agent_id_raw = request.args.get("agent_id", "").strip()
+    agent_id = None
+
+    scoped_id, scope_blocked = get_agent_scope()
+    if scope_blocked:
+        abort(403)
+
+    if scoped_id is not None:
+        agent_id = scoped_id
+    elif agent_id_raw:
+        try:
+            agent_id = int(agent_id_raw)
+        except (TypeError, ValueError):
+            agent_id = None
+
+    suggestions = suggest_available_properties(
+        query,
+        organization_id,
+        agent_id=agent_id,
+        limit=15,
+    )
+    return jsonify(suggestions)
+
+
+@app.route(
+    "/api/properties/<int:property_id>/operation-prefill"
+)
+@write_required
+def property_operation_prefill(property_id):
+    organization_id = require_user_organization()
+    scoped_id, scope_blocked = get_agent_scope()
+
+    if scope_blocked:
+        abort(403)
+
+    prefill = get_property_operation_prefill(
+        property_id,
+        organization_id,
+    )
+
+    if prefill is None:
+        abort(404)
+
+    if scoped_id is not None and prefill.get("agent_id") != scoped_id:
+        abort(403)
+
+    return jsonify(prefill)
+
+
 @app.route(
     "/agents/new",
     methods=[
@@ -5336,7 +5438,7 @@ def operations_new():
         abort(403)
 
     if request.method == "POST":
-        form_values = get_operation_form_values(
+        form_values = get_new_operation_form_values(
             request.form
         )
 
@@ -5349,7 +5451,7 @@ def operations_new():
         )
 
         errors, operation, parsed = (
-            process_operation_submission(
+            process_new_operation_submission(
                 form_values,
                 organization_id
             )
@@ -5425,6 +5527,18 @@ def operations_new():
             )
         except TenantError:
             abort(403)
+        except ValueError as error:
+            if str(error) == "property_already_used_in_operation":
+                return render_operation_form(
+                    "New Operation",
+                    "Save Draft" if scoped_id else "Save Operation",
+                    "Preview Calculation",
+                    form_values,
+                    ["property_already_used_in_operation"],
+                    organization_id,
+                    is_edit=False
+                )
+            raise
 
         if status == STATUS_DRAFT:
             flash_i18n("operation_draft_saved", "success")
@@ -5436,6 +5550,9 @@ def operations_new():
         )
 
     default_agent = str(scoped_id) if scoped_id else ""
+    org_defaults = get_new_operation_form_defaults(
+        organization_id
+    )
 
     return render_operation_form(
         "New Operation",
@@ -5444,18 +5561,25 @@ def operations_new():
         {
             "agent_id": default_agent,
             "property_id": "",
-            "currency": get_organization_default_currency(
-                organization_id
-            ),
+            "search_mode": "agent",
+            "currency": org_defaults["currency"],
             "original_amount": "",
             "exchange_rate": "",
-            "commission_rate": "",
-            "was_invoiced": "no",
-            "invoice_full_commission": "no",
-            "vat_amount": "0",
             "operation_date": date.today().strftime(
                 "%d/%m/%Y"
-            )
+            ),
+            "seller_side_active": "1",
+            "buyer_side_active": "1",
+            "is_referred": "",
+            "referred_side": "",
+            "seller_commission_rate": org_defaults[
+                "seller_commission_rate"
+            ],
+            "buyer_commission_rate": org_defaults[
+                "buyer_commission_rate"
+            ],
+            "seller_vat_amount": "0",
+            "buyer_vat_amount": "0",
         },
         [],
         organization_id,

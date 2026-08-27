@@ -13,13 +13,16 @@ from modules.cli_tenant import get_cli_organization_id
 
 from modules.database import (
     add_operation,
+    create_parties_for_new_operation,
     delete_operation,
     filter_operations as db_filter_operations,
     get_agent_record,
     get_agents,
     get_operations,
+    get_organization_settings,
     get_properties,
     get_property_record,
+    is_property_available_for_operation,
     update_operation,
     update_operation_status,
 )
@@ -47,6 +50,65 @@ from modules.validators import (
     validate_date_format,
     validate_invoice_full_commission,
 )
+
+from modules.vat_billing_calculator import minimum_vat
+
+VALID_REFERRED_SIDES = frozenset({
+    "seller",
+    "buyer",
+    "both",
+})
+
+
+def _checkbox_enabled(raw_value):
+    return str(raw_value or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _parse_commission_rate(raw_value, label):
+    if raw_value is None or str(raw_value).strip() == "":
+        return None, None
+    return parse_positive_float(raw_value, label)
+
+
+def _suggest_vat_for_commission(commission_amount):
+    if commission_amount is None or commission_amount <= 0:
+        return 0.0
+
+    try:
+        result = minimum_vat(commission_amount)
+        suggested = result.get("iva_suggested")
+        return float(suggested) if suggested is not None else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def get_new_operation_form_defaults(organization_id):
+    settings = get_organization_settings(
+        organization_id
+    )
+    return {
+        "buyer_commission_rate": str(
+            settings.get(
+                "default_buyer_commission_percent",
+                3.0,
+            )
+        ),
+        "seller_commission_rate": str(
+            settings.get(
+                "default_seller_commission_percent",
+                3.0,
+            )
+        ),
+        "currency": settings.get(
+            "default_currency",
+            "USD",
+        ),
+    }
 
 
 def calculate_operation_details(
@@ -488,6 +550,345 @@ def prepare_operation_from_form(
     return errors, operation, parsed
 
 
+def validate_new_operation_inputs(
+    form_values,
+    organization_id,
+):
+    errors = []
+    parsed = {}
+
+    agent_id = form_values.get("agent_id", "")
+    property_id = form_values.get("property_id", "")
+
+    if not agent_id:
+        errors.append("You must select an agent.")
+    else:
+        try:
+            parsed["agent_id"] = int(agent_id)
+        except (TypeError, ValueError):
+            errors.append("Invalid agent selection.")
+
+    if not property_id:
+        errors.append("You must select a property.")
+    else:
+        try:
+            parsed["property_id"] = int(property_id)
+        except (TypeError, ValueError):
+            errors.append("Invalid property selection.")
+
+    currency = form_values.get("currency", "USD")
+    if currency not in CURRENCIES:
+        errors.append("Invalid currency. Use USD or ARS.")
+    else:
+        parsed["currency"] = currency
+
+    original_value, original_error = parse_positive_float(
+        form_values.get("original_amount", ""),
+        "Operation value",
+    )
+    if original_error:
+        errors.append(original_error)
+    else:
+        parsed["original_amount"] = original_value
+
+    if currency == "USD":
+        parsed["exchange_rate"] = 1.0
+    else:
+        rate_value, rate_error = parse_positive_float(
+            form_values.get("exchange_rate", ""),
+            "Exchange rate",
+        )
+        if rate_error:
+            errors.append(rate_error)
+        else:
+            parsed["exchange_rate"] = rate_value
+
+    parsed["seller_side_active"] = _checkbox_enabled(
+        form_values.get("seller_side_active")
+    )
+    parsed["buyer_side_active"] = _checkbox_enabled(
+        form_values.get("buyer_side_active")
+    )
+
+    if not parsed["seller_side_active"] and not parsed[
+        "buyer_side_active"
+    ]:
+        errors.append("operation_side_required")
+
+    parsed["is_referred"] = _checkbox_enabled(
+        form_values.get("is_referred")
+    )
+    referred_side = str(
+        form_values.get("referred_side", "")
+    ).strip().lower()
+    if parsed["is_referred"]:
+        if referred_side not in VALID_REFERRED_SIDES:
+            errors.append("operation_referred_side_required")
+        else:
+            parsed["referred_side"] = referred_side
+    else:
+        parsed["referred_side"] = None
+
+    seller_rate = 0.0
+    buyer_rate = 0.0
+
+    if parsed["seller_side_active"]:
+        seller_rate_value, seller_rate_error = (
+            _parse_commission_rate(
+                form_values.get("seller_commission_rate"),
+                "Seller commission rate",
+            )
+        )
+        if seller_rate_error:
+            errors.append(seller_rate_error)
+        else:
+            seller_rate = seller_rate_value or 0.0
+            parsed["seller_commission_rate"] = seller_rate
+    else:
+        parsed["seller_commission_rate"] = 0.0
+
+    if parsed["buyer_side_active"]:
+        buyer_rate_value, buyer_rate_error = (
+            _parse_commission_rate(
+                form_values.get("buyer_commission_rate"),
+                "Buyer commission rate",
+            )
+        )
+        if buyer_rate_error:
+            errors.append(buyer_rate_error)
+        else:
+            buyer_rate = buyer_rate_value or 0.0
+            parsed["buyer_commission_rate"] = buyer_rate
+    else:
+        parsed["buyer_commission_rate"] = 0.0
+
+    seller_vat = 0.0
+    buyer_vat = 0.0
+
+    if parsed["seller_side_active"]:
+        seller_vat_value, seller_vat_error = (
+            parse_optional_positive_float(
+                form_values.get("seller_vat_amount", "0"),
+                "Seller VAT amount",
+            )
+        )
+        if seller_vat_error:
+            errors.append(seller_vat_error)
+        else:
+            seller_vat = seller_vat_value or 0.0
+            parsed["seller_vat_original"] = seller_vat
+    else:
+        parsed["seller_vat_original"] = 0.0
+
+    if parsed["buyer_side_active"]:
+        buyer_vat_value, buyer_vat_error = (
+            parse_optional_positive_float(
+                form_values.get("buyer_vat_amount", "0"),
+                "Buyer VAT amount",
+            )
+        )
+        if buyer_vat_error:
+            errors.append(buyer_vat_error)
+        else:
+            buyer_vat = buyer_vat_value or 0.0
+            parsed["buyer_vat_original"] = buyer_vat
+    else:
+        parsed["buyer_vat_original"] = 0.0
+
+    operation_date = form_values.get(
+        "operation_date",
+        "",
+    )
+    if not operation_date:
+        parsed["operation_date"] = date.today().strftime(
+            "%d/%m/%Y"
+        )
+    else:
+        validated_date, date_error = validate_date_format(
+            operation_date,
+            "Operation date",
+        )
+        if date_error:
+            errors.append(date_error)
+        else:
+            parsed["operation_date"] = validated_date
+
+    if (
+        "original_amount" in parsed
+        and "currency" in parsed
+        and "exchange_rate" in parsed
+    ):
+        try:
+            parsed["sale_price"] = convert_to_usd(
+                parsed["original_amount"],
+                parsed["currency"],
+                parsed["exchange_rate"],
+            )
+            parsed["vat_amount"] = convert_to_usd(
+                seller_vat + buyer_vat,
+                parsed["currency"],
+                parsed["exchange_rate"],
+            )
+        except ValueError as error:
+            errors.append(str(error))
+
+    seller_commission = 0.0
+    buyer_commission = 0.0
+
+    if (
+        "original_amount" in parsed
+        and parsed["seller_side_active"]
+    ):
+        seller_commission = (
+            parsed["original_amount"]
+            * parsed["seller_commission_rate"]
+            / 100.0
+        )
+    if (
+        "original_amount" in parsed
+        and parsed["buyer_side_active"]
+    ):
+        buyer_commission = (
+            parsed["original_amount"]
+            * parsed["buyer_commission_rate"]
+            / 100.0
+        )
+
+    parsed["seller_commission_amount"] = seller_commission
+    parsed["buyer_commission_amount"] = buyer_commission
+    parsed["total_commission_original"] = (
+        seller_commission + buyer_commission
+    )
+
+    if parsed.get("sale_price"):
+        if parsed["sale_price"] > 0:
+            parsed["commission_rate"] = (
+                parsed["total_commission_original"]
+                / parsed["original_amount"]
+                * 100.0
+            )
+        else:
+            parsed["commission_rate"] = 0.0
+
+    parsed["was_invoiced"] = "no"
+    parsed["invoice_full_commission"] = "no"
+
+    if (
+        "agent_id" in parsed
+        and "property_id" in parsed
+        and len(errors) == 0
+    ):
+        agent, property_data = get_agent_and_property(
+            parsed["agent_id"],
+            parsed["property_id"],
+            organization_id,
+        )
+
+        if agent is None:
+            errors.append("Selected agent was not found.")
+
+        if property_data is None:
+            errors.append("Selected property was not found.")
+        else:
+            if (
+                agent is not None
+                and property_data.get("agent_id")
+                != parsed["agent_id"]
+            ):
+                errors.append(
+                    "Property does not belong to the selected agent."
+                )
+
+            if not is_property_available_for_operation(
+                parsed["property_id"],
+                organization_id,
+            ):
+                errors.append(
+                    "property_already_used_in_operation"
+                )
+
+    return errors, parsed
+
+
+def prepare_new_operation_from_form(
+    form_values,
+    organization_id,
+    operation_display_id=None,
+):
+    errors, parsed = validate_new_operation_inputs(
+        form_values,
+        organization_id,
+    )
+
+    if len(errors) > 0:
+        return errors, None, parsed
+
+    try:
+        operation = build_operation_from_selection(
+            parsed["agent_id"],
+            parsed["property_id"],
+            organization_id,
+            parsed["sale_price"],
+            parsed["commission_rate"],
+            parsed["was_invoiced"],
+            parsed["vat_amount"],
+            operation_date=parsed["operation_date"],
+            operation_display_id=operation_display_id,
+            currency=parsed["currency"],
+            original_amount=parsed["original_amount"],
+            exchange_rate=parsed["exchange_rate"],
+        )
+    except ValueError as error:
+        errors.append(str(error))
+        return errors, None, parsed
+
+    operation["invoice_full_commission"] = "no"
+    operation["is_referred"] = parsed["is_referred"]
+    operation["referred_side"] = parsed["referred_side"]
+    operation["seller_vat_original"] = parsed[
+        "seller_vat_original"
+    ]
+    operation["buyer_vat_original"] = parsed[
+        "buyer_vat_original"
+    ]
+    operation["seller_side_active"] = parsed[
+        "seller_side_active"
+    ]
+    operation["buyer_side_active"] = parsed[
+        "buyer_side_active"
+    ]
+    operation["seller_commission_rate"] = parsed[
+        "seller_commission_rate"
+    ]
+    operation["buyer_commission_rate"] = parsed[
+        "buyer_commission_rate"
+    ]
+    operation["seller_commission_amount"] = parsed[
+        "seller_commission_amount"
+    ]
+    operation["buyer_commission_amount"] = parsed[
+        "buyer_commission_amount"
+    ]
+    operation["side_data"] = {
+        "seller_active": parsed["seller_side_active"],
+        "buyer_active": parsed["buyer_side_active"],
+        "seller_commission_percent": parsed[
+            "seller_commission_rate"
+        ],
+        "buyer_commission_percent": parsed[
+            "buyer_commission_rate"
+        ],
+        "seller_commission_amount": parsed[
+            "seller_commission_amount"
+        ],
+        "buyer_commission_amount": parsed[
+            "buyer_commission_amount"
+        ],
+    }
+
+    return errors, operation, parsed
+
+
 def save_calculated_operation(
     agent_id,
     property_id,
@@ -497,6 +898,12 @@ def save_calculated_operation(
     created_by_user_id=None,
     require_property_owner=False
 ):
+    if operation.get("side_data") and not is_property_available_for_operation(
+        property_id,
+        organization_id,
+    ):
+        raise ValueError("property_already_used_in_operation")
+
     operation_id = add_operation(
         operation["date"],
         agent_id,
@@ -532,7 +939,38 @@ def save_calculated_operation(
             "invoice_full_commission",
             "no",
         ),
+        is_referred=operation.get("is_referred", False),
+        referred_side=operation.get("referred_side"),
+        seller_vat_original=operation.get(
+            "seller_vat_original",
+            0,
+        ),
+        buyer_vat_original=operation.get(
+            "buyer_vat_original",
+            0,
+        ),
     )
+
+    side_data = operation.get("side_data")
+    if side_data:
+        create_parties_for_new_operation(
+            organization_id,
+            operation_id,
+            seller_active=side_data["seller_active"],
+            buyer_active=side_data["buyer_active"],
+            seller_commission_percent=side_data[
+                "seller_commission_percent"
+            ],
+            buyer_commission_percent=side_data[
+                "buyer_commission_percent"
+            ],
+            seller_commission_amount=side_data[
+                "seller_commission_amount"
+            ],
+            buyer_commission_amount=side_data[
+                "buyer_commission_amount"
+            ],
+        )
 
     operation["id"] = (
         f"COM-{operation_id:06d}"

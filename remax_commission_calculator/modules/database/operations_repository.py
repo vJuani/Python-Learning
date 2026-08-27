@@ -52,7 +52,11 @@ OPERATIONS_BASE_QUERY = """
         operations.invoice_currency,
         operations.invoice_exchange_rate,
         operations.invoice_amount_set_at,
-        operations.invoice_amount_set_by_user_id
+        operations.invoice_amount_set_by_user_id,
+        operations.is_referred,
+        operations.referred_side,
+        operations.seller_vat_original,
+        operations.buyer_vat_original
 
     FROM operations
 
@@ -137,6 +141,22 @@ def build_operation_dict(rows):
             "invoice_amount_set_by_user_id": (
                 row[35] if len(row) > 35 else None
             ),
+            "is_referred": bool(
+                row[36]
+            ) if len(row) > 36 and row[36] is not None else False,
+            "referred_side": (
+                row[37] if len(row) > 37 else None
+            ),
+            "seller_vat_original": (
+                float(row[38])
+                if len(row) > 38 and row[38] is not None
+                else 0.0
+            ),
+            "buyer_vat_original": (
+                float(row[39])
+                if len(row) > 39 and row[39] is not None
+                else 0.0
+            ),
         })
 
     return operations
@@ -165,7 +185,11 @@ def add_operation(
     created_by_user_id=None,
     rejection_reason=None,
     require_property_owner=False,
-    invoice_full_commission="no"
+    invoice_full_commission="no",
+    is_referred=False,
+    referred_side=None,
+    seller_vat_original=0,
+    buyer_vat_original=0,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -210,12 +234,16 @@ def add_operation(
             status,
             rejection_reason,
             created_by_user_id,
-            invoice_full_commission
+            invoice_full_commission,
+            is_referred,
+            referred_side,
+            seller_vat_original,
+            buyer_vat_original
         )
         VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?
         )
         """,
         (
@@ -240,7 +268,11 @@ def add_operation(
             status,
             rejection_reason,
             created_by_user_id,
-            invoice_full_commission
+            invoice_full_commission,
+            1 if is_referred else 0,
+            referred_side,
+            seller_vat_original,
+            buyer_vat_original,
         )
     )
 

@@ -623,3 +623,77 @@ def ensure_parties_for_operation(
         raise
     finally:
         connection.close()
+
+
+def create_parties_for_new_operation(
+    organization_id,
+    operation_id,
+    *,
+    seller_active,
+    buyer_active,
+    seller_commission_percent,
+    buyer_commission_percent,
+    seller_commission_amount,
+    buyer_commission_amount,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    now = _now_iso()
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        for party_role, active, percent, amount in (
+            (
+                "seller",
+                seller_active,
+                seller_commission_percent,
+                seller_commission_amount,
+            ),
+            (
+                "buyer",
+                buyer_active,
+                buyer_commission_percent,
+                buyer_commission_amount,
+            ),
+        ):
+            cursor.execute(
+                """
+                INSERT INTO operation_parties (
+                    organization_id,
+                    operation_id,
+                    party_role,
+                    is_participating,
+                    commission_percent,
+                    commission_amount,
+                    billing_enabled,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, 0, ?, ?
+                )
+                """,
+                (
+                    organization_id,
+                    operation_id,
+                    party_role,
+                    1 if active else 0,
+                    percent if active else 0,
+                    amount if active else 0,
+                    now,
+                    now,
+                ),
+            )
+
+        connection.commit()
+        return get_parties_for_operation(
+            organization_id,
+            operation_id,
+        )
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()

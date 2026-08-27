@@ -169,10 +169,12 @@ class OperationAgentScopeTests(unittest.TestCase):
                 "property_id": str(self.prop_tomy),
                 "currency": "USD",
                 "original_amount": "100000",
-                "commission_rate": "5",
-                "was_invoiced": "no",
-                "invoice_full_commission": "no",
-                "vat_amount": "0",
+                "seller_side_active": "1",
+                "buyer_side_active": "1",
+                "seller_commission_rate": "5",
+                "buyer_commission_rate": "5",
+                "seller_vat_amount": "0",
+                "buyer_vat_amount": "0",
             },
             follow_redirects=False,
         )
@@ -192,18 +194,8 @@ class OperationAgentScopeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         html = response.get_data(as_text=True)
 
-        self.assertIn(
-            f'data-agent-id="{self.pablo}"',
-            html,
-        )
-        self.assertIn(
-            f'data-agent-id="{self.tomy}"',
-            html,
-        )
-        self.assertIn(
-            'id="property-agent-hint"',
-            html,
-        )
+        self.assertIn('id="operation-new-form"', html)
+        self.assertIn('id="property_search"', html)
 
     def test_agent_only_own_properties_in_form(self):
         client = app.test_client()
@@ -219,8 +211,6 @@ class OperationAgentScopeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         html = response.get_data(as_text=True)
 
-        self.assertIn(f'value="{self.prop_pablo_a}"', html)
-        self.assertIn(f'value="{self.prop_pablo_b}"', html)
         self.assertNotIn(f'value="{self.prop_tomy}"', html)
 
         response = client.post(
@@ -232,10 +222,12 @@ class OperationAgentScopeTests(unittest.TestCase):
                 "property_id": str(self.prop_tomy),
                 "currency": "USD",
                 "original_amount": "100000",
-                "commission_rate": "5",
-                "was_invoiced": "no",
-                "invoice_full_commission": "no",
-                "vat_amount": "0",
+                "seller_side_active": "1",
+                "buyer_side_active": "1",
+                "seller_commission_rate": "5",
+                "buyer_commission_rate": "5",
+                "seller_vat_amount": "0",
+                "buyer_vat_amount": "0",
             },
             follow_redirects=False,
         )
@@ -277,10 +269,12 @@ class OperationAgentScopeTests(unittest.TestCase):
                 "property_id": str(self.prop_other_org),
                 "currency": "USD",
                 "original_amount": "100000",
-                "commission_rate": "5",
-                "was_invoiced": "no",
-                "invoice_full_commission": "no",
-                "vat_amount": "0",
+                "seller_side_active": "1",
+                "buyer_side_active": "1",
+                "seller_commission_rate": "5",
+                "buyer_commission_rate": "5",
+                "seller_vat_amount": "0",
+                "buyer_vat_amount": "0",
             },
             follow_redirects=False,
         )

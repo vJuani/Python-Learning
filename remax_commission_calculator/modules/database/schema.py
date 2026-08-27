@@ -2643,6 +2643,30 @@ def _migrate_invoicing_v2(cursor):
                 )
 
 
+def _migrate_operation_creation(cursor):
+    """
+    Side-aware operation creation: referral flags and per-side VAT
+    stored in original operation currency.
+    """
+    for column_name, column_sql in (
+        ("is_referred", "INTEGER NOT NULL DEFAULT 0"),
+        ("referred_side", "TEXT"),
+        ("seller_vat_original", "REAL NOT NULL DEFAULT 0"),
+        ("buyer_vat_original", "REAL NOT NULL DEFAULT 0"),
+    ):
+        if not _column_exists(
+            cursor,
+            "operations",
+            column_name,
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE operations
+                ADD COLUMN {column_name} {column_sql}
+                """
+            )
+
+
 def migrate_schema(create_backup=True):
     # Commit external_id before the bulk transaction so a later
     # rollback cannot drop the column on an existing Railway DB.
@@ -2860,6 +2884,7 @@ def migrate_schema(create_backup=True):
         _migrate_cash_treasury(cursor)
         _migrate_invoicing(cursor)
         _migrate_invoicing_v2(cursor)
+        _migrate_operation_creation(cursor)
 
         _validate_migration(
             cursor,

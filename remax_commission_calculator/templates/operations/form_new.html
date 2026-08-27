@@ -1,0 +1,285 @@
+<section class="panel operation-new-form" id="operation-new-form">
+    <form
+        class="agent-form operation-new"
+        method="post"
+        action="{{ url_for('operations_new') }}"
+        id="operation-new"
+        data-prefill-url="{{ url_for('property_operation_prefill', property_id=0) }}"
+        data-suggest-url="{{ url_for('properties_suggest') }}"
+        data-empty-label="{{ t('operation_property_search_empty') }}"
+        data-no-properties-label="{{ t('operation_no_properties_available') }}"
+        data-default-seller-rate="{{ org_commission_defaults.seller_commission_rate }}"
+        data-default-buyer-rate="{{ org_commission_defaults.buyer_commission_rate }}"
+        data-participation-both="{{ t('operation_summary_participation_both') }}"
+        data-participation-seller="{{ t('operation_summary_participation_seller') }}"
+        data-participation-buyer="{{ t('operation_summary_participation_buyer') }}"
+        data-select-agent-first="{{ t('select_agent_first_for_property') }}"
+        data-property-required="{{ t('err_select_property') }}"
+    >
+        <input type="hidden" name="property_id" id="property_id" value="{{ form_values.property_id }}">
+
+        <div class="operation-new-section">
+            <h3>{{ t('operation_search_section') }}</h3>
+
+            <div class="operation-search-mode" role="radiogroup">
+                <label class="radio-chip">
+                    <input
+                        type="radio"
+                        name="search_mode"
+                        value="agent"
+                        {% if form_values.search_mode != 'property_id' %}checked{% endif %}
+                    >
+                    {{ t('operation_search_by_agent') }}
+                </label>
+                <label class="radio-chip">
+                    <input
+                        type="radio"
+                        name="search_mode"
+                        value="property_id"
+                        {% if form_values.search_mode == 'property_id' %}checked{% endif %}
+                    >
+                    {{ t('operation_search_by_property_id') }}
+                </label>
+            </div>
+
+            <div class="form-group" id="agent-field-group">
+                <label for="agent_id">{{ t('agent') }}</label>
+                {% if lock_agent_selection %}
+                <input type="hidden" name="agent_id" value="{{ form_values.agent_id }}">
+                <select id="agent_id" class="form-input" disabled>
+                {% else %}
+                <select id="agent_id" name="agent_id" class="form-input">
+                {% endif %}
+                    <option value="">{{ t('select_agent') }}</option>
+                    {% for agent in agents %}
+                    <option
+                        value="{{ agent.id }}"
+                        {% if form_values.agent_id|string == agent.id|string %}selected{% endif %}
+                    >
+                        {{ agent.name }} ({{ agent.type }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group autocomplete-field" id="property-search-group">
+                <label for="property_search">{{ t('property') }}</label>
+                <input
+                    type="text"
+                    id="property_search"
+                    class="form-input"
+                    autocomplete="off"
+                    placeholder="{{ t('operation_property_search_placeholder') }}"
+                    value=""
+                    role="combobox"
+                    aria-expanded="false"
+                    aria-controls="property-search-list"
+                >
+                <ul
+                    id="property-search-list"
+                    class="autocomplete-list"
+                    role="listbox"
+                    hidden
+                ></ul>
+                <small id="property-search-hint" class="field-help"></small>
+            </div>
+        </div>
+
+        <div class="operation-new-section">
+            <h3>{{ t('operation_data_section') }}</h3>
+
+            <div class="form-group">
+                <label for="operation_date">{{ t('operation_date') }}</label>
+                <input
+                    type="text"
+                    id="operation_date"
+                    name="operation_date"
+                    class="form-input"
+                    placeholder="{{ t('placeholder_date') }}"
+                    value="{{ form_values.operation_date }}"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="currency">{{ t('currency') }}</label>
+                <select id="currency" name="currency" class="form-input" required>
+                    <option value="USD" {% if form_values.currency == "USD" %}selected{% endif %}>USD</option>
+                    <option value="ARS" {% if form_values.currency == "ARS" %}selected{% endif %}>ARS</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="original_amount">{{ t('operation_value') }}</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    id="original_amount"
+                    name="original_amount"
+                    class="form-input"
+                    value="{{ form_values.original_amount }}"
+                    required
+                >
+                <small class="field-help">{{ t('operation_value_help') }}</small>
+            </div>
+
+            <div
+                class="form-group"
+                id="exchange-rate-group"
+                {% if form_values.currency != "ARS" %}hidden{% endif %}
+            >
+                <label for="exchange_rate">{{ t('exchange_rate') }}</label>
+                <input
+                    type="number"
+                    step="0.0001"
+                    min="0"
+                    id="exchange_rate"
+                    name="exchange_rate"
+                    class="form-input"
+                    value="{{ form_values.exchange_rate }}"
+                    {% if form_values.currency == "ARS" %}required{% endif %}
+                >
+                <small class="field-help">{{ t('exchange_rate_help') }}</small>
+            </div>
+        </div>
+
+        <div class="operation-new-section">
+            <h3>{{ t('operation_participation_section') }}</h3>
+
+            <div class="operation-side-toggles">
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        name="seller_side_active"
+                        value="1"
+                        id="seller_side_active"
+                        {% if form_values.seller_side_active %}checked{% endif %}
+                    >
+                    {{ t('operation_we_have_seller_side') }}
+                </label>
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        name="buyer_side_active"
+                        value="1"
+                        id="buyer_side_active"
+                        {% if form_values.buyer_side_active %}checked{% endif %}
+                    >
+                    {{ t('operation_we_have_buyer_side') }}
+                </label>
+                <label class="checkbox-label">
+                    <input
+                        type="checkbox"
+                        name="is_referred"
+                        value="1"
+                        id="is_referred"
+                        {% if form_values.is_referred %}checked{% endif %}
+                    >
+                    {{ t('operation_referred') }}
+                </label>
+            </div>
+
+            <div
+                class="form-group"
+                id="referred-side-group"
+                {% if not form_values.is_referred %}hidden{% endif %}
+            >
+                <label for="referred_side">{{ t('operation_referred_side') }}</label>
+                <select id="referred_side" name="referred_side" class="form-input">
+                    <option value="">{{ t('operation_referred_side') }}…</option>
+                    <option value="seller" {% if form_values.referred_side == 'seller' %}selected{% endif %}>{{ t('operation_referred_side_seller') }}</option>
+                    <option value="buyer" {% if form_values.referred_side == 'buyer' %}selected{% endif %}>{{ t('operation_referred_side_buyer') }}</option>
+                    <option value="both" {% if form_values.referred_side == 'both' %}selected{% endif %}>{{ t('operation_referred_side_both') }}</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="operation-new-section">
+            <h3>{{ t('operation_commissions_section') }}</h3>
+
+            <div class="operation-sides-grid">
+                <article class="operation-side-card" id="seller-side-card">
+                    <h4>{{ t('operation_side_seller') }}</h4>
+                    <div class="form-group">
+                        <label for="seller_commission_rate">{{ t('operation_seller_commission_rate') }}</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            id="seller_commission_rate"
+                            name="seller_commission_rate"
+                            class="form-input"
+                            value="{{ form_values.seller_commission_rate }}"
+                        >
+                    </div>
+                    <p class="operation-side-result">
+                        <span>{{ t('operation_commission_calculated') }}:</span>
+                        <strong id="seller_commission_amount">—</strong>
+                    </p>
+                    <div class="form-group">
+                        <label for="seller_vat_amount">{{ t('operation_seller_vat') }}</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            id="seller_vat_amount"
+                            name="seller_vat_amount"
+                            class="form-input"
+                            value="{{ form_values.seller_vat_amount }}"
+                        >
+                    </div>
+                </article>
+
+                <article class="operation-side-card" id="buyer-side-card">
+                    <h4>{{ t('operation_side_buyer') }}</h4>
+                    <div class="form-group">
+                        <label for="buyer_commission_rate">{{ t('operation_buyer_commission_rate') }}</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            id="buyer_commission_rate"
+                            name="buyer_commission_rate"
+                            class="form-input"
+                            value="{{ form_values.buyer_commission_rate }}"
+                        >
+                    </div>
+                    <p class="operation-side-result">
+                        <span>{{ t('operation_commission_calculated') }}:</span>
+                        <strong id="buyer_commission_amount">—</strong>
+                    </p>
+                    <div class="form-group">
+                        <label for="buyer_vat_amount">{{ t('operation_buyer_vat') }}</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            id="buyer_vat_amount"
+                            name="buyer_vat_amount"
+                            class="form-input"
+                            value="{{ form_values.buyer_vat_amount }}"
+                        >
+                    </div>
+                </article>
+            </div>
+        </div>
+
+        <div class="operation-new-section operation-new-summary">
+            <h3>{{ t('operation_summary_section') }}</h3>
+            <dl class="operation-summary-dl">
+                <div><dt>{{ t('operation_value') }}</dt><dd id="summary_operation_value">—</dd></div>
+                <div><dt>{{ t('operation_side_seller') }}</dt><dd id="summary_seller_commission">—</dd></div>
+                <div><dt>{{ t('operation_side_buyer') }}</dt><dd id="summary_buyer_commission">—</dd></div>
+                <div><dt>{{ t('operation_total_commission') }}</dt><dd id="summary_total_commission">—</dd></div>
+                <div><dt>{{ t('operation_participation_label') }}</dt><dd id="summary_participation">—</dd></div>
+            </dl>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" name="action" value="preview" class="btn btn-secondary">{{ t('preview_calculation') }}</button>
+            <button type="submit" name="action" value="save" class="btn btn-primary">{{ submit_label }}</button>
+            <a href="{{ url_for('operations_list') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
+        </div>
+    </form>
+</section>

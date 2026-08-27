@@ -64,6 +64,63 @@
 
 <section class="panel">
     <div class="panel-header">
+        <h3>{{ t('operation_creation_section') }}</h3>
+    </div>
+
+    <p>
+        <strong>{{ t('operation_value') }}:</strong>
+        {{ operation.currency or 'USD' }}
+        {{ '%.2f'|format(operation.original_amount or operation.sale_price) }}
+    </p>
+
+    {% if operation.is_referred %}
+    <p>
+        <strong>{{ t('operation_referred') }}:</strong>
+        {{ t('yes') }}
+        {% if operation.referred_side %}
+        · {{ t('operation_referred_side') }}:
+        {{ t('operation_referred_side_' ~ operation.referred_side) }}
+        {% endif %}
+    </p>
+    {% else %}
+    <p><strong>{{ t('operation_referred') }}:</strong> {{ t('no') }}</p>
+    {% endif %}
+
+    {% for side_key in ['seller', 'buyer'] %}
+    {% set side = sides_state.get(side_key) if sides_state else none %}
+    {% set party = side.party if side else none %}
+    {% set vat_side = operation.seller_vat_original if side_key == 'seller' else operation.buyer_vat_original %}
+    <article class="operation-side-card {% if not party or not party.is_participating %}is-inactive{% endif %}">
+        <h4>{{ t('operation_side_' ~ side_key) }}</h4>
+        <p>
+            <strong>{{ t('operation_participation_label') }}:</strong>
+            {% if party and party.is_participating %}
+            {{ t('operation_participating_yes') }}
+            {% else %}
+            {{ t('operation_participating_no') }}
+            {% endif %}
+        </p>
+        {% if party and party.is_participating %}
+        <p>
+            <strong>{{ t('commission_rate') }}:</strong>
+            {{ party.commission_percent or 0 }}%
+            ·
+            <strong>{{ t('operation_commission_calculated') }}:</strong>
+            {{ operation.currency or 'USD' }}
+            {{ '%.2f'|format(party.commission_amount or 0) }}
+        </p>
+        <p>
+            <strong>{{ t('operation_' ~ side_key ~ '_vat') }}:</strong>
+            {{ operation.currency or 'USD' }}
+            {{ '%.2f'|format(vat_side or 0) }}
+        </p>
+        {% endif %}
+    </article>
+    {% endfor %}
+</section>
+
+<section class="panel">
+    <div class="panel-header">
         <h3>{{ t('billing_vat_section') }}</h3>
     </div>
 
