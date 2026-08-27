@@ -431,6 +431,16 @@ def inject_i18n_helpers():
 
 
 @app.context_processor
+def inject_billing_flash_cta():
+    return {
+        "billing_flash_cta": session.pop(
+            "billing_flash_cta",
+            None,
+        ),
+    }
+
+
+@app.context_processor
 def inject_auth_helpers():
     user = get_current_user()
     guest = get_guest_access()
@@ -5017,19 +5027,27 @@ def require_billing_user():
     return user
 
 
-def _flash_invoicing_error(error):
-    # One alert for incomplete profiles; list keys only in that card.
-    if error.message_key == (
-        "invoice_err_billing_profile_incomplete"
-    ):
-        flash_i18n(error.message_key, "error")
-        return
+def _flash_invoicing_error(
+    error,
+    *,
+    operation_id=None,
+    side=None,
+    user=None,
+):
+    from modules.billing_errors import (
+        resolve_billing_error_cta,
+        store_billing_error_cta,
+    )
+
     flash_i18n(error.message_key, "error")
-    for missing_key in error.missing or []:
-        if isinstance(missing_key, str) and missing_key.startswith(
-            "billing_missing_"
-        ):
-            flash_i18n(missing_key, "error")
+    store_billing_error_cta(
+        resolve_billing_error_cta(
+            error,
+            user=user,
+            operation_id=operation_id,
+            side=side,
+        )
+    )
 
 
 def _load_billing_invoice(organization_id, invoice_id, user):

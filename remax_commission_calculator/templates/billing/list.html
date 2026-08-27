@@ -8,13 +8,6 @@
         <h2>{{ t('billing_title') }}</h2>
         <p>{{ t('billing_subtitle_simple') }}</p>
     </div>
-    <div class="page-actions">
-        {% if not is_staff %}
-        <a href="{{ url_for('billing_agent_profile_self') }}" class="btn btn-secondary btn-sm">{{ t('billing_profile_title') }}</a>
-        {% else %}
-        <a href="{{ url_for('billing_issuers') }}" class="btn btn-secondary btn-sm">{{ t('billing_issuers_title') }}</a>
-        {% endif %}
-    </div>
 </section>
 
 <section class="panel billing-ai-panel">
@@ -30,11 +23,13 @@
         <button type="submit" class="btn btn-primary">{{ t('billing_ai_prepare') }}</button>
     </form>
     <p class="field-help billing-ai-examples">{{ t('billing_ai_examples') }}</p>
-    {% if session.get('billing_ai_operation') %}
-    <p class="field-help">{{ t('billing_ai_context_operation') }}: {{ session.billing_ai_operation }}</p>
-    {% endif %}
     {% if ai_message %}
-    <p class="billing-ai-feedback">{{ t(ai_message) }}</p>
+    <div class="billing-ai-feedback">
+        {% if ai_operation %}
+        <p class="billing-ai-found">{{ t('billing_ai_found_operation', operation=ai_operation) }}</p>
+        {% endif %}
+        <p>{{ t(ai_message) }}</p>
+    </div>
     {% endif %}
     {% if ai_options %}
     <ul class="billing-ai-options">
@@ -180,4 +175,15 @@
     {% endif %}
 </section>
 {% endif %}
+
+<details class="billing-config-details">
+    <summary>{{ t('billing_settings_title') }}</summary>
+    <div class="billing-config-links">
+        {% if is_staff %}
+        <a href="{{ url_for('billing_issuers') }}">{{ t('billing_issuers_title') }}</a>
+        {% else %}
+        <a href="{{ url_for('billing_agent_profile_self') }}">{{ t('billing_profile_title') }}</a>
+        {% endif %}
+    </div>
+</details>
 {% endblock %}

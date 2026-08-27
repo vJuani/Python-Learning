@@ -96,6 +96,20 @@ def register_billing_routes(app, *, helpers):
         "_load_billing_invoice"
     ]
 
+    def _flash_billing_error(
+        error,
+        *,
+        operation_id=None,
+        side=None,
+        user=None,
+    ):
+        flash_invoicing_error(
+            error,
+            operation_id=operation_id,
+            side=side,
+            user=user or get_current_user(),
+        )
+
     def _valid_side(side):
         if side not in VALID_SIDES:
             abort(404)
@@ -111,6 +125,7 @@ def register_billing_routes(app, *, helpers):
 
     def _clear_billing_ai_context():
         session.pop("billing_ai_context", None)
+        session.pop("billing_ai_operation", None)
 
     def _issuer_defaults(user, settings):
         issuer_mode = default_issuer_mode_for_user(
@@ -187,7 +202,12 @@ def register_billing_routes(app, *, helpers):
                 issuer_profile_id=issuer_profile_id,
             )
         except InvoicingError as error:
-            flash_invoicing_error(error)
+            _flash_billing_error(
+                error,
+                operation_id=operation_id,
+                side=side,
+                user=user,
+            )
             if error.message_key == (
                 "invoice_err_billing_profile_incomplete"
             ):
@@ -308,6 +328,12 @@ def register_billing_routes(app, *, helpers):
 
         ai_message = session.pop("billing_ai_message", None)
         ai_options = session.pop("billing_ai_options", None)
+        ai_operation = session.pop(
+            "billing_ai_operation",
+            None,
+        )
+        if not ai_message:
+            ai_operation = None
 
         return render_template(
             "billing/list.html",
@@ -335,6 +361,7 @@ def register_billing_routes(app, *, helpers):
             is_staff=is_admin(user),
             ai_message=ai_message,
             ai_options=ai_options,
+            ai_operation=ai_operation,
         )
 
     @app.route("/billing/ai/prepare", methods=["POST"])
@@ -580,7 +607,12 @@ def register_billing_routes(app, *, helpers):
                     issuer_profile_id=issuer_profile_id,
                 )
             except InvoicingError as error:
-                flash_invoicing_error(error)
+                _flash_billing_error(
+                    error,
+                    operation_id=operation_id,
+                    side=side,
+                    user=user,
+                )
                 if error.message_key == (
                     "invoice_err_billing_profile_incomplete"
                 ):
@@ -641,7 +673,14 @@ def register_billing_routes(app, *, helpers):
                         ),
                     )
                 except InvoicingError as error:
-                    flash_invoicing_error(error)
+                    _flash_billing_error(
+                        error,
+                        operation_id=invoice.get(
+                            "operation_id"
+                        ),
+                        side=invoice.get("side"),
+                        user=user,
+                    )
                 return redirect(
                     url_for(
                         "billing_review",
@@ -660,7 +699,14 @@ def register_billing_routes(app, *, helpers):
                     "success",
                 )
             except InvoicingError as error:
-                flash_invoicing_error(error)
+                _flash_billing_error(
+                    error,
+                    operation_id=invoice.get(
+                        "operation_id"
+                    ),
+                    side=invoice.get("side"),
+                    user=user,
+                )
                 return redirect(
                     url_for(
                         "billing_review",
@@ -719,7 +765,12 @@ def register_billing_routes(app, *, helpers):
             )
             flash_i18n("invoice_cancelled", "success")
         except InvoicingError as error:
-            flash_invoicing_error(error)
+            _flash_billing_error(
+                error,
+                operation_id=operation_id,
+                side=side,
+                user=user,
+            )
         return redirect(
             url_for("billing_detail", invoice_id=invoice_id)
         )
@@ -736,7 +787,12 @@ def register_billing_routes(app, *, helpers):
                 user,
             )
         except InvoicingError as error:
-            flash_invoicing_error(error)
+            _flash_billing_error(
+                error,
+                operation_id=operation_id,
+                side=side,
+                user=user,
+            )
             return redirect(
                 url_for(
                     "billing_detail",
@@ -794,7 +850,12 @@ def register_billing_routes(app, *, helpers):
             )
             flash_i18n("invoice_amount_saved", "success")
         except InvoicingError as error:
-            flash_invoicing_error(error)
+            _flash_billing_error(
+                error,
+                operation_id=operation_id,
+                side=side,
+                user=user,
+            )
         return redirect(
             url_for(
                 "operations_detail",
@@ -869,7 +930,12 @@ def register_billing_routes(app, *, helpers):
             )
             flash_i18n("invoice_amount_saved", "success")
         except InvoicingError as error:
-            flash_invoicing_error(error)
+            _flash_billing_error(
+                error,
+                operation_id=operation_id,
+                side=side,
+                user=user,
+            )
         return redirect(
             url_for(
                 "operations_detail",

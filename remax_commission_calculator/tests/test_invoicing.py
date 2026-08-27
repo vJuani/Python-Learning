@@ -26,6 +26,7 @@ from modules.database import (
     ensure_parties_for_operation,
     get_operation_record,
     get_operation_party,
+    set_operation_party_billing_enabled,
     set_operation_party_client_fields,
     update_organization_billing_fields,
     upsert_agent_billing_profile,
@@ -209,16 +210,121 @@ class InvoicingV2Tests(unittest.TestCase):
         return op_id
 
     def test_i18n_keys(self):
-        for key in (
+        billing_keys = (
             "nav_billing",
             "billing_missing_agent_email",
             "billing_agent_profile_incomplete_title",
             "billing_invoice_buyer",
             "billing_side_seller",
+            "billing_settings_title",
+            "billing_ai_found_operation",
+            "billing_cta_open_operation",
+            "billing_cta_complete_profile",
+            "billing_cta_manage_issuers",
+            "billing_cta_view_invoice",
+            "billing_cta_complete_client",
             "notification_operation_side_ready_to_invoice",
-        ):
-            self.assertIn(key, TRANSLATIONS["es"])
-            self.assertIn(key, TRANSLATIONS["en"])
+            "invoice_err_amount_invalid",
+            "invoice_err_currency_invalid",
+            "invoice_err_exchange_invalid",
+            "invoice_err_operation_not_found",
+            "invoice_err_amount_not_set",
+            "invoice_err_already_invoiced",
+            "invoice_err_billing_profile_incomplete",
+            "invoice_err_payment_condition_invalid",
+            "invoice_err_forbidden",
+            "invoice_err_not_found",
+            "invoice_err_invalid_transition",
+            "invoice_err_cannot_cancel_issued",
+            "invoice_err_fiscal_issue_unavailable",
+            "invoice_err_arca_not_configured",
+            "invoice_err_side_billing_disabled",
+            "invoice_err_party_not_participating",
+            "invoice_err_client_incomplete",
+            "invoice_err_party_client_incomplete",
+            "invoice_err_side_invalid",
+            "invoice_err_agents_cannot_invoice",
+            "invoice_err_office_cannot_invoice",
+            "invoice_err_issuer_profile_required",
+            "invoice_err_issuer_profile_not_found",
+            "invoice_err_issuer_mode_invalid",
+            "invoice_err_retry_same_invoice",
+            "invoice_err_use_create_draft_for_side",
+        )
+        for key in billing_keys:
+            self.assertIn(key, TRANSLATIONS["es"], key)
+            self.assertIn(key, TRANSLATIONS["en"], key)
+
+    def test_side_billing_disabled_error(self):
+        op_id = add_operation(
+            "27/08/2026",
+            self.agent_a,
+            self.property_a,
+            "no",
+            0,
+            100000,
+            3,
+            3000,
+            2700,
+            300,
+            1350,
+            1350,
+            0,
+            1350,
+            self.org_a,
+        )
+        ensure_parties_for_operation(self.org_a, op_id)
+        with self.assertRaises(InvoicingError) as ctx:
+            create_draft_for_side(
+                self.org_a,
+                op_id,
+                SIDE_BUYER,
+                self._agent_user(),
+                issuer_mode="agent",
+            )
+        self.assertEqual(
+            ctx.exception.message_key,
+            "invoice_err_side_billing_disabled",
+        )
+
+    def test_amount_not_set_error(self):
+        op_id = add_operation(
+            "27/08/2026",
+            self.agent_a,
+            self.property_a,
+            "no",
+            0,
+            100000,
+            3,
+            3000,
+            2700,
+            300,
+            1350,
+            1350,
+            0,
+            1350,
+            self.org_a,
+        )
+        ensure_parties_for_operation(self.org_a, op_id)
+        set_operation_party_billing_enabled(
+            self.org_a,
+            op_id,
+            SIDE_BUYER,
+            enabled=True,
+            by_user_id=self.admin_a,
+        )
+        with self.assertRaises(InvoicingError) as ctx:
+            create_draft_for_side(
+                self.org_a,
+                op_id,
+                SIDE_BUYER,
+                self._agent_user(),
+                issuer_mode="agent",
+            )
+        self.assertEqual(
+            ctx.exception.message_key,
+            "invoice_err_amount_not_set",
+        )
 
     def test_agent_invoices_client_not_org(self):
         op_id = self._make_ready_operation()

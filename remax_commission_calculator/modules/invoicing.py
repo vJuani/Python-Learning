@@ -866,7 +866,9 @@ def build_draft_preview_for_side(
     if party is None or not party.get("is_participating"):
         raise InvoicingError("invoice_err_party_not_participating")
     if not party.get("billing_enabled"):
-        raise InvoicingError("invoice_err_billing_not_enabled")
+        raise InvoicingError(
+            "invoice_err_side_billing_disabled"
+        )
     if not party_has_invoice_amount(party):
         raise InvoicingError("invoice_err_amount_not_set")
 

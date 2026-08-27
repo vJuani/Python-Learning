@@ -1,9 +1,14 @@
 {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
+    {% if messages or billing_flash_cta %}
     <div class="flash-messages">
         {% for category, message in messages %}
         <p class="flash-message flash-{{ category }}">{{ t(message) }}</p>
         {% endfor %}
+        {% if billing_flash_cta %}
+        <p class="flash-message flash-cta-row">
+            <a href="{{ billing_flash_cta.url }}" class="btn btn-secondary btn-sm">{{ t(billing_flash_cta.label_key) }}</a>
+        </p>
+        {% endif %}
     </div>
     {% endif %}
 {% endwith %}
