@@ -415,3 +415,53 @@ def deactivate(organization_id, profile_id):
         raise
     finally:
         connection.close()
+
+
+def update_arca_config(
+    organization_id,
+    profile_id,
+    *,
+    arca_connection_status=None,
+    arca_point_of_sale=None,
+    arca_certificate_ref=None,
+    arca_environment=None,
+    arca_last_validated_at=None,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    now = _now_iso()
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE billing_issuer_profiles
+            SET
+                arca_connection_status = COALESCE(?, arca_connection_status),
+                arca_point_of_sale = COALESCE(?, arca_point_of_sale),
+                arca_certificate_ref = COALESCE(?, arca_certificate_ref),
+                arca_environment = COALESCE(?, arca_environment),
+                arca_last_validated_at = COALESCE(?, arca_last_validated_at),
+                updated_at = ?
+            WHERE organization_id = ?
+                AND id = ?
+            """,
+            (
+                arca_connection_status,
+                arca_point_of_sale,
+                arca_certificate_ref,
+                arca_environment,
+                arca_last_validated_at,
+                now,
+                organization_id,
+                profile_id,
+            ),
+        )
+        connection.commit()
+        return get_profile(organization_id, profile_id)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()

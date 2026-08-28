@@ -2700,6 +2700,98 @@ def _migrate_arca_prep(cursor):
         )
 
 
+def _migrate_arca_integration(cursor):
+    """ARCA fiscal issuance: invoice fields, TA cache, audit events."""
+    for column_name, column_sql in (
+        ("fiscal_voucher_type", "TEXT"),
+        ("issued_at", "TEXT"),
+        ("issued_by_user_id", "INTEGER"),
+        ("provider_error", "TEXT"),
+        ("fiscal_environment", "TEXT"),
+        ("issue_attempt_token", "TEXT"),
+    ):
+        if _table_exists(cursor, "invoices") and not _column_exists(
+            cursor,
+            "invoices",
+            column_name,
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE invoices
+                ADD COLUMN {column_name} {column_sql}
+                """
+            )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS arca_ta_cache (
+            cache_key TEXT PRIMARY KEY,
+            token TEXT NOT NULL,
+            sign TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            service TEXT NOT NULL,
+            cuit TEXT NOT NULL,
+            environment TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS invoice_fiscal_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            invoice_id INTEGER NOT NULL,
+            issuer_key TEXT,
+            environment TEXT,
+            event_type TEXT NOT NULL,
+            result TEXT NOT NULL,
+            cae TEXT,
+            error_message TEXT,
+            actor_user_id INTEGER,
+            metadata TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (invoice_id)
+                REFERENCES invoices(id)
+                ON DELETE RESTRICT
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_invoice_fiscal_events_invoice
+        ON invoice_fiscal_events (
+            organization_id,
+            invoice_id,
+            id
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_invoices_fiscal_voucher_unique
+        ON invoices (
+            organization_id,
+            issuer_key,
+            point_of_sale,
+            fiscal_voucher_type,
+            external_invoice_number
+        )
+        WHERE status = 'issued'
+            AND provider = 'arca'
+            AND external_invoice_number IS NOT NULL
+        """
+    )
+
+
 def _migrate_operation_creation(cursor):
     """
     Side-aware operation creation: referral flags and per-side VAT
@@ -2942,6 +3034,7 @@ def migrate_schema(create_backup=True):
         _migrate_invoicing(cursor)
         _migrate_invoicing_v2(cursor)
         _migrate_arca_prep(cursor)
+        _migrate_arca_integration(cursor)
         _migrate_operation_creation(cursor)
 
         _validate_migration(

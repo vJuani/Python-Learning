@@ -93,21 +93,37 @@ def build_invoice_dict(row):
         "recipient_party_id": (
             row[49] if len(row) > 49 else None
         ),
+        "fiscal_voucher_type": (
+            row[50] if len(row) > 50 else None
+        ),
+        "issued_at": row[51] if len(row) > 51 else None,
+        "issued_by_user_id": (
+            row[52] if len(row) > 52 else None
+        ),
+        "provider_error": (
+            row[53] if len(row) > 53 else None
+        ),
+        "fiscal_environment": (
+            row[54] if len(row) > 54 else None
+        ),
+        "issue_attempt_token": (
+            row[55] if len(row) > 55 else None
+        ),
     }
 
     # Optional joined display fields (list_invoices).
-    if len(row) > 50:
-        invoice["agent_name"] = row[50]
-    if len(row) > 51:
-        invoice["property_address"] = row[51]
-    if len(row) > 52:
+    if len(row) > 56:
+        invoice["agent_name"] = row[56]
+    if len(row) > 57:
+        invoice["property_address"] = row[57]
+    if len(row) > 58:
         invoice["operation_display_id"] = (
-            f"COM-{int(row[52]):06d}"
-            if row[52] is not None
+            f"COM-{int(row[58]):06d}"
+            if row[58] is not None
             else None
         )
-    if len(row) > 53:
-        invoice["operation_date"] = row[53]
+    if len(row) > 59:
+        invoice["operation_date"] = row[59]
 
     return invoice
 
@@ -162,7 +178,13 @@ INVOICE_COLUMNS = """
         invoices.side,
         invoices.issuer_profile_id,
         invoices.issuer_key,
-        invoices.recipient_party_id
+        invoices.recipient_party_id,
+        invoices.fiscal_voucher_type,
+        invoices.issued_at,
+        invoices.issued_by_user_id,
+        invoices.provider_error,
+        invoices.fiscal_environment,
+        invoices.issue_attempt_token
 """
 
 INVOICES_BASE_QUERY = f"""
@@ -959,5 +981,161 @@ def count_pending_parties_to_invoice(
         )
         row = cursor.fetchone()
         return int(row[0] or 0)
+    finally:
+        connection.close()
+
+
+def claim_invoice_for_fiscal_issue(
+    organization_id,
+    invoice_id,
+    attempt_token,
+):
+    """Atomic lock to prevent duplicate ARCA submissions."""
+    organization_id = require_organization_id(
+        organization_id
+    )
+    now = _now_iso()
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE invoices
+            SET
+                issue_attempt_token = ?,
+                updated_at = ?
+            WHERE id = ?
+                AND organization_id = ?
+                AND status = 'ready_to_issue'
+                AND issue_attempt_token IS NULL
+            """,
+            (
+                attempt_token,
+                now,
+                invoice_id,
+                organization_id,
+            ),
+        )
+        claimed = cursor.rowcount > 0
+        connection.commit()
+        return claimed
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def apply_fiscal_issue_success(
+    organization_id,
+    invoice_id,
+    *,
+    attempt_token,
+    cae,
+    cae_expiration,
+    external_invoice_number,
+    point_of_sale,
+    fiscal_voucher_type,
+    provider_reference,
+    fiscal_environment,
+    issued_by_user_id,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    now = _now_iso()
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE invoices
+            SET
+                status = 'issued',
+                provider = 'arca',
+                cae = ?,
+                cae_expiration = ?,
+                external_invoice_number = ?,
+                point_of_sale = ?,
+                fiscal_voucher_type = ?,
+                provider_reference = ?,
+                fiscal_environment = ?,
+                issued_at = ?,
+                issued_by_user_id = ?,
+                provider_error = NULL,
+                issue_attempt_token = NULL,
+                updated_at = ?
+            WHERE id = ?
+                AND organization_id = ?
+                AND issue_attempt_token = ?
+                AND status = 'ready_to_issue'
+            """,
+            (
+                cae,
+                cae_expiration,
+                external_invoice_number,
+                str(point_of_sale),
+                str(fiscal_voucher_type),
+                provider_reference,
+                fiscal_environment,
+                now,
+                issued_by_user_id,
+                now,
+                invoice_id,
+                organization_id,
+                attempt_token,
+            ),
+        )
+        updated = cursor.rowcount > 0
+        connection.commit()
+        return updated
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def apply_fiscal_issue_error(
+    organization_id,
+    invoice_id,
+    *,
+    attempt_token,
+    provider_error,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    now = _now_iso()
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE invoices
+            SET
+                status = 'error',
+                provider_error = ?,
+                issue_attempt_token = NULL,
+                updated_at = ?
+            WHERE id = ?
+                AND organization_id = ?
+                AND issue_attempt_token = ?
+                AND status = 'ready_to_issue'
+            """,
+            (
+                (provider_error or "")[:500],
+                now,
+                invoice_id,
+                organization_id,
+                attempt_token,
+            ),
+        )
+        updated = cursor.rowcount > 0
+        connection.commit()
+        return updated
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         connection.close()

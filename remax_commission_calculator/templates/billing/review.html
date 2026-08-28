@@ -47,6 +47,11 @@
             <button type="submit" name="action" value="confirm" class="btn btn-primary">{{ t('billing_confirm_draft') }}</button>
         </div>
     </form>
+    {% elif invoice.status == 'ready_to_issue' and arca_enabled %}
+    <p class="billing-arca-test-banner">{{ t('billing_arca_test_environment') }}</p>
+    <form method="post" action="{{ url_for('billing_issue_arca', invoice_id=invoice.id) }}">
+        <button type="submit" class="btn btn-primary">{{ t('billing_issue_arca_homologation') }}</button>
+    </form>
     {% else %}
     <a class="btn btn-primary" href="{{ url_for('billing_detail', invoice_id=invoice.id) }}">{{ t('billing_view_invoice') }}</a>
     {% endif %}

@@ -112,6 +112,9 @@ class InvoiceProvider(ABC):
     def generate_draft_pdf(self, invoice: dict) -> bytes:
         raise NotImplementedError
 
+    def generate_fiscal_pdf(self, invoice: dict) -> bytes:
+        return self.generate_draft_pdf(invoice)
+
 
 class InternalInvoiceProvider(InvoiceProvider):
     def can_issue_fiscal(self) -> bool:
@@ -251,41 +254,76 @@ class InternalInvoiceProvider(InvoiceProvider):
 
 
 class ArcaInvoiceProvider(InvoiceProvider):
-    """Placeholder for WSAA/WSFEv1 — homologation only when enabled."""
+    """WSAA + WSFEv1 — homologation only."""
+
+    def __init__(self, *, transport=None):
+        from modules.arca.client import ArcaClient
+        from modules.arca.config import is_arca_fiscal_enabled
+        from modules.database.arca_repository import (
+            get_cached_ta,
+            store_cached_ta,
+        )
+
+        self._enabled = is_arca_fiscal_enabled()
+        self._client = ArcaClient(
+            transport=transport,
+            cache_getter=get_cached_ta,
+            cache_setter=store_cached_ta,
+        )
 
     def can_issue_fiscal(self) -> bool:
-        return False
+        return self._enabled
 
     def validate_issuer_configuration(
         self,
         issuer_profile: dict,
     ) -> IssuerConfigurationStatus:
+        from modules.arca.validation import validate_fiscal_issue
+
+        dummy_invoice = {
+            "status": "ready_to_issue",
+            "currency": "ARS",
+            "total_amount": 1,
+            "issue_date": "2026-01-01",
+            "side": "buyer",
+            "recipient_name": "Test",
+            "recipient_tax_id": "20-30000000-3",
+            "recipient_tax_condition": "consumidor_final",
+        }
+        result = validate_fiscal_issue(
+            dummy_invoice,
+            issuer_profile,
+        )
         status = (
             issuer_profile or {}
         ).get("arca_connection_status") or ARCA_STATUS_NOT_CONFIGURED
-        if status == ARCA_STATUS_CONNECTED:
+        if result.is_valid:
             return IssuerConfigurationStatus(
                 is_ready=True,
-                connection_status=status,
+                connection_status=ARCA_STATUS_CONNECTED,
                 message_key="billing_arca_ready",
                 details={
                     "point_of_sale": issuer_profile.get(
                         "arca_point_of_sale"
-                    )
-                    or issuer_profile.get("point_of_sale"),
+                    ),
                 },
             )
         return IssuerConfigurationStatus(
             is_ready=False,
             connection_status=status,
-            message_key="billing_arca_not_configured",
+            message_key=result.error_key
+            or "billing_arca_not_configured",
         )
 
     def authenticate(self, issuer_profile: dict) -> bool:
-        return (
-            (issuer_profile or {}).get("arca_connection_status")
-            == ARCA_STATUS_CONNECTED
-        )
+        try:
+            self._client.authenticate(
+                issuer_profile,
+                {"issuer_tax_id": issuer_profile.get("tax_id")},
+            )
+            return True
+        except Exception:
+            return False
 
     def issue_invoice(
         self,
@@ -293,8 +331,32 @@ class ArcaInvoiceProvider(InvoiceProvider):
         *,
         issuer_profile: dict | None = None,
     ) -> FiscalIssueResult:
-        raise RuntimeError(
-            "invoice_err_arca_not_configured"
+        if issuer_profile is None:
+            return FiscalIssueResult(
+                success=False,
+                error_key="invoice_err_arca_not_configured",
+            )
+        wsfe = self._client.issue_invoice(
+            invoice,
+            issuer_profile,
+        )
+        if not wsfe.success:
+            return FiscalIssueResult(
+                success=False,
+                error_key=(wsfe.errors or ["invoice_err_arca_issue_rejected"])[0],
+            )
+        return FiscalIssueResult(
+            success=True,
+            cae=wsfe.cae,
+            cae_expiration=wsfe.cae_expiration,
+            voucher_number=str(wsfe.voucher_number),
+            point_of_sale=str(wsfe.point_of_sale),
+            voucher_type=str(wsfe.voucher_type),
+            provider_reference=wsfe.raw_reference,
+            snapshot={
+                "cae": wsfe.cae,
+                "voucher_number": wsfe.voucher_number,
+            },
         )
 
     def get_last_voucher(
@@ -304,7 +366,25 @@ class ArcaInvoiceProvider(InvoiceProvider):
         point_of_sale: str,
         voucher_type: str,
     ) -> int | None:
-        return None
+        ticket = self._client.authenticate(
+            issuer_profile,
+            {"issuer_tax_id": issuer_profile.get("tax_id")},
+        )
+        from modules.arca.wsfev1 import get_last_authorized_voucher
+        import re
+
+        cuit = re.sub(
+            r"\D",
+            "",
+            str(issuer_profile.get("tax_id") or ""),
+        )
+        return get_last_authorized_voucher(
+            ticket=ticket,
+            cuit=cuit,
+            point_of_sale=int(point_of_sale),
+            voucher_type=int(voucher_type),
+            transport=self._client.transport,
+        )
 
     def fetch_invoice_status(
         self,
@@ -312,7 +392,7 @@ class ArcaInvoiceProvider(InvoiceProvider):
         *,
         issuer_profile: dict | None = None,
     ) -> dict:
-        return {"status": "unknown"}
+        return {"status": "issued", "reference": provider_reference}
 
     def fetch_pdf(
         self,
@@ -326,6 +406,47 @@ class ArcaInvoiceProvider(InvoiceProvider):
         return InternalInvoiceProvider().generate_draft_pdf(
             invoice
         )
+
+    def generate_fiscal_pdf(self, invoice: dict) -> bytes:
+        buffer = io.BytesIO()
+        pdf = canvas.Canvas(buffer, pagesize=A4)
+        width, height = A4
+        pdf.setFont("Helvetica-Bold", 16)
+        pdf.drawString(
+            20 * mm,
+            height - 25 * mm,
+            "HOMOLOGACIÓN — FACTURA DE PRUEBA",
+        )
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(
+            20 * mm,
+            height - 32 * mm,
+            "TEST ENVIRONMENT — NOT VALID FOR PRODUCTION",
+        )
+        y = height - 50 * mm
+        lines = [
+            ("Nº", invoice.get("external_invoice_number") or ""),
+            ("Punto de venta", invoice.get("point_of_sale") or ""),
+            ("CAE", invoice.get("cae") or ""),
+            ("Vto CAE", invoice.get("cae_expiration") or ""),
+            ("Emisor", invoice.get("issuer_name") or ""),
+            ("CUIT emisor", invoice.get("issuer_tax_id") or ""),
+            ("Receptor", invoice.get("recipient_name") or ""),
+            ("CUIT receptor", invoice.get("recipient_tax_id") or ""),
+            (
+                "Importe",
+                f"{invoice.get('currency', 'ARS')} "
+                f"{float(invoice.get('total_amount') or 0):,.2f}",
+            ),
+            ("Fecha", invoice.get("issue_date") or ""),
+            ("Ambiente", invoice.get("fiscal_environment") or "homologation"),
+        ]
+        pdf.setFont("Helvetica", 11)
+        for label, value in lines:
+            pdf.drawString(20 * mm, y, f"{label}: {value}")
+            y -= 8 * mm
+        pdf.save()
+        return buffer.getvalue()
 
 
 class MockArcaInvoiceProvider(ArcaInvoiceProvider):

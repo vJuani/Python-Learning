@@ -1413,6 +1413,91 @@ def create_postgres_schema():
         )
 
         for column_name, column_sql in (
+            ("fiscal_voucher_type", "TEXT"),
+            ("issued_at", "TEXT"),
+            ("issued_by_user_id", "BIGINT"),
+            ("provider_error", "TEXT"),
+            ("fiscal_environment", "TEXT"),
+            ("issue_attempt_token", "TEXT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE invoices
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        cursor.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS arca_ta_cache (
+                cache_key TEXT PRIMARY KEY,
+                token TEXT NOT NULL,
+                sign TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                service TEXT NOT NULL,
+                cuit TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+        cursor.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS invoice_fiscal_events (
+                id {_ID},
+                organization_id BIGINT NOT NULL,
+                invoice_id BIGINT NOT NULL,
+                issuer_key TEXT,
+                environment TEXT,
+                event_type TEXT NOT NULL,
+                result TEXT NOT NULL,
+                cae TEXT,
+                error_message TEXT,
+                actor_user_id BIGINT,
+                metadata TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (organization_id)
+                    REFERENCES organizations(id)
+                    ON DELETE RESTRICT,
+                FOREIGN KEY (invoice_id)
+                    REFERENCES invoices(id)
+                    ON DELETE RESTRICT
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_invoice_fiscal_events_invoice
+            ON invoice_fiscal_events (
+                organization_id,
+                invoice_id,
+                id
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_invoices_fiscal_voucher_unique
+            ON invoices (
+                organization_id,
+                issuer_key,
+                point_of_sale,
+                fiscal_voucher_type,
+                external_invoice_number
+            )
+            WHERE status = 'issued'
+                AND provider = 'arca'
+                AND external_invoice_number IS NOT NULL
+            """
+        )
+
+        for column_name, column_sql in (
             ("is_referred", f"{_FLAG} NOT NULL DEFAULT 0"),
             ("referred_side", "TEXT"),
             ("seller_vat_original", f"{_MONEY} NOT NULL DEFAULT 0"),

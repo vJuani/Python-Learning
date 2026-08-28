@@ -13,6 +13,7 @@ _TEST_TMP = tempfile.TemporaryDirectory()
 os.environ["DATABASE_PATH"] = str(
     Path(_TEST_TMP.name) / "test_billing_issuer_validation.db"
 )
+os.environ["INVOICE_PROVIDER"] = "internal"
 
 from modules.auth import ROLE_ADMIN, hash_password
 from modules.billing_issuer_validation import (
@@ -62,6 +63,9 @@ def _broker_profile(**overrides):
 
 
 class BillingIssuerValidationTests(unittest.TestCase):
+    def setUp(self):
+        os.environ["INVOICE_PROVIDER"] = "internal"
+
     @classmethod
     def setUpClass(cls):
         apply_config(app)
@@ -247,6 +251,7 @@ class BillingIssuerValidationTests(unittest.TestCase):
         self.assertTrue(result["is_valid"])
 
     def test_internal_provider_still_works(self):
+        os.environ["INVOICE_PROVIDER"] = "internal"
         provider = get_invoice_provider()
         self.assertIsInstance(provider, InternalInvoiceProvider)
         self.assertFalse(provider.can_issue_fiscal())

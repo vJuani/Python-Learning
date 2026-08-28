@@ -123,6 +123,7 @@ from .operations_repository import (
 
 from .agent_billing_profiles_repository import (
     get_by_agent as get_agent_billing_profile,
+    update_arca_config as update_agent_arca_config,
     upsert_profile as upsert_agent_billing_profile,
 )
 
@@ -131,6 +132,7 @@ from .billing_issuer_profiles_repository import (
     get_profile as get_billing_issuer_profile,
     list_profiles as list_billing_issuer_profiles,
     set_default as set_default_billing_issuer_profile,
+    update_arca_config as update_issuer_arca_config,
     upsert_profile as upsert_billing_issuer_profile,
 )
 

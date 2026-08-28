@@ -64,4 +64,8 @@
         <button type="submit" class="btn btn-primary">{{ t('billing_save_profile') }}</button>
     </form>
 </section>
+
+{% with arca_display=arca_display, arca_form=arca_form %}
+{% include "billing/_arca_config_panel.html" %}
+{% endwith %}
 {% endblock %}

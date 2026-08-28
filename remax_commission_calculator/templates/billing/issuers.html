@@ -50,6 +50,11 @@
             </form>
         </div>
         {% endif %}
+        {% if arca_enabled %}
+        {% with arca_display=p.arca_display, arca_form=p.arca_form, arca_profile_id=p.id %}
+        {% include "billing/_arca_config_panel.html" %}
+        {% endwith %}
+        {% endif %}
     </article>
     {% else %}
     <p class="empty-state">—</p>

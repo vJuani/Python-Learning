@@ -4943,6 +4943,50 @@ a.dashboard-quick-card:hover {
     background: transparent;
 }
 
+.billing-arca-test-banner {
+    font-weight: 700;
+    color: var(--warning-text, #b45309);
+    margin-bottom: 0.75rem;
+}
+
+.billing-arca-banner {
+    border-color: var(--warning-border, #f59e0b);
+    background: var(--warning-bg, rgba(245, 158, 11, 0.08));
+}
+
+.billing-arca-config {
+    margin-top: 1rem;
+}
+
+.billing-arca-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 0.75rem 1rem;
+    margin: 0 0 1rem;
+}
+
+.billing-arca-status-grid dt {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.billing-arca-status-grid dd {
+    margin: 0.15rem 0 0;
+    font-weight: 600;
+}
+
+.billing-arca-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.billing-issuer-card .billing-arca-config {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
 .billing-issuer-card .billing-issuer-missing {
     margin: 0.35rem 0 0.5rem;
     padding-left: 1.1rem;

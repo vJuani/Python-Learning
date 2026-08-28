@@ -39,6 +39,15 @@ def build_dict(row):
         "allowed_invoice_types": row[9],
         "created_at": row[10],
         "updated_at": row[11] if len(row) > 11 else row[10],
+        "arca_connection_status": (
+            row[12] if len(row) > 12 and row[12] else "not_configured"
+        ),
+        "arca_environment": row[13] if len(row) > 13 else None,
+        "arca_point_of_sale": row[14] if len(row) > 14 else None,
+        "arca_certificate_ref": row[15] if len(row) > 15 else None,
+        "arca_last_validated_at": (
+            row[16] if len(row) > 16 else None
+        ),
     }
 
 
@@ -55,7 +64,12 @@ PROFILE_SELECT = """
         point_of_sale,
         allowed_invoice_types,
         created_at,
-        updated_at
+        updated_at,
+        arca_connection_status,
+        arca_environment,
+        arca_point_of_sale,
+        arca_certificate_ref,
+        arca_last_validated_at
     FROM agent_billing_profiles
 """
 
@@ -177,6 +191,56 @@ def upsert_profile(
                 ),
             )
 
+        connection.commit()
+        return get_by_agent(organization_id, agent_id)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_arca_config(
+    organization_id,
+    agent_id,
+    *,
+    arca_connection_status=None,
+    arca_point_of_sale=None,
+    arca_certificate_ref=None,
+    arca_environment=None,
+    arca_last_validated_at=None,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    now = _now_iso()
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE agent_billing_profiles
+            SET
+                arca_connection_status = COALESCE(?, arca_connection_status),
+                arca_point_of_sale = COALESCE(?, arca_point_of_sale),
+                arca_certificate_ref = COALESCE(?, arca_certificate_ref),
+                arca_environment = COALESCE(?, arca_environment),
+                arca_last_validated_at = COALESCE(?, arca_last_validated_at),
+                updated_at = ?
+            WHERE organization_id = ?
+                AND agent_id = ?
+            """,
+            (
+                arca_connection_status,
+                arca_point_of_sale,
+                arca_certificate_ref,
+                arca_environment,
+                arca_last_validated_at,
+                now,
+                organization_id,
+                agent_id,
+            ),
+        )
         connection.commit()
         return get_by_agent(organization_id, agent_id)
     except Exception:

@@ -34,6 +34,8 @@ from modules.database import (
     list_billing_issuer_profiles,
     list_invoices_for_operation,
     set_operation_party_client_fields,
+    update_agent_arca_config,
+    update_issuer_arca_config,
     upsert_agent_billing_profile,
     upsert_billing_issuer_profile,
     deactivate_billing_issuer_profile,
@@ -43,6 +45,11 @@ from modules.database import (
 from modules.database.organization_settings_repository import (
     get_organization_settings,
     update_organization_billing_fields,
+)
+from modules.arca.config import is_arca_fiscal_enabled
+from modules.arca.issuer_config import (
+    build_arca_display,
+    test_arca_connection,
 )
 from modules.billing_issuer_validation import (
     validate_billing_issuer_profile,
@@ -69,6 +76,7 @@ from modules.invoicing import (
     build_draft_preview_for_side,
     cancel_invoice,
     confirm_draft,
+    issue_fiscal_invoice,
     create_draft_for_side,
     default_issuer_mode_for_user,
     generate_draft_pdf_bytes,
@@ -764,6 +772,7 @@ def register_billing_routes(app, *, helpers):
             "billing/review.html",
             invoice=invoice,
             payment_conditions=PAYMENT_CONDITIONS,
+            arca_enabled=is_arca_fiscal_enabled(),
         )
 
     @app.route("/billing/<int:invoice_id>")
@@ -786,6 +795,71 @@ def register_billing_routes(app, *, helpers):
             "billing/detail.html",
             invoice=invoice,
             operation=operation,
+            arca_enabled=is_arca_fiscal_enabled(),
+        )
+
+    @app.route(
+        "/billing/<int:invoice_id>/issue-arca",
+        methods=["POST"],
+    )
+    @login_required
+    def billing_issue_arca(invoice_id):
+        user = require_billing_user()
+        organization_id = require_user_organization()
+        invoice = load_billing_invoice(
+            organization_id,
+            invoice_id,
+            user,
+        )
+        try:
+            issue_fiscal_invoice(
+                organization_id,
+                invoice_id,
+                user,
+            )
+            flash_i18n("invoice_arca_issued", "success")
+        except InvoicingError as error:
+            _flash_billing_error(
+                error,
+                operation_id=invoice.get("operation_id"),
+                side=invoice.get("side"),
+                user=user,
+            )
+        return redirect(
+            url_for("billing_detail", invoice_id=invoice_id)
+        )
+
+    @app.route(
+        "/billing/<int:invoice_id>/retry",
+        methods=["POST"],
+    )
+    @login_required
+    def billing_retry_invoice(invoice_id):
+        user = require_billing_user()
+        organization_id = require_user_organization()
+        invoice = load_billing_invoice(
+            organization_id,
+            invoice_id,
+            user,
+        )
+        try:
+            from modules.invoicing import retry_error_invoice
+
+            retry_error_invoice(
+                organization_id,
+                invoice_id,
+                user,
+            )
+            flash_i18n("invoice_retry_ready", "success")
+        except InvoicingError as error:
+            _flash_billing_error(
+                error,
+                operation_id=invoice.get("operation_id"),
+                side=invoice.get("side"),
+                user=user,
+            )
+        return redirect(
+            url_for("billing_review", invoice_id=invoice_id)
         )
 
     @app.route(
@@ -992,6 +1066,19 @@ def register_billing_routes(app, *, helpers):
         organization_id = require_user_organization()
         if request.method == "POST":
             action = request.form.get("action", "save")
+            if action in ("arca_save", "arca_test") and is_arca_fiscal_enabled():
+                profile_id = int(request.form["profile_id"])
+                profile = get_billing_issuer_profile(
+                    organization_id,
+                    profile_id,
+                )
+                _save_issuer_arca_config(
+                    organization_id,
+                    profile_id,
+                    profile,
+                    test_only=action == "arca_test",
+                )
+                return redirect(url_for("billing_issuers"))
             if action == "deactivate":
                 deactivate_billing_issuer_profile(
                     organization_id,
@@ -1047,6 +1134,16 @@ def register_billing_routes(app, *, helpers):
                         profile,
                         require_active=False,
                     ),
+                    "arca_display": build_arca_display(profile),
+                    "arca_form": {
+                        "point_of_sale": profile.get(
+                            "arca_point_of_sale", ""
+                        ),
+                        "certificate_ref": profile.get(
+                            "arca_certificate_ref"
+                        )
+                        or f"issuer:{profile['id']}",
+                    },
                 }
                 for profile in list_billing_issuer_profiles(
                     organization_id,
@@ -1054,6 +1151,7 @@ def register_billing_routes(app, *, helpers):
                 )
             ],
             tax_conditions=TAX_CONDITIONS,
+            arca_enabled=is_arca_fiscal_enabled(),
         )
 
     def _profile_form(agent_id, organization_id):
@@ -1083,6 +1181,176 @@ def register_billing_routes(app, *, helpers):
                 profile.get("email", ""),
             ).strip(),
         }
+
+    def _arca_form_values(profile, *, default_ref):
+        profile = profile or {}
+        return {
+            "point_of_sale": request.form.get(
+                "arca_point_of_sale",
+                profile.get("arca_point_of_sale", ""),
+            ).strip(),
+            "certificate_ref": request.form.get(
+                "arca_certificate_ref",
+                profile.get("arca_certificate_ref")
+                or default_ref,
+            ).strip(),
+        }
+
+    def _save_agent_arca_config(
+        organization_id,
+        agent_id,
+        profile,
+        *,
+        test_only=False,
+    ):
+        from modules.arca.issuer_config import _now_iso
+
+        form = _arca_form_values(
+            profile,
+            default_ref=f"agent:{agent_id}",
+        )
+        if not form["point_of_sale"].isdigit():
+            flash_i18n(
+                "billing_missing_arca_point_of_sale",
+                "error",
+            )
+            return get_agent_billing_profile(
+                organization_id,
+                agent_id,
+            )
+
+        merged = dict(profile or {})
+        merged.update(
+            {
+                "tax_id": merged.get("tax_id"),
+                "arca_point_of_sale": form["point_of_sale"],
+                "arca_certificate_ref": form[
+                    "certificate_ref"
+                ],
+                "issuer_key": f"agent:{agent_id}",
+                "agent_id": agent_id,
+            }
+        )
+
+        if test_only:
+            status, error_key = test_arca_connection(merged)
+            update_agent_arca_config(
+                organization_id,
+                agent_id,
+                arca_connection_status=status,
+                arca_point_of_sale=form["point_of_sale"],
+                arca_certificate_ref=form[
+                    "certificate_ref"
+                ],
+                arca_environment="homologation",
+                arca_last_validated_at=_now_iso(),
+            )
+            if status == "connected":
+                flash_i18n(
+                    "billing_arca_test_success",
+                    "success",
+                )
+            else:
+                flash_i18n(
+                    error_key or "billing_arca_test_failed",
+                    "error",
+                )
+            return get_agent_billing_profile(
+                organization_id,
+                agent_id,
+            )
+
+        update_agent_arca_config(
+            organization_id,
+            agent_id,
+            arca_connection_status="configuring",
+            arca_point_of_sale=form["point_of_sale"],
+            arca_certificate_ref=form["certificate_ref"],
+            arca_environment="homologation",
+        )
+        flash_i18n("invoice_profile_saved", "success")
+        return get_agent_billing_profile(
+            organization_id,
+            agent_id,
+        )
+
+    def _save_issuer_arca_config(
+        organization_id,
+        profile_id,
+        profile,
+        *,
+        test_only=False,
+    ):
+        from modules.arca.issuer_config import _now_iso
+
+        form = _arca_form_values(
+            profile,
+            default_ref=f"issuer:{profile_id}",
+        )
+        if not form["point_of_sale"].isdigit():
+            flash_i18n(
+                "billing_missing_arca_point_of_sale",
+                "error",
+            )
+            return get_billing_issuer_profile(
+                organization_id,
+                profile_id,
+            )
+
+        merged = dict(profile or {})
+        merged.update(
+            {
+                "tax_id": merged.get("tax_id"),
+                "arca_point_of_sale": form["point_of_sale"],
+                "arca_certificate_ref": form[
+                    "certificate_ref"
+                ],
+                "issuer_key": f"issuer:{profile_id}",
+                "id": profile_id,
+            }
+        )
+
+        if test_only:
+            status, error_key = test_arca_connection(merged)
+            update_issuer_arca_config(
+                organization_id,
+                profile_id,
+                arca_connection_status=status,
+                arca_point_of_sale=form["point_of_sale"],
+                arca_certificate_ref=form[
+                    "certificate_ref"
+                ],
+                arca_environment="homologation",
+                arca_last_validated_at=_now_iso(),
+            )
+            if status == "connected":
+                flash_i18n(
+                    "billing_arca_test_success",
+                    "success",
+                )
+            else:
+                flash_i18n(
+                    error_key or "billing_arca_test_failed",
+                    "error",
+                )
+            return get_billing_issuer_profile(
+                organization_id,
+                profile_id,
+            )
+
+        update_issuer_arca_config(
+            organization_id,
+            profile_id,
+            arca_connection_status="configuring",
+            arca_point_of_sale=form["point_of_sale"],
+            arca_certificate_ref=form["certificate_ref"],
+            arca_environment="homologation",
+        )
+        flash_i18n("invoice_profile_saved", "success")
+        return get_billing_issuer_profile(
+            organization_id,
+            profile_id,
+        )
 
     @app.route(
         "/billing/agent-profile",
@@ -1120,6 +1388,25 @@ def register_billing_routes(app, *, helpers):
         errors = []
 
         if request.method == "POST":
+            action = request.form.get("action", "save")
+            if action in ("arca_save", "arca_test") and is_arca_fiscal_enabled():
+                profile = get_agent_billing_profile(
+                    organization_id,
+                    agent_id,
+                )
+                _save_agent_arca_config(
+                    organization_id,
+                    agent_id,
+                    profile,
+                    test_only=action == "arca_test",
+                )
+                return redirect(
+                    url_for(
+                        "billing_agent_profile",
+                        agent_id=agent_id,
+                    )
+                )
+
             if not form_values["legal_name"]:
                 errors.append(
                     "billing_missing_agent_legal_name"
@@ -1171,6 +1458,10 @@ def register_billing_routes(app, *, helpers):
             organization_id
         )
         org_ready, org_missing = org_billing_ready(settings)
+        arca_form = _arca_form_values(
+            profile,
+            default_ref=f"agent:{agent_id}",
+        )
 
         return render_template(
             "billing/agent_profile.html",
@@ -1182,4 +1473,6 @@ def register_billing_routes(app, *, helpers):
             missing=missing if not ready else [],
             org_ready=org_ready,
             org_missing=org_missing,
+            arca_display=build_arca_display(profile),
+            arca_form=arca_form,
         )

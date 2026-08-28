@@ -20,6 +20,9 @@ from modules.database.billing_issuer_profiles_repository import (
 from modules.database.connection import IntegrityError, get_connection
 from modules.database.invoices_repository import (
     ACTIVE_STATUSES,
+    apply_fiscal_issue_error,
+    apply_fiscal_issue_success,
+    claim_invoice_for_fiscal_issue,
     count_invoices_by_status,
     count_pending_parties_to_invoice,
     create_invoice_atomic,
@@ -47,6 +50,7 @@ from modules.database.organization_settings_repository import (
     get_organization_settings,
 )
 from modules.invoice_provider import (
+    PROVIDER_ARCA,
     get_invoice_provider,
     get_invoice_provider_name,
 )
@@ -1089,13 +1093,8 @@ def confirm_draft(organization_id, invoice_id, user):
         )
 
     provider = get_invoice_provider()
-    if provider.can_issue_fiscal():
-        raise InvoicingError(
-            "invoice_err_fiscal_issue_unavailable"
-        )
-
-    # Internal: confirm → ready_to_issue (still non-fiscal).
-    # Never set status issued; never touch was_invoiced.
+    # Internal and ARCA: confirm moves draft → ready_to_issue.
+    # Fiscal emission is a separate explicit action.
     update_invoice_status(
         organization_id,
         invoice_id,
@@ -1105,6 +1104,179 @@ def confirm_draft(organization_id, invoice_id, user):
         clear_cancellation=True,
     )
     return get_invoice(organization_id, invoice_id)
+
+
+def issue_fiscal_invoice(
+    organization_id,
+    invoice_id,
+    user,
+    *,
+    transport=None,
+):
+    """
+    Emit a ready_to_issue invoice via ARCA homologation.
+
+    Flow: validate → claim lock → authenticate → last voucher → CAE → persist.
+    """
+    import uuid
+
+    from modules.arca.client import ArcaClient
+    from modules.arca.config import get_arca_environment, is_arca_fiscal_enabled
+    from modules.arca.issuer_profile import resolve_invoice_issuer_profile
+    from modules.arca.validation import validate_fiscal_issue
+    from modules.database.arca_repository import (
+        get_cached_ta,
+        log_fiscal_event,
+        store_cached_ta,
+    )
+    from modules.invoice_provider import PROVIDER_ARCA
+
+    if not is_arca_fiscal_enabled():
+        raise InvoicingError(
+            "invoice_err_fiscal_issue_unavailable"
+        )
+
+    invoice = _require_invoice_access(
+        organization_id,
+        invoice_id,
+        user,
+    )
+    if invoice["status"] != STATUS_READY:
+        raise InvoicingError(
+            "invoice_err_invalid_transition"
+        )
+
+    issuer_profile = resolve_invoice_issuer_profile(
+        organization_id,
+        invoice,
+    )
+    if issuer_profile is None:
+        raise InvoicingError(
+            "invoice_err_arca_not_configured"
+        )
+
+    validation = validate_fiscal_issue(
+        invoice,
+        issuer_profile,
+    )
+    if not validation.is_valid:
+        raise InvoicingError(
+            validation.error_key
+            or "invoice_err_arca_preissue_incomplete",
+            missing=validation.missing,
+        )
+
+    attempt_token = str(uuid.uuid4())
+    if not claim_invoice_for_fiscal_issue(
+        organization_id,
+        invoice_id,
+        attempt_token,
+    ):
+        raise InvoicingError(
+            "invoice_err_arca_issue_in_progress"
+        )
+
+    environment = get_arca_environment()
+    client = ArcaClient(
+        transport=transport,
+        cache_getter=get_cached_ta,
+        cache_setter=store_cached_ta,
+    )
+
+    try:
+        log_fiscal_event(
+            organization_id,
+            invoice_id=invoice_id,
+            issuer_key=invoice.get("issuer_key"),
+            environment=environment,
+            event_type="arca_issue_start",
+            result="started",
+            actor_user_id=user.get("id"),
+        )
+        result = client.issue_invoice(
+            invoice,
+            issuer_profile,
+        )
+    except Exception as error:
+        safe_error = str(error)[:200]
+        apply_fiscal_issue_error(
+            organization_id,
+            invoice_id,
+            attempt_token=attempt_token,
+            provider_error=safe_error,
+        )
+        log_fiscal_event(
+            organization_id,
+            invoice_id=invoice_id,
+            issuer_key=invoice.get("issuer_key"),
+            environment=environment,
+            event_type="arca_issue_failed",
+            result="error",
+            error_message=safe_error,
+            actor_user_id=user.get("id"),
+        )
+        raise InvoicingError(
+            "invoice_err_arca_wsfe_failed"
+        ) from error
+
+    if not result.success:
+        error_text = "; ".join(result.errors or [])
+        apply_fiscal_issue_error(
+            organization_id,
+            invoice_id,
+            attempt_token=attempt_token,
+            provider_error=error_text[:500],
+        )
+        log_fiscal_event(
+            organization_id,
+            invoice_id=invoice_id,
+            issuer_key=invoice.get("issuer_key"),
+            environment=environment,
+            event_type="arca_issue_failed",
+            result="rejected",
+            error_message=error_text[:500],
+            actor_user_id=user.get("id"),
+        )
+        raise InvoicingError(
+            (result.errors or ["invoice_err_arca_issue_rejected"])[0]
+        )
+
+    voucher_number = str(result.voucher_number).zfill(8)
+    external_number = (
+        f"{str(result.point_of_sale).zfill(5)}-"
+        f"{voucher_number}"
+    )
+    if not apply_fiscal_issue_success(
+        organization_id,
+        invoice_id,
+        attempt_token=attempt_token,
+        cae=result.cae,
+        cae_expiration=result.cae_expiration,
+        external_invoice_number=external_number,
+        point_of_sale=result.point_of_sale,
+        fiscal_voucher_type=result.voucher_type,
+        provider_reference=result.raw_reference,
+        fiscal_environment=environment,
+        issued_by_user_id=user.get("id"),
+    ):
+        raise InvoicingError(
+            "invoice_err_arca_issue_in_progress"
+        )
+
+    log_fiscal_event(
+        organization_id,
+        invoice_id=invoice_id,
+        issuer_key=invoice.get("issuer_key"),
+        environment=environment,
+        event_type="arca_issue_success",
+        result="issued",
+        cae=result.cae,
+        actor_user_id=user.get("id"),
+    )
+
+    issued = get_invoice(organization_id, invoice_id)
+    issued["provider"] = PROVIDER_ARCA
+    return issued
 
 
 def cancel_invoice(
@@ -1210,6 +1382,16 @@ def generate_draft_pdf_bytes(organization_id, invoice_id, user):
         user,
     )
     provider = get_invoice_provider()
+    if invoice.get("status") == STATUS_ISSUED and invoice.get(
+        "provider"
+    ) == PROVIDER_ARCA:
+        pdf = provider.fetch_pdf(
+            invoice.get("provider_reference") or "",
+            issuer_profile=None,
+        )
+        if pdf:
+            return pdf
+        return provider.generate_fiscal_pdf(invoice)
     return provider.generate_draft_pdf(invoice)
 
 
@@ -1420,6 +1602,7 @@ __all__ = [
     "build_draft_preview_from_operation",
     "create_draft_from_operation",
     "confirm_draft",
+    "issue_fiscal_invoice",
     "cancel_invoice",
     "retry_error_invoice",
     "update_draft_options",
