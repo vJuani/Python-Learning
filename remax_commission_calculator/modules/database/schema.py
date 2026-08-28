@@ -2643,6 +2643,63 @@ def _migrate_invoicing_v2(cursor):
                 )
 
 
+def _migrate_arca_prep(cursor):
+    """ARCA connection fields and issuer default backfill."""
+    arca_columns = (
+        (
+            "arca_connection_status",
+            "TEXT NOT NULL DEFAULT 'not_configured'",
+        ),
+        ("arca_environment", "TEXT"),
+        ("arca_point_of_sale", "TEXT"),
+        ("arca_voucher_types", "TEXT"),
+        ("arca_last_validated_at", "TEXT"),
+        ("arca_certificate_ref", "TEXT"),
+        ("arca_provider", "TEXT DEFAULT 'arca'"),
+        ("arca_metadata", "TEXT"),
+    )
+
+    for table_name in (
+        "billing_issuer_profiles",
+        "agent_billing_profiles",
+    ):
+        if not _table_exists(cursor, table_name):
+            continue
+        for column_name, column_sql in arca_columns:
+            if not _column_exists(
+                cursor,
+                table_name,
+                column_name,
+            ):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE {table_name}
+                    ADD COLUMN {column_name} {column_sql}
+                    """
+                )
+
+    if (
+        _table_exists(cursor, "organization_settings")
+        and _table_exists(cursor, "billing_issuer_profiles")
+    ):
+        cursor.execute(
+            """
+            UPDATE organization_settings
+            SET default_issuer_profile_id = (
+                SELECT bip.id
+                FROM billing_issuer_profiles bip
+                WHERE bip.organization_id
+                    = organization_settings.organization_id
+                    AND bip.is_default = 1
+                    AND bip.is_active = 1
+                ORDER BY bip.id ASC
+                LIMIT 1
+            )
+            WHERE default_issuer_profile_id IS NULL
+            """
+        )
+
+
 def _migrate_operation_creation(cursor):
     """
     Side-aware operation creation: referral flags and per-side VAT
@@ -2884,6 +2941,7 @@ def migrate_schema(create_backup=True):
         _migrate_cash_treasury(cursor)
         _migrate_invoicing(cursor)
         _migrate_invoicing_v2(cursor)
+        _migrate_arca_prep(cursor)
         _migrate_operation_creation(cursor)
 
         _validate_migration(

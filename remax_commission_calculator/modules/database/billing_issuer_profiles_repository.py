@@ -10,6 +10,43 @@ from .connection import execute_insert, get_connection
 from .tenant import require_organization_id
 
 
+def _normalize_tax_id(tax_id):
+    from modules.billing_issuer_validation import normalize_cuit
+
+    return normalize_cuit(tax_id)
+
+
+def _sync_default_issuer_setting(
+    cursor,
+    organization_id,
+    profile_id,
+):
+    cursor.execute(
+        """
+        UPDATE organization_settings
+        SET default_issuer_profile_id = ?
+        WHERE organization_id = ?
+        """,
+        (profile_id, organization_id),
+    )
+
+
+def _clear_default_issuer_setting_if_match(
+    cursor,
+    organization_id,
+    profile_id,
+):
+    cursor.execute(
+        """
+        UPDATE organization_settings
+        SET default_issuer_profile_id = NULL
+        WHERE organization_id = ?
+            AND default_issuer_profile_id = ?
+        """,
+        (organization_id, profile_id),
+    )
+
+
 def _now_iso():
     return datetime.utcnow().replace(
         microsecond=0
@@ -32,7 +69,15 @@ PROFILE_SELECT = """
         point_of_sale,
         created_at,
         updated_at,
-        deactivated_at
+        deactivated_at,
+        arca_connection_status,
+        arca_environment,
+        arca_point_of_sale,
+        arca_voucher_types,
+        arca_last_validated_at,
+        arca_certificate_ref,
+        arca_provider,
+        arca_metadata
     FROM billing_issuer_profiles
 """
 
@@ -57,6 +102,22 @@ def build_dict(row):
         "created_at": row[12],
         "updated_at": row[13],
         "deactivated_at": row[14],
+        "arca_connection_status": (
+            row[15] if len(row) > 15 and row[15] else "not_configured"
+        ),
+        "arca_environment": row[16] if len(row) > 16 else None,
+        "arca_point_of_sale": row[17] if len(row) > 17 else None,
+        "arca_voucher_types": row[18] if len(row) > 18 else None,
+        "arca_last_validated_at": (
+            row[19] if len(row) > 19 else None
+        ),
+        "arca_certificate_ref": (
+            row[20] if len(row) > 20 else None
+        ),
+        "arca_provider": (
+            row[21] if len(row) > 21 and row[21] else "arca"
+        ),
+        "arca_metadata": row[22] if len(row) > 22 else None,
     }
 
 
@@ -180,7 +241,7 @@ def upsert_profile(
                     issuer_type,
                     (display_name or "").strip(),
                     (legal_name or "").strip(),
-                    (tax_id or "").strip(),
+                    _normalize_tax_id(tax_id),
                     (tax_condition or "").strip() or None,
                     (fiscal_address or "").strip() or None,
                     (email or "").strip() or None,
@@ -212,7 +273,7 @@ def upsert_profile(
                     issuer_type,
                     (display_name or "").strip(),
                     (legal_name or "").strip(),
-                    (tax_id or "").strip(),
+                    _normalize_tax_id(tax_id),
                     (tax_condition or "").strip() or None,
                     (fiscal_address or "").strip() or None,
                     (email or "").strip() or None,
@@ -243,6 +304,11 @@ def upsert_profile(
                     AND id = ?
                 """,
                 (now, organization_id, profile_id),
+            )
+            _sync_default_issuer_setting(
+                cursor,
+                organization_id,
+                profile_id,
             )
 
         connection.commit()
@@ -297,6 +363,11 @@ def set_default(organization_id, profile_id):
             """,
             (now, organization_id, profile_id),
         )
+        _sync_default_issuer_setting(
+            cursor,
+            organization_id,
+            profile_id,
+        )
         connection.commit()
         return get_profile(organization_id, profile_id)
     except Exception:
@@ -330,6 +401,12 @@ def deactivate(organization_id, profile_id):
         )
         if cursor.rowcount == 0:
             raise ValueError("Issuer profile not found")
+
+        _clear_default_issuer_setting_if_match(
+            cursor,
+            organization_id,
+            profile_id,
+        )
 
         connection.commit()
         return get_profile(organization_id, profile_id)

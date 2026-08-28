@@ -32,6 +32,31 @@ def resolve_billing_error_cta(
                 "label_key": "billing_cta_manage_issuers",
             }
 
+    if is_staff and key in (
+        "invoice_err_issuer_default_required",
+        "invoice_err_issuer_profile_required",
+        "invoice_err_issuer_inactive",
+        "invoice_err_issuer_type_invalid",
+    ):
+        return {
+            "url": url_for("billing_issuers"),
+            "label_key": "billing_cta_manage_issuers",
+        }
+
+    if is_agent and not is_staff and key.startswith(
+        "invoice_err_agent_missing_"
+    ):
+        return {
+            "url": url_for("billing_agent_profile_self"),
+            "label_key": "billing_cta_complete_profile",
+        }
+
+    if is_staff and key.startswith("invoice_err_issuer_missing_"):
+        return {
+            "url": url_for("billing_issuers"),
+            "label_key": "billing_cta_manage_issuers",
+        }
+
     if operation_id is not None and key in (
         "invoice_err_amount_not_set",
         "invoice_err_side_billing_disabled",

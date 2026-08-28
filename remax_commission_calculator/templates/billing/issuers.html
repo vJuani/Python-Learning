@@ -14,17 +14,41 @@
 
 <section class="panel">
     {% for p in profiles %}
-    <article class="billing-card">
-        <h4>{{ p.display_name }} {% if p.is_default %}· {{ t('billing_ready_to_invoice') }}{% endif %}</h4>
-        <p>{{ p.issuer_type }} · {{ p.tax_id }}</p>
+    <article class="billing-card billing-issuer-card">
+        <h4>
+            {{ p.display_name }}
+            {% if p.validation.is_valid and p.is_active %}
+            · <span class="badge badge-soft">{{ t('billing_ready_to_invoice') }}</span>
+            {% endif %}
+            {% if p.is_default %}
+            · <span class="badge">{{ t('billing_issuer_default_badge') }}</span>
+            {% endif %}
+        </h4>
+        <p>{{ t('billing_issuer_type_' ~ p.issuer_type) }} · {{ p.tax_id }}</p>
         <p>{{ p.legal_name }}</p>
-        <p>{% if p.is_active %}OK{% else %}OFF{% endif %}</p>
+        <p>
+            {% if p.is_active %}
+            <span class="badge badge-soft">{{ t('billing_issuer_status_active') }}</span>
+            {% else %}
+            <span class="badge">{{ t('billing_issuer_status_inactive') }}</span>
+            {% endif %}
+            <span class="badge">{{ t('billing_arca_status_' ~ (p.arca_connection_status or 'not_configured')) }}</span>
+        </p>
+        {% if not p.validation.is_valid %}
+        <ul class="billing-issuer-missing">
+            {% for key in p.validation.missing_i18n_keys %}
+            <li>{{ t(key) }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
         {% if p.is_active %}
-        <form method="post" style="display:inline">
-            <input type="hidden" name="profile_id" value="{{ p.id }}">
-            <button name="action" value="set_default" class="btn btn-secondary">Default</button>
-            <button name="action" value="deactivate" class="btn btn-danger">Off</button>
-        </form>
+        <div class="billing-issuer-actions">
+            <form method="post" class="billing-issuer-action-form">
+                <input type="hidden" name="profile_id" value="{{ p.id }}">
+                <button name="action" value="set_default" class="btn btn-secondary btn-sm" {% if p.is_default %}disabled{% endif %}>{{ t('billing_issuer_set_default') }}</button>
+                <button name="action" value="deactivate" class="btn btn-danger btn-sm">{{ t('billing_issuer_deactivate') }}</button>
+            </form>
+        </div>
         {% endif %}
     </article>
     {% else %}
@@ -33,15 +57,15 @@
 </section>
 
 <section class="panel">
-    <h3>{{ t('billing_issuers_title') }}</h3>
+    <h3>{{ t('billing_issuers_add') }}</h3>
     <form method="post" class="agent-form">
         <input type="hidden" name="action" value="save">
         <div class="form-group">
-            <label>Type</label>
+            <label>{{ t('billing_issuer_type_label') }}</label>
             <select name="issuer_type" class="form-input">
-                <option value="organization">organization</option>
-                <option value="broker">broker</option>
-                <option value="other">other</option>
+                <option value="organization">{{ t('billing_issuer_type_organization') }}</option>
+                <option value="broker">{{ t('billing_issuer_type_broker') }}</option>
+                <option value="other">{{ t('billing_issuer_type_other') }}</option>
             </select>
         </div>
         <div class="form-group">
@@ -55,7 +79,7 @@
         </div>
         <div class="form-group">
             <label>{{ t('billing_tax_condition') }}</label>
-            <select name="tax_condition" class="form-input">
+            <select name="tax_condition" class="form-input" required>
                 {% for tc in tax_conditions %}
                 <option value="{{ tc }}">{{ t('billing_tax_' ~ tc) }}</option>
                 {% endfor %}
@@ -63,14 +87,14 @@
         </div>
         <div class="form-group">
             <label>{{ t('billing_fiscal_address') }}</label>
-            <input name="fiscal_address" class="form-input">
+            <input name="fiscal_address" class="form-input" required>
         </div>
         <div class="form-group">
             <label>{{ t('billing_email') }}</label>
             <input name="email" class="form-input">
         </div>
         <label class="checkbox-label">
-            <input type="checkbox" name="is_default" value="1"> Default
+            <input type="checkbox" name="is_default" value="1"> {{ t('billing_issuer_set_default') }}
         </label>
         <button type="submit" class="btn btn-primary">{{ t('save') }}</button>
     </form>

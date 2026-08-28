@@ -172,47 +172,24 @@ def org_billing_ready(settings):
 
 def agent_billing_ready(profile):
     """Email is optional; required: legal_name, tax_id, tax_condition, fiscal_address."""
-    missing = []
-    if profile is None:
-        return False, [
-            "billing_missing_agent_legal_name",
-            "billing_missing_agent_tax_id",
-            "billing_missing_agent_tax_condition",
-            "billing_missing_agent_fiscal_address",
-        ]
+    from modules.billing_issuer_validation import (
+        validate_agent_billing_profile,
+    )
 
-    if not (profile.get("legal_name") or "").strip():
-        missing.append("billing_missing_agent_legal_name")
-    if not validate_cuit(profile.get("tax_id")):
-        missing.append("billing_missing_agent_tax_id")
-    if not (profile.get("tax_condition") or "").strip():
-        missing.append("billing_missing_agent_tax_condition")
-    if not (profile.get("fiscal_address") or "").strip():
-        missing.append("billing_missing_agent_fiscal_address")
-
-    return len(missing) == 0, missing
+    result = validate_agent_billing_profile(profile)
+    return result["is_valid"], result["missing_i18n_keys"]
 
 
 def issuer_profile_ready(profile):
-    missing = []
-    if profile is None:
-        return False, [
-            "billing_missing_issuer_legal_name",
-            "billing_missing_issuer_tax_id",
-            "billing_missing_issuer_tax_condition",
-            "billing_missing_issuer_fiscal_address",
-        ]
+    from modules.billing_issuer_validation import (
+        validate_billing_issuer_profile,
+    )
 
-    if not (profile.get("legal_name") or "").strip():
-        missing.append("billing_missing_issuer_legal_name")
-    if not validate_cuit(profile.get("tax_id")):
-        missing.append("billing_missing_issuer_tax_id")
-    if not (profile.get("tax_condition") or "").strip():
-        missing.append("billing_missing_issuer_tax_condition")
-    if not (profile.get("fiscal_address") or "").strip():
-        missing.append("billing_missing_issuer_fiscal_address")
-
-    return len(missing) == 0, missing
+    result = validate_billing_issuer_profile(
+        profile,
+        require_active=False,
+    )
+    return result["is_valid"], result["missing_i18n_keys"]
 
 
 def party_client_ready(party):
@@ -266,15 +243,21 @@ def get_next_missing_client_field(party):
     return None
 
 
-def default_issuer_mode_for_user(user, settings):
+def default_issuer_mode_for_user(user, settings, organization_id=None):
     from modules.auth import ROLE_ADMIN, ROLE_AGENT
+    from modules.billing_issuer_validation import (
+        list_usable_issuer_profiles,
+    )
 
     if user.get("role") == ROLE_AGENT:
         return ISSUER_MODE_AGENT
-    if settings.get("office_can_invoice") and settings.get(
-        "default_issuer_profile_id"
-    ):
+    if not settings.get("office_can_invoice", True):
+        return ISSUER_MODE_AGENT
+    if settings.get("default_issuer_profile_id"):
         return ISSUER_MODE_OFFICE
+    if organization_id is not None:
+        if list_usable_issuer_profiles(organization_id):
+            return ISSUER_MODE_OFFICE
     return ISSUER_MODE_AGENT
 
 
@@ -727,11 +710,16 @@ def _resolve_issuer(
             organization_id,
             operation["agent_db_id"],
         )
-        ready, missing = agent_billing_ready(profile)
-        if not ready:
+        from modules.billing_issuer_validation import (
+            validate_agent_billing_profile,
+        )
+
+        validation = validate_agent_billing_profile(profile)
+        if not validation["is_valid"]:
             raise InvoicingError(
-                "invoice_err_billing_profile_incomplete",
-                missing=missing,
+                validation["error_key"]
+                or "invoice_err_billing_profile_incomplete",
+                missing=validation["missing_i18n_keys"],
             )
         return {
             "issuer_user_id": user.get("id"),
@@ -745,7 +733,7 @@ def _resolve_issuer(
                 operation["agent_db_id"]
             ),
             "source": "agent_operation",
-            "point_of_sale": None,
+            "point_of_sale": profile.get("point_of_sale"),
         }
 
     if role != ROLE_ADMIN:
@@ -758,11 +746,16 @@ def _resolve_issuer(
             organization_id,
             operation["agent_db_id"],
         )
-        ready, missing = agent_billing_ready(profile)
-        if not ready:
+        from modules.billing_issuer_validation import (
+            validate_agent_billing_profile,
+        )
+
+        validation = validate_agent_billing_profile(profile)
+        if not validation["is_valid"]:
             raise InvoicingError(
-                "invoice_err_billing_profile_incomplete",
-                missing=missing,
+                validation["error_key"]
+                or "invoice_err_billing_profile_incomplete",
+                missing=validation["missing_i18n_keys"],
             )
         return {
             "issuer_user_id": user.get("id"),
@@ -776,33 +769,32 @@ def _resolve_issuer(
                 operation["agent_db_id"]
             ),
             "source": "admin",
-            "point_of_sale": None,
+            "point_of_sale": profile.get("point_of_sale"),
         }
 
     if issuer_mode == ISSUER_MODE_OFFICE:
         if not settings.get("office_can_invoice", True):
             raise InvoicingError("invoice_err_office_cannot_invoice")
-        if issuer_profile_id is None:
-            issuer_profile_id = settings.get(
-                "default_issuer_profile_id"
-            )
-        if issuer_profile_id is None:
-            raise InvoicingError(
-                "invoice_err_issuer_profile_required"
-            )
+        from modules.billing_issuer_validation import (
+            resolve_office_issuer_profile_id,
+            validate_billing_issuer_profile,
+        )
+
+        resolved_id = resolve_office_issuer_profile_id(
+            organization_id,
+            issuer_profile_id=issuer_profile_id,
+            settings=settings,
+        )
         profile = get_billing_issuer_profile(
             organization_id,
-            int(issuer_profile_id),
+            int(resolved_id),
         )
-        if profile is None or not profile.get("is_active", True):
+        validation = validate_billing_issuer_profile(profile)
+        if not validation["is_valid"]:
             raise InvoicingError(
-                "invoice_err_issuer_profile_not_found"
-            )
-        ready, missing = issuer_profile_ready(profile)
-        if not ready:
-            raise InvoicingError(
-                "invoice_err_billing_profile_incomplete",
-                missing=missing,
+                validation["error_key"]
+                or "invoice_err_billing_profile_incomplete",
+                missing=validation["missing_i18n_keys"],
             )
         return {
             "issuer_user_id": user.get("id"),

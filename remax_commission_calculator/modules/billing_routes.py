@@ -44,6 +44,9 @@ from modules.database.organization_settings_repository import (
     get_organization_settings,
     update_organization_billing_fields,
 )
+from modules.billing_issuer_validation import (
+    validate_billing_issuer_profile,
+)
 from modules.invoice_ai_service import (
     DisambiguationResult,
     INTENT_LIST_PENDING,
@@ -55,6 +58,7 @@ from modules.invoice_ai_service import (
 )
 from modules.invoicing import (
     InvoicingError,
+    ISSUER_MODE_OFFICE,
     PAYMENT_CONDITIONS,
     SIDE_BUYER,
     SIDE_SELLER,
@@ -127,14 +131,29 @@ def register_billing_routes(app, *, helpers):
         session.pop("billing_ai_context", None)
         session.pop("billing_ai_operation", None)
 
-    def _issuer_defaults(user, settings):
+    def _issuer_defaults(user, settings, organization_id):
+        from modules.billing_issuer_validation import (
+            resolve_office_issuer_profile_id,
+        )
+
         issuer_mode = default_issuer_mode_for_user(
             user,
             settings,
+            organization_id,
         )
-        issuer_profile_id = settings.get(
-            "default_issuer_profile_id"
-        )
+        issuer_profile_id = None
+        if issuer_mode == ISSUER_MODE_OFFICE:
+            try:
+                issuer_profile_id = (
+                    resolve_office_issuer_profile_id(
+                        organization_id,
+                        settings=settings,
+                    )
+                )
+            except InvoicingError:
+                issuer_profile_id = settings.get(
+                    "default_issuer_profile_id"
+                )
         return issuer_mode, issuer_profile_id
 
     def _prepare_side_view(
@@ -173,6 +192,7 @@ def register_billing_routes(app, *, helpers):
         issuer_mode, issuer_profile_id = _issuer_defaults(
             user,
             settings,
+            organization_id,
         )
 
         missing_field = get_next_missing_client_field(
@@ -573,7 +593,11 @@ def register_billing_routes(app, *, helpers):
         issuer_mode = (
             request.form.get("issuer_mode")
             or request.args.get("issuer_mode")
-            or default_issuer_mode_for_user(user, settings)
+            or default_issuer_mode_for_user(
+                user,
+                settings,
+                organization_id,
+            )
         )
         issuer_profile_id = request.form.get(
             "issuer_profile_id"
@@ -582,6 +606,22 @@ def register_billing_routes(app, *, helpers):
             issuer_profile_id
         ).isdigit():
             issuer_profile_id = int(issuer_profile_id)
+        elif issuer_mode == ISSUER_MODE_OFFICE:
+            from modules.billing_issuer_validation import (
+                resolve_office_issuer_profile_id,
+            )
+
+            try:
+                issuer_profile_id = (
+                    resolve_office_issuer_profile_id(
+                        organization_id,
+                        settings=settings,
+                    )
+                )
+            except InvoicingError:
+                issuer_profile_id = settings.get(
+                    "default_issuer_profile_id"
+                )
         else:
             issuer_profile_id = settings.get(
                 "default_issuer_profile_id"
@@ -1000,10 +1040,19 @@ def register_billing_routes(app, *, helpers):
 
         return render_template(
             "billing/issuers.html",
-            profiles=list_billing_issuer_profiles(
-                organization_id,
-                active_only=False,
-            ),
+            profiles=[
+                {
+                    **profile,
+                    "validation": validate_billing_issuer_profile(
+                        profile,
+                        require_active=False,
+                    ),
+                }
+                for profile in list_billing_issuer_profiles(
+                    organization_id,
+                    active_only=False,
+                )
+            ],
             tax_conditions=TAX_CONDITIONS,
         )
 

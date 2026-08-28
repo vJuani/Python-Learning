@@ -10,6 +10,12 @@ from .connection import execute_insert, get_connection
 from .tenant import require_organization_id
 
 
+def _normalize_tax_id(tax_id):
+    from modules.billing_issuer_validation import normalize_cuit
+
+    return normalize_cuit(tax_id)
+
+
 def _now_iso():
     return datetime.utcnow().replace(
         microsecond=0
@@ -130,7 +136,7 @@ def upsert_profile(
                     organization_id,
                     agent_id,
                     (legal_name or "").strip(),
-                    (tax_id or "").strip(),
+                    _normalize_tax_id(tax_id),
                     (tax_condition or "").strip(),
                     (fiscal_address or "").strip(),
                     (email or "").strip(),
@@ -159,7 +165,7 @@ def upsert_profile(
                 """,
                 (
                     (legal_name or "").strip(),
-                    (tax_id or "").strip(),
+                    _normalize_tax_id(tax_id),
                     (tax_condition or "").strip(),
                     (fiscal_address or "").strip(),
                     (email or "").strip(),

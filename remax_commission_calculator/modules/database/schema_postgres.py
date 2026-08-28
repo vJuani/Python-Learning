@@ -1304,6 +1304,51 @@ def create_postgres_schema():
             """
         )
 
+        for table_name in (
+            "billing_issuer_profiles",
+            "agent_billing_profiles",
+        ):
+            for column_name, column_sql in (
+                (
+                    "arca_connection_status",
+                    "TEXT NOT NULL DEFAULT 'not_configured'",
+                ),
+                ("arca_environment", "TEXT"),
+                ("arca_point_of_sale", "TEXT"),
+                ("arca_voucher_types", "TEXT"),
+                ("arca_last_validated_at", "TEXT"),
+                ("arca_certificate_ref", "TEXT"),
+                ("arca_provider", "TEXT DEFAULT 'arca'"),
+                ("arca_metadata", "TEXT"),
+            ):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE {table_name}
+                    ADD COLUMN IF NOT EXISTS
+                    {column_name} {column_sql}
+                    """
+                )
+
+        cursor.execute(
+            """
+            UPDATE organization_settings
+            SET default_issuer_profile_id = sub.profile_id
+            FROM (
+                SELECT
+                    bip.organization_id,
+                    MIN(bip.id) AS profile_id
+                FROM billing_issuer_profiles bip
+                WHERE bip.is_default = 1
+                    AND bip.is_active = 1
+                GROUP BY bip.organization_id
+            ) AS sub
+            WHERE organization_settings.organization_id
+                = sub.organization_id
+                AND organization_settings.default_issuer_profile_id
+                    IS NULL
+            """
+        )
+
         for column_name, column_sql in (
             ("side", "TEXT"),
             ("issuer_profile_id", "BIGINT"),

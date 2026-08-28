@@ -4943,6 +4943,23 @@ a.dashboard-quick-card:hover {
     background: transparent;
 }
 
+.billing-issuer-card .billing-issuer-missing {
+    margin: 0.35rem 0 0.5rem;
+    padding-left: 1.1rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.billing-issuer-actions {
+    margin-top: 0.5rem;
+}
+
+.billing-issuer-action-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
 .billing-card-list {
     display: grid;
     gap: 0.85rem;
