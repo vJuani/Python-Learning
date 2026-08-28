@@ -30,28 +30,88 @@
 </section>
 {% endif %}
 
-{% if invoice.status == 'error' and invoice.provider_error %}
-<section class="panel">
-    <p class="flash-message flash-error">{{ invoice.provider_error }}</p>
+{% if invoice.status == 'error' %}
+<section class="panel billing-detail-error">
+    <p class="flash-message flash-error">{{ invoice.provider_error or t('invoice_err_arca_wsfe_failed') }}</p>
     <form method="post" action="{{ url_for('billing_retry_invoice', invoice_id=invoice.id) }}">
         <button type="submit" class="btn btn-secondary">{{ t('billing_retry_arca') }}</button>
     </form>
 </section>
 {% endif %}
 
-<section class="panel">
-    <p class="money-lg">{{ invoice.currency }} {{ '%.2f'|format(invoice.total_amount) }}</p>
-    {% if invoice.status != 'issued' %}
+<section class="panel billing-detail-summary">
+    <p class="money-lg">{{ invoice.total_amount | money(invoice.currency) }}</p>
+    {% if invoice.status != 'issued' and invoice.provider != 'arca' %}
     <p class="field-help">{{ t('billing_internal_notice') }}</p>
+    {% endif %}
+    {% if invoice.status == 'issued' and invoice.provider == 'arca' %}
+    <p class="billing-arca-test-banner">{{ t('billing_arca_test_environment') }}</p>
     {% endif %}
 </section>
 
-<section class="panel">
+<section class="panel billing-detail-cards">
+    <article class="billing-detail-card">
+        <h4>{{ t('billing_issuer') }}</h4>
+        <p>{{ invoice.issuer_name }}</p>
+        <p class="field-help">{{ invoice.issuer_tax_id }}</p>
+    </article>
+    <article class="billing-detail-card">
+        <h4>{{ t('billing_recipient') }}</h4>
+        <p>{{ invoice.recipient_name }}</p>
+        <p class="field-help">{{ invoice.recipient_tax_id }}</p>
+    </article>
+    <article class="billing-detail-card">
+        <h4>{{ t('billing_operation') }}</h4>
+        <p>
+            {% if operation %}
+            <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}">{{ operation.property }} · {{ operation.id }}</a>
+            {% else %}
+            #{{ invoice.operation_id }}
+            {% endif %}
+        </p>
+        {% if invoice.side %}
+        <p class="field-help">{{ t('billing_side_' ~ invoice.side) }}</p>
+        {% endif %}
+    </article>
+    <article class="billing-detail-card">
+        <h4>{{ t('billing_concept') }}</h4>
+        <p>{{ invoice.description }}</p>
+        <p class="field-help">{{ invoice.issue_date }} · {{ t('billing_pay_' ~ invoice.payment_condition) }}</p>
+    </article>
+    {% if invoice.provider %}
+    <article class="billing-detail-card">
+        <h4>{{ t('billing_provider_label') }}</h4>
+        <p>{{ invoice.provider }}</p>
+        {% if invoice.fiscal_environment %}
+        <p class="field-help">{{ t('billing_arca_environment_label') }}: {{ invoice.fiscal_environment }}</p>
+        {% endif %}
+    </article>
+    {% endif %}
+    {% if invoice.external_invoice_number or invoice.cae %}
+    <article class="billing-detail-card">
+        <h4>{{ t('billing_fiscal_data') }}</h4>
+        {% if invoice.point_of_sale %}
+        <p>{{ t('billing_point_of_sale') }}: {{ invoice.point_of_sale }}</p>
+        {% endif %}
+        {% if invoice.external_invoice_number %}
+        <p>{{ t('billing_fiscal_number') }}: {{ invoice.external_invoice_number }}</p>
+        {% endif %}
+        {% if invoice.cae %}
+        <p>CAE: {{ invoice.cae }}</p>
+        <p class="field-help">{{ t('billing_cae_expiration') }}: {{ invoice.cae_expiration }}</p>
+        {% endif %}
+    </article>
+    {% endif %}
+</section>
+
+<section class="panel billing-detail-desktop">
     <dl class="detail-list">
+        <dt>{{ t('billing_internal_number') }}</dt>
+        <dd>{{ invoice.invoice_number_internal }}</dd>
         <dt>{{ t('billing_issuer') }}</dt>
-        <dd>{{ invoice.issuer_name }}<br>{{ invoice.issuer_tax_id }}</dd>
+        <dd>{{ invoice.issuer_name }} · {{ invoice.issuer_tax_id }}</dd>
         <dt>{{ t('billing_recipient') }}</dt>
-        <dd>{{ invoice.recipient_name }}<br>{{ invoice.recipient_tax_id }}</dd>
+        <dd>{{ invoice.recipient_name }} · {{ invoice.recipient_tax_id }}</dd>
         <dt>{{ t('billing_operation') }}</dt>
         <dd>
             {% if operation %}
@@ -66,6 +126,10 @@
         {% endif %}
         <dt>{{ t('billing_concept') }}</dt>
         <dd>{{ invoice.description }}</dd>
+        {% if invoice.provider %}
+        <dt>{{ t('billing_provider_label') }}</dt>
+        <dd>{{ invoice.provider }}{% if invoice.fiscal_environment %} · {{ invoice.fiscal_environment }}{% endif %}</dd>
+        {% endif %}
         {% if invoice.external_invoice_number %}
         <dt>{{ t('billing_fiscal_number') }}</dt>
         <dd>{{ invoice.external_invoice_number }}</dd>
@@ -80,8 +144,6 @@
         {% endif %}
         <dt>{{ t('billing_issue_date') }}</dt>
         <dd>{{ invoice.issue_date }}</dd>
-        <dt>{{ t('billing_internal_number') }}</dt>
-        <dd>{{ invoice.invoice_number_internal }}</dd>
     </dl>
 </section>
 

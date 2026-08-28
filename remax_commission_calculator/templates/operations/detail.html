@@ -143,44 +143,78 @@
     </div>
 </section>
 
-<section class="panel">
+<section class="panel billing-operation-panel">
     <div class="panel-header">
         <h3>{{ t('billing_vat_section') }}</h3>
+        <a href="{{ url_for('billing_list') }}" class="btn btn-secondary btn-sm">✨ {{ t('billing_ai_title') }}</a>
     </div>
-
-    <p class="field-help">
-        <a href="{{ url_for('billing_list') }}">✨ {{ t('billing_ai_title') }}</a>
-    </p>
 
     {% for side_key in ['buyer', 'seller'] %}
     {% set side = sides_state.get(side_key) if sides_state else none %}
     {% if side and side.party and side.party.is_participating %}
-    <article class="billing-side-block billing-side-compact">
-        <h4>{{ t('billing_side_' ~ side_key) }}</h4>
-        <p>
-            {% if side.can_create_draft %}
-            {{ t('billing_status_pending') }}
-            {% elif side.invoices %}
-            {{ t('billing_status_' ~ side.invoices[0].status) }}
-            {% else %}
-            {{ t('billing_amount_pending') }}
+    {% set party = side.party %}
+    {% set vat_side = operation.seller_vat_original if side_key == 'seller' else operation.buyer_vat_original %}
+    {% set op_currency = operation.currency or 'USD' %}
+    {% set display_status = side.display_status if side.display_status is defined else side.state %}
+    <article class="billing-side-block billing-side-operation">
+        <div class="billing-side-operation-header">
+            <h4>{{ t('billing_side_' ~ side_key) }}</h4>
+            <span class="badge badge-soft">{{ t('billing_side_state_' ~ display_status) }}</span>
+        </div>
+
+        <dl class="billing-side-metrics">
+            <div>
+                <dt>{{ t('operation_commission_calculated') }}</dt>
+                <dd class="money">{{ party.commission_amount | money(op_currency) }}</dd>
+            </div>
+            <div>
+                <dt>{{ t('operation_' ~ side_key ~ '_vat') }}</dt>
+                <dd class="money">{{ vat_side | money(op_currency) }}</dd>
+            </div>
+            {% if party.invoice_amount %}
+            <div>
+                <dt>{{ t('billing_invoice_amount_label') }}</dt>
+                <dd class="money">{{ party.invoice_amount | money(party.invoice_currency or 'ARS') }}</dd>
+            </div>
             {% endif %}
-        </p>
-        {% if side.party.invoice_amount %}
-        <p class="money">{{ side.party.invoice_amount | money(side.party.invoice_currency or 'ARS') }}</p>
-        {% endif %}
+        </dl>
 
         {% if can_create_invoice and side.can_create_draft %}
-        <a class="btn btn-primary" href="{{ url_for('billing_prepare', operation_id=operation.db_id, side=side_key) }}">{{ t('billing_invoice_' ~ side_key) }}</a>
+        <a class="btn btn-primary" href="{{ url_for('billing_prepare', operation_id=operation.db_id, side=side_key) }}">{{ t('billing_invoice_' ~ side_key) }} →</a>
         {% elif side.invoices %}
         <a class="btn btn-secondary" href="{{ url_for('billing_detail', invoice_id=side.invoices[0].id) }}">{{ t('billing_view_invoice') }}</a>
         {% endif %}
 
         {% if can_set_invoice_amount %}
-        <details class="billing-side-edit">
-            <summary>{{ t('billing_more_options') }}</summary>
-            <p class="field-help"><a href="{{ url_for('vat_calculator', operation_id=operation.db_id) }}">{{ t('billing_calculate_vat') }}</a></p>
-        </details>
+        <form method="post" action="{{ url_for('operations_set_party_invoice_amount', operation_id=operation.db_id, side=side_key) }}" class="billing-side-amount-form">
+            <div class="form-group">
+                <label for="invoice_amount_{{ side_key }}">{{ t('billing_invoice_amount_label') }}</label>
+                <input
+                    type="text"
+                    id="invoice_amount_{{ side_key }}"
+                    name="invoice_amount"
+                    class="form-input"
+                    inputmode="decimal"
+                    value="{{ party.invoice_amount or '' }}"
+                    placeholder="{{ vat_side }}"
+                >
+            </div>
+            <div class="form-group">
+                <label for="invoice_currency_{{ side_key }}">{{ t('billing_currency') }}</label>
+                <select id="invoice_currency_{{ side_key }}" name="invoice_currency" class="form-input">
+                    <option value="ARS" {% if (party.invoice_currency or 'ARS') == 'ARS' %}selected{% endif %}>ARS</option>
+                    <option value="USD" {% if party.invoice_currency == 'USD' %}selected{% endif %}>USD</option>
+                </select>
+            </div>
+            <label class="checkbox-label">
+                <input type="checkbox" name="enable_billing" value="1" {% if party.billing_enabled %}checked{% endif %}>
+                {{ t('billing_enable_side') }}
+            </label>
+            <div class="billing-side-form-actions">
+                <button type="submit" class="btn btn-primary btn-sm">{{ t('billing_save_amount') }}</button>
+                <a href="{{ url_for('vat_calculator', operation_id=operation.db_id) }}" class="btn btn-ghost btn-sm">{{ t('billing_calculate_vat') }}</a>
+            </div>
+        </form>
         {% endif %}
     </article>
     {% endif %}

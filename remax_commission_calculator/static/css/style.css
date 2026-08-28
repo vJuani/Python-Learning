@@ -4987,6 +4987,113 @@ a.dashboard-quick-card:hover {
     border-top: 1px solid var(--border-color, #e5e7eb);
 }
 
+.billing-review-panel {
+    max-width: 36rem;
+}
+
+.billing-review-amount {
+    font-size: 1.75rem;
+    margin: 0 0 1rem;
+}
+
+.billing-review-dl {
+    margin-bottom: 1.25rem;
+}
+
+.billing-review-env {
+    margin: 0 0 1rem;
+}
+
+.billing-review-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: flex-start;
+}
+
+.billing-review-change {
+    margin: 0.35rem 0 0;
+}
+
+.billing-detail-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 0.75rem;
+}
+
+.billing-detail-card {
+    padding: 0.75rem;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 0.5rem;
+}
+
+.billing-detail-card h4 {
+    margin: 0 0 0.35rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.billing-detail-desktop {
+    display: none;
+}
+
+.billing-side-operation {
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.billing-side-operation:last-child {
+    border-bottom: none;
+}
+
+.billing-side-operation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.billing-side-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: 0.5rem 1rem;
+    margin: 0 0 0.75rem;
+}
+
+.billing-side-metrics dt {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.billing-side-metrics dd {
+    margin: 0.1rem 0 0;
+}
+
+.billing-side-amount-form {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border-color, #e5e7eb);
+    max-width: 24rem;
+}
+
+.billing-side-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+@media (min-width: 768px) {
+    .billing-detail-cards {
+        display: none;
+    }
+
+    .billing-detail-desktop {
+        display: block;
+    }
+}
+
 .billing-issuer-card .billing-issuer-missing {
     margin: 0.35rem 0 0.5rem;
     padding-left: 1.1rem;

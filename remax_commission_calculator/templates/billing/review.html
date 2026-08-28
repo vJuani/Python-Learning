@@ -6,51 +6,94 @@
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ t('billing_review') }}</h2>
+        {% if operation %}
+        <p>{{ operation.property }} · {{ t('billing_side_' ~ invoice.side) }}</p>
+        {% else %}
         <p>{{ invoice.invoice_number_internal }}</p>
+        {% endif %}
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('billing_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
 </section>
 
-<section class="panel">
-    <p class="badge">{{ t('billing_non_fiscal_badge') }}</p>
-    <p class="field-help">{{ t('billing_internal_notice') }}</p>
-    <dl class="detail-list">
-        <dt>{{ t('billing_issuer') }}</dt>
-        <dd>{{ invoice.issuer_name }}</dd>
-        <dt>{{ t('billing_recipient') }}</dt>
-        <dd>{{ invoice.recipient_name }}</dd>
-        <dt>{{ t('billing_concept') }}</dt>
-        <dd>{{ invoice.description }}</dd>
-        <dt>{{ t('billing_amount') }}</dt>
-        <dd>{{ invoice.currency }} {{ '%.2f'|format(invoice.total_amount) }}</dd>
-        <dt>{{ t('billing_issue_date') }}</dt>
-        <dd>{{ invoice.issue_date }}</dd>
-        <dt>{{ t('billing_payment_condition') }}</dt>
-        <dd>{{ t('billing_pay_' ~ invoice.payment_condition) }}</dd>
+{% if arca_enabled %}
+<p class="billing-arca-test-banner billing-review-env">{{ t('billing_arca_test_environment') }}</p>
+{% elif invoice.status != 'issued' %}
+<p class="badge billing-review-internal-badge">{{ t('billing_non_fiscal_badge') }}</p>
+{% endif %}
+
+<section class="panel billing-review-panel">
+    <p class="money billing-review-amount">{{ invoice.total_amount | money(invoice.currency) }}</p>
+
+    <dl class="billing-prepare-dl billing-review-dl">
+        <div>
+            <dt>{{ t('billing_issuer') }}</dt>
+            <dd>
+                {{ invoice.issuer_name }}<br>
+                <span class="field-help">{{ invoice.issuer_tax_id }}</span>
+                {% if can_change_issuer %}
+                <p class="billing-review-change">
+                    <a href="{{ url_for('billing_issuers') if is_staff else url_for('billing_agent_profile_self') }}">{{ t('billing_change_issuer') }}</a>
+                </p>
+                {% endif %}
+            </dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_recipient') }}</dt>
+            <dd>
+                {{ invoice.recipient_name }}<br>
+                <span class="field-help">{{ invoice.recipient_tax_id }}</span>
+            </dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_concept') }}</dt>
+            <dd>{{ invoice.description }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_issue_date') }}</dt>
+            <dd>{{ invoice.issue_date }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_payment_condition') }}</dt>
+            <dd>{{ t('billing_pay_' ~ invoice.payment_condition) }}</dd>
+        </div>
+        {% if arca_enabled %}
+        <div>
+            <dt>{{ t('billing_arca_environment_label') }}</dt>
+            <dd>{{ t('billing_arca_env_homologation') }}</dd>
+        </div>
+        {% endif %}
     </dl>
 
     {% if invoice.status == 'draft' %}
-    <form method="post" class="agent-form">
-        <div class="form-group">
-            <label for="payment_condition">{{ t('billing_payment_condition') }}</label>
-            <select id="payment_condition" name="payment_condition" class="form-input">
-                {% for pc in payment_conditions %}
-                <option value="{{ pc }}" {% if invoice.payment_condition == pc %}selected{% endif %}>{{ t('billing_pay_' ~ pc) }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="issue_date">{{ t('billing_issue_date') }}</label>
-            <input type="date" id="issue_date" name="issue_date" class="form-input" value="{{ invoice.issue_date }}">
-        </div>
-        <div class="form-actions">
-            <button type="submit" name="action" value="edit" class="btn btn-secondary">{{ t('billing_back_edit') }}</button>
-            <button type="submit" name="action" value="confirm" class="btn btn-primary">{{ t('billing_confirm_draft') }}</button>
-        </div>
+    <form method="post" class="billing-review-actions">
+        <button type="submit" name="action" value="confirm" class="btn btn-primary">
+            {{ t('billing_confirm_draft') }}
+        </button>
+        <details class="billing-more-options">
+            <summary>{{ t('billing_more_options') }}</summary>
+            <div class="billing-review-more-fields">
+                <div class="form-group">
+                    <label for="payment_condition">{{ t('billing_payment_condition') }}</label>
+                    <select id="payment_condition" name="payment_condition" class="form-input">
+                        {% for pc in payment_conditions %}
+                        <option value="{{ pc }}" {% if invoice.payment_condition == pc %}selected{% endif %}>{{ t('billing_pay_' ~ pc) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="issue_date">{{ t('billing_issue_date') }}</label>
+                    <input type="date" id="issue_date" name="issue_date" class="form-input" value="{{ invoice.issue_date }}">
+                </div>
+                <button type="submit" name="action" value="edit" class="btn btn-secondary btn-sm">{{ t('billing_save_draft_options') }}</button>
+            </div>
+        </details>
     </form>
     {% elif invoice.status == 'ready_to_issue' and arca_enabled %}
-    <p class="billing-arca-test-banner">{{ t('billing_arca_test_environment') }}</p>
-    <form method="post" action="{{ url_for('billing_issue_arca', invoice_id=invoice.id) }}">
+    <form method="post" action="{{ url_for('billing_issue_arca', invoice_id=invoice.id) }}" class="billing-review-actions">
         <button type="submit" class="btn btn-primary">{{ t('billing_issue_arca_homologation') }}</button>
+        <a class="btn btn-secondary" href="{{ url_for('billing_detail', invoice_id=invoice.id) }}">{{ t('billing_view_invoice') }}</a>
     </form>
     {% else %}
     <a class="btn btn-primary" href="{{ url_for('billing_detail', invoice_id=invoice.id) }}">{{ t('billing_view_invoice') }}</a>

@@ -479,9 +479,31 @@ def get_operation_sides_state(
         side_info["party"] = party
         side_info["invoices"] = side_invoices
         side_info["side"] = side
+        side_info["display_status"] = (
+            get_side_billing_display_status(side_info)
+        )
         result[side] = side_info
 
     return result
+
+
+def get_side_billing_display_status(side_info):
+    """Human-facing billing status key for a buyer/seller side."""
+    party = (side_info or {}).get("party") or {}
+    if not party.get("is_participating"):
+        return "not_participating"
+    if not party.get("billing_enabled"):
+        return "not_enabled"
+    state = (side_info or {}).get("state")
+    mapping = {
+        "pending_amount": "amount_pending",
+        "pending": "pending_to_invoice",
+        "has_draft": "draft",
+        "ready_to_issue": "ready",
+        "issued": "issued",
+        "error": "error",
+    }
+    return mapping.get(state, "pending_to_invoice")
 
 
 def parse_invoice_amount(raw_amount):
@@ -1597,6 +1619,7 @@ __all__ = [
     "set_party_invoice_amount",
     "get_operation_billing_state",
     "get_operation_sides_state",
+    "get_side_billing_display_status",
     "build_draft_preview_for_side",
     "create_draft_for_side",
     "build_draft_preview_from_operation",

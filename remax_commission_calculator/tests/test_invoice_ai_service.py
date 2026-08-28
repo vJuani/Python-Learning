@@ -286,6 +286,35 @@ class InvoiceAiServiceTests(unittest.TestCase):
         self.assertIsInstance(result, ParsedInvoiceIntent)
         self.assertEqual(result.intent, INTENT_LIST_PENDING)
 
+    def test_resolve_then_missing_cuit_field(self):
+        from modules.database import (
+            ensure_parties_for_operation,
+            get_operation_party,
+        )
+        from modules.invoicing import (
+            get_next_missing_client_field,
+            set_party_invoice_amount,
+        )
+
+        ensure_parties_for_operation(self.org, self.operation_id)
+        set_party_invoice_amount(
+            self.org,
+            self.operation_id,
+            SIDE_BUYER,
+            "2500000",
+            "ARS",
+            None,
+            self.admin,
+            enable_billing=True,
+        )
+        party = get_operation_party(
+            self.org,
+            self.operation_id,
+            SIDE_BUYER,
+        )
+        missing = get_next_missing_client_field(party)
+        self.assertEqual(missing, "client_tax_id")
+
 
 if __name__ == "__main__":
     unittest.main()

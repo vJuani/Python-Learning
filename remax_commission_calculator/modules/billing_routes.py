@@ -5,6 +5,7 @@ Billing / Facturación HTTP routes (multi-side, multi-issuer).
 from __future__ import annotations
 
 import io
+import logging
 
 from flask import (
     abort,
@@ -90,6 +91,8 @@ from modules.invoicing import (
     update_draft_options,
     validate_cuit,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def register_billing_routes(app, *, helpers):
@@ -207,6 +210,12 @@ def register_billing_routes(app, *, helpers):
             party
         )
         if missing_field:
+            logger.info(
+                "invoice_ai_missing_fields field=%s operation=%s side=%s",
+                missing_field,
+                operation_id,
+                side,
+            )
             return render_template(
                 "billing/missing_client.html",
                 operation=operation,
@@ -454,6 +463,11 @@ def register_billing_routes(app, *, helpers):
             return redirect(url_for("billing_list"))
 
         if isinstance(result, ResolvedInvoiceIntent):
+            logger.info(
+                "invoice_ai_intent_resolved operation=%s side=%s",
+                result.operation_id,
+                result.side,
+            )
             _clear_billing_ai_context()
             return redirect(
                 url_for(
@@ -763,16 +777,26 @@ def register_billing_routes(app, *, helpers):
                 )
             return redirect(
                 url_for(
-                    "billing_detail",
+                    "billing_review",
                     invoice_id=invoice_id,
                 )
+            )
+
+        operation = None
+        if invoice.get("operation_id"):
+            operation = get_operation_record(
+                invoice["operation_id"],
+                organization_id,
             )
 
         return render_template(
             "billing/review.html",
             invoice=invoice,
+            operation=operation,
             payment_conditions=PAYMENT_CONDITIONS,
             arca_enabled=is_arca_fiscal_enabled(),
+            is_staff=is_admin(user),
+            can_change_issuer=True,
         )
 
     @app.route("/billing/<int:invoice_id>")
