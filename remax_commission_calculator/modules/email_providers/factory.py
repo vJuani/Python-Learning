@@ -13,6 +13,7 @@ from modules.email_providers.console import (
     ConsoleEmailProvider,
     MockEmailProvider,
 )
+from modules.email_providers.resend_api import ResendApiEmailProvider
 from modules.email_providers.smtp import SmtpEmailProvider
 
 
@@ -21,7 +22,8 @@ logger = logging.getLogger(__name__)
 _PROVIDER: EmailProvider | None = None
 
 CONSOLE_BACKENDS = frozenset({"console", "mock"})
-SMTP_BACKENDS = frozenset({"smtp", "resend"})
+RESEND_BACKEND = "resend"
+SMTP_BACKEND = "smtp"
 
 
 def get_email_backend() -> str:
@@ -53,7 +55,7 @@ def get_email_provider() -> EmailProvider:
             detail = (
                 f"EMAIL_BACKEND={backend} is not allowed when "
                 "APP_ENV is staging/production. "
-                "Set EMAIL_BACKEND=smtp or EMAIL_BACKEND=resend."
+                "Set EMAIL_BACKEND=resend or EMAIL_BACKEND=smtp."
             )
             logger.error(
                 "email_provider_blocked detail=%s",
@@ -70,11 +72,28 @@ def get_email_provider() -> EmailProvider:
         )
         return _PROVIDER
 
-    if backend in SMTP_BACKENDS:
-        provider = SmtpEmailProvider(preset=backend)
+    if backend == RESEND_BACKEND:
+        provider = ResendApiEmailProvider()
         if is_deployed():
             provider.validate_config()
         _PROVIDER = provider
+        logger.info(
+            "email_provider_selected backend=%s provider=%s",
+            backend,
+            type(provider).__name__,
+        )
+        return _PROVIDER
+
+    if backend == SMTP_BACKEND:
+        provider = SmtpEmailProvider()
+        if is_deployed():
+            provider.validate_config()
+        _PROVIDER = provider
+        logger.info(
+            "email_provider_selected backend=%s provider=%s",
+            backend,
+            type(provider).__name__,
+        )
         return _PROVIDER
 
     detail = (

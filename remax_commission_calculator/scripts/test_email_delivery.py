@@ -4,8 +4,8 @@ Send a one-off test email using the configured EmailProvider.
 
 Usage (Railway shell or local with production-like env):
   EMAIL_BACKEND=resend
-  SMTP_PASSWORD=re_...
-  EMAIL_FROM="Commission Calculator <noreply@yourdomain.com>"
+  RESEND_API_KEY=re_...
+  EMAIL_FROM="JRH One <noreply@jrhone.com>"
   python scripts/test_email_delivery.py --to you@example.com
 
 Never run against production users without --to pointing to your inbox.
@@ -57,7 +57,7 @@ def main() -> int:
         "Commission Calculator — test email",
         (
             "This is a test message from scripts/test_email_delivery.py\n"
-            "If you received this, SMTP/Resend is configured correctly."
+            "If you received this, Resend HTTP API is configured correctly."
         ),
         html_body=(
             "<p>This is a <strong>test</strong> from "
