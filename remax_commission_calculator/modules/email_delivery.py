@@ -1,45 +1,38 @@
 import logging
 import os
-import smtplib
-from email.message import EmailMessage
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from modules.config import BASE_DIR, is_deployed
+from modules.config import BASE_DIR
+from modules.email_providers import (
+    EmailDeliveryError,
+    OutboundEmail,
+    get_email_provider,
+    is_console_email_backend,
+)
+from modules.email_providers.console import _mask_email_for_log
+from modules.email_providers.factory import get_email_backend
 
 
 logger = logging.getLogger(__name__)
 
 BRAND_NAME = "Commission Calculator"
 
-
-class EmailDeliveryError(Exception):
-    """Raised when outbound email cannot be delivered."""
-
-    def __init__(self, error_key, *, detail=None):
-        super().__init__(error_key)
-        self.error_key = error_key
-        self.detail = (detail or "")[:300]
-
-
-def _mask_email_for_log(email):
-    address = (email or "").strip().lower()
-
-    if "@" not in address:
-        return address
-
-    local, domain = address.split("@", 1)
-
-    if len(local) <= 2:
-        visible = local[:1]
-    else:
-        visible = local[:2]
-
-    return f"{visible}***@{domain}"
-
-
-def _normalize_recipient(email):
-    return (email or "").strip().lower()
+# Re-export for existing imports.
+__all__ = [
+    "EmailDeliveryError",
+    "BRAND_NAME",
+    "get_email_backend",
+    "is_console_email_backend",
+    "get_app_base_url",
+    "get_email_logo_url",
+    "render_email_html",
+    "send_verification_code_email",
+    "send_registration_approved_email",
+    "send_registration_rejected_email",
+    "send_transactional_email",
+    "send_verification_email",
+]
 
 EMAIL_COPY = {
     "es": {
@@ -103,26 +96,10 @@ EMAIL_COPY = {
 }
 
 
-def get_email_backend():
-    raw = os.environ.get(
-        "EMAIL_BACKEND",
-        "console"
-    ).strip().lower()
-
-    if raw in ("mock", "console"):
-        return raw
-
-    return raw
-
-
-def is_console_email_backend():
-    return get_email_backend() in ("console", "mock")
-
-
 def get_app_base_url():
     return os.environ.get(
         "APP_BASE_URL",
-        "http://127.0.0.1:5000"
+        "http://127.0.0.1:5000",
     ).rstrip("/")
 
 
@@ -187,90 +164,55 @@ def render_email_html(template_name, **context):
     return template.render(**context)
 
 
-def _append_inbox(to_email, subject, body):
-    inbox_path = BASE_DIR / "tmp_email_inbox.txt"
-    flat_body = " ".join(
-        str(body).splitlines()
-    ).strip()
-
-    with open(inbox_path, "a", encoding="utf-8") as inbox:
-        inbox.write(
-            f"{to_email}\t{subject}\t{flat_body}\n"
-        )
+def _normalize_recipient(email):
+    return (email or "").strip().lower()
 
 
-def _smtp_error_detail(exc):
-    code = getattr(exc, "smtp_code", None)
-    error = getattr(exc, "smtp_error", None)
-
-    if isinstance(error, (bytes, bytearray)):
-        error = error.decode("utf-8", errors="replace")
-
-    if code is None and error is None:
-        return str(exc)
-
-    return f"smtp_code={code} smtp_error={error}"
-
-
-def _send_email(to_email, subject, text_body, html_body=None):
-    backend = get_email_backend()
+def send_transactional_email(
+    to_email,
+    subject,
+    text_body,
+    *,
+    html_body=None,
+):
+    """
+    Generic transactional send used by verification, approvals,
+    and future flows (e.g. password reset).
+    """
     to_email = _normalize_recipient(to_email)
+    provider = get_email_provider()
 
     logger.info(
-        "verification_email_send_start backend=%s to=%s subject=%s html=%s",
-        backend,
+        "email_send_start backend=%s to=%s subject=%s html=%s",
+        provider.backend_name,
         _mask_email_for_log(to_email),
         subject,
         bool(html_body),
     )
 
-    if is_deployed() and backend in ("console", "mock"):
-        detail = (
-            f"EMAIL_BACKEND={backend} is not allowed when "
-            "APP_ENV is staging/production"
-        )
-        logger.error(
-            "verification_email_send_failed to=%s detail=%s",
-            _mask_email_for_log(to_email),
-            detail,
-        )
-        raise EmailDeliveryError(
-            "err_verify_email_not_configured",
-            detail=detail,
-        )
-
     try:
-        if backend == "smtp":
-            _send_smtp_email(
-                to_email,
-                subject,
-                text_body,
+        provider.send(
+            OutboundEmail(
+                to=to_email,
+                subject=subject,
+                text_body=text_body,
                 html_body=html_body,
             )
-        else:
-            logger.info(
-                "verification_email_send_console to=%s "
-                "(dev/test only — not delivered)",
-                _mask_email_for_log(to_email),
-            )
-            _send_console_email(
-                to_email,
-                subject,
-                text_body,
-                html_body=html_body,
-            )
+        )
     except EmailDeliveryError:
+        logger.error(
+            "email_send_failed backend=%s to=%s subject=%s",
+            provider.backend_name,
+            _mask_email_for_log(to_email),
+            subject,
+        )
         raise
     except Exception as exc:
-        detail = (
-            _smtp_error_detail(exc)
-            if isinstance(exc, smtplib.SMTPException)
-            else str(exc)[:200]
-        )
+        detail = str(exc)[:200]
         logger.error(
-            "verification_email_send_failed to=%s backend=%s detail=%s",
+            "email_send_failed backend=%s to=%s detail=%s",
+            provider.backend_name,
             _mask_email_for_log(to_email),
-            backend,
             detail,
         )
         raise EmailDeliveryError(
@@ -279,164 +221,9 @@ def _send_email(to_email, subject, text_body, html_body=None):
         ) from exc
 
     logger.info(
-        "verification_email_send_success backend=%s to=%s subject=%s",
-        backend,
+        "email_send_success backend=%s to=%s subject=%s",
+        provider.backend_name,
         _mask_email_for_log(to_email),
-        subject,
-    )
-
-
-def _send_console_email(
-    to_email,
-    subject,
-    text_body,
-    html_body=None
-):
-    print()
-    print("=== EMAIL (console backend) ===")
-    print(f"To: {to_email}")
-    print(f"Subject: {subject}")
-    print("--- text/plain ---")
-    print(text_body)
-
-    if html_body:
-        print("--- text/html ---")
-        print(f"(html length={len(html_body)} chars)")
-
-    print("================================")
-    print()
-
-    _append_inbox(to_email, subject, text_body)
-
-
-def _send_smtp_email(
-    to_email,
-    subject,
-    text_body,
-    html_body=None
-):
-    to_email = _normalize_recipient(to_email)
-    host = os.environ.get("SMTP_HOST", "").strip()
-    username = os.environ.get("SMTP_USERNAME", "").strip()
-    password = os.environ.get("SMTP_PASSWORD", "")
-    sender = os.environ.get("EMAIL_FROM", "").strip()
-
-    if sender == "":
-        sender = os.environ.get("SMTP_FROM", username).strip()
-
-    if host == "" or sender == "":
-        logger.error(
-            "SMTP not configured: host_set=%s from_set=%s "
-            "(set SMTP_HOST and EMAIL_FROM in .env)",
-            bool(host),
-            bool(sender),
-        )
-        raise RuntimeError(
-            "SMTP is not configured. Set SMTP_HOST and EMAIL_FROM."
-        )
-
-    if password.strip() == "":
-        logger.error(
-            "SMTP rejected locally: SMTP_PASSWORD is empty "
-            "(set it in .env, not .env.example)"
-        )
-        raise RuntimeError(
-            "SMTP is not configured. Set SMTP_PASSWORD."
-        )
-
-    port = int(os.environ.get("SMTP_PORT", "587"))
-    use_tls = os.environ.get(
-        "SMTP_USE_TLS",
-        "1"
-    ).strip().lower() in ("1", "true", "yes", "on")
-
-    message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = sender
-    message["To"] = to_email
-    message.set_content(text_body)
-
-    if html_body:
-        message.add_alternative(
-            html_body,
-            subtype="html"
-        )
-
-    logger.info(
-        "SMTP connecting host=%s port=%s tls=%s "
-        "username_set=%s from=%s to=%s",
-        host,
-        port,
-        use_tls,
-        bool(username),
-        sender,
-        to_email,
-    )
-
-    try:
-        with smtplib.SMTP(host, port, timeout=20) as smtp:
-            if use_tls:
-                smtp.starttls()
-
-            if username != "":
-                smtp.login(username, password)
-
-            refused = smtp.send_message(message)
-    except smtplib.SMTPAuthenticationError as exc:
-        logger.error(
-            "SMTP authentication rejected by provider: %s",
-            _smtp_error_detail(exc),
-        )
-        raise
-    except smtplib.SMTPRecipientsRefused as exc:
-        logger.error(
-            "SMTP provider refused all recipients to=%s detail=%s",
-            to_email,
-            _smtp_error_detail(exc),
-        )
-        raise
-    except smtplib.SMTPSenderRefused as exc:
-        logger.error(
-            "SMTP provider refused sender from=%s detail=%s",
-            sender,
-            _smtp_error_detail(exc),
-        )
-        raise
-    except smtplib.SMTPDataError as exc:
-        logger.error(
-            "SMTP provider rejected message data: %s",
-            _smtp_error_detail(exc),
-        )
-        raise
-    except smtplib.SMTPException as exc:
-        logger.error(
-            "SMTP provider error: %s",
-            _smtp_error_detail(exc),
-        )
-        raise
-    except OSError as exc:
-        logger.error(
-            "SMTP connection failed host=%s port=%s error=%s",
-            host,
-            port,
-            exc,
-        )
-        raise
-
-    if refused:
-        logger.error(
-            "SMTP provider accepted connection but refused "
-            "recipient(s): %s",
-            refused,
-        )
-        raise RuntimeError(
-            f"SMTP refused recipient(s): {refused}"
-        )
-
-    logger.info(
-        "SMTP provider accepted message from=%s to=%s subject=%s",
-        sender,
-        to_email,
         subject,
     )
 
@@ -470,11 +257,27 @@ def send_verification_code_email(to_email, code, language="es"):
         ignore_text=copy["verify_ignore"],
     )
 
-    _send_email(
-        to_email,
-        subject,
-        text_body,
-        html_body=html_body
+    logger.info(
+        "verification_email_send_start to=%s",
+        _mask_email_for_log(to_email),
+    )
+    try:
+        send_transactional_email(
+            to_email,
+            subject,
+            text_body,
+            html_body=html_body,
+        )
+    except EmailDeliveryError:
+        logger.error(
+            "verification_email_send_failed to=%s",
+            _mask_email_for_log(to_email),
+        )
+        raise
+
+    logger.info(
+        "verification_email_send_success to=%s",
+        _mask_email_for_log(to_email),
     )
 
 
@@ -482,7 +285,7 @@ def send_registration_approved_email(
     to_email,
     language="es",
     first_name=None,
-    organization_name=None
+    organization_name=None,
 ):
     language = _normalize_language(language)
     copy = _copy(language)
@@ -533,11 +336,11 @@ def send_registration_approved_email(
         cta_label=copy["approved_cta"],
     )
 
-    _send_email(
+    send_transactional_email(
         to_email,
         subject,
         text_body,
-        html_body=html_body
+        html_body=html_body,
     )
 
 
@@ -545,7 +348,7 @@ def send_registration_rejected_email(
     to_email,
     language="es",
     first_name=None,
-    reason=None
+    reason=None,
 ):
     language = _normalize_language(language)
     copy = _copy(language)
@@ -591,18 +394,17 @@ def send_registration_rejected_email(
         reason_label=copy["rejected_reason_label"],
     )
 
-    _send_email(
+    send_transactional_email(
         to_email,
         subject,
         text_body,
-        html_body=html_body
+        html_body=html_body,
     )
 
 
-# Backward-compatible alias used by older call sites.
 def send_verification_email(to_email, verify_url):
     send_verification_code_email(
         to_email,
         code=verify_url,
-        language="es"
+        language="es",
     )

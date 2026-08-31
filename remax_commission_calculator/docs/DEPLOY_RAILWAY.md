@@ -90,10 +90,24 @@ Railway also injects `PORT` automatically.
 | `LOG_LEVEL` | `INFO` |
 | `SESSION_COOKIE_SECURE` | `1` |
 | `SESSION_COOKIE_SAMESITE` | `Lax` |
-| `EMAIL_BACKEND` | `smtp` (or `console` for smoke tests without mail) |
+| `EMAIL_BACKEND` | `resend` or `smtp` (**required** for agent registration emails) |
 | `EMAIL_LOGO_URL` | public HTTPS logo URL (optional) |
 
-### SMTP (when `EMAIL_BACKEND=smtp`)
+### Email / Resend (required for registration verification)
+
+| Variable | Notes |
+|----------|--------|
+| `EMAIL_BACKEND` | `resend` (recommended) or `smtp` |
+| `SMTP_HOST` | `smtp.resend.com` (auto when `EMAIL_BACKEND=resend`) |
+| `SMTP_PORT` | `587` |
+| `SMTP_USERNAME` | `resend` |
+| `SMTP_PASSWORD` | Resend API key (`re_...`) — Railway secret |
+| `SMTP_USE_TLS` | `1` |
+| `EMAIL_FROM` | Verified sender, e.g. `Commission Calculator <noreply@yourdomain.com>` |
+
+Do **not** use `console` or `mock` in staging/production — registration codes will not be delivered.
+
+### SMTP (legacy generic — when `EMAIL_BACKEND=smtp`)
 
 | Variable | Notes |
 |----------|--------|
