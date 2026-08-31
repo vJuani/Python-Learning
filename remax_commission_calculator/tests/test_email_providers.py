@@ -76,6 +76,39 @@ class EmailProviderTests(unittest.TestCase):
             self.assertIsInstance(provider, ResendApiEmailProvider)
             self.assertEqual(provider.backend_name, "resend")
 
+    def test_resend_config_valid_without_smtp_password(self):
+        env = {
+            "EMAIL_BACKEND": "resend",
+            "APP_ENV": "staging",
+            "RESEND_API_KEY": "re_test_key",
+            "EMAIL_FROM": "JRH One <noreply@jrhone.com>",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            os.environ.pop("SMTP_PASSWORD", None)
+            reset_email_provider_cache()
+            provider = get_email_provider()
+            self.assertIsInstance(provider, ResendApiEmailProvider)
+            provider.validate_config()
+
+    def test_smtp_config_requires_smtp_password(self):
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_BACKEND": "smtp",
+                "APP_ENV": "development",
+                "SMTP_HOST": "smtp.example.com",
+                "EMAIL_FROM": "noreply@example.com",
+            },
+            clear=False,
+        ):
+            os.environ.pop("SMTP_PASSWORD", None)
+            reset_email_provider_cache()
+            provider = get_email_provider()
+            self.assertIsInstance(provider, SmtpEmailProvider)
+            with self.assertRaises(EmailDeliveryError) as ctx:
+                provider.validate_config()
+            self.assertIn("SMTP_PASSWORD", ctx.exception.detail)
+
     @patch("modules.email_providers.resend_api.requests.post")
     def test_resend_api_success(self, mock_post):
         response = MagicMock()

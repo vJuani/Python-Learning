@@ -77,6 +77,11 @@ def get_email_provider() -> EmailProvider:
         if is_deployed():
             provider.validate_config()
         _PROVIDER = provider
+        logger.info(
+            "email_provider_selected backend=%s provider=%s",
+            backend,
+            type(provider).__name__,
+        )
         return _PROVIDER
 
     if backend == SMTP_BACKEND:
@@ -84,6 +89,11 @@ def get_email_provider() -> EmailProvider:
         if is_deployed():
             provider.validate_config()
         _PROVIDER = provider
+        logger.info(
+            "email_provider_selected backend=%s provider=%s",
+            backend,
+            type(provider).__name__,
+        )
         return _PROVIDER
 
     detail = (
