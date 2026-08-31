@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="application-name" content="{{ brand_name }}">
     <meta name="apple-mobile-web-app-title" content="{{ brand_name }}">
-    <meta name="theme-color" content="#111827">
+    <meta name="theme-color" content="#0a1633">
     <script>
         (function () {
             try {
@@ -28,6 +28,7 @@
         href="{{ brand_logo_icon_url }}"
     >
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-one.css') }}">
     {% if organization_branding_css %}
     <style>
         :root {

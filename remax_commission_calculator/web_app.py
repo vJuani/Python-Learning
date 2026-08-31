@@ -572,7 +572,7 @@ def web_manifest():
         "start_url": "/",
         "display": "standalone",
         "background_color": "#ffffff",
-        "theme_color": "#111827",
+        "theme_color": "#0a1633",
         "icons": [
             {
                 "src": url_for(

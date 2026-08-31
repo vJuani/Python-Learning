@@ -17,6 +17,15 @@ DEFAULT_BRAND_NAME = "JRH One"
 DEFAULT_APP_DOMAIN = "jrhone.com"
 DEFAULT_APP_BASE_URL = "http://127.0.0.1:5000"
 
+# JRH One identity palette (option 2) — see docs/BRAND_GUIDE.md
+BRAND_COLORS = {
+    "navy": "#0A1633",
+    "blue": "#0D47FF",
+    "steel": "#33415C",
+    "surface_muted": "#F2F4F8",
+    "white": "#FFFFFF",
+}
+
 DEFAULT_LOGO_HORIZONTAL_REL = "images/jrh-one-logo-horizontal.jpg"
 DEFAULT_LOGO_FULL_REL = "images/jrh-one-logo-full.jpg"
 DEFAULT_LOGO_ICON_REL = "images/jrh-one-icon.jpg"

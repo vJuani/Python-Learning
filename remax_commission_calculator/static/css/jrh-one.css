@@ -1,0 +1,311 @@
+/**
+ * JRH One — brand layer (option 2 identity)
+ * Loaded after style.css; overrides tokens and polishes key surfaces.
+ */
+
+/* ── Auth split layout ───────────────────────────────────── */
+.auth-layout--split {
+    width: min(960px, 100%);
+    margin: 0 auto;
+    display: grid;
+    gap: 0;
+    padding: 0;
+    min-height: calc(100vh - 8rem);
+    align-items: stretch;
+}
+
+.auth-brand-panel {
+    display: none;
+}
+
+@media (min-width: 900px) {
+    .auth-layout--split {
+        grid-template-columns: 1fr 1fr;
+        border-radius: var(--radius);
+        overflow: hidden;
+        box-shadow: var(--shadow);
+        min-height: 32rem;
+    }
+
+    .auth-brand-panel {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2.5rem 2rem;
+        background:
+            radial-gradient(circle at 20% 20%, rgba(13, 71, 255, 0.22), transparent 45%),
+            linear-gradient(165deg, var(--jrh-navy) 0%, #0d2248 100%);
+        color: #fff;
+    }
+
+    .auth-layout--split .auth-card {
+        width: 100%;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 2.25rem 2rem;
+    }
+
+    body.is-auth-page .auth-layout--split {
+        margin-top: 1rem;
+    }
+}
+
+.auth-brand-panel-inner {
+    text-align: center;
+    max-width: 18rem;
+}
+
+.auth-brand-panel-logo {
+    display: block;
+    max-width: 11rem;
+    height: auto;
+    margin: 0 auto 1rem;
+    border-radius: var(--radius-sm);
+}
+
+.auth-brand-panel-name {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.auth-brand-panel-tagline {
+    margin: 0.65rem 0 0;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.72);
+    font-weight: 500;
+}
+
+.auth-layout--split .auth-brand {
+    display: none;
+}
+
+@media (max-width: 899px) {
+    .auth-layout--split .auth-brand {
+        display: block;
+    }
+}
+
+body.is-auth-page {
+    background: var(--jrh-surface-muted);
+}
+
+body.is-auth-page .site-footer {
+    border-top: 1px solid var(--border-soft);
+}
+
+/* ── Logo in shell / header ────────────────────────────── */
+.site-brand-logo-shell {
+    background: transparent;
+    border-radius: var(--radius-sm);
+    padding: 0.2rem 0;
+}
+
+body.has-app-rail .app-rail-brand .site-brand-logo-shell {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.35rem 0.5rem;
+}
+
+.site-brand-logo,
+.dashboard-welcome-logo {
+    max-height: 2rem;
+    width: auto;
+}
+
+/* ── KPI / dashboard ───────────────────────────────────── */
+.dashboard-welcome {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    padding: 1.15rem 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 2px rgba(10, 22, 51, 0.04);
+}
+
+.dashboard-welcome-text h1 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--jrh-navy);
+}
+
+.saas-kpi-grid .stat-card {
+    border-top: 3px solid var(--jrh-blue);
+    background: var(--surface);
+}
+
+.saas-kpi-grid .stat-label {
+    color: var(--jrh-steel);
+    font-size: 0.78rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.saas-kpi-grid .stat-value {
+    color: var(--jrh-navy);
+    font-weight: 700;
+}
+
+.dashboard-period-chip {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+}
+
+/* ── Page headers (global) ─────────────────────────────── */
+.page-header-text h1,
+.page-header-text h2,
+.panel-header h3 {
+    color: var(--jrh-navy);
+    font-weight: 600;
+}
+
+.page-header-text p {
+    color: var(--jrh-steel);
+}
+
+/* ── Buttons ───────────────────────────────────────────── */
+.btn-primary {
+    background: var(--jrh-blue);
+    border-color: var(--jrh-blue);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.btn-primary:hover {
+    background: var(--jrh-blue-hover);
+    border-color: var(--jrh-blue-hover);
+}
+
+.btn-secondary {
+    border-color: var(--border);
+    color: var(--jrh-navy);
+}
+
+.btn-ghost {
+    color: var(--jrh-steel);
+}
+
+/* ── Forms ─────────────────────────────────────────────── */
+.form-input:focus,
+.form-select:focus,
+textarea.form-input:focus {
+    border-color: var(--jrh-blue);
+    box-shadow: 0 0 0 3px rgba(13, 71, 255, 0.14);
+}
+
+.code-digit {
+    border-color: var(--border);
+    font-weight: 700;
+    color: var(--jrh-navy);
+}
+
+.code-digit:focus {
+    border-color: var(--jrh-blue);
+}
+
+/* ── Tables ────────────────────────────────────────────── */
+.data-table thead th {
+    background: var(--jrh-navy);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+/* ── Badges / chips ────────────────────────────────────── */
+.badge,
+.status-badge {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+/* ── Sidebar active state ──────────────────────────────── */
+body.has-app-rail .app-rail-nav .nav-link.active,
+body.has-app-rail .app-rail-nav .app-nav-link.active {
+    background: rgba(13, 71, 255, 0.22);
+    color: #fff;
+    border-left: 3px solid var(--jrh-blue);
+}
+
+body.has-app-rail .app-rail-nav .nav-link:hover,
+body.has-app-rail .app-rail-nav .app-nav-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+/* ── Mobile bottom nav ─────────────────────────────────── */
+@media (max-width: 768px) {
+    .mobile-bottom-nav {
+        background: var(--jrh-navy);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 -4px 20px rgba(10, 22, 51, 0.18);
+    }
+
+    .mobile-bottom-nav-item {
+        color: rgba(255, 255, 255, 0.65);
+    }
+
+    .mobile-bottom-nav-item.active {
+        color: #fff;
+    }
+
+    .mobile-bottom-nav-item.active .mobile-bottom-nav-icon {
+        background: rgba(13, 71, 255, 0.35);
+        color: #fff;
+    }
+}
+
+/* ── Footer ────────────────────────────────────────────── */
+.site-footer {
+    border-top: 1px solid var(--border-soft);
+    color: var(--jrh-steel);
+}
+
+.footer-slogan {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+}
+
+/* ── Empty states ──────────────────────────────────────── */
+.empty-state {
+    color: var(--jrh-steel);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 2rem 1.25rem;
+    text-align: center;
+    background: var(--surface);
+}
+
+/* ── Billing / cash polish ─────────────────────────────── */
+.billing-side-card,
+.cash-balance-card,
+.ai-upload-panel {
+    border-radius: var(--radius);
+    border-color: var(--border-soft);
+}
+
+.panel-spaced {
+    margin-bottom: 1rem;
+}
+
+/* ── Dark mode tune ────────────────────────────────────── */
+[data-theme="dark"] {
+    --jrh-navy: #0a1633;
+    --accent: #3b6bff;
+    --accent-hover: #2d5ef0;
+    --table-head-bg: #111f3d;
+}
+
+[data-theme="dark"] .saas-kpi-grid .stat-card {
+    border-top-color: var(--accent);
+}

@@ -3,7 +3,7 @@ import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from modules.branding import get_app_base_url, get_brand_name
+from modules.branding import get_app_base_url, get_app_domain, get_brand_name
 from modules.config import BASE_DIR
 from modules.email_providers import (
     EmailDeliveryError,
@@ -36,7 +36,7 @@ __all__ = [
 
 EMAIL_COPY = {
     "es": {
-        "footer_tagline": "Calculá. Gestioná. Crecé.",
+        "footer_tagline": "Gestión. Control. Resultados.",
         "verify_subject": "Tu código de verificación",
         "verify_title": "Verificá tu correo",
         "verify_intro": (
@@ -76,7 +76,7 @@ EMAIL_COPY = {
         "reset_cta": "Restablecer contraseña",
     },
     "en": {
-        "footer_tagline": "Calculate. Manage. Grow.",
+        "footer_tagline": "Manage. Control. Deliver.",
         "verify_subject": "Your verification code",
         "verify_title": "Verify your email",
         "verify_intro": (
@@ -147,6 +147,7 @@ def _brand_context(language, subject):
         "language": language,
         "subject": subject,
         "brand_name": get_brand_name(),
+        "brand_domain": get_app_domain(),
         "footer_tagline": copy["footer_tagline"],
         "logo_url": get_email_logo_url(),
     }

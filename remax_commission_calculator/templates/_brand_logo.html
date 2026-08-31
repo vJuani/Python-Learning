@@ -1,0 +1,17 @@
+{# Reusable brand logo — variant: horizontal | full | icon #}
+{% set logo_variant = logo_variant|default('horizontal') %}
+{% if logo_variant == 'icon' %}
+    {% set logo_src = brand_logo_icon_url %}
+    {% set logo_class = 'brand-logo brand-logo--icon' %}
+{% elif logo_variant == 'full' %}
+    {% set logo_src = brand_logo_full_url %}
+    {% set logo_class = 'brand-logo brand-logo--full' %}
+{% else %}
+    {% set logo_src = organization_logo_url or brand_logo_horizontal_url %}
+    {% set logo_class = 'brand-logo brand-logo--horizontal' %}
+{% endif %}
+<img
+    src="{{ logo_src }}"
+    alt="{{ brand_name }}"
+    class="{{ logo_class }}"
+>

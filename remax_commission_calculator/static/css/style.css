@@ -1,49 +1,61 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
 
 :root {
-    --bg: #f3f5f8;
-    --bg-soft: #eef2f6;
-    --surface: #ffffff;
-    --text: #0a1830;
-    --text-muted: #5b6b7c;
-    --muted: #5b6b7c;
-    --border: #d8e0ea;
-    --border-soft: #e8eef5;
-    --accent: #0860c8;
-    --accent-hover: #064a9c;
-    --accent-soft: #dbeafe;
-    --accent-ink: #0a3d7a;
-    --brand-navy: #001838;
-    --danger: #c2410c;
-    --danger-hover: #9a3412;
-    --danger-soft: #ffedd5;
-    --danger-ink: #9a3412;
-    --warning: #b45309;
+    /* JRH One — identity option 2 */
+    --jrh-navy: #0a1633;
+    --jrh-navy-soft: #111f3d;
+    --jrh-blue: #0d47ff;
+    --jrh-blue-hover: #0a3ad4;
+    --jrh-steel: #33415c;
+    --jrh-surface-muted: #f2f4f8;
+    --jrh-white: #ffffff;
+
+    --bg: var(--jrh-surface-muted);
+    --bg-soft: #e8ecf3;
+    --surface: var(--jrh-white);
+    --text: var(--jrh-navy);
+    --text-muted: var(--jrh-steel);
+    --muted: var(--jrh-steel);
+    --border: #d5dde8;
+    --border-soft: #e4eaf2;
+    --accent: var(--jrh-blue);
+    --accent-hover: var(--jrh-blue-hover);
+    --accent-soft: #e8efff;
+    --accent-ink: #0835c7;
+    --brand-navy: var(--jrh-navy);
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+    --danger-soft: #fee2e2;
+    --danger-ink: #991b1b;
+    --warning: #d97706;
     --warning-soft: #fef3c7;
     --warning-ink: #92400e;
-    --success: #047857;
+    --success: #059669;
     --success-soft: #d1fae5;
-    --success-ink: #065f46;
-    --edit: #1d4ed8;
-    --edit-soft: #dbeafe;
-    --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+    --success-ink: #047857;
+    --info: var(--jrh-blue);
+    --info-soft: var(--accent-soft);
+    --info-ink: var(--accent-ink);
+    --edit: var(--jrh-blue);
+    --edit-soft: var(--accent-soft);
+    --shadow: 0 1px 2px rgba(10, 22, 51, 0.04), 0 10px 28px rgba(10, 22, 51, 0.07);
     --radius: 12px;
     --radius-sm: 8px;
     --header-height: 64px;
-    --font: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+    --font: "Poppins", "Segoe UI", sans-serif;
     --body-gradient:
-        radial-gradient(circle at top right, rgba(8, 96, 200, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(13, 71, 255, 0.06), transparent 32%),
         linear-gradient(180deg, #f7f9fc 0%, var(--bg) 100%);
-    --header-bg: rgba(255, 255, 255, 0.92);
-    --footer-bg: rgba(255, 255, 255, 0.55);
-    --table-head-bg: #001838;
+    --header-bg: rgba(255, 255, 255, 0.94);
+    --footer-bg: rgba(242, 244, 248, 0.9);
+    --table-head-bg: var(--jrh-navy);
     --table-head-text: #ffffff;
     --table-row-even: #f8fafc;
-    --table-row-hover: #eff6ff;
+    --table-row-hover: #eef3ff;
     --panel-danger-bg: linear-gradient(180deg, #fff7ed 0%, #ffffff 42%);
     --panel-danger-border: #fdba74;
-    --stat-accent-bg: linear-gradient(160deg, #eff6ff 0%, #ffffff 55%);
-    --stat-accent-border: #93c5fd;
+    --stat-accent-bg: linear-gradient(160deg, #eef3ff 0%, #ffffff 58%);
+    --stat-accent-border: #93b4ff;
     --flash-error-bg: #fee2e2;
     --flash-error-text: #991b1b;
     --flash-error-border: #fecaca;
@@ -52,6 +64,8 @@
     --theme-toggle-bg: var(--bg-soft);
     --theme-toggle-hover: var(--accent-soft);
     --theme-toggle-icon: var(--text-muted);
+    --rail-width: 15.5rem;
+    --rail-collapsed-width: 4.25rem;
 }
 
 [data-theme="dark"] {

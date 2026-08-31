@@ -3,7 +3,8 @@
 {% block title %}{{ t('login_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
-<section class="auth-layout">
+<section class="auth-layout auth-layout--split">
+    {% include "auth/_brand_panel.html" %}
     <div class="panel auth-card">
         <div class="auth-brand">
             <img

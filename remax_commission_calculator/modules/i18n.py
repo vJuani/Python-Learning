@@ -13,7 +13,7 @@ TRANSLATIONS = {
     "es": {
         "app_title": "JRH One",
         "app_footer": "JRH One — Panel Web",
-        "app_slogan": "Calculá. Gestioná. Crecé.",
+        "app_slogan": "Gestión. Control. Resultados.",
         "nav_dashboard": "Panel",
         "nav_agents": "Agentes",
         "nav_people": "Agentes",
@@ -1437,7 +1437,7 @@ TRANSLATIONS = {
     "en": {
         "app_title": "JRH One",
         "app_footer": "JRH One — Web Dashboard",
-        "app_slogan": "Calculate. Manage. Grow.",
+        "app_slogan": "Manage. Control. Deliver.",
         "nav_dashboard": "Dashboard",
         "nav_agents": "Agents",
         "nav_people": "Agents",
