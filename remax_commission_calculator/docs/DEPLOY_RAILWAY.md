@@ -93,21 +93,19 @@ Railway also injects `PORT` automatically.
 | `EMAIL_BACKEND` | `resend` or `smtp` (**required** for agent registration emails) |
 | `EMAIL_LOGO_URL` | public HTTPS logo URL (optional) |
 
-### Email / Resend (required for registration verification)
+### Email / Resend HTTP API (required for registration verification)
 
 | Variable | Notes |
 |----------|--------|
 | `EMAIL_BACKEND` | `resend` (recommended) or `smtp` |
-| `SMTP_HOST` | `smtp.resend.com` (auto when `EMAIL_BACKEND=resend`) |
-| `SMTP_PORT` | `587` |
-| `SMTP_USERNAME` | `resend` |
-| `SMTP_PASSWORD` | Resend API key (`re_...`) — Railway secret |
-| `SMTP_USE_TLS` | `1` |
-| `EMAIL_FROM` | Verified sender, e.g. `Commission Calculator <noreply@yourdomain.com>` |
+| `RESEND_API_KEY` | Resend API key (`re_...`) — Railway secret |
+| `EMAIL_FROM` | Verified sender, e.g. `JRH One <noreply@jrhone.com>` |
+
+Uses HTTPS (`POST https://api.resend.com/emails`) on port 443 — no outbound SMTP required.
 
 Do **not** use `console` or `mock` in staging/production — registration codes will not be delivered.
 
-### SMTP (legacy generic — when `EMAIL_BACKEND=smtp`)
+### SMTP (legacy generic — when `EMAIL_BACKEND=smtp` only)
 
 | Variable | Notes |
 |----------|--------|

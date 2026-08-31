@@ -10,7 +10,7 @@ from modules.email_providers import (
     get_email_provider,
     is_console_email_backend,
 )
-from modules.email_providers.console import _mask_email_for_log
+from modules.email_providers._log import mask_email_for_log
 from modules.email_providers.factory import get_email_backend
 
 
@@ -31,6 +31,7 @@ __all__ = [
     "send_registration_approved_email",
     "send_registration_rejected_email",
     "send_transactional_email",
+    "send_password_reset_email",
     "send_verification_email",
 ]
 
@@ -63,6 +64,17 @@ EMAIL_COPY = {
             "fue rechazada por tu inmobiliaria."
         ),
         "rejected_reason_label": "Motivo",
+        "reset_subject": "Restablecé tu contraseña",
+        "reset_title": "Restablecé tu contraseña",
+        "reset_intro": (
+            "Usá este enlace para elegir una nueva contraseña:"
+        ),
+        "reset_expiry": "Este enlace vence en 60 minutos.",
+        "reset_ignore": (
+            "Si vos no solicitaste restablecer la contraseña, "
+            "podés ignorar este correo."
+        ),
+        "reset_cta": "Restablecer contraseña",
     },
     "en": {
         "footer_tagline": "Calculate. Manage. Grow.",
@@ -92,6 +104,17 @@ EMAIL_COPY = {
             "was rejected by your brokerage."
         ),
         "rejected_reason_label": "Reason",
+        "reset_subject": "Reset your password",
+        "reset_title": "Reset your password",
+        "reset_intro": (
+            "Use this link to choose a new password:"
+        ),
+        "reset_expiry": "This link expires in 60 minutes.",
+        "reset_ignore": (
+            "If you did not request a password reset, "
+            "you can ignore this email."
+        ),
+        "reset_cta": "Reset password",
     },
 }
 
@@ -185,7 +208,7 @@ def send_transactional_email(
     logger.info(
         "email_send_start backend=%s to=%s subject=%s html=%s",
         provider.backend_name,
-        _mask_email_for_log(to_email),
+        mask_email_for_log(to_email),
         subject,
         bool(html_body),
     )
@@ -203,7 +226,7 @@ def send_transactional_email(
         logger.error(
             "email_send_failed backend=%s to=%s subject=%s",
             provider.backend_name,
-            _mask_email_for_log(to_email),
+            mask_email_for_log(to_email),
             subject,
         )
         raise
@@ -212,7 +235,7 @@ def send_transactional_email(
         logger.error(
             "email_send_failed backend=%s to=%s detail=%s",
             provider.backend_name,
-            _mask_email_for_log(to_email),
+            mask_email_for_log(to_email),
             detail,
         )
         raise EmailDeliveryError(
@@ -223,7 +246,7 @@ def send_transactional_email(
     logger.info(
         "email_send_success backend=%s to=%s subject=%s",
         provider.backend_name,
-        _mask_email_for_log(to_email),
+        mask_email_for_log(to_email),
         subject,
     )
 
@@ -259,7 +282,7 @@ def send_verification_code_email(to_email, code, language="es"):
 
     logger.info(
         "verification_email_send_start to=%s",
-        _mask_email_for_log(to_email),
+        mask_email_for_log(to_email),
     )
     try:
         send_transactional_email(
@@ -271,13 +294,13 @@ def send_verification_code_email(to_email, code, language="es"):
     except EmailDeliveryError:
         logger.error(
             "verification_email_send_failed to=%s",
-            _mask_email_for_log(to_email),
+            mask_email_for_log(to_email),
         )
         raise
 
     logger.info(
         "verification_email_send_success to=%s",
-        _mask_email_for_log(to_email),
+        mask_email_for_log(to_email),
     )
 
 
@@ -399,6 +422,63 @@ def send_registration_rejected_email(
         subject,
         text_body,
         html_body=html_body,
+    )
+
+
+def send_password_reset_email(
+    to_email,
+    reset_url,
+    language="es",
+):
+    language = _normalize_language(language)
+    copy = _copy(language)
+    to_email = _normalize_recipient(to_email)
+    reset_url = (reset_url or "").strip()
+
+    subject = copy["reset_subject"]
+    text_body = (
+        f"{BRAND_NAME}\n\n"
+        f"{copy['reset_title']}\n\n"
+        f"{copy['reset_intro']}\n\n"
+        f"{reset_url}\n\n"
+        f"{copy['reset_expiry']}\n"
+        f"{copy['reset_ignore']}\n\n"
+        f"{BRAND_NAME}\n"
+        f"{copy['footer_tagline']}\n"
+    )
+
+    html_body = render_email_html(
+        "email/password_reset.html",
+        **_brand_context(language, subject),
+        title=copy["reset_title"],
+        intro=copy["reset_intro"],
+        cta_url=reset_url,
+        cta_label=copy["reset_cta"],
+        expiry_text=copy["reset_expiry"],
+        ignore_text=copy["reset_ignore"],
+    )
+
+    logger.info(
+        "password_reset_email_send_start to=%s",
+        mask_email_for_log(to_email),
+    )
+    try:
+        send_transactional_email(
+            to_email,
+            subject,
+            text_body,
+            html_body=html_body,
+        )
+    except EmailDeliveryError:
+        logger.error(
+            "password_reset_email_send_failed to=%s",
+            mask_email_for_log(to_email),
+        )
+        raise
+
+    logger.info(
+        "password_reset_email_send_success to=%s",
+        mask_email_for_log(to_email),
     )
 
 
