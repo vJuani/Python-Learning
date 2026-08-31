@@ -173,19 +173,28 @@ class EmailVerificationTests(unittest.TestCase):
                 "err_verify_email_not_configured",
             )
 
-    @patch("modules.email_delivery._send_smtp_email")
-    def test_smtp_provider_failure(self, mock_smtp):
-        mock_smtp.side_effect = RuntimeError(
-            "SMTP refused recipient"
+    @patch("modules.email_delivery.send_transactional_email")
+    def test_smtp_provider_failure(self, mock_send):
+        mock_send.side_effect = EmailDeliveryError(
+            "err_verify_email_send_failed",
+            detail="SMTP refused recipient",
         )
         with patch.dict(
             os.environ,
             {
                 "EMAIL_BACKEND": "smtp",
                 "APP_ENV": "development",
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PASSWORD": "secret",
+                "EMAIL_FROM": "test@example.com",
             },
             clear=False,
         ):
+            from modules.email_providers import (
+                reset_email_provider_cache,
+            )
+
+            reset_email_provider_cache()
             with self.assertRaises(EmailDeliveryError) as ctx:
                 send_verification_code_email(
                     "agent@example.com",
