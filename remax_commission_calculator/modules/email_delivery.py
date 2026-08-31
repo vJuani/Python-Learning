@@ -3,7 +3,13 @@ import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from modules.branding import get_app_base_url, get_app_domain, get_brand_name
+from modules.branding import (
+    get_app_base_url,
+    get_app_domain,
+    get_brand_email_footer_rel,
+    get_brand_logo_dark_rel,
+    get_brand_name,
+)
 from modules.config import BASE_DIR
 from modules.email_providers import (
     EmailDeliveryError,
@@ -125,19 +131,46 @@ def get_email_logo_url():
     """
     raw = os.environ.get("EMAIL_LOGO_URL", "").strip()
 
-    if raw == "":
+    if raw:
+        lower = raw.lower()
+
+        if "127.0.0.1" in lower or "localhost" in lower:
+            logger.warning(
+                "EMAIL_LOGO_URL ignored: mail clients cannot load "
+                "localhost images. Use a public URL."
+            )
+            return None
+
+        return raw
+
+    base = get_app_base_url().rstrip("/")
+    lower_base = base.lower()
+
+    if "127.0.0.1" in lower_base or "localhost" in lower_base:
         return None
 
-    lower = raw.lower()
+    return f"{base}/static/{get_brand_logo_dark_rel()}"
 
-    if "127.0.0.1" in lower or "localhost" in lower:
-        logger.warning(
-            "EMAIL_LOGO_URL ignored: mail clients cannot load "
-            "localhost images. Use a public URL."
-        )
+
+def get_email_footer_image_url():
+    """Public URL for the branded email footer image."""
+    raw = os.environ.get("EMAIL_FOOTER_IMAGE_URL", "").strip()
+
+    if raw:
+        lower = raw.lower()
+
+        if "127.0.0.1" in lower or "localhost" in lower:
+            return None
+
+        return raw
+
+    base = get_app_base_url().rstrip("/")
+    lower_base = base.lower()
+
+    if "127.0.0.1" in lower_base or "localhost" in lower_base:
         return None
 
-    return raw
+    return f"{base}/static/{get_brand_email_footer_rel()}"
 
 
 def _brand_context(language, subject):
@@ -150,6 +183,7 @@ def _brand_context(language, subject):
         "brand_domain": get_app_domain(),
         "footer_tagline": copy["footer_tagline"],
         "logo_url": get_email_logo_url(),
+        "email_footer_image_url": get_email_footer_image_url(),
     }
 
 

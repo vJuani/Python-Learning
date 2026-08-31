@@ -37,6 +37,14 @@
           </tr>
           <tr>
             <td style="padding:20px 32px 24px 32px;border-top:1px solid #e4eaf2;text-align:center;background:#f8fafc;">
+              {% if email_footer_image_url %}
+              <img
+                src="{{ email_footer_image_url }}"
+                alt="{{ brand_name }}"
+                width="200"
+                style="display:block;margin:0 auto 12px auto;max-width:200px;height:auto;border:0;outline:none;text-decoration:none;"
+              >
+              {% endif %}
               <p style="margin:0 0 6px 0;font-size:13px;font-weight:600;color:#0a1633;">
                 {{ brand_name }}
               </p>

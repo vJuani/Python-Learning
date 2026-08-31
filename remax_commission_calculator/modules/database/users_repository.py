@@ -403,6 +403,26 @@ def update_user(
     connection.close()
 
 
+def update_user_password(user_id, password_hash):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        UPDATE users
+        SET password_hash = ?
+        WHERE id = ?
+        """,
+        (
+            password_hash,
+            user_id,
+        ),
+    )
+
+    connection.commit()
+    connection.close()
+
+
 def delete_user(user_id, organization_id):
     organization_id = require_organization_id(
         organization_id

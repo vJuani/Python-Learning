@@ -1,0 +1,334 @@
+/**
+ * JRH One — internal app pages polish
+ */
+
+/* Section headers */
+.page-header,
+.page-header-ops,
+.billing-page-header,
+.report-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.page-header-text h1,
+.page-header-text h2,
+.page-header-ops h2,
+.billing-page-header h2,
+.report-page-header h2 {
+    margin: 0 0 var(--space-2);
+    font-size: clamp(1.2rem, 3vw, 1.45rem);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    line-height: var(--line-height-tight);
+}
+
+.page-header-text p,
+.page-header-ops p,
+.billing-page-header p,
+.report-page-header p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-relaxed);
+    max-width: 42rem;
+}
+
+.page-actions,
+.page-actions-split,
+.page-actions-stack,
+.cash-page-actions,
+.billing-page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.page-actions .btn-primary,
+.page-actions-split .btn-primary,
+.cash-page-actions .btn-primary {
+    box-shadow: var(--shadow-xs);
+}
+
+/* Cards & panels */
+.panel,
+.panel-list,
+.entity-card,
+.billing-pending-card,
+.month-summary-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-xs);
+}
+
+.panel-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.panel-header h3 {
+    margin: 0;
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.panel-spaced {
+    margin-bottom: var(--space-4);
+}
+
+/* Sidebar filters */
+.sidebar-panel {
+    padding: var(--space-4);
+}
+
+.sidebar-title {
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.sidebar-filter-form,
+.filter-form {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.filter-grid {
+    display: grid;
+    gap: var(--space-3);
+}
+
+.filter-form .form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+}
+
+/* Tables */
+.table-wrapper {
+    border: 1px solid var(--table-border);
+    border-radius: var(--radius);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    background: var(--surface);
+}
+
+.data-table,
+.table-dense {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table thead th,
+.table-dense thead th {
+    background: var(--table-head-bg);
+    color: var(--table-head-text);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: var(--space-3) var(--space-4);
+    white-space: nowrap;
+}
+
+.data-table tbody td,
+.table-dense tbody td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-soft);
+    vertical-align: middle;
+}
+
+.data-table tbody tr:nth-child(even),
+.table-dense tbody tr:nth-child(even) {
+    background: var(--table-row-even);
+}
+
+.data-table tbody tr:hover,
+.table-dense tbody tr:hover {
+    background: var(--table-row-hover);
+}
+
+/* Entity cards (mobile lists) */
+.entity-card-list {
+    display: grid;
+    gap: var(--space-3);
+}
+
+.entity-card {
+    padding: var(--space-4);
+    transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.entity-card:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border);
+}
+
+.entity-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+}
+
+/* Badges */
+.badge,
+.status-badge,
+.badge-soft {
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.02em;
+    padding: 0.2rem 0.55rem;
+    line-height: 1.4;
+}
+
+.badge-soft {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+}
+
+/* Tabs */
+.billing-tabs,
+.report-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.billing-tab,
+.report-tab {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-muted);
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.billing-tab:hover,
+.report-tab:hover {
+    color: var(--text);
+    background: var(--surface-hover);
+}
+
+.billing-tab.active,
+.report-tab.active {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    border-color: var(--accent-soft);
+    font-weight: var(--font-weight-semibold);
+}
+
+/* KPI grids */
+.stats-grid,
+.saas-kpi-grid,
+.billing-kpi-grid {
+    display: grid;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+@media (min-width: 640px) {
+    .stats-grid,
+    .saas-kpi-grid,
+    .billing-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1024px) {
+    .stats-grid,
+    .saas-kpi-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .filter-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* Empty states */
+.empty-state {
+    padding: var(--space-8) var(--space-5);
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-muted);
+}
+
+.empty-state-title {
+    margin: 0 0 var(--space-2);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.empty-state-text {
+    margin: 0;
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-relaxed);
+}
+
+/* Report / VAT tools */
+.report-toolbar-form,
+.vat-calc-form {
+    margin-bottom: var(--space-4);
+}
+
+.report-toolbar-fields {
+    display: grid;
+    gap: var(--space-3);
+}
+
+.vat-calc-notice {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--flash-info-bg);
+    border: 1px solid var(--flash-info-border);
+    color: var(--flash-info-text);
+    font-size: var(--font-size-sm);
+}
+
+/* Settings */
+.settings-logo-preview {
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-inset);
+}
+
+.settings-logo-image {
+    max-height: 3rem;
+    width: auto;
+}

@@ -24,13 +24,24 @@ CSS variables live in `static/css/style.css` (`:root`) and overrides in `static/
 
 ## Logo assets
 
+Canonical folder: **`static/brand/`** — see `static/brand/README.md`.
+
+| File | Purpose |
+|------|---------|
+| `brand-icon.png` | Favicon, PWA icon |
+| `brand-logo-light.png` | Horizontal logo on light backgrounds |
+| `brand-logo-dark.png` | Horizontal logo on navy / dark surfaces |
+| `email-footer.png` | Email signature footer image |
+
+Legacy fallbacks remain in `static/images/` until brand files are uploaded.
+
+Override via env: `APP_BRAND_ICON`, `APP_BRAND_LOGO_LIGHT`, `APP_BRAND_LOGO_DARK`, `APP_BRAND_EMAIL_FOOTER`.
+
 | Asset | Path | Use |
 |-------|------|-----|
-| Horizontal | `static/images/jrh-one-logo-horizontal.jpg` | Sidebar, header |
-| Full | `static/images/jrh-one-logo-full.jpg` | Auth panel, emails |
-| Icon | `static/images/jrh-one-icon.jpg` | Favicon, PWA |
-
-Override via env: `APP_BRAND_LOGO_HORIZONTAL`, `APP_BRAND_LOGO_FULL`, `APP_BRAND_LOGO_ICON`.
+| Horizontal (legacy) | `static/images/jrh-one-logo-horizontal.jpg` | Sidebar, header |
+| Full (legacy) | `static/images/jrh-one-logo-full.jpg` | Auth panel, emails |
+| Icon (legacy) | `static/images/jrh-one-icon.jpg` | Favicon, PWA |
 
 Template partial: `templates/_brand_logo.html` (`logo_variant`: horizontal | full | icon).
 

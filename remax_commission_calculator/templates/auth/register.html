@@ -6,14 +6,7 @@
 <section class="auth-layout auth-layout--split">
     {% include "auth/_brand_panel.html" %}
     <div class="panel auth-card">
-        <div class="auth-brand">
-            <img
-                src="{{ brand_logo_full_url }}"
-                alt="{{ brand_name }}"
-                class="auth-brand-logo"
-            >
-            <p class="auth-brand-slogan">{{ t('app_slogan') }}</p>
-        </div>
+        {% include "auth/_auth_brand_mobile.html" %}
 
         <div class="page-header-text auth-header">
             <h2>{{ t('register_title') }}</h2>
@@ -57,9 +50,9 @@
         </form>
         {% else %}
         {% if errors %}
-        <div class="flash-messages">
+        <div class="auth-errors" role="alert">
             {% for error in errors %}
-            <p class="flash-message flash-error">{{ error }}</p>
+            <p class="auth-error-item">{{ error }}</p>
             {% endfor %}
         </div>
         {% endif %}

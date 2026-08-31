@@ -337,6 +337,8 @@ PUBLIC_ENDPOINTS = (
     "register_continue_verification",
     "verify_email",
     "verify_email_resend",
+    "forgot_password",
+    "reset_password",
     "guest_access",
     "set_language",
     "static"
@@ -534,6 +536,9 @@ def inject_organization_branding():
 def inject_product_branding():
     from modules.branding import (
         get_app_domain,
+        get_brand_email_footer_rel,
+        get_brand_logo_dark_rel,
+        get_brand_logo_light_rel,
         get_brand_name,
         get_logo_full_rel,
         get_logo_horizontal_rel,
@@ -547,6 +552,14 @@ def inject_product_branding():
             "static",
             filename=get_logo_horizontal_rel(),
         ),
+        "brand_logo_light_url": url_for(
+            "static",
+            filename=get_brand_logo_light_rel(),
+        ),
+        "brand_logo_dark_url": url_for(
+            "static",
+            filename=get_brand_logo_dark_rel(),
+        ),
         "brand_logo_full_url": url_for(
             "static",
             filename=get_logo_full_rel(),
@@ -554,6 +567,10 @@ def inject_product_branding():
         "brand_logo_icon_url": url_for(
             "static",
             filename=get_logo_icon_rel(),
+        ),
+        "brand_email_footer_url": url_for(
+            "static",
+            filename=get_brand_email_footer_rel(),
         ),
     }
 
@@ -568,10 +585,10 @@ def web_manifest():
     return {
         "name": get_brand_name(),
         "short_name": get_brand_name(),
-        "description": get_brand_name(),
+        "description": "JRH One — Gestión. Control. Resultados.",
         "start_url": "/",
         "display": "standalone",
-        "background_color": "#ffffff",
+        "background_color": "#f2f4f8",
         "theme_color": "#0a1633",
         "icons": [
             {
@@ -579,9 +596,19 @@ def web_manifest():
                     "static",
                     filename=get_logo_icon_rel(),
                 ),
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": url_for(
+                    "static",
+                    filename=get_logo_icon_rel(),
+                ),
                 "sizes": "512x512",
-                "type": "image/jpeg",
-            }
+                "type": "image/png",
+                "purpose": "any maskable",
+            },
         ],
     }
 
@@ -1891,6 +1918,95 @@ def verify_email_resend():
 
     return redirect(
         url_for("verify_email")
+    )
+
+
+@app.route(
+    "/forgot-password",
+    methods=[
+        "GET",
+        "POST"
+    ]
+)
+def forgot_password():
+    if (
+        get_current_user() is not None
+        or get_guest_access() is not None
+    ):
+        return redirect(url_for("dashboard"))
+
+    email = ""
+    sent = False
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+
+        from modules.password_reset import request_password_reset
+
+        request_password_reset(
+            email,
+            language=get_current_language(),
+        )
+        sent = True
+
+    return render_template(
+        "auth/forgot_password.html",
+        email=email,
+        sent=sent,
+    )
+
+
+@app.route(
+    "/reset-password/<token>",
+    methods=[
+        "GET",
+        "POST"
+    ]
+)
+def reset_password(token):
+    if (
+        get_current_user() is not None
+        or get_guest_access() is not None
+    ):
+        return redirect(url_for("dashboard"))
+
+    from modules.password_reset import (
+        complete_password_reset,
+        verify_reset_token,
+    )
+
+    user_id = verify_reset_token(token)
+    errors = []
+    success = False
+
+    if user_id is None and request.method == "GET":
+        flash_i18n("reset_password_invalid", "error")
+        return redirect(url_for("forgot_password"))
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm_password = request.form.get(
+            "confirm_password",
+            "",
+        )
+
+        error_key = complete_password_reset(
+            token,
+            password,
+            confirm_password,
+        )
+
+        if error_key is None:
+            flash_i18n("reset_password_success", "success")
+            return redirect(url_for("login"))
+
+        errors = localize_form_errors([error_key])
+
+    return render_template(
+        "auth/reset_password.html",
+        token=token,
+        errors=errors,
+        success=success,
     )
 
 

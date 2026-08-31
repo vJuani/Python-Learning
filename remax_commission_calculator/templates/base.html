@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="application-name" content="{{ brand_name }}">
     <meta name="apple-mobile-web-app-title" content="{{ brand_name }}">
-    <meta name="theme-color" content="#0a1633">
+    <meta name="description" content="{{ brand_name }} — {{ t('app_slogan') }}">
+    <meta name="theme-color" content="#0a1633" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
     <script>
         (function () {
             try {
@@ -24,11 +26,18 @@
     <link rel="manifest" href="{{ url_for('web_manifest') }}">
     <link
         rel="icon"
-        type="image/jpeg"
+        type="image/png"
+        href="{{ brand_logo_icon_url }}"
+    >
+    <link
+        rel="apple-touch-icon"
         href="{{ brand_logo_icon_url }}"
     >
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-one.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth-pages.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app-pages.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
     {% if organization_branding_css %}
     <style>
         :root {
@@ -41,17 +50,15 @@
     {% endif %}
     {% block extra_css %}{% endblock %}
 </head>
-<body class="{% if current_user or guest_access %}has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend') %} is-auth-page{% endif %}">
+<body class="{% if current_user or guest_access %}has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
     <aside class="app-rail" aria-label="{{ t('nav_aria') }}">
         <div class="app-rail-top">
             <a href="{{ url_for('dashboard') }}" class="app-rail-brand">
                 <span class="site-brand-logo-shell">
-                    <img
-                        src="{{ organization_logo_url or brand_logo_horizontal_url }}"
-                        alt="{{ brand_name }}"
-                        class="site-brand-logo"
-                    >
+                    {% with logo_variant='dark', logo_extra_class='site-brand-logo' %}
+                    {% include "_brand_logo.html" %}
+                    {% endwith %}
                 </span>
             </a>
             <button
@@ -93,11 +100,9 @@
                     class="site-brand"
                 >
                     <span class="site-brand-logo-shell">
-                        <img
-                            src="{{ organization_logo_url or brand_logo_horizontal_url }}"
-                            alt="{{ brand_name }}"
-                            class="site-brand-logo"
-                        >
+                        {% with logo_variant='theme', logo_extra_class='site-brand-logo' %}
+                        {% include "_brand_logo.html" %}
+                        {% endwith %}
                     </span>
                 </a>
             </div>
@@ -294,7 +299,7 @@
                     </div>
                 </div>
             </div>
-            {% elif request.endpoint not in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend') %}
+            {% elif request.endpoint not in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password') %}
             <div class="header-zone header-zone-center header-zone-center-guest">
                 <nav class="guest-nav" aria-label="{{ t('nav_aria') }}">
                     <a href="{{ url_for('login') }}" class="btn btn-small btn-primary">{{ t('login_button') }}</a>
@@ -427,8 +432,15 @@
     <footer class="site-footer">
         <div class="container footer-content">
             <div class="footer-brand">
-                <p>{{ t('app_footer') }}</p>
-                <p class="footer-slogan">{{ t('app_slogan') }}</p>
+                <div class="footer-brand-mark">
+                    {% with logo_variant='icon', logo_extra_class='footer-brand-icon' %}
+                    {% include "_brand_logo.html" %}
+                    {% endwith %}
+                    <div>
+                        <p>{{ t('app_footer') }}</p>
+                        <p class="footer-slogan">{{ t('app_slogan') }}</p>
+                    </div>
+                </div>
             </div>
             {% if current_user or guest_access %}
             <a href="{{ url_for('dashboard') }}" class="footer-link">{{ t('back_home') }}</a>

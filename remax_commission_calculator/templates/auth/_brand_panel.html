@@ -1,10 +1,8 @@
 <aside class="auth-brand-panel" aria-label="{{ brand_name }}">
     <div class="auth-brand-panel-inner">
-        <img
-            src="{{ brand_logo_full_url }}"
-            alt="{{ brand_name }}"
-            class="auth-brand-panel-logo"
-        >
+        {% with logo_variant='dark', logo_extra_class='auth-brand-panel-logo' %}
+        {% include "_brand_logo.html" %}
+        {% endwith %}
         <p class="auth-brand-panel-name">{{ brand_name }}</p>
         <p class="auth-brand-panel-tagline">{{ t('app_slogan') }}</p>
     </div>

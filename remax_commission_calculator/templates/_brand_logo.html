@@ -1,17 +1,46 @@
-{# Reusable brand logo — variant: horizontal | full | icon #}
-{% set logo_variant = logo_variant|default('horizontal') %}
-{% if logo_variant == 'icon' %}
-    {% set logo_src = brand_logo_icon_url %}
-    {% set logo_class = 'brand-logo brand-logo--icon' %}
-{% elif logo_variant == 'full' %}
-    {% set logo_src = brand_logo_full_url %}
-    {% set logo_class = 'brand-logo brand-logo--full' %}
-{% else %}
-    {% set logo_src = organization_logo_url or brand_logo_horizontal_url %}
-    {% set logo_class = 'brand-logo brand-logo--horizontal' %}
-{% endif %}
+{# Reusable brand logo — variant: light | dark | theme | icon | horizontal | full #}
+{% set logo_variant = logo_variant|default('light') %}
+{% set logo_extra_class = logo_extra_class|default('') %}
+{% if organization_logo_url %}
 <img
-    src="{{ logo_src }}"
+    src="{{ organization_logo_url }}"
     alt="{{ brand_name }}"
-    class="{{ logo_class }}"
+    class="brand-logo brand-logo--org {{ logo_extra_class }}"
 >
+{% elif logo_variant == 'theme' %}
+<img
+    src="{{ brand_logo_light_url }}"
+    alt="{{ brand_name }}"
+    class="brand-logo brand-logo--light {{ logo_extra_class }}"
+>
+<img
+    src="{{ brand_logo_dark_url }}"
+    alt=""
+    class="brand-logo brand-logo--dark {{ logo_extra_class }}"
+    aria-hidden="true"
+>
+{% elif logo_variant == 'dark' %}
+<img
+    src="{{ brand_logo_dark_url }}"
+    alt="{{ brand_name }}"
+    class="brand-logo brand-logo--dark {{ logo_extra_class }}"
+>
+{% elif logo_variant == 'icon' %}
+<img
+    src="{{ brand_logo_icon_url }}"
+    alt="{{ brand_name }}"
+    class="brand-logo brand-logo--icon {{ logo_extra_class }}"
+>
+{% elif logo_variant in ('horizontal', 'full') %}
+<img
+    src="{{ brand_logo_light_url }}"
+    alt="{{ brand_name }}"
+    class="brand-logo brand-logo--horizontal {{ logo_extra_class }}"
+>
+{% else %}
+<img
+    src="{{ brand_logo_light_url }}"
+    alt="{{ brand_name }}"
+    class="brand-logo brand-logo--light {{ logo_extra_class }}"
+>
+{% endif %}

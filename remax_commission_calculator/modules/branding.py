@@ -26,6 +26,14 @@ BRAND_COLORS = {
     "white": "#FFFFFF",
 }
 
+# Canonical brand asset folder: static/brand/ (see static/brand/README.md)
+BRAND_ASSET_DIR = "brand"
+BRAND_ICON_REL = f"{BRAND_ASSET_DIR}/brand-icon.png"
+BRAND_LOGO_LIGHT_REL = f"{BRAND_ASSET_DIR}/brand-logo-light.png"
+BRAND_LOGO_DARK_REL = f"{BRAND_ASSET_DIR}/brand-logo-dark.png"
+BRAND_EMAIL_FOOTER_REL = f"{BRAND_ASSET_DIR}/email-footer.png"
+
+# Legacy defaults until brand/ assets are uploaded.
 DEFAULT_LOGO_HORIZONTAL_REL = "images/jrh-one-logo-horizontal.jpg"
 DEFAULT_LOGO_FULL_REL = "images/jrh-one-logo-full.jpg"
 DEFAULT_LOGO_ICON_REL = "images/jrh-one-icon.jpg"
@@ -56,24 +64,65 @@ def _logo_rel(env_key: str, default_rel: str) -> str:
     return raw or default_rel
 
 
+def _resolve_brand_asset(canonical_rel: str, fallback_rel: str) -> str:
+    """Prefer canonical brand/ file when present; else legacy path."""
+    if _resolve_static_path(canonical_rel).is_file():
+        return canonical_rel
+    return fallback_rel
+
+
+def get_brand_icon_rel() -> str:
+    return _logo_rel(
+        "APP_BRAND_ICON",
+        _resolve_brand_asset(BRAND_ICON_REL, DEFAULT_LOGO_ICON_REL),
+    )
+
+
+def get_brand_logo_light_rel() -> str:
+    return _logo_rel(
+        "APP_BRAND_LOGO_LIGHT",
+        _resolve_brand_asset(
+            BRAND_LOGO_LIGHT_REL,
+            DEFAULT_LOGO_HORIZONTAL_REL,
+        ),
+    )
+
+
+def get_brand_logo_dark_rel() -> str:
+    return _logo_rel(
+        "APP_BRAND_LOGO_DARK",
+        _resolve_brand_asset(
+            BRAND_LOGO_DARK_REL,
+            DEFAULT_LOGO_HORIZONTAL_REL,
+        ),
+    )
+
+
+def get_brand_email_footer_rel() -> str:
+    return _logo_rel(
+        "APP_BRAND_EMAIL_FOOTER",
+        BRAND_EMAIL_FOOTER_REL,
+    )
+
+
 def get_logo_horizontal_rel() -> str:
     return _logo_rel(
         "APP_BRAND_LOGO_HORIZONTAL",
-        DEFAULT_LOGO_HORIZONTAL_REL,
+        get_brand_logo_light_rel(),
     )
 
 
 def get_logo_full_rel() -> str:
     return _logo_rel(
         "APP_BRAND_LOGO_FULL",
-        DEFAULT_LOGO_FULL_REL,
+        get_brand_logo_light_rel(),
     )
 
 
 def get_logo_icon_rel() -> str:
     return _logo_rel(
         "APP_BRAND_LOGO_ICON",
-        DEFAULT_LOGO_ICON_REL,
+        get_brand_icon_rel(),
     )
 
 

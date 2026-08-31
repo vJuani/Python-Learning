@@ -6,11 +6,9 @@
 <section class="dashboard-welcome" aria-label="{{ t('dashboard_hello', name=dashboard.welcome_name) }}">
     <div class="dashboard-welcome-brand">
         <span class="dashboard-welcome-logo-shell">
-            <img
-                src="{{ organization_logo_url or brand_logo_horizontal_url }}"
-                alt="{{ brand_name }}"
-                class="dashboard-welcome-logo"
-            >
+            {% with logo_variant='light', logo_extra_class='dashboard-welcome-logo' %}
+            {% include "_brand_logo.html" %}
+            {% endwith %}
         </span>
     </div>
     <div class="dashboard-welcome-text">

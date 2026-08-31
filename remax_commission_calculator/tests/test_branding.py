@@ -7,8 +7,10 @@ import unittest
 from unittest.mock import patch
 
 from modules.branding import (
+    BRAND_LOGO_LIGHT_REL,
     DEFAULT_BRAND_NAME,
     get_brand_name,
+    get_brand_logo_light_rel,
     get_logo_horizontal_rel,
 )
 from modules.i18n import translate
@@ -38,7 +40,11 @@ class BrandingTests(unittest.TestCase):
     def test_default_logo_paths(self):
         self.assertEqual(
             get_logo_horizontal_rel(),
-            "images/jrh-one-logo-horizontal.jpg",
+            get_brand_logo_light_rel(),
+        )
+        self.assertEqual(
+            get_brand_logo_light_rel(),
+            BRAND_LOGO_LIGHT_REL,
         )
 
 
