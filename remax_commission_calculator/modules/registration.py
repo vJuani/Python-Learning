@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import datetime
 
@@ -36,11 +37,15 @@ from modules.database import (
 )
 from modules.config import is_deployed
 from modules.email_delivery import (
+    EmailDeliveryError,
     send_registration_approved_email,
     send_registration_rejected_email,
     send_verification_code_email
 )
 from modules.passwords import validate_password_policy
+
+
+logger = logging.getLogger(__name__)
 
 
 EMAIL_PATTERN = re.compile(
@@ -133,19 +138,37 @@ def resolve_organization_from_code(organization_code):
 
 
 def _issue_verification_code(request_id, email, language="es"):
+    email = (email or "").strip().lower()
     raw_code = generate_email_verification_code()
     create_email_verification_token(
         request_id,
         hash_access_secret(raw_code),
         minutes=CODE_EXPIRY_MINUTES
     )
-    send_verification_code_email(
-        email,
-        raw_code,
-        language=language
+    logger.info(
+        "verification_code_created request_id=%s email=%s "
+        "expires_minutes=%s",
+        request_id,
+        mask_email(email),
+        CODE_EXPIRY_MINUTES,
     )
+    try:
+        send_verification_code_email(
+            email,
+            raw_code,
+            language=language
+        )
+    except EmailDeliveryError as error:
+        logger.warning(
+            "verification_email_send_failed request_id=%s email=%s "
+            "error_key=%s",
+            request_id,
+            mask_email(email),
+            error.error_key,
+        )
+        return False, error.error_key
 
-    return raw_code
+    return True, None
 
 
 def submit_agent_registration(parsed, language="es"):
@@ -208,11 +231,16 @@ def submit_agent_registration(parsed, language="es"):
         hash_password(parsed["password"])
     )
 
-    _issue_verification_code(
+    sent, email_error = _issue_verification_code(
         request_id,
         parsed["email"],
         language=language
     )
+
+    if not sent:
+        return [
+            email_error or "err_verify_email_send_failed"
+        ], None
 
     return [], {
         "action": "created",
@@ -424,11 +452,14 @@ def resend_verification_code(request_id, language="es"):
         except ValueError:
             pass
 
-    _issue_verification_code(
+    sent, email_error = _issue_verification_code(
         request_id,
         request_data["email"],
         language=language
     )
+
+    if not sent:
+        return False, email_error or "err_verify_email_send_failed"
 
     return True, None
 

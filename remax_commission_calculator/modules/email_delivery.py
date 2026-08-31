@@ -5,12 +5,41 @@ from email.message import EmailMessage
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from modules.config import BASE_DIR
+from modules.config import BASE_DIR, is_deployed
 
 
 logger = logging.getLogger(__name__)
 
 BRAND_NAME = "Commission Calculator"
+
+
+class EmailDeliveryError(Exception):
+    """Raised when outbound email cannot be delivered."""
+
+    def __init__(self, error_key, *, detail=None):
+        super().__init__(error_key)
+        self.error_key = error_key
+        self.detail = (detail or "")[:300]
+
+
+def _mask_email_for_log(email):
+    address = (email or "").strip().lower()
+
+    if "@" not in address:
+        return address
+
+    local, domain = address.split("@", 1)
+
+    if len(local) <= 2:
+        visible = local[:1]
+    else:
+        visible = local[:2]
+
+    return f"{visible}***@{domain}"
+
+
+def _normalize_recipient(email):
+    return (email or "").strip().lower()
 
 EMAIL_COPY = {
     "es": {
@@ -75,10 +104,19 @@ EMAIL_COPY = {
 
 
 def get_email_backend():
-    return os.environ.get(
+    raw = os.environ.get(
         "EMAIL_BACKEND",
         "console"
     ).strip().lower()
+
+    if raw in ("mock", "console"):
+        return raw
+
+    return raw
+
+
+def is_console_email_backend():
+    return get_email_backend() in ("console", "mock")
 
 
 def get_app_base_url():
@@ -176,37 +214,75 @@ def _smtp_error_detail(exc):
 
 def _send_email(to_email, subject, text_body, html_body=None):
     backend = get_email_backend()
+    to_email = _normalize_recipient(to_email)
 
     logger.info(
-        "Email dispatch backend=%s to=%s subject=%s html=%s",
+        "verification_email_send_start backend=%s to=%s subject=%s html=%s",
         backend,
-        to_email,
+        _mask_email_for_log(to_email),
         subject,
         bool(html_body),
     )
 
-    if backend == "smtp":
-        _send_smtp_email(
-            to_email,
-            subject,
-            text_body,
-            html_body=html_body
+    if is_deployed() and backend in ("console", "mock"):
+        detail = (
+            f"EMAIL_BACKEND={backend} is not allowed when "
+            "APP_ENV is staging/production"
         )
-        return
+        logger.error(
+            "verification_email_send_failed to=%s detail=%s",
+            _mask_email_for_log(to_email),
+            detail,
+        )
+        raise EmailDeliveryError(
+            "err_verify_email_not_configured",
+            detail=detail,
+        )
 
-    logger.warning(
-        "EMAIL_BACKEND=%r is not 'smtp'; "
-        "message will not leave this machine "
-        "(console/tmp_email_inbox only). "
-        "Create/edit .env (not .env.example) "
-        "and set EMAIL_BACKEND=smtp.",
+    try:
+        if backend == "smtp":
+            _send_smtp_email(
+                to_email,
+                subject,
+                text_body,
+                html_body=html_body,
+            )
+        else:
+            logger.info(
+                "verification_email_send_console to=%s "
+                "(dev/test only — not delivered)",
+                _mask_email_for_log(to_email),
+            )
+            _send_console_email(
+                to_email,
+                subject,
+                text_body,
+                html_body=html_body,
+            )
+    except EmailDeliveryError:
+        raise
+    except Exception as exc:
+        detail = (
+            _smtp_error_detail(exc)
+            if isinstance(exc, smtplib.SMTPException)
+            else str(exc)[:200]
+        )
+        logger.error(
+            "verification_email_send_failed to=%s backend=%s detail=%s",
+            _mask_email_for_log(to_email),
+            backend,
+            detail,
+        )
+        raise EmailDeliveryError(
+            "err_verify_email_send_failed",
+            detail=detail,
+        ) from exc
+
+    logger.info(
+        "verification_email_send_success backend=%s to=%s subject=%s",
         backend,
-    )
-    _send_console_email(
-        to_email,
+        _mask_email_for_log(to_email),
         subject,
-        text_body,
-        html_body=html_body
     )
 
 
@@ -239,6 +315,7 @@ def _send_smtp_email(
     text_body,
     html_body=None
 ):
+    to_email = _normalize_recipient(to_email)
     host = os.environ.get("SMTP_HOST", "").strip()
     username = os.environ.get("SMTP_USERNAME", "").strip()
     password = os.environ.get("SMTP_PASSWORD", "")
@@ -367,6 +444,7 @@ def _send_smtp_email(
 def send_verification_code_email(to_email, code, language="es"):
     language = _normalize_language(language)
     copy = _copy(language)
+    to_email = _normalize_recipient(to_email)
     code_text = str(code).strip()
     code_digits = list(code_text)
 
