@@ -3,6 +3,7 @@ import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from modules.branding import get_app_base_url, get_brand_name
 from modules.config import BASE_DIR
 from modules.email_providers import (
     EmailDeliveryError,
@@ -16,12 +17,10 @@ from modules.email_providers.factory import get_email_backend
 
 logger = logging.getLogger(__name__)
 
-BRAND_NAME = "Commission Calculator"
-
 # Re-export for existing imports.
 __all__ = [
     "EmailDeliveryError",
-    "BRAND_NAME",
+    "get_brand_name",
     "get_email_backend",
     "is_console_email_backend",
     "get_app_base_url",
@@ -52,7 +51,7 @@ EMAIL_COPY = {
         "approved_title": "¡Tu cuenta fue aprobada!",
         "approved_greeting": "Hola {name},",
         "approved_body": (
-            "Ya podés empezar a usar Commission Calculator."
+            "Ya podés empezar a usar {brand_name}."
         ),
         "approved_org_label": "Inmobiliaria:",
         "approved_cta": "Iniciar sesión",
@@ -60,7 +59,7 @@ EMAIL_COPY = {
         "rejected_title": "Actualización sobre tu solicitud",
         "rejected_greeting": "Hola {name},",
         "rejected_body": (
-            "Tu solicitud para acceder a Commission Calculator "
+            "Tu solicitud para acceder a {brand_name} "
             "fue rechazada por tu inmobiliaria."
         ),
         "rejected_reason_label": "Motivo",
@@ -92,7 +91,7 @@ EMAIL_COPY = {
         "approved_title": "Your account was approved!",
         "approved_greeting": "Hi {name},",
         "approved_body": (
-            "You can start using Commission Calculator now."
+            "You can start using {brand_name} now."
         ),
         "approved_org_label": "Brokerage:",
         "approved_cta": "Sign in",
@@ -100,7 +99,7 @@ EMAIL_COPY = {
         "rejected_title": "Update on your request",
         "rejected_greeting": "Hi {name},",
         "rejected_body": (
-            "Your request to access Commission Calculator "
+            "Your request to access {brand_name} "
             "was rejected by your brokerage."
         ),
         "rejected_reason_label": "Reason",
@@ -117,13 +116,6 @@ EMAIL_COPY = {
         "reset_cta": "Reset password",
     },
 }
-
-
-def get_app_base_url():
-    return os.environ.get(
-        "APP_BASE_URL",
-        "http://127.0.0.1:5000",
-    ).rstrip("/")
 
 
 def get_email_logo_url():
@@ -154,7 +146,7 @@ def _brand_context(language, subject):
     return {
         "language": language,
         "subject": subject,
-        "brand_name": BRAND_NAME,
+        "brand_name": get_brand_name(),
         "footer_tagline": copy["footer_tagline"],
         "logo_url": get_email_logo_url(),
     }
@@ -260,13 +252,13 @@ def send_verification_code_email(to_email, code, language="es"):
 
     subject = copy["verify_subject"]
     text_body = (
-        f"{BRAND_NAME}\n\n"
+        f"{get_brand_name()}\n\n"
         f"{copy['verify_title']}\n\n"
         f"{copy['verify_intro']}\n\n"
         f"{code_text}\n\n"
         f"{copy['verify_expiry']}\n"
         f"{copy['verify_ignore']}\n\n"
-        f"{BRAND_NAME}\n"
+        f"{get_brand_name()}\n"
         f"{copy['footer_tagline']}\n"
     )
 
@@ -323,13 +315,16 @@ def send_registration_approved_email(
         else ""
     )
 
-    text_lines = [BRAND_NAME, "", copy["approved_title"], ""]
+    brand = get_brand_name()
+    approved_body = copy["approved_body"].format(brand_name=brand)
+
+    text_lines = [brand, "", copy["approved_title"], ""]
 
     if greeting:
         text_lines.append(greeting)
         text_lines.append("")
 
-    text_lines.append(copy["approved_body"])
+    text_lines.append(approved_body)
 
     if org_name:
         text_lines.append("")
@@ -341,7 +336,7 @@ def send_registration_approved_email(
         "",
         f"{copy['approved_cta']}: {login_url}",
         "",
-        BRAND_NAME,
+        get_brand_name(),
         copy["footer_tagline"],
         "",
     ])
@@ -352,7 +347,7 @@ def send_registration_approved_email(
         **_brand_context(language, subject),
         title=copy["approved_title"],
         greeting=greeting,
-        body_text=copy["approved_body"],
+        body_text=approved_body,
         organization_name=org_name or None,
         organization_label=copy["approved_org_label"],
         cta_url=login_url,
@@ -385,13 +380,16 @@ def send_registration_rejected_email(
         else ""
     )
 
-    text_lines = [BRAND_NAME, "", copy["rejected_title"], ""]
+    brand = get_brand_name()
+    rejected_body = copy["rejected_body"].format(brand_name=brand)
+
+    text_lines = [brand, "", copy["rejected_title"], ""]
 
     if greeting:
         text_lines.append(greeting)
         text_lines.append("")
 
-    text_lines.append(copy["rejected_body"])
+    text_lines.append(rejected_body)
 
     if reason_text:
         text_lines.append("")
@@ -401,7 +399,7 @@ def send_registration_rejected_email(
 
     text_lines.extend([
         "",
-        BRAND_NAME,
+        get_brand_name(),
         copy["footer_tagline"],
         "",
     ])
@@ -412,7 +410,7 @@ def send_registration_rejected_email(
         **_brand_context(language, subject),
         title=copy["rejected_title"],
         greeting=greeting,
-        body_text=copy["rejected_body"],
+        body_text=rejected_body,
         reason=reason_text or None,
         reason_label=copy["rejected_reason_label"],
     )
@@ -437,13 +435,13 @@ def send_password_reset_email(
 
     subject = copy["reset_subject"]
     text_body = (
-        f"{BRAND_NAME}\n\n"
+        f"{get_brand_name()}\n\n"
         f"{copy['reset_title']}\n\n"
         f"{copy['reset_intro']}\n\n"
         f"{reset_url}\n\n"
         f"{copy['reset_expiry']}\n"
         f"{copy['reset_ignore']}\n\n"
-        f"{BRAND_NAME}\n"
+        f"{get_brand_name()}\n"
         f"{copy['footer_tagline']}\n"
     )
 

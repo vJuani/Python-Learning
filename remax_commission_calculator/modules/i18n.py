@@ -1,5 +1,7 @@
 import re
 
+from modules.branding import get_brand_name, get_brand_footer
+
 SUPPORTED_LANGUAGES = (
     "es",
     "en"
@@ -9,8 +11,8 @@ DEFAULT_LANGUAGE = "es"
 
 TRANSLATIONS = {
     "es": {
-        "app_title": "Commission Calculator",
-        "app_footer": "Commission Calculator — Panel Web",
+        "app_title": "JRH One",
+        "app_footer": "JRH One — Panel Web",
         "app_slogan": "Calculá. Gestioná. Crecé.",
         "nav_dashboard": "Panel",
         "nav_agents": "Agentes",
@@ -479,7 +481,7 @@ TRANSLATIONS = {
         "billing_non_fiscal_badge": "BORRADOR — NO FISCAL",
         "billing_internal_notice": "Documento interno. No es una factura fiscal ni tiene CAE.",
         "billing_empty_pending": "No tenés operaciones pendientes de facturar.",
-        "billing_empty_invoices_agent": "Todavía no emitiste facturas desde Commission Calculator.",
+        "billing_empty_invoices_agent": "Todavía no emitiste facturas desde {brand_name}.",
         "billing_empty_invoices_staff": "No encontramos facturas para estos filtros.",
         "billing_invoice": "Factura",
         "billing_facturar": "Facturar",
@@ -1433,8 +1435,8 @@ TRANSLATIONS = {
         "month_12": "Diciembre",
     },
     "en": {
-        "app_title": "Commission Calculator",
-        "app_footer": "Commission Calculator — Web Dashboard",
+        "app_title": "JRH One",
+        "app_footer": "JRH One — Web Dashboard",
         "app_slogan": "Calculate. Manage. Grow.",
         "nav_dashboard": "Dashboard",
         "nav_agents": "Agents",
@@ -1903,7 +1905,7 @@ TRANSLATIONS = {
         "billing_non_fiscal_badge": "DRAFT — NON-FISCAL",
         "billing_internal_notice": "Internal document. Not a fiscal invoice and has no CAE.",
         "billing_empty_pending": "You have no operations pending to invoice.",
-        "billing_empty_invoices_agent": "You have not created invoices in Commission Calculator yet.",
+        "billing_empty_invoices_agent": "You have not created invoices in {brand_name} yet.",
         "billing_empty_invoices_staff": "No invoices match these filters.",
         "billing_invoice": "Invoice",
         "billing_facturar": "Invoice",
@@ -2959,6 +2961,15 @@ def normalize_language(language):
 
 def translate(key, language=DEFAULT_LANGUAGE, **kwargs):
     language = normalize_language(language)
+
+    if key == "app_title":
+        return get_brand_name()
+
+    if key == "app_footer":
+        return get_brand_footer(language)
+
+    kwargs.setdefault("brand_name", get_brand_name())
+
     catalog = TRANSLATIONS.get(
         language,
         TRANSLATIONS[DEFAULT_LANGUAGE]

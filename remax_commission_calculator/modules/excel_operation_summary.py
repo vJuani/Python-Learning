@@ -18,7 +18,7 @@ from openpyxl.styles import (
 from openpyxl.utils import get_column_letter
 
 
-# Brand palette (Commission Calculator)
+# Brand palette (JRH One)
 NAVY = "001838"
 ACCENT = "0860C8"
 ACCENT_SOFT = "E8F1FC"

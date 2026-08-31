@@ -44,17 +44,19 @@ def main() -> int:
     ).strip().lower()
 
     from modules.email_providers import reset_email_provider_cache
+    from modules.branding import get_brand_name
     from modules.email_delivery import send_transactional_email
 
     reset_email_provider_cache()
 
     backend = os.environ.get("EMAIL_BACKEND", "console")
+    brand = get_brand_name()
     print(f"Backend: {backend}")
     print(f"Sending test email to: {recipient}")
 
     send_transactional_email(
         recipient,
-        "Commission Calculator — test email",
+        f"{brand} — test email",
         (
             "This is a test message from scripts/test_email_delivery.py\n"
             "If you received this, Resend HTTP API is configured correctly."

@@ -9,6 +9,11 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
+from modules.branding import (
+    DEFAULT_BRAND_LOGO,
+    get_brand_name,
+    resolve_brand_logo_path,
+)
 from modules.config import BASE_DIR
 from modules.database.operation_documents_repository import (
     DOC_TYPE_LABEL_KEYS,
@@ -20,11 +25,6 @@ from modules.database.organization_settings_repository import (
 from modules.database.users_repository import get_user_by_id
 from modules.i18n import translate
 
-
-BRAND_APP_NAME = "Commission Calculator"
-DEFAULT_BRAND_LOGO = (
-    BASE_DIR / "static" / "images" / "logo-horizontal.png"
-)
 ZERO = Decimal("0")
 
 
@@ -100,10 +100,7 @@ def _brand_logo_path(organization_logo_path):
     if org_logo is not None:
         return org_logo
 
-    if DEFAULT_BRAND_LOGO.is_file():
-        return DEFAULT_BRAND_LOGO
-
-    return None
+    return resolve_brand_logo_path()
 
 
 def _doc_type_label(doc_type, language):
@@ -482,7 +479,7 @@ def build_operation_summary(
             language,
         ),
         "brand": {
-            "app_name": BRAND_APP_NAME,
+            "app_name": get_brand_name(),
             "slogan": _t("app_slogan", language),
             "organization_name": organization_name,
             "logo_path": str(logo_path) if logo_path else None,
@@ -700,7 +697,7 @@ def load_operation_summary(
 
 
 __all__ = [
-    "BRAND_APP_NAME",
+    "DEFAULT_BRAND_LOGO",
     "build_billing_lines",
     "build_commission_lines",
     "build_download_basename",

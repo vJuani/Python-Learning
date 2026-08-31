@@ -530,6 +530,62 @@ def inject_organization_branding():
     }
 
 
+@app.context_processor
+def inject_product_branding():
+    from modules.branding import (
+        get_app_domain,
+        get_brand_name,
+        get_logo_full_rel,
+        get_logo_horizontal_rel,
+        get_logo_icon_rel,
+    )
+
+    return {
+        "brand_name": get_brand_name(),
+        "brand_domain": get_app_domain(),
+        "brand_logo_horizontal_url": url_for(
+            "static",
+            filename=get_logo_horizontal_rel(),
+        ),
+        "brand_logo_full_url": url_for(
+            "static",
+            filename=get_logo_full_rel(),
+        ),
+        "brand_logo_icon_url": url_for(
+            "static",
+            filename=get_logo_icon_rel(),
+        ),
+    }
+
+
+@app.get("/manifest.webmanifest")
+def web_manifest():
+    from modules.branding import (
+        get_brand_name,
+        get_logo_icon_rel,
+    )
+
+    return {
+        "name": get_brand_name(),
+        "short_name": get_brand_name(),
+        "description": get_brand_name(),
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#ffffff",
+        "theme_color": "#111827",
+        "icons": [
+            {
+                "src": url_for(
+                    "static",
+                    filename=get_logo_icon_rel(),
+                ),
+                "sizes": "512x512",
+                "type": "image/jpeg",
+            }
+        ],
+    }
+
+
 @app.template_filter("money")
 def money_filter(amount, currency="USD"):
     return format_money(

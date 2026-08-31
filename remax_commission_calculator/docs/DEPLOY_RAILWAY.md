@@ -62,7 +62,9 @@ upload a `.env` file.
 |----------|----------------|
 | `APP_ENV` | `staging` |
 | `SECRET_KEY` | strong random hex (required; rejects empty / `dev-secret-key`) |
-| `APP_BASE_URL` | public HTTPS URL of the service (e.g. `https://….up.railway.app`) |
+| `APP_BASE_URL` | public HTTPS URL of the service (e.g. `https://app.jrhone.com`) |
+| `APP_BRAND_NAME` | `JRH One` (visible product name) |
+| `APP_DOMAIN` | `jrhone.com` (metadata / links) |
 | `DATABASE_PATH` | `/data/commission.db` |
 | `PRIVATE_UPLOAD_ROOT` | `/data/uploads` |
 

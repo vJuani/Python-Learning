@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="application-name" content="{{ brand_name }}">
+    <meta name="apple-mobile-web-app-title" content="{{ brand_name }}">
+    <meta name="theme-color" content="#111827">
     <script>
         (function () {
             try {
@@ -17,11 +20,12 @@
             }
         }());
     </script>
-    <title>{% block title %}{{ t('app_title') }}{% endblock %}</title>
+    <title>{% block title %}{{ brand_name }}{% endblock %}</title>
+    <link rel="manifest" href="{{ url_for('web_manifest') }}">
     <link
         rel="icon"
-        type="image/png"
-        href="{{ url_for('static', filename='images/logo-icon.png') }}"
+        type="image/jpeg"
+        href="{{ brand_logo_icon_url }}"
     >
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% if organization_branding_css %}
@@ -43,8 +47,8 @@
             <a href="{{ url_for('dashboard') }}" class="app-rail-brand">
                 <span class="site-brand-logo-shell">
                     <img
-                        src="{% if organization_logo_url %}{{ organization_logo_url }}{% else %}{{ url_for('static', filename='images/logo-horizontal.png') }}{% endif %}"
-                        alt="{{ t('app_title') }}"
+                        src="{{ organization_logo_url or brand_logo_horizontal_url }}"
+                        alt="{{ brand_name }}"
                         class="site-brand-logo"
                     >
                 </span>
@@ -89,8 +93,8 @@
                 >
                     <span class="site-brand-logo-shell">
                         <img
-                            src="{% if organization_logo_url %}{{ organization_logo_url }}{% else %}{{ url_for('static', filename='images/logo-horizontal.png') }}{% endif %}"
-                            alt="{{ t('app_title') }}"
+                            src="{{ organization_logo_url or brand_logo_horizontal_url }}"
+                            alt="{{ brand_name }}"
                             class="site-brand-logo"
                         >
                     </span>
@@ -101,7 +105,7 @@
             <nav id="main-nav" class="main-nav header-zone header-zone-center" aria-label="{{ t('nav_aria') }}">
                 <div class="mobile-drawer-brand hide-desktop">
                     <div class="mobile-drawer-brand-text">
-                        <strong>{{ t('app_title') }}</strong>
+                        <strong>{{ brand_name }}</strong>
                         <span>{{ t('app_slogan') }}</span>
                     </div>
                 </div>

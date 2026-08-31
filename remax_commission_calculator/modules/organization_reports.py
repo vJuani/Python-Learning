@@ -21,7 +21,7 @@ from modules.database.reports_repository import (
 )
 from modules.formatting import CURRENCIES
 from modules.i18n import translate
-from modules.operation_summary import DEFAULT_BRAND_LOGO
+from modules.branding import DEFAULT_BRAND_LOGO, resolve_brand_logo_path
 from modules.validators import (
     AGENT_TYPES,
     JURISDICTIONS,
@@ -93,10 +93,7 @@ def _brand_logo_path(organization_logo_path):
     if org_logo is not None:
         return org_logo
 
-    if DEFAULT_BRAND_LOGO.is_file():
-        return DEFAULT_BRAND_LOGO
-
-    return None
+    return resolve_brand_logo_path()
 
 
 def _t(key, language, **kwargs):

@@ -6,6 +6,7 @@ from openpyxl.chart import BarChart, Reference
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 
+from modules.branding import get_brand_name
 from modules.dashboard import (
     calculate_dashboard_metrics,
     get_agent_ranking
@@ -223,9 +224,7 @@ def export_excel(
         index=0
     )
 
-    dashboard["A1"] = (
-        "Commission Calculator Report"
-    )
+    dashboard["A1"] = f"{get_brand_name()} Report"
 
     dashboard["A1"].font = Font(
         bold=True,
