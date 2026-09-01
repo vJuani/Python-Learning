@@ -1,382 +1,209 @@
 {% extends "base.html" %}
 
-{% block title %}{{ t('operations_title') }} | {{ t('app_title') }}{% endblock %}
+{% block body_class %}is-operations-page {% endblock %}
 
-{% block sidebar %}
-<div class="sidebar-panel">
-    <h3 class="sidebar-title">{{ t('sidebar_filters') }}</h3>
+{% block title %}{{ t('operations_page_title') }} | {{ t('app_title') }}{% endblock %}
 
-    {% include "_sidebar_search.html" %}
-
-    {% if filter_errors %}
-    <div class="flash-messages">
-        {% for error in filter_errors %}
-        <p class="flash-message flash-error">{{ error }}</p>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    <form class="sidebar-filter-form filter-form" method="get" action="{{ url_for('operations_list') }}">
-        <div class="filter-grid">
-            <div class="form-group">
-                <label for="operation_id">{{ t('operation_id') }}</label>
-                <input
-                    type="text"
-                    id="operation_id"
-                    name="operation_id"
-                    class="form-input"
-                    placeholder="{{ t('placeholder_com_id') }}"
-                    value="{{ filters.operation_id }}"
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="agent_id">{{ t('agent') }}</label>
-                <select id="agent_id" name="agent_id" class="form-input">
-                    <option value="">{{ t('all_agents') }}</option>
-                    {% for agent in agents %}
-                    <option
-                        value="{{ agent.id }}"
-                        {% if filters.agent_id == agent.id|string %}selected{% endif %}
-                    >{{ agent.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="property">{{ t('property') }}</label>
-                <input
-                    type="text"
-                    id="property"
-                    name="property"
-                    class="form-input"
-                    placeholder="{{ t('placeholder_address') }}"
-                    value="{{ filters.property }}"
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="jurisdiction">{{ t('jurisdiction') }}</label>
-                <select id="jurisdiction" name="jurisdiction" class="form-input">
-                    <option value="">{{ t('all_jurisdictions') }}</option>
-                    {% for jurisdiction in jurisdictions %}
-                    <option
-                        value="{{ jurisdiction }}"
-                        {% if filters.jurisdiction == jurisdiction %}selected{% endif %}
-                    >
-                        {{ jurisdiction }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="min_amount">{{ t('min_amount') }}</label>
-                <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    id="min_amount"
-                    name="min_amount"
-                    class="form-input"
-                    placeholder="{{ t('placeholder_amount') }}"
-                    value="{{ filters.min_amount }}"
-                >
-                <small class="field-help">{{ t('usd_equiv_min_help') }}</small>
-            </div>
-
-            <div class="form-group">
-                <label for="max_amount">{{ t('max_amount') }}</label>
-                <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    id="max_amount"
-                    name="max_amount"
-                    class="form-input"
-                    placeholder="{{ t('placeholder_amount') }}"
-                    value="{{ filters.max_amount }}"
-                >
-                <small class="field-help">{{ t('usd_equiv_max_help') }}</small>
-            </div>
-
-            <div class="form-group">
-                <label for="date_from">{{ t('start_date') }}</label>
-                <input
-                    type="text"
-                    id="date_from"
-                    name="date_from"
-                    class="form-input"
-                    placeholder="{{ t('placeholder_date') }}"
-                    value="{{ filters.date_from }}"
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="date_to">{{ t('end_date') }}</label>
-                <input
-                    type="text"
-                    id="date_to"
-                    name="date_to"
-                    class="form-input"
-                    placeholder="{{ t('placeholder_date') }}"
-                    value="{{ filters.date_to }}"
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="was_invoiced">{{ t('invoiced') }}</label>
-                <select id="was_invoiced" name="was_invoiced" class="form-input">
-                    <option value="">{{ t('all') }}</option>
-                    <option value="yes" {% if filters.was_invoiced == "yes" %}selected{% endif %}>{{ t('yes') }}</option>
-                    <option value="no" {% if filters.was_invoiced == "no" %}selected{% endif %}>{{ t('no') }}</option>
-                </select>
-                <small class="field-help">{{ t('invoiced_help') }}</small>
-            </div>
-
-            <div class="form-group">
-                <label for="status">{{ t('status') }}</label>
-                <select id="status" name="status" class="form-input">
-                    <option value="">{{ t('all') }}</option>
-                    {% for status in operation_statuses %}
-                    <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>
-                        {{ t('status_' ~ status) }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-
-        <div class="sidebar-filter-actions">
-            <button type="submit" class="btn btn-primary btn-block">{{ t('sidebar_apply_filters') }}</button>
-            <a href="{{ url_for('operations_list') }}" class="btn btn-secondary btn-block">{{ t('clear_filters') }}</a>
-        </div>
-    </form>
-
-    <p class="sidebar-count">{{ operation_count }} {{ t('found') }}</p>
-</div>
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/operations-page.css') }}">
 {% endblock %}
 
 {% block content %}
-<section class="page-header page-header-ops">
-    <div class="page-header-text">
-        <h2>{{ t('operations_title') }}</h2>
-        <p class="results-meta">{{ t('results_found', count=operation_count) }}</p>
-    </div>
-
-    <div class="page-actions page-actions-split">
-        {% if can_write() %}
-        {% if can_create_operations %}
-        <a href="{{ url_for('operations_new') }}" class="btn btn-primary">+ {{ t('new_operation') }}</a>
-        {% else %}
-        <span class="btn btn-secondary disabled-hint">+ {{ t('new_operation') }}</span>
-        {% endif %}
-        {% endif %}
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
-    </div>
-</section>
-
-<section class="panel mobile-inline-filters hide-desktop">
-    <form class="mobile-inline-filters-form" method="get" action="{{ url_for('operations_list') }}">
-        <div class="form-group">
-            <label class="visually-hidden" for="mobile-ops-search">{{ t('search') }}</label>
-            <input
-                type="search"
-                id="mobile-ops-search"
-                name="property"
-                class="form-input"
-                placeholder="{{ t('operations_mobile_search_placeholder') }}"
-                value="{{ filters.property }}"
-            >
+<div class="operations-page">
+    <header class="operations-page__header">
+        <div>
+            <h1>{{ t('operations_page_title') }}</h1>
+            <p>{{ t('operations_page_subtitle') }}</p>
         </div>
-        <div class="mobile-inline-filters-row">
-            <div class="form-group">
-                <label for="mobile-ops-agent_id">{{ t('agent') }}</label>
-                <select id="mobile-ops-agent_id" name="agent_id" class="form-input">
-                    <option value="">{{ t('all_agents') }}</option>
-                    {% for agent in agents %}
-                    <option
-                        value="{{ agent.id }}"
-                        {% if filters.agent_id == agent.id|string %}selected{% endif %}
-                    >{{ agent.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="mobile-ops-jurisdiction">{{ t('jurisdiction') }}</label>
-                <select id="mobile-ops-jurisdiction" name="jurisdiction" class="form-input">
-                    <option value="">{{ t('all_jurisdictions') }}</option>
-                    {% for jurisdiction in jurisdictions %}
-                    <option
-                        value="{{ jurisdiction }}"
-                        {% if filters.jurisdiction == jurisdiction %}selected{% endif %}
-                    >{{ jurisdiction }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-        {% if filters.operation_id %}<input type="hidden" name="operation_id" value="{{ filters.operation_id }}">{% endif %}
-        {% if filters.min_amount %}<input type="hidden" name="min_amount" value="{{ filters.min_amount }}">{% endif %}
-        {% if filters.max_amount %}<input type="hidden" name="max_amount" value="{{ filters.max_amount }}">{% endif %}
-        {% if filters.date_from %}<input type="hidden" name="date_from" value="{{ filters.date_from }}">{% endif %}
-        {% if filters.date_to %}<input type="hidden" name="date_to" value="{{ filters.date_to }}">{% endif %}
-        {% if filters.was_invoiced %}<input type="hidden" name="was_invoiced" value="{{ filters.was_invoiced }}">{% endif %}
-        {% if filters.status %}<input type="hidden" name="status" value="{{ filters.status }}">{% endif %}
-        <button type="submit" class="btn btn-primary btn-block">{{ t('sidebar_apply_filters') }}</button>
-    </form>
-</section>
+        {% if can_write() and can_create_operations %}
+        <a href="{{ url_for('operations_new') }}" class="operations-btn operations-btn--primary">+ {{ t('new_operation') }}</a>
+        {% endif %}
+    </header>
 
-{% if can_write() and not can_create_operations %}
-<section class="panel">
-    <div class="empty-state">
-        <p class="empty-state-title">{{ t('setup_required') }}</p>
-        <p class="empty-state-text">
-            {{ t('setup_required_text') }}
-            {% if is_admin() %}
-            <a href="{{ url_for('agents_list') }}">{{ t('go_to_agents') }}</a>
-            {{ t('or') }}
-            {% endif %}
-            <a href="{{ url_for('properties_list') }}">{{ t('go_to_properties') }}</a>.
-        </p>
-    </div>
-</section>
-{% endif %}
-
-<section class="panel panel-list">
-    <div class="panel-header hide-mobile">
-        <h3>{{ t('operation_list') }}</h3>
-    </div>
-
-    {% if operations %}
-    <div class="entity-card-list hide-desktop">
-        {% for operation in operations %}
-        {% set agent_parts = operation.agent.split() %}
-        <article class="entity-card entity-card-operation">
-            <div class="entity-card-heading">
-                <div class="entity-card-heading-text">
-                    <h4 class="entity-card-title">{{ operation.property }}</h4>
-                    {% if operation.property_external_id %}
-                    <span class="entity-external-id">#{{ operation.property_external_id }}</span>
-                    {% endif %}
-                </div>
-                <span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span>
-            </div>
-            <dl class="entity-card-metrics entity-card-metrics-ops">
-                <div>
-                    <dt>{{ t('agent') }}</dt>
-                    <dd class="entity-agent-inline">
-                        <span class="entity-avatar entity-avatar-sm" aria-hidden="true">
-                            {{ agent_parts[0][0:1]|upper }}{% if agent_parts|length > 1 %}{{ agent_parts[1][0:1]|upper }}{% endif %}
-                        </span>
-                        {{ operation.agent }}
-                    </dd>
-                </div>
-                <div>
-                    <dt>{{ t('property_value_label') }}</dt>
-                    <dd class="money">{{ operation.sale_price|money }}</dd>
-                </div>
-                <div>
-                    <dt>{{ t('date') }}</dt>
-                    <dd>{% if operation.date %}{{ operation.date|short_date }}{% else %}—{% endif %}</dd>
-                </div>
-                <div>
-                    <dt>{{ t('total_commission_label') }}</dt>
-                    <dd class="money money-emphasis">{{ operation.total_commission|money }}</dd>
-                </div>
-            </dl>
-            <div class="entity-card-footer">
-                <a
-                    href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
-                    class="btn btn-small btn-outline entity-card-cta-btn"
-                >{{ t('view_operation') }} →</a>
-            </div>
-            {% if is_admin() or (is_agent() and operation.status in ['draft', 'rejected']) %}
-            <div class="entity-card-actions">
-                <a
-                    href="{{ url_for('operations_edit', operation_id=operation.db_id) }}"
-                    class="btn btn-small btn-edit"
-                >{{ t('edit') }}</a>
-            </div>
-            {% endif %}
-        </article>
-        {% endfor %}
-    </div>
-
-    <div class="table-wrapper hide-mobile">
-        <table class="table-dense">
-            <thead>
-                <tr>
-                    <th>{{ t('property') }}</th>
-                    <th>{{ t('agent') }}</th>
-                    <th>{{ t('property_value_label') }}</th>
-                    <th>{{ t('total_commission_label') }}</th>
-                    <th>{{ t('status') }}</th>
-                    <th>{{ t('date') }}</th>
-                    <th class="col-actions">{{ t('actions') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for operation in operations %}
-                <tr>
-                    <td>
-                        <div class="cell-stack">
-                            <strong>{{ operation.property }}</strong>
-                            {% if operation.property_external_id %}
-                            <span class="entity-external-id">#{{ operation.property_external_id }}</span>
-                            {% endif %}
-                        </div>
-                    </td>
-                    <td>{{ operation.agent }}</td>
-                    <td class="money">{{ operation.sale_price|money }}</td>
-                    <td class="money money-emphasis">{{ operation.total_commission|money }}</td>
-                    <td><span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span></td>
-                    <td>{% if operation.date %}{{ operation.date|short_date }}{% endif %}</td>
-                    <td class="table-actions col-actions">
-                        <a
-                            href="{{ url_for('operations_detail', operation_id=operation.db_id) }}"
-                            class="btn btn-small btn-secondary"
-                        >{{ t('view') }}</a>
-                        {% if is_admin() or (is_agent() and operation.status in ['draft', 'rejected']) %}
-                        <a
-                            href="{{ url_for('operations_edit', operation_id=operation.db_id) }}"
-                            class="btn btn-small btn-edit"
-                        >{{ t('edit') }}</a>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="empty-state">
-        <p class="empty-state-title">
-            {% if filter_errors %}
-            {{ t('fix_filter_values') }}
-            {% elif filters_active %}
-            {{ t('no_operations_match_filters') }}
-            {% elif can_create_operations %}
-            {{ t('empty_operations_title') }}
-            {% else %}
-            {{ t('no_operations_yet') }}
-            {% endif %}
-        </p>
-        <p class="empty-state-text">
-            {% if filter_errors %}
-            {{ t('correct_errors_retry') }}
-            {% elif filters_active %}
-            {{ t('adjust_filters') }}
-            {% elif not can_write() %}
-            {% elif can_create_operations %}
-            {{ t('empty_operations_hint') }}
-            <a href="{{ url_for('operations_new') }}">{{ t('create_first_operation') }}</a>
-            {% else %}
-            {{ t('create_agent_property_first') }}
-            {% endif %}
-        </p>
-    </div>
+    {% if filter_errors %}
+    <div class="operations-flash">{% for error in filter_errors %}<p>{{ error }}</p>{% endfor %}</div>
     {% endif %}
 
-    {% include "_pagination.html" %}
-</section>
+    <section class="operations-kpis" aria-label="{{ t('operations_kpis_aria') }}">
+        <article class="operations-kpi-card">
+            <span class="operations-kpi-card__icon operations-kpi-card__icon--active" aria-hidden="true"></span>
+            <div>
+                <span class="operations-kpi-card__label">{{ t('operations_kpi_active') }}</span>
+                <strong>{{ operations_panel.kpis.active }}</strong>
+            </div>
+        </article>
+        <article class="operations-kpi-card">
+            <span class="operations-kpi-card__icon operations-kpi-card__icon--reserved" aria-hidden="true"></span>
+            <div>
+                <span class="operations-kpi-card__label">{{ t('operations_kpi_reserved') }}</span>
+                <strong>{{ operations_panel.kpis.reserved }}</strong>
+            </div>
+        </article>
+        <article class="operations-kpi-card">
+            <span class="operations-kpi-card__icon operations-kpi-card__icon--closed" aria-hidden="true"></span>
+            <div>
+                <span class="operations-kpi-card__label">{{ t('operations_kpi_closed') }}</span>
+                <strong>{{ operations_panel.kpis.closed }}</strong>
+            </div>
+        </article>
+        <article class="operations-kpi-card">
+            <span class="operations-kpi-card__icon operations-kpi-card__icon--pending" aria-hidden="true"></span>
+            <div>
+                <span class="operations-kpi-card__label">{{ t('operations_kpi_pending') }}</span>
+                <strong>{{ operations_panel.kpis.pending }}</strong>
+            </div>
+        </article>
+    </section>
+
+    <section class="operations-card">
+        <form class="operations-toolbar" method="get" action="{{ url_for('operations_list') }}">
+            <input type="hidden" name="tab" value="{{ operations_panel.filters.tab }}">
+            <details class="operations-toolbar__more">
+                <summary class="operations-btn operations-btn--ghost">{{ t('operations_advanced_filters') }}</summary>
+                <div class="operations-toolbar__more-panel">
+                    <label><span>{{ t('property') }}</span><input type="search" name="q" value="{{ operations_panel.filters.q }}"></label>
+                    <label><span>{{ t('agent') }}</span>
+                        <select name="agent_id">
+                            <option value="">{{ t('all_agents') }}</option>
+                            {% for agent in operations_panel.agent_options %}
+                            <option value="{{ agent.id }}" {% if operations_panel.filters.agent_id|string == agent.id|string %}selected{% endif %}>{{ agent.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label><span>{{ t('operations_col_stage') }}</span>
+                        <select name="stage">
+                            <option value="">{{ t('all') }}</option>
+                            <option value="progress" {% if operations_panel.filters.stage == 'progress' %}selected{% endif %}>{{ t('dashboard_stage_negotiation') }}</option>
+                            <option value="reserved" {% if operations_panel.filters.stage == 'reserved' %}selected{% endif %}>{{ t('dashboard_stage_reservation') }}</option>
+                            <option value="closed" {% if operations_panel.filters.stage == 'closed' %}selected{% endif %}>{{ t('dashboard_stage_closing') }}</option>
+                        </select>
+                    </label>
+                    <label><span>{{ t('status') }}</span>
+                        <select name="status">
+                            <option value="">{{ t('all') }}</option>
+                            {% for status in operation_statuses %}
+                            <option value="{{ status }}" {% if operations_panel.filters.status == status %}selected{% endif %}>{{ t('status_' ~ status) }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label><span>{{ t('operations_col_type') }}</span>
+                        <select name="type">
+                            <option value="">{{ t('all') }}</option>
+                            <option value="sale" {% if operations_panel.filters.type == 'sale' %}selected{% endif %}>{{ t('operations_type_sale') }}</option>
+                            <option value="rental" {% if operations_panel.filters.type == 'rental' %}selected{% endif %}>{{ t('operations_type_rental') }}</option>
+                        </select>
+                    </label>
+                    <label><span>{{ t('operations_col_currency') }}</span>
+                        <select name="currency">
+                            <option value="">{{ t('all') }}</option>
+                            {% for currency in operations_panel.currencies %}
+                            <option value="{{ currency }}" {% if operations_panel.filters.currency == currency %}selected{% endif %}>{{ currency }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+            </details>
+            <button type="submit" class="operations-btn operations-btn--ghost">{{ t('filter') }}</button>
+            <a href="{{ url_for('operations_list') }}" class="operations-btn operations-btn--ghost">{{ t('operations_clear_filters') }}</a>
+        </form>
+
+        <nav class="operations-tabs" aria-label="{{ t('operations_tabs_aria') }}">
+            {% for tab in operations_panel.tabs %}
+            <a href="{{ url_for('operations_list', tab=tab.key, q=operations_panel.filters.q, agent_id=operations_panel.filters.agent_id, stage=operations_panel.filters.stage, status=operations_panel.filters.status, type=operations_panel.filters.type, currency=operations_panel.filters.currency) }}" class="operations-tab{% if operations_panel.filters.tab == tab.key %} is-active{% endif %}">
+                {{ tab.label }} ({{ tab.count }})
+            </a>
+            {% endfor %}
+        </nav>
+
+        {% if operations_panel.rows %}
+        <div class="table-wrapper">
+            <table class="operations-table">
+                <thead>
+                    <tr>
+                        <th>{{ t('operations_col_id') }}</th>
+                        <th>{{ t('property') }}</th>
+                        <th>{{ t('operations_col_client') }}</th>
+                        <th>{{ t('agent') }}</th>
+                        <th>{{ t('operations_col_type') }}</th>
+                        <th>{{ t('operations_col_currency') }}</th>
+                        <th>{{ t('operations_col_commission') }}</th>
+                        <th>{{ t('operations_col_stage') }}</th>
+                        <th>{{ t('status') }}</th>
+                        <th>{{ t('operations_col_date') }}</th>
+                        <th>{{ t('actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in operations_panel.rows %}
+                    <tr>
+                        <td><a href="{{ url_for('operations_detail', operation_id=row.db_id) }}" class="operations-id-link">{{ row.display_id }}</a></td>
+                        <td>
+                            <strong>{{ row.property_title }}</strong>
+                            <span class="operations-subtext">{{ row.property_subtitle }}</span>
+                        </td>
+                        <td>{{ row.client_name }}</td>
+                        <td>
+                            <div class="operations-agent-cell">
+                                <span class="operations-avatar">{{ row.agent_initials }}</span>
+                                <span>{{ row.agent }}</span>
+                            </div>
+                        </td>
+                        <td><span class="operations-type operations-type--{{ row.type_tone }}">{{ row.type_label }}</span></td>
+                        <td>{{ row.currency }}</td>
+                        <td class="money">{{ row.total_commission|money }}</td>
+                        <td><span class="operations-stage operations-stage--{{ row.stage_tone }}">{{ row.stage_label }}</span></td>
+                        <td><span class="operations-status operations-status--{{ row.workflow_status.tone }}">{{ row.workflow_status.label }}</span></td>
+                        <td>{{ row.date }}</td>
+                        <td>
+                            <a href="{{ url_for('operations_detail', operation_id=row.db_id) }}" class="operations-action" title="{{ t('view') }}">👁</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <footer class="operations-pagination">
+            <p>{{ t('operations_pagination_showing', from=operations_panel.pagination.from_row, to=operations_panel.pagination.to_row, total=operations_panel.pagination.total) }}</p>
+            <div class="operations-pagination__controls">
+                {% if operations_panel.pagination.page > 1 %}
+                <a href="{{ url_for('operations_list', page=operations_panel.pagination.page - 1, per_page=operations_panel.pagination.per_page, tab=operations_panel.filters.tab, q=operations_panel.filters.q, agent_id=operations_panel.filters.agent_id, stage=operations_panel.filters.stage, status=operations_panel.filters.status, type=operations_panel.filters.type, currency=operations_panel.filters.currency) }}">‹</a>
+                {% endif %}
+                {% for p in range(1, operations_panel.pagination.total_pages + 1) %}
+                {% if p <= 3 or p == operations_panel.pagination.total_pages or (p >= operations_panel.pagination.page - 1 and p <= operations_panel.pagination.page + 1) %}
+                <a href="{{ url_for('operations_list', page=p, per_page=operations_panel.pagination.per_page, tab=operations_panel.filters.tab, q=operations_panel.filters.q, agent_id=operations_panel.filters.agent_id, stage=operations_panel.filters.stage, status=operations_panel.filters.status, type=operations_panel.filters.type, currency=operations_panel.filters.currency) }}" class="{% if p == operations_panel.pagination.page %}is-active{% endif %}">{{ p }}</a>
+                {% elif p == 4 and operations_panel.pagination.total_pages > 5 %}<span>…</span>{% endif %}
+                {% endfor %}
+                {% if operations_panel.pagination.page < operations_panel.pagination.total_pages %}
+                <a href="{{ url_for('operations_list', page=operations_panel.pagination.page + 1, per_page=operations_panel.pagination.per_page, tab=operations_panel.filters.tab, q=operations_panel.filters.q, agent_id=operations_panel.filters.agent_id, stage=operations_panel.filters.stage, status=operations_panel.filters.status, type=operations_panel.filters.type, currency=operations_panel.filters.currency) }}">›</a>
+                {% endif %}
+            </div>
+            <label class="operations-pagination__size">
+                {{ t('operations_show') }}
+                <select name="per_page" form="operations-per-page-form" onchange="document.getElementById('operations-per-page-form').submit()">
+                    {% for size in [10, 20, 50] %}
+                    <option value="{{ size }}" {% if operations_panel.pagination.per_page == size %}selected{% endif %}>{{ size }}</option>
+                    {% endfor %}
+                </select>
+                {{ t('operations_per_page') }}
+            </label>
+            <form id="operations-per-page-form" method="get" action="{{ url_for('operations_list') }}" hidden>
+                <input type="hidden" name="tab" value="{{ operations_panel.filters.tab }}">
+                <input type="hidden" name="q" value="{{ operations_panel.filters.q }}">
+                <input type="hidden" name="agent_id" value="{{ operations_panel.filters.agent_id }}">
+                <input type="hidden" name="stage" value="{{ operations_panel.filters.stage }}">
+                <input type="hidden" name="status" value="{{ operations_panel.filters.status }}">
+                <input type="hidden" name="type" value="{{ operations_panel.filters.type }}">
+                <input type="hidden" name="currency" value="{{ operations_panel.filters.currency }}">
+            </form>
+        </footer>
+        {% else %}
+        <div class="operations-empty">
+            {% if filter_errors %}{{ t('fix_filter_values') }}
+            {% elif filters_active %}{{ t('no_operations_match_filters') }}
+            {% else %}{{ t('empty_operations_title') }}{% endif %}
+        </div>
+        {% endif %}
+    </section>
+</div>
 {% endblock %}

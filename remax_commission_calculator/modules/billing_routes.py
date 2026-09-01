@@ -55,6 +55,12 @@ from modules.arca.issuer_config import (
 from modules.billing_issuer_validation import (
     validate_billing_issuer_profile,
 )
+from modules.billing_ai_workspace import (
+    build_billing_ai_workspace,
+    format_preview_amounts,
+    preview_to_workspace,
+)
+from modules.i18n import translate
 from modules.invoice_ai_service import (
     DisambiguationResult,
     INTENT_LIST_PENDING,
@@ -101,6 +107,7 @@ def register_billing_routes(app, *, helpers):
     ]
     require_billing_user = helpers["require_billing_user"]
     flash_i18n = helpers["flash_i18n"]
+    get_current_language = helpers["get_current_language"]
     ensure_operation_scope = helpers[
         "ensure_operation_scope"
     ]
@@ -300,6 +307,61 @@ def register_billing_routes(app, *, helpers):
             is_staff=is_admin(user),
         )
 
+    def _append_billing_chat(role, text, *, text_key=None):
+        messages = session.get("billing_ai_chat") or []
+        entry = {"role": role, "text": text}
+        if text_key:
+            entry["text_key"] = text_key
+        messages.append(entry)
+        session["billing_ai_chat"] = messages[-30:]
+
+    def _billing_ai_workspace_session():
+        return session.get("billing_ai_workspace")
+
+    def _set_billing_ai_workspace(workspace):
+        session["billing_ai_workspace"] = workspace
+
+    def _clear_billing_ai_workspace():
+        session.pop("billing_ai_workspace", None)
+
+    def _resolve_ai_workspace_preview(
+        result,
+        user,
+        organization_id,
+    ):
+        settings = get_organization_settings(organization_id)
+        issuer_mode, issuer_profile_id = _issuer_defaults(
+            user,
+            settings,
+            organization_id,
+        )
+        preview = build_draft_preview_for_side(
+            organization_id,
+            result.operation_id,
+            result.side,
+            user,
+            issuer_mode=issuer_mode,
+            issuer_profile_id=issuer_profile_id,
+        )
+        language = get_current_language()
+        enriched = format_preview_amounts(
+            preview,
+            language=language,
+        )
+        workspace = preview_to_workspace(
+            enriched,
+            operation_id=result.operation_id,
+            side=result.side,
+            language=language,
+        )
+        _set_billing_ai_workspace(workspace)
+        _append_billing_chat(
+            "assistant",
+            translate("billing_ai_preview_ready", language=language),
+            text_key="billing_ai_preview_ready",
+        )
+        return redirect(url_for("billing_list"))
+
     @app.route("/billing")
     @login_required
     def billing_list():
@@ -313,6 +375,7 @@ def register_billing_routes(app, *, helpers):
                 flash_i18n("agent_scope_missing", "error")
                 abort(403)
 
+        view = request.args.get("view", "workspace").strip()
         tab = request.args.get("tab", "pending").strip()
         if tab not in (
             "pending",
@@ -372,8 +435,22 @@ def register_billing_routes(app, *, helpers):
         if not ai_message:
             ai_operation = None
 
+        language = get_current_language()
+        chat_messages = session.get("billing_ai_chat")
+        ai_workspace = build_billing_ai_workspace(
+            language=language,
+            chat_messages=chat_messages,
+            workspace=_billing_ai_workspace_session(),
+            ai_message=ai_message,
+            ai_options=ai_options,
+            ai_operation=ai_operation,
+        )
+        if chat_messages is not None:
+            session["billing_ai_chat"] = ai_workspace["chat_messages"]
+
         return render_template(
             "billing/list.html",
+            view=view,
             invoices=(
                 list_invoices(
                     organization_id,
@@ -396,9 +473,7 @@ def register_billing_routes(app, *, helpers):
             ),
             payment_conditions=PAYMENT_CONDITIONS,
             is_staff=is_admin(user),
-            ai_message=ai_message,
-            ai_options=ai_options,
-            ai_operation=ai_operation,
+            ai_workspace=ai_workspace,
         )
 
     @app.route("/billing/ai/prepare", methods=["POST"])
@@ -410,6 +485,8 @@ def register_billing_routes(app, *, helpers):
         if not text:
             flash_i18n("billing_ai_empty_prompt", "error")
             return redirect(url_for("billing_list"))
+
+        _append_billing_chat("user", text)
 
         context = _billing_ai_context()
         parsed = parse_invoice_intent(
@@ -469,13 +546,20 @@ def register_billing_routes(app, *, helpers):
                 result.side,
             )
             _clear_billing_ai_context()
-            return redirect(
-                url_for(
-                    "billing_prepare",
+            try:
+                return _resolve_ai_workspace_preview(
+                    result,
+                    user,
+                    organization_id,
+                )
+            except InvoicingError as error:
+                _flash_billing_error(
+                    error,
                     operation_id=result.operation_id,
                     side=result.side,
+                    user=user,
                 )
-            )
+                return redirect(url_for("billing_list"))
 
         flash_i18n("billing_ai_not_understood", "error")
         return redirect(url_for("billing_list"))

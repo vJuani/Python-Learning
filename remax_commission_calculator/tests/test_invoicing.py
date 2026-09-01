@@ -583,7 +583,7 @@ class InvoicingV2Tests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertIn(
-            f"/billing/operations/{op_id}/buyer/prepare",
+            "/billing",
             response.headers.get("Location", ""),
         )
 
@@ -649,7 +649,7 @@ class InvoicingV2Tests(unittest.TestCase):
             sides=("buyer", "seller"),
         )
         self._login("bill_agent_a")
-        response = self.client.get("/billing?tab=pending")
+        response = self.client.get("/billing?view=history&tab=pending")
         self.assertEqual(response.status_code, 200)
         body = response.get_data(as_text=True)
         self.assertIn("Facturar al comprador", body)

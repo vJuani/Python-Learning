@@ -1,189 +1,175 @@
 {% extends "base.html" %}
 
-{% block title %}{{ t('billing_title') }} | {{ t('app_title') }}{% endblock %}
+{% block body_class %}is-billing-ai-page {% endblock %}
+
+{% block title %}{{ t('billing_ai_page_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/billing-ai-page.css') }}">
+{% endblock %}
 
 {% block content %}
-<section class="page-header billing-page-header">
-    <div class="page-header-text">
-        <h2>{{ t('billing_title') }}</h2>
-        <p>{{ t('billing_subtitle_simple') }}</p>
-    </div>
-</section>
-
-<section class="panel billing-ai-panel">
-    <h3 class="billing-ai-title">✨ {{ t('billing_ai_title') }}</h3>
-    <form method="post" action="{{ url_for('billing_ai_prepare') }}" class="billing-ai-form">
-        <input
-            type="text"
-            name="prompt"
-            class="form-input billing-ai-input"
-            placeholder="{{ t('billing_ai_placeholder') }}"
-            autocomplete="off"
-        >
-        <button type="submit" class="btn btn-primary">{{ t('billing_ai_prepare') }}</button>
-    </form>
-    <p class="field-help billing-ai-examples">{{ t('billing_ai_examples') }}</p>
-    {% if ai_message %}
-    <div class="billing-ai-feedback">
-        {% if ai_operation %}
-        <p class="billing-ai-found">{{ t('billing_ai_found_operation', operation=ai_operation) }}</p>
-        {% endif %}
-        <p>{{ t(ai_message) }}</p>
-    </div>
-    {% endif %}
-    {% if ai_options %}
-    <ul class="billing-ai-options">
-        {% for opt in ai_options %}
-        <li>
-            <a href="{{ url_for('billing_ai_select_operation', operation_id=opt.operation_id) }}">{{ opt.label }}</a>
-        </li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-</section>
-
-<section class="stats-grid billing-kpi-grid">
-    <article class="stat-card">
-        <span class="stat-label">{{ t('billing_kpi_pending') }}</span>
-        <strong class="stat-value">{{ kpis.pending }}</strong>
-    </article>
-    <article class="stat-card">
-        <span class="stat-label">{{ t('billing_kpi_drafts') }}</span>
-        <strong class="stat-value">{{ kpis.drafts }}</strong>
-    </article>
-    <article class="stat-card">
-        <span class="stat-label">{{ t('billing_kpi_ready') }}</span>
-        <strong class="stat-value">{{ kpis.ready_to_issue }}</strong>
-    </article>
-    <article class="stat-card">
-        <span class="stat-label">{{ t('billing_kpi_drafts_total') }}</span>
-        <strong class="stat-value billing-kpi-muted">{{ kpis.total_month | money('ARS') }}</strong>
-    </article>
-</section>
-
-<form class="billing-search-bar" method="get" action="{{ url_for('billing_list') }}">
-    <input type="hidden" name="tab" value="{{ tab }}">
-    <input
-        type="search"
-        name="q"
-        class="form-input"
-        placeholder="{{ t('billing_search_placeholder') }}"
-        value="{{ filters.q }}"
-    >
-    {% if is_staff %}
-    <details class="billing-filters-details">
-        <summary>{{ t('billing_filters') }}</summary>
-        <div class="billing-filters-grid">
-            <select name="agent_id" class="form-input">
-                <option value="">{{ t('billing_filter_agent') }}</option>
-                {% for agent in agents %}
-                <option value="{{ agent.id }}" {% if filters.agent_id == agent.id|string %}selected{% endif %}>{{ agent.name }}</option>
-                {% endfor %}
-            </select>
-            <input type="text" name="operation_id" class="form-input" placeholder="{{ t('billing_filter_operation') }}" value="{{ filters.operation_id }}">
+<div class="billing-ai-page">
+    <header class="billing-ai-page__header">
+        <div>
+            <h1>✨ {{ t('billing_ai_page_title') }}</h1>
+            <p>{{ t('billing_ai_page_subtitle') }}</p>
         </div>
-    </details>
-    {% endif %}
-    <button type="submit" class="btn btn-secondary btn-sm">{{ t('search') }}</button>
-</form>
+        <a href="{{ url_for('billing_list', view='history') }}" class="billing-ai-btn billing-ai-btn--outline">{{ t('billing_ai_history') }}</a>
+    </header>
 
-<nav class="billing-tabs" aria-label="{{ t('billing_title') }}">
-    <a href="{{ url_for('billing_list', tab='pending', q=filters.q) }}" class="billing-tab {% if tab == 'pending' %}is-active{% endif %}">{{ t('billing_tab_pending') }}</a>
-    <a href="{{ url_for('billing_list', tab='draft', q=filters.q) }}" class="billing-tab {% if tab == 'draft' %}is-active{% endif %}">{{ t('billing_tab_drafts') }}</a>
-    <a href="{{ url_for('billing_list', tab='ready', q=filters.q) }}" class="billing-tab {% if tab == 'ready' %}is-active{% endif %}">{{ t('billing_tab_ready') }}</a>
-    <a href="{{ url_for('billing_list', tab='issued', q=filters.q) }}" class="billing-tab {% if tab == 'issued' %}is-active{% endif %}">{{ t('billing_tab_issued') }}</a>
-</nav>
-
-{% if tab == 'pending' %}
-<section class="panel billing-pending-panel">
-    <div class="panel-header"><h3>{{ t('billing_kpi_pending') }}</h3></div>
-    {% if pending_items %}
-    <div class="billing-pending-grid">
-        {% for item in pending_items %}
-        <article class="billing-pending-card">
-            <h4>{{ item.property }}</h4>
-            <p class="billing-pending-meta">
-                {{ item.id }} · {{ t('billing_side_' ~ item.side) }}
-            </p>
-            {% if is_staff and item.agent %}
-            <p class="billing-pending-agent">{{ item.agent }}</p>
-            {% elif not is_staff and item.agent %}
-            <p class="billing-pending-agent">{{ item.agent }}</p>
-            {% endif %}
-            <p class="money billing-pending-amount">
-                {{ item.invoice_amount | money(item.invoice_currency or 'ARS') }}
-            </p>
-            <span class="badge badge-soft">{{ t('billing_status_pending') }}</span>
-            <div class="billing-pending-actions">
-                <a
-                    class="btn btn-primary"
-                    href="{{ url_for('billing_prepare', operation_id=item.db_id, side=item.side) }}"
-                >{{ t('billing_invoice_' ~ item.side) }} →</a>
-            </div>
-        </article>
-        {% endfor %}
-    </div>
-    {% else %}
-    <p class="empty-state">{{ t('billing_empty_pending') }}</p>
-    {% endif %}
-</section>
-{% else %}
-<section class="panel">
-    <div class="panel-header"><h3>{{ t('billing_invoice') }}</h3></div>
-    {% if invoices %}
-    <div class="billing-card-list billing-invoices-mobile">
-        {% for inv in invoices %}
-        <article class="billing-card">
-            <h4>{{ inv.invoice_number_internal }}</h4>
-            <p>{{ inv.property_address or '' }} · {{ inv.operation_display_id }}</p>
-            <p class="money">{{ inv.total_amount | money(inv.currency) }}</p>
-            <span class="badge">{{ t('billing_status_' ~ inv.status) }}</span>
-            <a class="btn btn-secondary" href="{{ url_for('billing_detail', invoice_id=inv.id) }}">{{ t('billing_view_invoice') }}</a>
-        </article>
-        {% endfor %}
-    </div>
-    <div class="table-wrap billing-invoices-desktop">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>{{ t('billing_issue_date') }}</th>
-                    <th>{{ t('billing_invoice') }}</th>
-                    {% if is_staff %}<th>{{ t('billing_agent') }}</th>{% endif %}
-                    <th>{{ t('billing_operation') }}</th>
-                    <th>{{ t('billing_amount') }}</th>
-                    <th>{{ t('status') }}</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for inv in invoices %}
-                <tr>
-                    <td>{{ inv.issue_date }}</td>
-                    <td>{{ inv.invoice_number_internal }}</td>
-                    {% if is_staff %}<td>{{ inv.agent_name }}</td>{% endif %}
-                    <td>{{ inv.property_address }} · {{ inv.operation_display_id }}</td>
-                    <td>{{ inv.total_amount | money(inv.currency) }}</td>
-                    <td>{{ t('billing_status_' ~ inv.status) }}</td>
-                    <td><a href="{{ url_for('billing_detail', invoice_id=inv.id) }}">{{ t('billing_view_invoice') }}</a></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <p class="empty-state">{% if is_staff %}{{ t('billing_empty_invoices_staff') }}{% else %}{{ t('billing_empty_invoices_agent') }}{% endif %}</p>
-    {% endif %}
-</section>
-{% endif %}
-
-<details class="billing-config-details">
-    <summary>{{ t('billing_settings_title') }}</summary>
-    <div class="billing-config-links">
-        {% if is_staff %}
-        <a href="{{ url_for('billing_issuers') }}">{{ t('billing_issuers_title') }}</a>
+    {% if view == 'history' %}
+    <section class="billing-ai-history">
+        <nav class="billing-ai-history__tabs">
+            <a href="{{ url_for('billing_list', view='history', tab='pending') }}" class="{% if tab == 'pending' %}is-active{% endif %}">{{ t('billing_tab_pending') }}</a>
+            <a href="{{ url_for('billing_list', view='history', tab='draft') }}" class="{% if tab == 'draft' %}is-active{% endif %}">{{ t('billing_tab_drafts') }}</a>
+            <a href="{{ url_for('billing_list', view='history', tab='ready') }}" class="{% if tab == 'ready' %}is-active{% endif %}">{{ t('billing_tab_ready') }}</a>
+            <a href="{{ url_for('billing_list', view='history', tab='issued') }}" class="{% if tab == 'issued' %}is-active{% endif %}">{{ t('billing_tab_issued') }}</a>
+        </nav>
+        {% if tab == 'pending' and pending_items %}
+        <div class="billing-ai-history__grid">
+            {% for item in pending_items %}
+            <article class="billing-ai-history__card">
+                <h3>{{ item.property }}</h3>
+                <p>{{ item.id }} · {{ t('billing_side_' ~ item.side) }}</p>
+                <p class="money">{{ item.invoice_amount | money(item.invoice_currency or 'ARS') }}</p>
+                <a href="{{ url_for('billing_prepare', operation_id=item.db_id, side=item.side) }}" class="billing-ai-btn billing-ai-btn--primary">{{ t('billing_invoice_' ~ item.side) }}</a>
+            </article>
+            {% endfor %}
+        </div>
+        {% elif invoices %}
+        <div class="table-wrapper">
+            <table class="billing-ai-history__table">
+                <thead>
+                    <tr>
+                        <th>{{ t('billing_issue_date') }}</th>
+                        <th>{{ t('billing_invoice') }}</th>
+                        <th>{{ t('billing_operation') }}</th>
+                        <th>{{ t('billing_amount') }}</th>
+                        <th>{{ t('status') }}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inv in invoices %}
+                    <tr>
+                        <td>{{ inv.issue_date }}</td>
+                        <td>{{ inv.invoice_number_internal }}</td>
+                        <td>{{ inv.property_address }} · {{ inv.operation_display_id }}</td>
+                        <td>{{ inv.total_amount | money(inv.currency) }}</td>
+                        <td>{{ t('billing_status_' ~ inv.status) }}</td>
+                        <td><a href="{{ url_for('billing_detail', invoice_id=inv.id) }}">{{ t('billing_view_invoice') }}</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
-        <a href="{{ url_for('billing_agent_profile_self') }}">{{ t('billing_profile_title') }}</a>
+        <p class="billing-ai-empty">{{ t('billing_empty_invoices_staff') if is_staff else t('billing_empty_invoices_agent') }}</p>
         {% endif %}
+        <p><a href="{{ url_for('billing_list') }}">← {{ t('billing_ai_back_to_workspace') }}</a></p>
+    </section>
+    {% else %}
+    <div class="billing-ai-workspace">
+        <section class="billing-ai-chat">
+            <div class="billing-ai-chat__messages">
+                {% for message in ai_workspace.chat_messages %}
+                <article class="billing-ai-message billing-ai-message--{{ message.role }}">
+                    {% if message.role == 'assistant' %}<span class="billing-ai-message__avatar">JRH</span>{% endif %}
+                    <div class="billing-ai-message__bubble">
+                        {% if message.text_key %}{{ t(message.text_key) }}{% else %}{{ message.text }}{% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+                {% if ai_workspace.ai_operation %}
+                <p class="billing-ai-found">{{ t('billing_ai_found_operation', operation=ai_workspace.ai_operation) }}</p>
+                {% endif %}
+                {% if ai_workspace.ai_options %}
+                <ul class="billing-ai-options">
+                    {% for opt in ai_workspace.ai_options %}
+                    <li><a href="{{ url_for('billing_ai_select_operation', operation_id=opt.operation_id) }}">{{ opt.label }}</a></li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            <div class="billing-ai-chat__suggestions">
+                <span>{{ t('billing_ai_suggestions_title') }}</span>
+                {% for item in ai_workspace.suggestions %}
+                <button type="button" class="billing-ai-chip" data-prompt="{{ item.label }}">{{ item.label }}</button>
+                {% endfor %}
+            </div>
+            <form method="post" action="{{ url_for('billing_ai_prepare') }}" class="billing-ai-chat__form">
+                <textarea name="prompt" rows="2" placeholder="{{ t('billing_ai_input_placeholder') }}" required></textarea>
+                <button type="submit" class="billing-ai-btn billing-ai-btn--primary">{{ t('billing_ai_send') }}</button>
+            </form>
+        </section>
+
+        <section class="billing-ai-preview">
+            <h2>{{ t('billing_ai_preview_title') }}</h2>
+            {% if ai_workspace.has_preview %}
+            <article class="billing-ai-invoice-card">
+                <span class="billing-ai-invoice-card__badge">{{ ai_workspace.preview.draft_label }}</span>
+                <header>
+                    <strong>{{ t('billing_invoice') }} A</strong>
+                    <span>{{ ai_workspace.preview.issuer_name }}</span>
+                    <span>{{ ai_workspace.preview.issuer_tax_id }}</span>
+                </header>
+                <div class="billing-ai-invoice-card__client">
+                    <strong>{{ ai_workspace.preview.recipient_name }}</strong>
+                    <span>{{ ai_workspace.preview.recipient_tax_id }}</span>
+                </div>
+                <p>{{ ai_workspace.preview.description }}</p>
+                <dl>
+                    <div><dt>{{ t('billing_ai_field_net_amount') }}</dt><dd>{{ ai_workspace.preview.net_amount_display }}</dd></div>
+                    <div><dt>{{ t('billing_ai_field_vat') }}</dt><dd>{{ ai_workspace.preview.vat_amount_display }}</dd></div>
+                    <div><dt>{{ t('billing_ai_field_total') }}</dt><dd class="billing-ai-invoice-card__total">{{ ai_workspace.preview.total_amount_display }}</dd></div>
+                </dl>
+            </article>
+            {% else %}
+            <div class="billing-ai-preview__empty">
+                <p>{{ t('billing_ai_preview_empty') }}</p>
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="billing-ai-extracted">
+            <h2>{{ t('billing_ai_extracted_title') }}</h2>
+            {% if ai_workspace.extracted_fields %}
+            <ul class="billing-ai-fields">
+                {% for field in ai_workspace.extracted_fields %}
+                <li>
+                    <span>{{ field.label }}</span>
+                    <strong>{{ field.value }}</strong>
+                </li>
+                {% endfor %}
+            </ul>
+            <p class="billing-ai-note">{{ t('billing_ai_review_notice') }}</p>
+            {% if ai_workspace.operation_id and ai_workspace.side %}
+            <form method="post" action="{{ url_for('billing_new_for_side', operation_id=ai_workspace.operation_id, side=ai_workspace.side) }}">
+                <button type="submit" class="billing-ai-btn billing-ai-btn--primary billing-ai-btn--block">{{ t('billing_ai_issue_invoice') }}</button>
+            </form>
+            <a href="{{ url_for('billing_prepare', operation_id=ai_workspace.operation_id, side=ai_workspace.side) }}" class="billing-ai-link">{{ t('billing_ai_download_draft') }}</a>
+            {% endif %}
+            {% else %}
+            <p class="billing-ai-empty">{{ t('billing_ai_extracted_empty') }}</p>
+            {% endif %}
+        </section>
     </div>
-</details>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    document.querySelectorAll(".billing-ai-chip").forEach(function (chip) {
+        chip.addEventListener("click", function () {
+            var textarea = document.querySelector(".billing-ai-chat__form textarea");
+            if (!textarea) return;
+            textarea.value = chip.getAttribute("data-prompt") || "";
+            textarea.focus();
+        });
+    });
+})();
+</script>
 {% endblock %}
