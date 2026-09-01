@@ -18,29 +18,27 @@
         <div class="reports-page__actions">
             <form class="reports-toolbar" method="get" action="{{ url_for('reports_index') }}">
                 <input type="hidden" name="view" value="{{ report.view }}">
-                <input type="month" name="month_year" value="{{ report.form.month_year }}" class="reports-toolbar__date" title="{{ t('reports_filter_month') }}">
+                <label class="reports-toolbar__period" title="{{ t('reports_filter_month') }}">
+                    <span class="reports-toolbar__period-icon" aria-hidden="true">📅</span>
+                    <span class="reports-toolbar__period-text">{{ reports_panel.period_label }}</span>
+                    <input type="month" name="month_year" value="{{ report.form.month_year }}" class="reports-toolbar__period-input">
+                </label>
                 <select name="period_mode" class="reports-toolbar__select">
                     <option value="month" {% if report.form.period_mode == 'month' %}selected{% endif %}>{{ t('reports_page_compare_prev') }}</option>
                     <option value="range" {% if report.form.period_mode == 'range' %}selected{% endif %}>{{ t('reports_page_period_range') }}</option>
                 </select>
-                <button type="submit" class="reports-btn reports-btn--ghost">{{ t('sidebar_apply_filters') }}</button>
+                <button type="submit" class="reports-toolbar__apply">{{ t('sidebar_apply_filters') }}</button>
             </form>
-            <a href="{{ url_for('reports_xlsx', **request.args) }}" class="reports-btn reports-btn--primary">{{ t('reports_page_export') }}</a>
+            <a href="{{ url_for('reports_xlsx', **request.args) }}" class="reports-btn reports-btn--primary">
+                <span class="reports-btn__icon" aria-hidden="true">↓</span>
+                {{ t('reports_page_export') }}
+            </a>
         </div>
     </header>
-
-    <p class="reports-page__period">{{ reports_panel.period_label }} · {{ reports_panel.compare_label }}</p>
 
     {% if report.errors %}
     <div class="reports-flash">{% for error in report.errors %}<p>{{ error }}</p>{% endfor %}</div>
     {% endif %}
-
-    <nav class="reports-tabs" aria-label="{{ t('reports_page_title') }}">
-        <a href="{{ url_for('reports_index', view='general') }}" class="{% if report.view == 'general' %}is-active{% endif %}">{{ report.labels.view_general }}</a>
-        <a href="{{ url_for('reports_index', view='monthly') }}" class="{% if report.view == 'monthly' %}is-active{% endif %}">{{ report.labels.view_monthly }}</a>
-        <a href="{{ url_for('reports_index', view='invoiced') }}" class="{% if report.view == 'invoiced' %}is-active{% endif %}">{{ report.labels.view_invoiced }}</a>
-        <a href="{{ url_for('reports_index', view='uninvoiced') }}" class="{% if report.view == 'uninvoiced' %}is-active{% endif %}">{{ report.labels.view_uninvoiced }}</a>
-    </nav>
 
     <section class="reports-kpis" aria-label="{{ t('reports_page_kpis_aria') }}">
         {% for kpi in reports_panel.kpis %}
@@ -58,7 +56,7 @@
                 {% if kpi.change_pct is not none %}
                 <span class="reports-kpi-card__delta reports-kpi-card__delta--{{ kpi.change_direction }}">
                     {% if kpi.change_direction == 'up' %}↑{% elif kpi.change_direction == 'down' %}↓{% else %}→{% endif %}
-                    {{ kpi.change_pct | abs }}%
+                    {{ kpi.change_pct | abs }}% {{ t('reports_page_vs_period', period=reports_panel.compare_period_label) }}
                 </span>
                 {% endif %}
             </div>
@@ -70,48 +68,80 @@
     <div class="reports-grid reports-grid--charts">
         <section class="reports-card">
             <h2>{{ t('reports_page_chart_weekly') }}</h2>
-            <canvas id="reports-chart-weekly" height="220"></canvas>
+            <div class="reports-chart-wrap">
+                <canvas id="reports-chart-weekly" height="200"></canvas>
+            </div>
         </section>
         <section class="reports-card">
             <h2>{{ t('reports_page_chart_evolution') }}</h2>
-            <canvas id="reports-chart-evolution" height="220"></canvas>
+            <div class="reports-chart-legend">
+                <span><i class="reports-line reports-line--current"></i>{{ t('reports_page_evolution_current') }}</span>
+                <span><i class="reports-line reports-line--previous"></i>{{ t('reports_page_evolution_previous') }}</span>
+            </div>
+            <div class="reports-chart-wrap">
+                <canvas id="reports-chart-evolution" height="200"></canvas>
+            </div>
         </section>
         <section class="reports-card reports-card--donut">
             <h2>{{ t('reports_page_chart_stages') }}</h2>
             <div class="reports-donut-wrap">
-                <canvas id="reports-chart-stages" height="200"></canvas>
+                <div class="reports-donut-chart">
+                    <canvas id="reports-chart-stages" height="180"></canvas>
+                    <div class="reports-donut-center">
+                        <strong>{{ reports_panel.operations_total }}</strong>
+                        <span>{{ t('reports_page_total_label') }}</span>
+                    </div>
+                </div>
                 <ul class="reports-donut-legend">
                     {% for item in reports_panel.stage_distribution %}
-                    <li><span class="reports-dot reports-dot--{{ item.tone }}"></span>{{ item.label }} <strong>{{ item.count }}</strong> · {{ item.pct }}%</li>
+                    <li>
+                        <span class="reports-dot reports-dot--{{ item.tone }}"></span>
+                        <span class="reports-donut-legend__label">{{ item.label }}</span>
+                        <span class="reports-donut-legend__value">{{ item.count }} · {{ item.pct }}%</span>
+                    </li>
                     {% endfor %}
                 </ul>
             </div>
-            <p class="reports-card__footnote">{{ t('reports_page_total_operations', count=reports_panel.operations_total) }}</p>
         </section>
     </div>
 
     <div class="reports-grid reports-grid--finance">
-        <section class="reports-card reports-card--wide">
-            <div class="reports-card__split-head">
-                <h2>{{ t('reports_page_chart_commissions') }}</h2>
-                <div class="reports-mini-kpi">
-                    <span>{{ t('reports_page_kpi_commission') }}</span>
+        <section class="reports-card reports-card--split">
+            <h2>{{ t('reports_page_chart_commissions') }}</h2>
+            <div class="reports-card__split-body">
+                <div class="reports-chart-wrap reports-chart-wrap--wide">
+                    <canvas id="reports-chart-commissions" height="200"></canvas>
+                </div>
+                <div class="reports-side-summary">
+                    <span>{{ t('reports_page_commission_total') }}</span>
                     <strong>{{ reports_panel.commission_trend.total | money }}</strong>
                     {% if reports_panel.commission_trend.change_pct is not none %}
-                    <em class="reports-kpi-card__delta reports-kpi-card__delta--up">↑ {{ reports_panel.commission_trend.change_pct }}%</em>
+                    <em class="reports-kpi-card__delta reports-kpi-card__delta--up">
+                        ↑ {{ reports_panel.commission_trend.change_pct }}% {{ t('reports_page_vs_period', period=reports_panel.compare_period_label) }}
+                    </em>
                     {% endif %}
                 </div>
             </div>
-            <canvas id="reports-chart-commissions" height="220"></canvas>
         </section>
         {% if reports_panel.cash_flow %}
-        <section class="reports-card reports-card--wide">
+        <section class="reports-card reports-card--split">
             <h2>{{ t('reports_page_chart_cashflow') }}</h2>
-            <canvas id="reports-chart-cashflow" height="220"></canvas>
-            <div class="reports-cashflow-totals">
-                <span>{{ t('reports_page_cash_in') }} <strong>{{ reports_panel.cash_flow.totals.inflow | money('ARS') }}</strong></span>
-                <span>{{ t('reports_page_cash_out') }} <strong>{{ reports_panel.cash_flow.totals.outflow | money('ARS') }}</strong></span>
-                <span>{{ t('reports_page_cash_net') }} <strong>{{ reports_panel.cash_flow.totals.net | money('ARS') }}</strong></span>
+            <div class="reports-card__split-body">
+                <div class="reports-chart-wrap reports-chart-wrap--wide">
+                    <canvas id="reports-chart-cashflow" height="200"></canvas>
+                </div>
+                <div class="reports-cashflow-side">
+                    <ul class="reports-cashflow-legend">
+                        <li><span class="reports-line reports-line--inflow"></span>{{ t('reports_page_cash_in') }}</li>
+                        <li><span class="reports-line reports-line--outflow"></span>{{ t('reports_page_cash_out') }}</li>
+                        <li><span class="reports-line reports-line--net"></span>{{ t('reports_page_cash_net') }}</li>
+                    </ul>
+                    <dl class="reports-cashflow-totals">
+                        <div><dt>{{ t('reports_page_cash_in') }}</dt><dd class="is-inflow">{{ reports_panel.cash_flow.totals.inflow | money('ARS') }}</dd></div>
+                        <div><dt>{{ t('reports_page_cash_out') }}</dt><dd class="is-outflow">{{ reports_panel.cash_flow.totals.outflow | money('ARS') }}</dd></div>
+                        <div><dt>{{ t('reports_page_cash_net') }}</dt><dd class="is-net">{{ reports_panel.cash_flow.totals.net | money('ARS') }}</dd></div>
+                    </dl>
+                </div>
             </div>
         </section>
         {% endif %}
@@ -121,10 +151,20 @@
         <section class="reports-card reports-card--donut">
             <h2>{{ t('reports_page_chart_status') }}</h2>
             <div class="reports-donut-wrap">
-                <canvas id="reports-chart-status" height="200"></canvas>
+                <div class="reports-donut-chart">
+                    <canvas id="reports-chart-status" height="180"></canvas>
+                    <div class="reports-donut-center">
+                        <strong>{{ reports_panel.operations_total }}</strong>
+                        <span>{{ t('reports_page_total_label') }}</span>
+                    </div>
+                </div>
                 <ul class="reports-donut-legend">
                     {% for item in reports_panel.status_distribution %}
-                    <li><span class="reports-dot reports-dot--{{ item.tone }}"></span>{{ item.label }} <strong>{{ item.pct }}%</strong></li>
+                    <li>
+                        <span class="reports-dot reports-dot--{{ item.tone }}"></span>
+                        <span class="reports-donut-legend__label">{{ item.label }}</span>
+                        <span class="reports-donut-legend__value">{{ item.pct }}%</span>
+                    </li>
                     {% endfor %}
                 </ul>
             </div>
@@ -133,11 +173,11 @@
         <section class="reports-card">
             <div class="reports-card__split-head">
                 <h2>{{ t('reports_page_top_agents') }}</h2>
-                <a href="{{ url_for('agents_list') }}">{{ t('reports_page_view_all_agents') }} →</a>
             </div>
             <table class="reports-agents-table">
                 <thead>
                     <tr>
+                        <th>{{ t('reports_page_col_rank') }}</th>
                         <th>{{ t('agent') }}</th>
                         <th>{{ t('reports_page_col_ops') }}</th>
                         <th>{{ t('reports_page_col_volume') }}</th>
@@ -147,6 +187,7 @@
                 <tbody>
                     {% for agent in reports_panel.top_agents %}
                     <tr>
+                        <td><span class="reports-agent-rank">{{ agent.rank }}</span></td>
                         <td>
                             <span class="reports-agent-avatar">{{ agent.initials }}</span>
                             {{ agent.name }}
@@ -156,10 +197,11 @@
                         <td>{{ agent.commission | money }}</td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="4">{{ t('reports_page_no_agents') }}</td></tr>
+                    <tr><td colspan="5">{{ t('reports_page_no_agents') }}</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
+            <a class="reports-card__footer-link" href="{{ url_for('agents_list') }}">{{ t('reports_page_view_all_agents') }} →</a>
         </section>
 
         <section class="reports-card reports-card--insights">
@@ -167,8 +209,11 @@
             <ul class="reports-insights">
                 {% for insight in reports_panel.insights %}
                 <li class="reports-insight reports-insight--{{ insight.tone }}">
-                    <strong>{{ insight.title }}</strong>
-                    <p>{{ insight.text }}</p>
+                    <span class="reports-insight__icon" aria-hidden="true"></span>
+                    <div>
+                        <strong>{{ insight.title }}</strong>
+                        <p>{{ insight.text }}</p>
+                    </div>
                 </li>
                 {% else %}
                 <li class="reports-insight reports-insight--neutral">
@@ -176,13 +221,19 @@
                 </li>
                 {% endfor %}
             </ul>
-            <a href="{{ url_for('operations_list') }}">{{ t('reports_page_detailed_analysis') }} →</a>
+            <a class="reports-card__footer-link" href="{{ url_for('operations_list') }}">{{ t('reports_page_detailed_analysis') }} →</a>
         </section>
     </div>
     {% endif %}
 
     <details class="reports-advanced">
         <summary>{{ t('reports_page_advanced_filters') }}</summary>
+        <nav class="reports-tabs" aria-label="{{ t('reports_page_title') }}">
+            <a href="{{ url_for('reports_index', view='general') }}" class="{% if report.view == 'general' %}is-active{% endif %}">{{ report.labels.view_general }}</a>
+            <a href="{{ url_for('reports_index', view='monthly') }}" class="{% if report.view == 'monthly' %}is-active{% endif %}">{{ report.labels.view_monthly }}</a>
+            <a href="{{ url_for('reports_index', view='invoiced') }}" class="{% if report.view == 'invoiced' %}is-active{% endif %}">{{ report.labels.view_invoiced }}</a>
+            <a href="{{ url_for('reports_index', view='uninvoiced') }}" class="{% if report.view == 'uninvoiced' %}is-active{% endif %}">{{ report.labels.view_uninvoiced }}</a>
+        </nav>
         <form method="get" action="{{ url_for('reports_index') }}" class="reports-advanced__form">
             <input type="hidden" name="view" value="{{ report.view }}">
             <label><span>{{ t('reports_filter_agent') }}</span>
@@ -196,7 +247,7 @@
             <label><span>{{ t('reports_filter_date_from') }}</span><input type="date" name="date_from" value="{{ report.form.date_from }}"></label>
             <label><span>{{ t('reports_filter_date_to') }}</span><input type="date" name="date_to" value="{{ report.form.date_to }}"></label>
             <input type="hidden" name="period_mode" value="range">
-            <button type="submit" class="reports-btn reports-btn--primary">{{ t('sidebar_apply_filters') }}</button>
+            <button type="submit" class="reports-btn reports-btn--ghost">{{ t('sidebar_apply_filters') }}</button>
             <a href="{{ url_for('reports_pdf', **request.args) }}" class="reports-btn reports-btn--ghost">PDF</a>
         </form>
     </details>

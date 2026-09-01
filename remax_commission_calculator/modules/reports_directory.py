@@ -50,6 +50,36 @@ _MONTHS_EN = (
     "December",
 )
 
+_MONTHS_ES_SHORT = (
+    "ene",
+    "feb",
+    "mar",
+    "abr",
+    "may",
+    "jun",
+    "jul",
+    "ago",
+    "sep",
+    "oct",
+    "nov",
+    "dic",
+)
+
+_MONTHS_EN_SHORT = (
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+)
+
 
 def _pct_change(current, previous):
     current = float(current or 0)
@@ -98,6 +128,134 @@ def _previous_period_bounds(date_from, date_to):
     prev_end = start - timedelta(days=1)
     prev_start = prev_end - timedelta(days=length - 1)
     return prev_start.strftime("%Y%m%d"), prev_end.strftime("%Y%m%d")
+
+
+def _format_compare_period_label(date_from, date_to, language):
+    start = _iso_to_date(date_from)
+    end = _iso_to_date(date_to)
+    if start is None or end is None:
+        return _t("reports_page_compare_prev_short", language)
+
+    months = _MONTHS_ES_SHORT if language == "es" else _MONTHS_EN_SHORT
+    if start.year == end.year and start.month == end.month:
+        return f"{months[start.month - 1]} {start.year}"
+
+    if language == "es":
+        return (
+            f"{months[start.month - 1]} – "
+            f"{months[end.month - 1]} {end.year}"
+        )
+
+    return (
+        f"{months[start.month - 1]} – "
+        f"{months[end.month - 1]} {end.year}"
+    )
+
+
+def _format_day_label(day, language):
+    months = _MONTHS_ES_SHORT if language == "es" else _MONTHS_EN_SHORT
+    if language == "es":
+        return f"{day.day} {months[day.month - 1]}"
+    return f"{months[day.month - 1]} {day.day}"
+
+
+def _sample_series(labels, values, max_points=16):
+    if len(labels) <= max_points:
+        return labels, values
+
+    step = max(1, len(labels) // max_points)
+    sampled_labels = []
+    sampled_values = []
+    for index in range(0, len(labels), step):
+        sampled_labels.append(labels[index])
+        sampled_values.append(values[index])
+
+    if sampled_labels[-1] != labels[-1]:
+        sampled_labels.append(labels[-1])
+        sampled_values.append(values[-1])
+
+    return sampled_labels, sampled_values
+
+
+def _daily_operation_counts(operations, date_from, date_to, language):
+    start = _iso_to_date(date_from)
+    end = _iso_to_date(date_to)
+    if start is None or end is None:
+        return [], []
+
+    buckets = defaultdict(int)
+    for operation in operations:
+        parsed = _parse_operation_date(operation.get("date"))
+        if parsed is None or parsed < start or parsed > end:
+            continue
+        buckets[parsed] += 1
+
+    labels = []
+    values = []
+    cursor_day = start
+    while cursor_day <= end:
+        labels.append(_format_day_label(cursor_day, language))
+        values.append(buckets.get(cursor_day, 0))
+        cursor_day += timedelta(days=1)
+
+    return _sample_series(labels, values)
+
+
+def _daily_cumulative_commission(operations, date_from, date_to, language):
+    start = _iso_to_date(date_from)
+    end = _iso_to_date(date_to)
+    if start is None or end is None:
+        return [], []
+
+    buckets = defaultdict(float)
+    for operation in operations:
+        parsed = _parse_operation_date(operation.get("date"))
+        if parsed is None or parsed < start or parsed > end:
+            continue
+        buckets[parsed] += float(operation.get("total_commission") or 0)
+
+    labels = []
+    values = []
+    cumulative = 0.0
+    cursor_day = start
+    while cursor_day <= end:
+        cumulative += buckets.get(cursor_day, 0.0)
+        labels.append(_format_day_label(cursor_day, language))
+        values.append(round(cumulative, 2))
+        cursor_day += timedelta(days=1)
+
+    return _sample_series(labels, values)
+
+
+def _operations_evolution(current_operations, previous_operations, date_from, date_to, prev_from, prev_to, language):
+    current_labels, current_values = _daily_operation_counts(
+        current_operations,
+        date_from,
+        date_to,
+        language,
+    )
+    previous_labels, previous_values = _daily_operation_counts(
+        previous_operations,
+        prev_from,
+        prev_to,
+        language,
+    )
+
+    if not current_labels:
+        return {"labels": [], "current": [], "previous": []}
+
+    if len(previous_values) < len(current_values):
+        previous_values = previous_values + [0] * (
+            len(current_values) - len(previous_values)
+        )
+    elif len(previous_values) > len(current_values):
+        previous_values = previous_values[: len(current_values)]
+
+    return {
+        "labels": current_labels,
+        "current": current_values,
+        "previous": previous_values,
+    }
 
 
 def _format_period_label(date_from, date_to, language):
@@ -170,19 +328,20 @@ def _weekly_operations(operations, language):
 
     chart_labels = []
     chart_values = []
+    months = _MONTHS_ES_SHORT if language == "es" else _MONTHS_EN_SHORT
 
     for year, week in ordered[-4:]:
         week_start = date.fromisocalendar(year, week, 1)
         week_end = week_start + timedelta(days=6)
         if language == "es":
             label = (
-                f"{week_start.day}/{week_start.month} – "
-                f"{week_end.day}/{week_end.month}"
+                f"{week_start.day} {months[week_start.month - 1]} – "
+                f"{week_end.day} {months[week_end.month - 1]}"
             )
         else:
             label = (
-                f"{week_start.month}/{week_start.day} – "
-                f"{week_end.month}/{week_end.day}"
+                f"{months[week_start.month - 1]} {week_start.day} – "
+                f"{months[week_end.month - 1]} {week_end.day}"
             )
         chart_labels.append(label)
         chart_values.append(buckets[(year, week)])
@@ -281,14 +440,18 @@ def _status_distribution(operations, language):
     return items
 
 
-def _count_active_properties(organization_id):
-    return len(
-        [
-            item
-            for item in get_properties(organization_id)
-            if (item.get("status") or STATUS_APPROVED) == STATUS_APPROVED
-        ]
-    )
+def _count_active_properties(organization_id, *, before_date=None):
+    cutoff = _iso_to_date(before_date) if before_date else None
+    count = 0
+    for item in get_properties(organization_id):
+        if (item.get("status") or STATUS_APPROVED) != STATUS_APPROVED:
+            continue
+        if cutoff is not None:
+            submitted = _parse_operation_date(item.get("submitted_at"))
+            if submitted is not None and submitted > cutoff:
+                continue
+        count += 1
+    return count
 
 
 def _count_new_properties(organization_id, date_from, date_to):
@@ -465,6 +628,10 @@ def build_reports_panel(
     prev_ticket = prev_volume / prev_ops if prev_ops else 0.0
 
     active_properties = _count_active_properties(organization_id)
+    prev_active_properties = _count_active_properties(
+        organization_id,
+        before_date=prev_to,
+    )
     new_properties = _count_new_properties(
         organization_id,
         query_filters.get("date_from"),
@@ -517,7 +684,7 @@ def build_reports_panel(
             _t("reports_page_kpi_properties", language),
             active_properties,
             str(active_properties),
-            None,
+            _pct_change(active_properties, prev_active_properties),
         ),
     ]
 
@@ -533,29 +700,44 @@ def build_reports_panel(
         status=query_filters.get("status"),
     )
 
-    monthly_series = report.get("monthly_series") or []
-    commission_labels = [item["month"] for item in monthly_series]
-    commission_values = [
-        item["total_commission"] for item in monthly_series
-    ]
-
-    evolution_current = [
-        item["operations_count"] for item in monthly_series
-    ]
-    evolution_previous = []
+    prev_operations = []
     if prev_from and prev_to:
-        prev_filters = dict(query_filters)
-        prev_filters["date_from"] = prev_from
-        prev_filters["date_to"] = prev_to
-        prev_series = aggregate_report_metrics(prev_filters)
-        evolution_previous = [int(prev_series.get("operations_count") or 0)]
+        prev_operations = filter_operations(
+            organization_id,
+            agent_id=query_filters.get("agent_id"),
+            date_from=prev_from,
+            date_to=prev_to,
+            was_invoiced=query_filters.get("was_invoiced"),
+            jurisdiction=query_filters.get("jurisdiction"),
+            currency=query_filters.get("currency"),
+            agent_type=query_filters.get("agent_type"),
+            status=query_filters.get("status"),
+        )
+
+    commission_labels, commission_values = _daily_cumulative_commission(
+        raw_operations,
+        query_filters.get("date_from"),
+        query_filters.get("date_to"),
+        language,
+    )
+
+    operations_evolution = _operations_evolution(
+        raw_operations,
+        prev_operations,
+        query_filters.get("date_from"),
+        query_filters.get("date_to"),
+        prev_from,
+        prev_to,
+        language,
+    )
 
     top_agents = []
-    for item in (report.get("agent_ranking") or [])[:5]:
+    for index, item in enumerate((report.get("agent_ranking") or [])[:5], start=1):
         name = item.get("agent_name") or "—"
         initials = "".join(part[0] for part in name.split()[:2]).upper()
         top_agents.append(
             {
+                "rank": index,
                 "name": name,
                 "operations": item.get("operations_count", 0),
                 "volume": item.get("volume_usd", 0.0),
@@ -579,13 +761,14 @@ def build_reports_panel(
             language,
         ),
         "compare_label": _t("reports_page_compare_prev", language),
+        "compare_period_label": _format_compare_period_label(
+            prev_from,
+            prev_to,
+            language,
+        ),
         "kpis": kpis,
         "weekly_operations": _weekly_operations(raw_operations, language),
-        "operations_evolution": {
-            "labels": commission_labels,
-            "current": evolution_current,
-            "previous": evolution_previous,
-        },
+        "operations_evolution": operations_evolution,
         "stage_distribution": _stage_distribution(
             raw_operations,
             language,

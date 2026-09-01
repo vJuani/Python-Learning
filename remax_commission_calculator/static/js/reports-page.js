@@ -13,7 +13,36 @@
 
     var accent = "#0d47ff";
     var muted = "#94a3b8";
-    var grid = "rgba(15, 23, 42, 0.08)";
+    var grid = "rgba(15, 23, 42, 0.06)";
+
+    function chartOptions(extra) {
+        var options = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { color: muted, font: { size: 11 }, maxRotation: 0 },
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: grid },
+                    ticks: { color: muted, font: { size: 11 } },
+                },
+            },
+        };
+
+        if (extra) {
+            Object.keys(extra).forEach(function (key) {
+                options[key] = extra[key];
+            });
+        }
+
+        return options;
+    }
 
     function barChart(id, labels, values) {
         var canvas = document.getElementById(id);
@@ -32,18 +61,7 @@
                     maxBarThickness: 42,
                 }],
             },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { display: false }, ticks: { color: muted } },
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: grid },
-                        ticks: { color: muted, precision: 0 },
-                    },
-                },
-            },
+            options: chartOptions(),
         });
     }
 
@@ -65,6 +83,10 @@
                         backgroundColor: "rgba(13, 71, 255, 0.08)",
                         fill: false,
                         tension: 0.35,
+                        pointRadius: 3,
+                        pointBackgroundColor: accent,
+                        pointBorderColor: "#fff",
+                        pointBorderWidth: 2,
                     },
                     {
                         label: "previous",
@@ -73,21 +95,11 @@
                         borderDash: [6, 6],
                         fill: false,
                         tension: 0.35,
+                        pointRadius: 0,
                     },
                 ],
             },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { display: false }, ticks: { color: muted } },
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: grid },
-                        ticks: { color: muted, precision: 0 },
-                    },
-                },
-            },
+            options: chartOptions(),
         });
     }
 
@@ -97,6 +109,11 @@
             return;
         }
 
+        var ctx = canvas.getContext("2d");
+        var gradient = ctx.createLinearGradient(0, 0, 0, 200);
+        gradient.addColorStop(0, "rgba(13, 71, 255, 0.22)");
+        gradient.addColorStop(1, "rgba(13, 71, 255, 0)");
+
         new Chart(canvas, {
             type: "line",
             data: {
@@ -104,23 +121,37 @@
                 datasets: [{
                     data: values,
                     borderColor: accent,
-                    backgroundColor: "rgba(13, 71, 255, 0.15)",
+                    backgroundColor: gradient,
                     fill: true,
                     tension: 0.35,
+                    pointRadius: 3,
+                    pointBackgroundColor: accent,
+                    pointBorderColor: "#fff",
+                    pointBorderWidth: 2,
                 }],
             },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
+            options: chartOptions({
                 scales: {
-                    x: { grid: { display: false }, ticks: { color: muted } },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: muted, font: { size: 11 }, maxRotation: 0 },
+                    },
                     y: {
                         beginAtZero: true,
                         grid: { color: grid },
-                        ticks: { color: muted },
+                        ticks: {
+                            color: muted,
+                            font: { size: 11 },
+                            callback: function (value) {
+                                if (value >= 1000) {
+                                    return "$" + Math.round(value / 1000) + "K";
+                                }
+                                return "$" + value;
+                            },
+                        },
                     },
                 },
-            },
+            }),
         });
     }
 
@@ -132,15 +163,15 @@
 
         var palette = {
             reservation: "#0d47ff",
-            proposal: "#f59e0b",
+            proposal: "#14b8a6",
             negotiation: "#8b5cf6",
-            closing: "#22c55e",
-            rejected: "#ef4444",
-            active: "#0d47ff",
-            progress: "#8b5cf6",
+            closing: "#f59e0b",
+            rejected: "#22c55e",
+            active: "#14b8a6",
+            progress: "#22c55e",
             pending: "#f59e0b",
             cancelled: "#ef4444",
-            closed: "#22c55e",
+            closed: "#94a3b8",
             neutral: "#94a3b8",
         };
 
@@ -157,7 +188,9 @@
                 }],
             },
             options: {
-                cutout: "68%",
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: "72%",
                 plugins: { legend: { display: false } },
             },
         });
@@ -179,29 +212,49 @@
                         data: cashFlow.inflow,
                         borderColor: "#22c55e",
                         tension: 0.35,
+                        pointRadius: 0,
                     },
                     {
                         label: "outflow",
                         data: cashFlow.outflow,
                         borderColor: "#ef4444",
                         tension: 0.35,
+                        pointRadius: 0,
                     },
                     {
                         label: "net",
                         data: cashFlow.net,
                         borderColor: accent,
                         tension: 0.35,
+                        pointRadius: 0,
                     },
                 ],
             },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: true, position: "bottom" } },
+            options: chartOptions({
                 scales: {
-                    x: { grid: { display: false }, ticks: { color: muted } },
-                    y: { grid: { color: grid }, ticks: { color: muted } },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: muted, font: { size: 11 }, maxRotation: 0 },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: grid },
+                        ticks: {
+                            color: muted,
+                            font: { size: 11 },
+                            callback: function (value) {
+                                if (value >= 1000000) {
+                                    return "$" + (value / 1000000).toFixed(1) + "M";
+                                }
+                                if (value >= 1000) {
+                                    return "$" + Math.round(value / 1000) + "K";
+                                }
+                                return "$" + value;
+                            },
+                        },
+                    },
                 },
-            },
+            }),
         });
     }
 
@@ -230,4 +283,13 @@
     );
 
     cashflowChart("reports-chart-cashflow", panel.cash_flow);
+
+    var toolbar = document.querySelector(".reports-toolbar");
+    if (toolbar) {
+        toolbar.querySelectorAll("input, select").forEach(function (field) {
+            field.addEventListener("change", function () {
+                toolbar.submit();
+            });
+        });
+    }
 })();
