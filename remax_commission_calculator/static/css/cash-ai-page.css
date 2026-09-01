@@ -275,6 +275,14 @@ body.is-cash-ai-page .app-main-inner {
     align-items: end;
 }
 
+.cash-ai-evolution-card__chart {
+    position: relative;
+    height: 15rem;
+    min-height: 15rem;
+    max-height: 15rem;
+    overflow: hidden;
+}
+
 .cash-ai-evolution-card__summary {
     display: grid;
     gap: 0.75rem;
