@@ -1,0 +1,82 @@
+<aside class="login-marketing" aria-label="{{ brand_name }}">
+    <div class="login-marketing__brand">
+        <img
+            src="{{ url_for('static', filename='brand/login-header-lockup.png') }}"
+            alt="{{ brand_name }}"
+            class="login-marketing__logo"
+            width="280"
+            height="48"
+        >
+    </div>
+
+    <h1 class="login-marketing__headline">
+        {{ t('login_marketing_headline_before') }}
+        <span class="login-marketing__headline-accent">{{ t('login_marketing_headline_accent') }}</span>
+    </h1>
+
+    <p class="login-marketing__description">
+        {{ t('login_marketing_description') }}
+    </p>
+
+    <div class="login-features" role="list">
+        <article class="login-feature" role="listitem">
+            <span class="login-feature__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.75"/>
+                    <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" stroke-width="1.75"/>
+                </svg>
+            </span>
+            <div>
+                <h2 class="login-feature__title">{{ t('login_feature_control_title') }}</h2>
+                <p class="login-feature__text">{{ t('login_feature_control_text') }}</p>
+            </div>
+        </article>
+
+        <article class="login-feature" role="listitem">
+            <span class="login-feature__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M7 3h10v18H7z" stroke="currentColor" stroke-width="1.75"/>
+                    <path d="M9 8h6M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                    <path d="M16 15h3v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </span>
+            <div>
+                <h2 class="login-feature__title">{{ t('login_feature_billing_title') }}</h2>
+                <p class="login-feature__text">{{ t('login_feature_billing_text') }}</p>
+            </div>
+        </article>
+
+        <article class="login-feature" role="listitem">
+            <span class="login-feature__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.75"/>
+                    <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                    <path d="M19 8v6M16 11h6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                </svg>
+            </span>
+            <div>
+                <h2 class="login-feature__title">{{ t('login_feature_agents_title') }}</h2>
+                <p class="login-feature__text">{{ t('login_feature_agents_text') }}</p>
+            </div>
+        </article>
+
+        <article class="login-feature" role="listitem">
+            <span class="login-feature__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.75"/>
+                    <path d="M3 10h18" stroke="currentColor" stroke-width="1.75"/>
+                    <circle cx="16" cy="15" r="1.25" fill="currentColor"/>
+                </svg>
+            </span>
+            <div>
+                <h2 class="login-feature__title">{{ t('login_feature_cash_title') }}</h2>
+                <p class="login-feature__text">{{ t('login_feature_cash_text') }}</p>
+            </div>
+        </article>
+    </div>
+
+    <blockquote class="login-quote">
+        <span class="login-quote__icon" aria-hidden="true">“</span>
+        <p>{{ t('login_quote_text') }}</p>
+    </blockquote>
+</aside>

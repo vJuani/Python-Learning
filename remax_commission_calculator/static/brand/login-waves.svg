@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 420" fill="none" preserveAspectRatio="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="login-wave-a" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0D47FF" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#60A5FA" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="login-wave-b" x1="20%" y1="100%" x2="80%" y2="0%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#93C5FD" stop-opacity="0.03"/>
+    </linearGradient>
+  </defs>
+  <path
+    fill="url(#login-wave-a)"
+    d="M0 260C180 180 320 300 520 220C720 140 900 280 1120 200C1280 140 1360 180 1440 160V420H0V260Z"
+  />
+  <path
+    fill="url(#login-wave-b)"
+    d="M0 320C220 240 380 360 600 280C820 200 1020 340 1240 260C1340 220 1400 250 1440 240V420H0V320Z"
+  />
+  <path
+    fill="#0D47FF"
+    fill-opacity="0.06"
+    d="M0 360C260 300 420 380 700 320C980 260 1180 350 1440 300V420H0V360Z"
+  />
+</svg>
