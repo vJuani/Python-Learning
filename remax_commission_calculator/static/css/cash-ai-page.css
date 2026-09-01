@@ -1,0 +1,440 @@
+/**
+ * JRH One — Cash AI page (desktop mockup)
+ */
+
+body.is-cash-ai-page .site-footer {
+    display: none;
+}
+
+body.is-cash-ai-page .app-main-inner {
+    max-width: none;
+}
+
+.cash-ai-page {
+    display: grid;
+    gap: 1rem;
+}
+
+.cash-ai-page__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.cash-ai-breadcrumb {
+    display: flex;
+    gap: 0.35rem;
+    margin-bottom: 0.35rem;
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
+.cash-ai-breadcrumb a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.cash-ai-page__header h1 {
+    margin: 0 0 0.3rem;
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.cash-ai-page__header p {
+    margin: 0;
+    color: #6b7280;
+}
+
+.cash-ai-page__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.cash-ai-page__date {
+    padding: 0.45rem 0.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.7rem;
+    background: #fff;
+    font-size: 0.86rem;
+}
+
+.cash-ai-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.45rem;
+    padding: 0.45rem 0.95rem;
+    border-radius: 0.7rem;
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.cash-ai-btn--primary {
+    background: #0d47ff;
+    color: #fff;
+}
+
+.cash-ai-btn--ghost {
+    background: #f8fafc;
+    border-color: #e5e7eb;
+    color: #374151;
+}
+
+.cash-ai-flash {
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-size: 0.84rem;
+}
+
+.cash-ai-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.cash-ai-kpi-card {
+    position: relative;
+    padding: 1rem;
+    border-radius: 1rem;
+    background: #fff;
+    border: 1px solid #eef2f7;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.cash-ai-kpi-card__label {
+    display: block;
+    color: #6b7280;
+    font-size: 0.78rem;
+    margin-bottom: 0.25rem;
+}
+
+.cash-ai-kpi-card strong {
+    font-size: 1.2rem;
+}
+
+.cash-ai-kpi-card__delta {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 600;
+}
+
+.cash-ai-kpi-card__delta--up { color: #16a34a; }
+.cash-ai-kpi-card__delta--down { color: #dc2626; }
+
+.cash-ai-kpi-card__badge {
+    position: absolute;
+    top: 0.85rem;
+    right: 0.85rem;
+    min-width: 1.4rem;
+    height: 1.4rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: #0d47ff;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cash-ai-evolution {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 0.85rem;
+}
+
+.cash-ai-card {
+    padding: 1rem 1.1rem;
+    border-radius: 1rem;
+    background: #fff;
+    border: 1px solid #eef2f7;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.cash-ai-card h2 {
+    margin: 0 0 0.85rem;
+    font-size: 0.98rem;
+}
+
+.cash-ai-balances {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+    display: grid;
+    gap: 0.65rem;
+}
+
+.cash-ai-balances li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.cash-ai-period-change {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.82rem;
+    color: #6b7280;
+}
+
+.cash-ai-workflow {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.cash-ai-step {
+    padding: 1rem;
+    border-radius: 1rem;
+    background: #fff;
+    border: 1px solid #eef2f7;
+    min-height: 18rem;
+}
+
+.cash-ai-step.is-active {
+    border-color: #bfd3ff;
+    box-shadow: 0 0 0 1px rgba(13, 71, 255, 0.08);
+}
+
+.cash-ai-step header {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 0.85rem;
+}
+
+.cash-ai-step header span {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    background: #e8f0ff;
+    color: #0d47ff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.cash-ai-step h3 {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.cash-ai-dropzone {
+    display: grid;
+    place-items: center;
+    min-height: 6rem;
+    margin-bottom: 0.65rem;
+    padding: 1rem;
+    border: 1px dashed #cbd5e1;
+    border-radius: 0.85rem;
+    background: #f8fafc;
+    text-align: center;
+    font-size: 0.82rem;
+    color: #6b7280;
+    cursor: pointer;
+}
+
+.cash-ai-dropzone input {
+    display: none;
+}
+
+.cash-ai-upload textarea {
+    width: 100%;
+    margin-bottom: 0.65rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.65rem;
+    font: inherit;
+    resize: vertical;
+}
+
+.cash-ai-receipts {
+    list-style: none;
+    margin: 0.85rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.55rem;
+}
+
+.cash-ai-receipts li {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.78rem;
+}
+
+.cash-ai-receipts a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.cash-ai-receipts strong {
+    display: block;
+    font-size: 0.82rem;
+}
+
+.cash-ai-status,
+.cash-ai-pill {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.cash-ai-status--success,
+.cash-ai-pill--income { background: #dcfce7; color: #166534; }
+.cash-ai-status--warning { background: #fef3c7; color: #92400e; }
+.cash-ai-status--danger { background: #fee2e2; color: #991b1b; }
+.cash-ai-pill--expense { background: #fee2e2; color: #991b1b; }
+
+.cash-ai-confidence {
+    display: inline-flex;
+    margin-bottom: 0.65rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.cash-ai-receipt-thumb img {
+    width: 100%;
+    max-height: 8rem;
+    object-fit: cover;
+    border-radius: 0.65rem;
+    margin-bottom: 0.65rem;
+}
+
+.cash-ai-fields {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0;
+    font-size: 0.8rem;
+}
+
+.cash-ai-fields div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+}
+
+.cash-ai-fields dt {
+    color: #6b7280;
+}
+
+.cash-ai-fields dd {
+    margin: 0;
+    text-align: right;
+}
+
+.cash-ai-categorize,
+.cash-ai-confirm-form__grid {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.cash-ai-categorize label,
+.cash-ai-confirm-form__grid label {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.cash-ai-categorize select,
+.cash-ai-confirm-form__grid select,
+.cash-ai-confirm-form__grid input {
+    min-height: 2.2rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.6rem;
+    font: inherit;
+}
+
+.cash-ai-summary {
+    margin-bottom: 0.75rem;
+    font-size: 0.84rem;
+    color: #4b5563;
+}
+
+.cash-ai-empty {
+    color: #6b7280;
+    font-size: 0.82rem;
+}
+
+.cash-ai-bottom {
+    display: grid;
+    grid-template-columns: 1.4fr 0.9fr;
+    gap: 0.85rem;
+}
+
+.cash-ai-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.cash-ai-table th,
+.cash-ai-table td {
+    padding: 0.5rem 0.35rem;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: left;
+}
+
+.cash-ai-activity {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.cash-ai-activity li p {
+    margin: 0 0 0.2rem;
+    font-size: 0.84rem;
+}
+
+.cash-ai-activity li span {
+    color: #6b7280;
+    font-size: 0.75rem;
+}
+
+@media (max-width: 1200px) {
+    .cash-ai-kpis,
+    .cash-ai-workflow {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cash-ai-evolution,
+    .cash-ai-bottom {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .cash-ai-page__header {
+        flex-direction: column;
+    }
+
+    .cash-ai-kpis,
+    .cash-ai-workflow {
+        grid-template-columns: 1fr;
+    }
+}

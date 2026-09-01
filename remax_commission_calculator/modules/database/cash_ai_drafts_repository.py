@@ -158,6 +158,44 @@ def create_cash_ai_draft(
         connection.close()
 
 
+def list_cash_ai_drafts(
+    organization_id,
+    *,
+    limit=20,
+    status=None,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    clauses = ["organization_id = ?"]
+    params = [organization_id]
+
+    if status is not None:
+        clauses.append("status = ?")
+        params.append(status)
+
+    limit_value = int(limit) if limit is not None else 20
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            DRAFT_SELECT
+            + f"""
+            WHERE {" AND ".join(clauses)}
+            ORDER BY updated_at DESC, id DESC
+            LIMIT ?
+            """,
+            (*params, limit_value),
+        )
+        return [
+            _build_draft_dict(row)
+            for row in cursor.fetchall()
+        ]
+    finally:
+        connection.close()
+
+
 def get_cash_ai_draft(draft_id, organization_id):
     organization_id = require_organization_id(
         organization_id

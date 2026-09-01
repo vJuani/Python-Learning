@@ -129,8 +129,10 @@ from modules.organization_reports import load_organization_report
 from modules.pdf_organization_report import build_organization_report_pdf
 from modules.excel_organization_report import build_organization_report_xlsx
 from modules.agents_directory import build_agents_directory
+from modules.cash_ai_directory import build_cash_ai_workspace
 from modules.operations_directory import build_operations_directory
 from modules.properties_directory import build_properties_directory
+from modules.reports_directory import build_reports_panel
 from modules.dashboard_home import build_home_panel
 from modules.organization_dashboard import (
     empty_organization_dashboard,
@@ -3592,10 +3594,21 @@ def _load_organization_report_for_request():
 @app.route("/reports")
 @login_required
 def reports_index():
+    organization_id = require_user_organization()
+    agent_id, scope_blocked = get_agent_scope()
     report = _load_organization_report_for_request()
+    reports_panel = build_reports_panel(
+        organization_id,
+        report,
+        request.args,
+        language=get_current_language(),
+        scoped_agent_id=0 if scope_blocked else agent_id,
+        include_cash_flow=is_admin(),
+    )
     return render_template(
         "reports/index.html",
         report=report,
+        reports_panel=reports_panel,
     )
 
 
@@ -6617,26 +6630,60 @@ def cash_opening_balance():
     )
 
 
-def _cash_ai_review_template(organization_id, draft, **extra):
-    context = build_review_context(organization_id, draft)
-    force_duplicates = extra.pop("force_duplicates", None)
+def _render_cash_ai_workspace(organization_id, draft=None, **extra):
+    cash_ai_panel = build_cash_ai_workspace(
+        organization_id,
+        language=get_current_language(),
+    )
     errors = extra.pop("errors", None) or []
-    context.update(extra)
+    form_values = extra.pop(
+        "form_values",
+        {"user_context_text": ""},
+    )
 
-    if force_duplicates is not None:
-        context["duplicates"] = force_duplicates
+    if draft is not None:
+        context = build_review_context(organization_id, draft)
+        force_duplicates = extra.pop("force_duplicates", None)
+        context.update(extra)
+        if force_duplicates is not None:
+            context["duplicates"] = force_duplicates
+        if "editing" not in context:
+            context["editing"] = (
+                request.args.get("edit") == "1"
+            )
+    else:
+        context = {
+            "draft": None,
+            "payload": {},
+            "duplicates": [],
+            "preview": None,
+            "preview_error": None,
+            "review_fields": set(),
+            "editing": False,
+            **extra,
+        }
 
     context.update(
         {
+            "cash_ai_panel": cash_ai_panel,
             "currencies": CASH_CURRENCIES,
             "payment_methods": AI_PAYMENT_METHODS,
             "income_categories": INCOME_CATEGORIES,
             "expense_categories": EXPENSE_CATEGORIES,
             "payment_undetermined": PAYMENT_UNDETERMINED,
             "errors": errors,
+            "form_values": form_values,
         }
     )
-    return render_template("cash/ai_review.html", **context)
+    return render_template("cash/ai_workspace.html", **context)
+
+
+def _cash_ai_review_template(organization_id, draft, **extra):
+    return _render_cash_ai_workspace(
+        organization_id,
+        draft,
+        **extra,
+    )
 
 
 @app.route(
@@ -6649,8 +6696,8 @@ def cash_ai_new():
     current_user = get_current_user()
 
     if request.method == "GET":
-        return render_template(
-            "cash/ai_upload.html",
+        return _render_cash_ai_workspace(
+            organization_id,
             form_values={"user_context_text": ""},
             errors=[],
         )
@@ -6683,8 +6730,8 @@ def cash_ai_new():
             error.message_key,
             error.kwargs.get("stage"),
         )
-        return render_template(
-            "cash/ai_upload.html",
+        return _render_cash_ai_workspace(
+            organization_id,
             form_values={
                 "user_context_text": context_text,
             },
