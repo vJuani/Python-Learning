@@ -56,11 +56,13 @@
     <aside class="app-rail" aria-label="{{ t('nav_aria') }}">
         <div class="app-rail-top">
             <a href="{{ url_for('dashboard') }}" class="app-rail-brand">
-                <span class="site-brand-logo-shell">
-                    {% with logo_variant='light', logo_extra_class='site-brand-logo app-rail-logo' %}
-                    {% include "_brand_logo.html" %}
-                    {% endwith %}
-                </span>
+                <img
+                    src="{{ url_for('static', filename='brand/login-header-lockup.png') }}"
+                    alt="{{ brand_name }}"
+                    class="app-rail-logo-lockup"
+                    width="210"
+                    height="40"
+                >
             </a>
             <button
                 type="button"
@@ -78,6 +80,13 @@
         <nav id="app-rail-nav" class="app-rail-nav">
             {% include "_app_nav_links.html" %}
         </nav>
+        <div class="app-rail-promo hide-mobile">
+            <strong>{{ t('rail_ia_title') }}</strong>
+            <p>{{ t('rail_ia_text') }}</p>
+            <a href="{{ url_for('cash_ai_new') if is_admin() else url_for('dashboard') }}" class="app-rail-promo__link">
+                {{ t('rail_ia_cta') }} →
+            </a>
+        </div>
         <div class="app-rail-footer">
             {% if current_user %}
             {% set rail_first = (current_user.first_name or '').strip() %}
@@ -118,10 +127,22 @@
             </div>
 
             {% if current_user or guest_access %}
-            <div class="header-zone header-zone-context hide-mobile">
-                {% if organization_display_name %}
-                <p class="header-org-name">{{ organization_display_name }}</p>
-                {% endif %}
+            <div class="header-zone header-zone-search hide-mobile">
+                <form class="header-search-form" method="get" action="{{ url_for('search_results') }}">
+                    <svg class="header-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.75"/>
+                        <path d="M20 20l-3-3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                    </svg>
+                    <input
+                        type="search"
+                        name="q"
+                        class="header-search-input"
+                        placeholder="{{ t('header_global_search_placeholder') }}"
+                        value="{{ request.args.get('q', '') }}"
+                        aria-label="{{ t('nav_search_aria') }}"
+                    >
+                    <span class="header-search-kbd" aria-hidden="true">⌘K</span>
+                </form>
             </div>
 
             <nav id="main-nav" class="main-nav header-zone header-zone-center" aria-label="{{ t('nav_aria') }}">
@@ -273,13 +294,19 @@
                     <div class="header-tools-group header-tools-account">
                         <div class="header-account">
                         {% if current_user %}
+                        {% set header_first = (current_user.first_name or '').strip() %}
+                        {% set header_last = (current_user.last_name or '').strip() %}
+                        {% set header_name = (header_first ~ ' ' ~ header_last).strip() or current_user.username %}
+                        {% set header_parts = header_name.split() %}
                         <details class="nav-dropdown nav-account-dropdown">
-                            <summary class="nav-user nav-account-toggle" title="{{ t('logged_in_as') }}">
-                                <strong class="nav-user-name">{{ current_user.username }}</strong>
-                                <span class="nav-user-role">{{ t('role_' ~ current_user.role) }}</span>
-                                {% if current_user.agent_name %}
-                                <span class="nav-user-agent">{{ current_user.agent_name }}</span>
-                                {% endif %}
+                            <summary class="nav-user nav-account-toggle header-account-chip" title="{{ t('logged_in_as') }}">
+                                <span class="header-account-chip__text">
+                                    <strong>{{ header_name }}</strong>
+                                    <span>{{ t('role_' ~ current_user.role) }}</span>
+                                </span>
+                                <span class="header-account-chip__avatar" aria-hidden="true">
+                                    {{ header_parts[0][0:1]|upper }}{% if header_parts|length > 1 %}{{ header_parts[1][0:1]|upper }}{% endif %}
+                                </span>
                             </summary>
                             <div class="nav-dropdown-menu nav-dropdown-menu-end" role="menu">
                                 {% if can_manage_users() %}

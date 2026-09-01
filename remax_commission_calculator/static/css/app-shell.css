@@ -66,17 +66,17 @@
 
     body.has-app-rail .app-rail-nav .nav-link:hover,
     body.has-app-rail .app-rail-nav .app-nav-link:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: var(--rail-text);
+        background: var(--rail-active-bg);
+        color: var(--rail-active-border);
     }
 
     body.has-app-rail .app-rail-nav .nav-link.active,
     body.has-app-rail .app-rail-nav .app-nav-link.active {
         background: var(--rail-active-bg);
-        color: var(--rail-text);
+        color: var(--rail-active-border);
         font-weight: var(--font-weight-semibold);
-        box-shadow: inset 3px 0 0 var(--rail-active-border);
-        padding-left: calc(0.75rem - 3px);
+        box-shadow: none;
+        padding-left: 0.75rem;
     }
 
     body.has-app-rail .app-rail-footer {
@@ -146,9 +146,180 @@
     }
 
     body.has-app-rail .app-rail-logout:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: var(--rail-text);
+        background: var(--rail-active-bg);
+        color: var(--rail-active-border);
     }
+}
+
+/* ── Header search (mockup) ──────────────────────────────── */
+@media (min-width: 1025px) {
+    .header-search-form {
+        position: relative;
+        width: min(34rem, 100%);
+    }
+
+    .header-search-input {
+        width: 100%;
+        min-height: 2.65rem;
+        padding: 0.55rem 3.25rem 0.55rem 2.65rem;
+        border: 1px solid var(--border-soft);
+        border-radius: 0.75rem;
+        background: #f8fafc;
+        color: var(--text);
+        font: inherit;
+        font-size: 0.88rem;
+    }
+
+    .header-search-input::placeholder {
+        color: #9ca3af;
+    }
+
+    .header-search-input:focus {
+        outline: none;
+        border-color: #c7d7fe;
+        background: #fff;
+        box-shadow: 0 0 0 3px rgba(13, 71, 255, 0.1);
+    }
+
+    .header-search-icon {
+        position: absolute;
+        left: 0.85rem;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 1rem;
+        height: 1rem;
+        color: #9ca3af;
+        pointer-events: none;
+    }
+
+    .header-search-kbd {
+        position: absolute;
+        right: 0.65rem;
+        top: 50%;
+        transform: translateY(-50%);
+        padding: 0.1rem 0.4rem;
+        border: 1px solid var(--border-soft);
+        border-radius: 0.35rem;
+        background: #fff;
+        color: #9ca3af;
+        font-size: 0.68rem;
+        line-height: 1.2;
+    }
+
+    .header-account-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.2rem 0.2rem 0.2rem 0.65rem;
+        border: 1px solid var(--border-soft);
+        border-radius: 999px;
+        background: #fff;
+        cursor: pointer;
+        list-style: none;
+    }
+
+    .header-account-chip::-webkit-details-marker {
+        display: none;
+    }
+
+    .header-account-chip__avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+        color: #1d4ed8;
+        font-size: 0.72rem;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    .header-account-chip__text {
+        display: grid;
+        gap: 0.05rem;
+        min-width: 0;
+        text-align: left;
+    }
+
+    .header-account-chip__text strong {
+        font-size: 0.82rem;
+        color: #111827;
+        line-height: 1.2;
+    }
+
+    .header-account-chip__text span {
+        font-size: 0.72rem;
+        color: #6b7280;
+        line-height: 1.2;
+    }
+}
+
+/* ── Sidebar nav icons ───────────────────────────────────── */
+.app-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.app-nav-link__icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    color: currentColor;
+    opacity: 0.85;
+}
+
+.app-nav-link.active .app-nav-link__icon {
+    opacity: 1;
+}
+
+.app-rail-promo {
+    margin-top: auto;
+    padding: 0.85rem;
+    border: 1px solid #e8edf5;
+    border-radius: 0.85rem;
+    background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+}
+
+.app-rail-promo strong {
+    display: block;
+    font-size: 0.82rem;
+    color: #111827;
+    margin-bottom: 0.25rem;
+}
+
+.app-rail-promo p {
+    margin: 0 0 0.65rem;
+    font-size: 0.72rem;
+    line-height: 1.45;
+    color: #6b7280;
+}
+
+.app-rail-promo__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #0d47ff;
+    text-decoration: none;
+}
+
+.app-rail-promo__link:hover {
+    text-decoration: underline;
+}
+
+body.is-dashboard-page .site-footer {
+    display: none;
+}
+
+body.is-dashboard-page .app-main-inner {
+    max-width: none;
+    padding-top: 1.25rem;
+    padding-bottom: 2rem;
+}
 
     html[data-rail="collapsed"] body.has-app-rail .app-rail {
         padding-left: var(--space-2);

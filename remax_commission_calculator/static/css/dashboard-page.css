@@ -127,9 +127,43 @@
 
 .home-panel__layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 20rem);
     gap: 1rem;
     align-items: start;
+}
+
+.home-table th {
+    background: #f8fafc;
+    color: #6b7280;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    border-bottom: 1px solid #edf0f5;
+}
+
+.home-table td {
+    font-size: 0.84rem;
+    color: #374151;
+}
+
+.home-table tbody tr:hover {
+    background: #fafbfc;
+}
+
+.home-kpi-card {
+    min-height: 6.5rem;
+}
+
+.home-panel__period-select {
+    box-shadow: 0 1px 2px rgba(10, 22, 51, 0.04);
+}
+
+.app-rail-logo-lockup {
+    display: block;
+    width: min(12.5rem, 100%);
+    height: auto;
+    object-fit: contain;
 }
 
 .home-panel__main,

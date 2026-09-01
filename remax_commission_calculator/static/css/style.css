@@ -3273,9 +3273,9 @@ a.dashboard-quick-card:hover {
         height: 100vh;
         z-index: 40;
         padding: 0.75rem 0.65rem 0.85rem;
-        border-right: 1px solid rgba(255, 255, 255, 0.08);
-        background: var(--brand-navy);
-        color: #e8eefc;
+        border-right: 1px solid var(--rail-border);
+        background: var(--rail-bg);
+        color: var(--rail-text);
         overflow-x: hidden;
         overflow-y: auto;
     }
@@ -3296,9 +3296,9 @@ a.dashboard-quick-card:hover {
     }
 
     body.has-app-rail .app-rail-brand .site-brand-logo-shell {
-        background: rgba(255, 255, 255, 0.06);
-        border-radius: var(--radius-sm);
-        padding: 0.3rem 0.4rem;
+        background: transparent;
+        border-radius: 0;
+        padding: 0;
         max-width: 100%;
     }
 
@@ -3316,43 +3316,32 @@ a.dashboard-quick-card:hover {
     }
 
     body.has-app-rail .app-rail-nav .nav-link {
-        color: rgba(232, 238, 252, 0.78);
+        color: var(--rail-text-muted);
         background: transparent;
         padding: 0.55rem 0.7rem;
-        font-size: 0.9rem;
+        font-size: 0.88rem;
         line-height: 1.25;
     }
 
     body.has-app-rail .app-rail-nav .nav-link:hover,
     body.has-app-rail .app-rail-nav .nav-link.active {
-        background: rgba(59, 130, 246, 0.18);
-        color: #fff;
+        background: var(--rail-active-bg);
+        color: var(--rail-active-border);
     }
 
     body.has-app-rail .app-rail-footer {
         display: grid;
         gap: 0.35rem;
         padding-top: 0.55rem;
-        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        border-top: 1px solid var(--rail-border);
     }
 
     body.has-app-rail .app-rail-user {
-        display: grid;
-        gap: 0.05rem;
-        padding: 0 0.45rem;
-        color: rgba(232, 238, 252, 0.85);
-        font-size: 0.78rem;
+        display: none;
     }
 
-    body.has-app-rail .app-rail-user strong {
-        font-size: 0.86rem;
-        color: #fff;
-    }
-
-    body.has-app-rail .app-rail-footer .nav-link {
-        color: rgba(232, 238, 252, 0.78);
-        padding: 0.5rem 0.7rem;
-        font-size: 0.88rem;
+    body.has-app-rail .app-rail-logout {
+        display: none;
     }
 
     body.has-app-rail .header-zone-left,
@@ -3362,10 +3351,22 @@ a.dashboard-quick-card:hover {
     }
 
     body.has-app-rail .header-grid {
-        grid-template-columns: 1fr auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         min-height: var(--header-height);
-        padding-left: 0.85rem;
-        padding-right: 0.85rem;
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+        gap: 1rem;
+    }
+
+    body.has-app-rail .header-zone-search {
+        display: flex;
+        justify-content: center;
+        grid-column: 1;
+        min-width: 0;
+    }
+
+    body.has-app-rail .header-zone-context {
+        display: none;
     }
 
     body.has-app-rail .header-zone-right {
