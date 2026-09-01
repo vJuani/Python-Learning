@@ -121,6 +121,7 @@
                 <span class="cash-ai-step__num">1</span>
                 <h3>{{ t('cash_ai_page_step_upload') }}</h3>
             </header>
+            <div class="cash-ai-step__body">
             <form class="cash-ai-upload" method="post" action="{{ url_for('cash_ai_new') }}" enctype="multipart/form-data" data-cash-ai-form>
                 <label class="cash-ai-dropzone">
                     <input type="file" name="receipt" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" capture="environment">
@@ -147,6 +148,7 @@
                     {% endfor %}
                 </ul>
             </div>
+            </div>
         </article>
 
         <article class="cash-ai-step {% if draft and draft.status != 'failed' %}is-active{% endif %}">
@@ -154,6 +156,7 @@
                 <span class="cash-ai-step__num">2</span>
                 <h3>{{ t('cash_ai_page_step_analysis') }}</h3>
             </header>
+            <div class="cash-ai-step__body">
             {% if draft and draft.status != 'failed' %}
             <div class="cash-ai-analysis">
                 {% if draft.attachment_path %}
@@ -181,6 +184,7 @@
             {% else %}
             <p class="cash-ai-empty">{{ t('cash_ai_page_step_empty') }}</p>
             {% endif %}
+            </div>
         </article>
 
         <article class="cash-ai-step {% if draft and editing %}is-active{% elif draft and payload.category %}is-complete{% endif %}">
@@ -192,6 +196,7 @@
                 {% endif %}
             </header>
             {% if draft %}
+            <div class="cash-ai-step__body">
             <form method="post" action="{{ url_for('cash_ai_review', draft_id=draft.id) }}" class="cash-ai-categorize" data-cash-ai-confirm>
                 <input type="hidden" name="action" value="save" data-cash-ai-action>
                 <input type="hidden" name="confirm_token" value="{{ draft.confirm_token }}">
@@ -220,8 +225,9 @@
                 <label>{{ t('cash_notes') }}
                     <textarea name="notes" rows="2">{{ payload.notes or '' }}</textarea>
                 </label>
-                <button type="submit" class="cash-ai-btn cash-ai-btn--outline cash-ai-btn--block" data-cash-ai-set-action="save">{{ t('save') }}</button>
+                <button type="submit" class="cash-ai-btn cash-ai-btn--soft cash-ai-btn--block" data-cash-ai-set-action="save">{{ t('save') }}</button>
             </form>
+            </div>
             {% else %}
             <p class="cash-ai-empty">{{ t('cash_ai_page_step_empty') }}</p>
             {% endif %}
@@ -232,6 +238,7 @@
                 <span class="cash-ai-step__num">4</span>
                 <h3>{{ t('cash_ai_page_step_confirm') }}</h3>
             </header>
+            <div class="cash-ai-step__body">
             {% if draft and draft.status == 'failed' %}
             <p class="cash-ai-flash">{{ t(draft.error_message_key or 'cash_ai_err_provider_failed') }}</p>
             <form method="post" action="{{ url_for('cash_ai_retry', draft_id=draft.id) }}">
@@ -270,6 +277,7 @@
             {% else %}
             <p class="cash-ai-empty">{{ t('cash_ai_page_step_empty') }}</p>
             {% endif %}
+            </div>
         </article>
     </section>
 
