@@ -14,7 +14,7 @@
         <div>
             <nav class="cash-ai-breadcrumb" aria-label="Breadcrumb">
                 <a href="{{ url_for('dashboard') }}">{{ t('nav_home_short') }}</a>
-                <span>/</span>
+                <span aria-hidden="true">/</span>
                 <span>{{ t('cash_ai_page_title') }}</span>
             </nav>
             <h1>{{ t('cash_ai_page_title') }}</h1>
@@ -22,7 +22,7 @@
         </div>
         <div class="cash-ai-page__actions">
             <span class="cash-ai-page__date">{{ cash_ai_panel.date_label }}</span>
-            <a href="{{ url_for('cash_list') }}" class="cash-ai-btn cash-ai-btn--ghost">{{ t('cash_ai_page_export') }}</a>
+            <a href="{{ url_for('cash_list') }}" class="cash-ai-btn cash-ai-btn--outline">{{ t('cash_ai_page_export') }}</a>
         </div>
     </header>
 
@@ -31,27 +31,43 @@
     {% endif %}
 
     <section class="cash-ai-kpis" aria-label="{{ t('cash_ai_page_kpis_aria') }}">
-        <article class="cash-ai-kpi-card">
-            <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_income') }}</span>
-            <strong>{{ cash_ai_panel.kpis.income_today | money('ARS') }}</strong>
-            {% if cash_ai_panel.kpis.income_change is not none %}
-            <em class="cash-ai-kpi-card__delta cash-ai-kpi-card__delta--up">↑ {{ cash_ai_panel.kpis.income_change }}%</em>
-            {% endif %}
+        <article class="cash-ai-kpi-card cash-ai-kpi-card--income">
+            <span class="cash-ai-kpi-card__icon" aria-hidden="true"></span>
+            <div>
+                <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_income') }}</span>
+                <strong>{{ cash_ai_panel.kpis.income_today | money('ARS') }}</strong>
+                {% if cash_ai_panel.kpis.income_change is not none %}
+                <em class="cash-ai-kpi-card__delta cash-ai-kpi-card__delta--up">↑ {{ cash_ai_panel.kpis.income_change }}% {{ t('cash_ai_page_vs_yesterday') }}</em>
+                {% endif %}
+                <small>{{ t('cash_ai_page_movements_count', count=cash_ai_panel.kpis.income_count) }}</small>
+            </div>
         </article>
-        <article class="cash-ai-kpi-card">
-            <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_expense') }}</span>
-            <strong>{{ cash_ai_panel.kpis.expense_today | money('ARS') }}</strong>
-            {% if cash_ai_panel.kpis.expense_change is not none %}
-            <em class="cash-ai-kpi-card__delta cash-ai-kpi-card__delta--down">↓ {{ cash_ai_panel.kpis.expense_change | abs }}%</em>
-            {% endif %}
+        <article class="cash-ai-kpi-card cash-ai-kpi-card--expense">
+            <span class="cash-ai-kpi-card__icon" aria-hidden="true"></span>
+            <div>
+                <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_expense') }}</span>
+                <strong>{{ cash_ai_panel.kpis.expense_today | money('ARS') }}</strong>
+                {% if cash_ai_panel.kpis.expense_change is not none %}
+                <em class="cash-ai-kpi-card__delta cash-ai-kpi-card__delta--down">↓ {{ cash_ai_panel.kpis.expense_change | abs }}% {{ t('cash_ai_page_vs_yesterday') }}</em>
+                {% endif %}
+                <small>{{ t('cash_ai_page_movements_count', count=cash_ai_panel.kpis.expense_count) }}</small>
+            </div>
         </article>
-        <article class="cash-ai-kpi-card">
-            <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_net') }}</span>
-            <strong>{{ cash_ai_panel.kpis.net_today | money('ARS') }}</strong>
+        <article class="cash-ai-kpi-card cash-ai-kpi-card--net">
+            <span class="cash-ai-kpi-card__icon" aria-hidden="true"></span>
+            <div>
+                <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_net') }}</span>
+                <strong>{{ cash_ai_panel.kpis.net_today | money('ARS') }}</strong>
+                <small>{{ t('cash_ai_page_net_vs_yesterday', amount=cash_ai_panel.kpis.net_yesterday | money('ARS')) }}</small>
+            </div>
         </article>
         <article class="cash-ai-kpi-card cash-ai-kpi-card--pending">
-            <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_pending') }}</span>
-            <strong>{{ cash_ai_panel.kpis.pending_amount | money('ARS') }}</strong>
+            <span class="cash-ai-kpi-card__icon" aria-hidden="true"></span>
+            <div>
+                <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_pending') }}</span>
+                <strong>{{ cash_ai_panel.kpis.pending_amount | money('ARS') }}</strong>
+                <small>{{ t('cash_ai_page_receipts_count', count=cash_ai_panel.kpis.pending_receipts) }}</small>
+            </div>
             <span class="cash-ai-kpi-card__badge">{{ cash_ai_panel.kpis.pending_count }}</span>
         </article>
     </section>
@@ -59,82 +75,134 @@
     <section class="cash-ai-evolution">
         <div class="cash-ai-card cash-ai-card--chart">
             <h2>{{ t('cash_ai_page_evolution_title') }}</h2>
-            <canvas id="cash-ai-evolution-chart" height="220"></canvas>
+            <p class="cash-ai-card__hint">{{ t('cash_ai_page_evolution_hint') }}</p>
+            <canvas id="cash-ai-evolution-chart" height="240"></canvas>
         </div>
         <div class="cash-ai-card cash-ai-card--balances">
             <h2>{{ t('cash_ai_page_balances_title') }}</h2>
             <ul class="cash-ai-balances">
-                <li><span>🇦🇷 ARS</span><strong>{{ cash_ai_panel.balances.ARS | money('ARS') }}</strong></li>
-                <li><span>🇺🇸 USD</span><strong>{{ cash_ai_panel.balances.USD | money('USD') }}</strong></li>
+                <li>
+                    <span class="cash-ai-balances__flag">🇦🇷</span>
+                    <span>ARS</span>
+                    <strong>{{ cash_ai_panel.balances.ARS | money('ARS') }}</strong>
+                </li>
+                <li>
+                    <span class="cash-ai-balances__flag">🇺🇸</span>
+                    <span>USD</span>
+                    <strong>{{ cash_ai_panel.balances.USD | money('USD') }}</strong>
+                </li>
             </ul>
-            <div class="cash-ai-period-change">
-                <span>{{ t('cash_ai_page_period_change') }}</span>
-                {% if cash_ai_panel.balances.period_change is not none %}
-                <em class="cash-ai-kpi-card__delta cash-ai-kpi-card__delta--up">↑ {{ cash_ai_panel.balances.period_change }}%</em>
-                {% endif %}
-            </div>
+            <dl class="cash-ai-period">
+                <div>
+                    <dt>{{ t('cash_ai_page_period_start') }} ({{ cash_ai_panel.balances.period_start_label }})</dt>
+                    <dd>{{ cash_ai_panel.balances.period_start | money('ARS') }}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('cash_ai_page_period_end') }} ({{ cash_ai_panel.balances.period_end_label }})</dt>
+                    <dd>{{ cash_ai_panel.balances.period_end | money('ARS') }}</dd>
+                </div>
+                <div class="cash-ai-period__change">
+                    <dt>{{ t('cash_ai_page_period_change') }}</dt>
+                    <dd>
+                        {% if cash_ai_panel.balances.period_change is not none %}
+                        <em class="cash-ai-kpi-card__delta cash-ai-kpi-card__delta--up">↑ {{ cash_ai_panel.balances.period_change }}%</em>
+                        {% endif %}
+                        <span>{{ cash_ai_panel.balances.period_change_amount | money('ARS') }}</span>
+                    </dd>
+                </div>
+            </dl>
         </div>
     </section>
 
     <section class="cash-ai-workflow" aria-label="{{ t('cash_ai_page_workflow_aria') }}">
         <article class="cash-ai-step {% if not draft %}is-active{% endif %}">
-            <header><span>1</span><h3>{{ t('cash_ai_page_step_upload') }}</h3></header>
+            <header class="cash-ai-step__head">
+                <span class="cash-ai-step__num">1</span>
+                <h3>{{ t('cash_ai_page_step_upload') }}</h3>
+            </header>
             <form class="cash-ai-upload" method="post" action="{{ url_for('cash_ai_new') }}" enctype="multipart/form-data" data-cash-ai-form>
                 <label class="cash-ai-dropzone">
                     <input type="file" name="receipt" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" capture="environment">
-                    <span>{{ t('cash_ai_page_dropzone') }}</span>
+                    <span class="cash-ai-dropzone__icon" aria-hidden="true">↑</span>
+                    <strong>{{ t('cash_ai_page_dropzone') }}</strong>
+                    <small>PNG, JPG, WEBP</small>
                 </label>
-                <textarea name="user_context_text" rows="3" placeholder="{{ t('cash_ai_context_placeholder') }}">{{ form_values.user_context_text if form_values else '' }}</textarea>
-                <button type="submit" class="cash-ai-btn cash-ai-btn--primary" data-cash-ai-submit>{{ t('cash_ai_analyze') }}</button>
+                <textarea name="user_context_text" rows="2" placeholder="{{ t('cash_ai_context_placeholder') }}">{{ form_values.user_context_text if form_values else '' }}</textarea>
+                <button type="submit" class="cash-ai-btn cash-ai-btn--primary cash-ai-btn--block" data-cash-ai-submit>{{ t('cash_ai_analyze') }}</button>
             </form>
-            <ul class="cash-ai-receipts">
-                {% for receipt in cash_ai_panel.recent_receipts %}
-                <li>
-                    <a href="{{ url_for('cash_ai_review', draft_id=receipt.id) }}">
-                        <strong>{{ receipt.name }}</strong>
-                        <span>{{ receipt.date }} · {{ receipt.amount | money(receipt.currency) if receipt.amount is not none else '—' }}</span>
-                    </a>
-                    <span class="cash-ai-status cash-ai-status--{{ receipt.status_tone }}">{{ receipt.status_label }}</span>
-                </li>
-                {% else %}
-                <li class="cash-ai-empty">{{ t('cash_ai_page_no_receipts') }}</li>
-                {% endfor %}
-            </ul>
+            <div class="cash-ai-receipts-block">
+                <h4>{{ t('cash_ai_page_recent_receipts') }}</h4>
+                <ul class="cash-ai-receipts">
+                    {% for receipt in cash_ai_panel.recent_receipts %}
+                    <li>
+                        <a href="{{ url_for('cash_ai_review', draft_id=receipt.id) }}">
+                            <strong>{{ receipt.name }}</strong>
+                            <span>{{ receipt.date }} · {{ receipt.amount | money(receipt.currency) if receipt.amount is not none else '—' }}</span>
+                        </a>
+                        <span class="cash-ai-status cash-ai-status--{{ receipt.status_tone }}">{{ receipt.status_label }}</span>
+                    </li>
+                    {% else %}
+                    <li class="cash-ai-empty">{{ t('cash_ai_page_no_receipts') }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
         </article>
 
         <article class="cash-ai-step {% if draft and draft.status != 'failed' %}is-active{% endif %}">
-            <header><span>2</span><h3>{{ t('cash_ai_page_step_analysis') }}</h3></header>
+            <header class="cash-ai-step__head">
+                <span class="cash-ai-step__num">2</span>
+                <h3>{{ t('cash_ai_page_step_analysis') }}</h3>
+            </header>
             {% if draft and draft.status != 'failed' %}
-            {% if draft.confidence %}
-            <span class="cash-ai-confidence">
-                {{ t('cash_ai_page_confidence', pct=96 if draft.confidence == 'high' else (45 if draft.confidence == 'low' else draft.confidence)) }}
-            </span>
-            {% endif %}
-            {% if draft.attachment_path %}
-            <a href="{{ url_for('cash_ai_draft_receipt', draft_id=draft.id) }}" class="cash-ai-receipt-thumb" target="_blank" rel="noopener">
-                <img src="{{ url_for('cash_ai_draft_receipt', draft_id=draft.id) }}" alt="{{ t('cash_receipt') }}" loading="lazy">
-            </a>
-            {% endif %}
-            <dl class="cash-ai-fields">
-                <div><dt>{{ t('cash_movement_date') }}</dt><dd>{{ payload.movement_date | short_date if payload.movement_date else '—' }}</dd></div>
-                <div><dt>{{ t('cash_merchant') }}</dt><dd>{{ payload.merchant or '—' }}</dd></div>
-                <div><dt>{{ t('cash_movement_type') }}</dt><dd>{{ t('cash_type_' ~ (payload.movement_type or 'expense')) }}</dd></div>
-                <div><dt>{{ t('cash_amount') }}</dt><dd>{% if payload.amount is not none %}{{ payload.amount | money(payload.currency or 'ARS') }}{% else %}—{% endif %}</dd></div>
-                <div><dt>{{ t('cash_payment_method') }}</dt><dd>{% if payload.payment_method %}{{ t('cash_pay_' ~ payload.payment_method) }}{% else %}—{% endif %}</dd></div>
-                <div><dt>{{ t('cash_receipt_number') }}</dt><dd>{{ payload.receipt_number or '—' }}</dd></div>
-            </dl>
+            <div class="cash-ai-analysis">
+                {% if draft.attachment_path %}
+                <a href="{{ url_for('cash_ai_draft_receipt', draft_id=draft.id) }}" class="cash-ai-receipt-thumb" target="_blank" rel="noopener">
+                    <img src="{{ url_for('cash_ai_draft_receipt', draft_id=draft.id) }}" alt="{{ t('cash_receipt') }}" loading="lazy">
+                </a>
+                {% endif %}
+                <div class="cash-ai-analysis__body">
+                    {% if draft.confidence %}
+                    <span class="cash-ai-confidence">
+                        {{ t('cash_ai_page_confidence', pct=96 if draft.confidence == 'high' else (45 if draft.confidence == 'low' else draft.confidence)) }}
+                    </span>
+                    {% endif %}
+                    <dl class="cash-ai-fields">
+                        <div><dt>{{ t('cash_movement_date') }}</dt><dd>{{ payload.movement_date | short_date if payload.movement_date else '—' }}</dd></div>
+                        <div><dt>{{ t('cash_merchant') }}</dt><dd>{{ payload.merchant or '—' }}</dd></div>
+                        <div><dt>{{ t('cash_movement_type') }}</dt><dd>{{ t('cash_type_' ~ (payload.movement_type or 'expense')) }}</dd></div>
+                        <div><dt>{{ t('cash_amount') }}</dt><dd>{% if payload.amount is not none %}{{ payload.amount | money(payload.currency or 'ARS') }}{% else %}—{% endif %}</dd></div>
+                        <div><dt>{{ t('cash_payment_method') }}</dt><dd>{% if payload.payment_method %}{{ t('cash_pay_' ~ payload.payment_method) }}{% else %}—{% endif %}</dd></div>
+                        <div><dt>{{ t('cash_receipt_number') }}</dt><dd>{{ payload.receipt_number or '—' }}</dd></div>
+                    </dl>
+                    <a href="{{ url_for('cash_ai_review', draft_id=draft.id) }}?edit=1" class="cash-ai-link">{{ t('cash_ai_page_edit_extracted') }}</a>
+                </div>
+            </div>
             {% else %}
             <p class="cash-ai-empty">{{ t('cash_ai_page_step_empty') }}</p>
             {% endif %}
         </article>
 
-        <article class="cash-ai-step {% if draft and editing %}is-active{% endif %}">
-            <header><span>3</span><h3>{{ t('cash_ai_page_step_categorize') }}</h3></header>
-            {% if draft and editing %}
+        <article class="cash-ai-step {% if draft and editing %}is-active{% elif draft and payload.category %}is-complete{% endif %}">
+            <header class="cash-ai-step__head">
+                <span class="cash-ai-step__num">3</span>
+                <h3>{{ t('cash_ai_page_step_categorize') }}</h3>
+                {% if draft %}
+                <button type="button" class="cash-ai-chip" disabled>{{ t('cash_ai_page_ai_suggestions') }}</button>
+                {% endif %}
+            </header>
+            {% if draft %}
             <form method="post" action="{{ url_for('cash_ai_review', draft_id=draft.id) }}" class="cash-ai-categorize" data-cash-ai-confirm>
                 <input type="hidden" name="action" value="save" data-cash-ai-action>
                 <input type="hidden" name="confirm_token" value="{{ draft.confirm_token }}">
-                <label>{{ t('cash_category') }}
+                <input type="hidden" name="movement_type" value="{{ payload.movement_type or '' }}">
+                <input type="hidden" name="currency" value="{{ payload.currency or '' }}">
+                <input type="hidden" name="amount" value="{{ payload.amount if payload.amount is not none else '' }}">
+                <input type="hidden" name="description" value="{{ payload.description or '' }}">
+                <input type="hidden" name="merchant" value="{{ payload.merchant or '' }}">
+                <input type="hidden" name="payment_method" value="{{ payload.payment_method or '' }}">
+                <input type="hidden" name="receipt_number" value="{{ payload.receipt_number or '' }}">
+                <input type="hidden" name="movement_date" value="{{ payload.movement_date or '' }}">
+                <label>{{ t('cash_ai_page_category_main') }}
                     <select name="category" required>
                         <optgroup label="{{ t('cash_type_income') }}">
                             {% for category in income_categories %}
@@ -148,40 +216,39 @@
                         </optgroup>
                     </select>
                 </label>
-                <input type="hidden" name="movement_type" value="{{ payload.movement_type or '' }}">
-                <input type="hidden" name="currency" value="{{ payload.currency or '' }}">
-                <input type="hidden" name="amount" value="{{ payload.amount if payload.amount is not none else '' }}">
-                <input type="hidden" name="description" value="{{ payload.description or '' }}">
-                <input type="hidden" name="merchant" value="{{ payload.merchant or '' }}">
-                <input type="hidden" name="payment_method" value="{{ payload.payment_method or '' }}">
-                <input type="hidden" name="receipt_number" value="{{ payload.receipt_number or '' }}">
-                <input type="hidden" name="movement_date" value="{{ payload.movement_date or '' }}">
-                <input type="hidden" name="notes" value="{{ payload.notes or '' }}">
-                <button type="submit" class="cash-ai-btn cash-ai-btn--ghost" data-cash-ai-set-action="save">{{ t('save') }}</button>
+                <label>{{ t('cash_notes') }}
+                    <textarea name="notes" rows="2">{{ payload.notes or '' }}</textarea>
+                </label>
+                <button type="submit" class="cash-ai-btn cash-ai-btn--outline cash-ai-btn--block" data-cash-ai-set-action="save">{{ t('save') }}</button>
             </form>
-            {% elif draft and not editing %}
-            <p>{{ payload.category and t('cash_cat_' ~ payload.category) or '—' }}</p>
-            <button type="button" class="cash-ai-btn cash-ai-btn--ghost" onclick="location.href='{{ url_for('cash_ai_review', draft_id=draft.id) }}?edit=1'">{{ t('cash_ai_edit') }}</button>
             {% else %}
             <p class="cash-ai-empty">{{ t('cash_ai_page_step_empty') }}</p>
             {% endif %}
         </article>
 
-        <article class="cash-ai-step {% if draft and not editing and draft.status == 'review' %}is-active{% endif %}">
-            <header><span>4</span><h3>{{ t('cash_ai_page_step_confirm') }}</h3></header>
+        <article class="cash-ai-step {% if draft and draft.status == 'review' and not editing %}is-active{% endif %}">
+            <header class="cash-ai-step__head">
+                <span class="cash-ai-step__num">4</span>
+                <h3>{{ t('cash_ai_page_step_confirm') }}</h3>
+            </header>
             {% if draft and draft.status == 'failed' %}
             <p class="cash-ai-flash">{{ t(draft.error_message_key or 'cash_ai_err_provider_failed') }}</p>
             <form method="post" action="{{ url_for('cash_ai_retry', draft_id=draft.id) }}">
-                <button type="submit" class="cash-ai-btn cash-ai-btn--primary">{{ t('cash_ai_retry') }}</button>
+                <button type="submit" class="cash-ai-btn cash-ai-btn--primary cash-ai-btn--block">{{ t('cash_ai_retry') }}</button>
             </form>
-            {% elif draft and not editing %}
+            {% elif draft %}
             {% if duplicates %}
-            <div class="cash-ai-flash">{{ t('cash_ai_duplicate_help') }}</div>
+            <div class="cash-ai-note">{{ t('cash_ai_duplicate_help') }}</div>
+            {% else %}
+            <p class="cash-ai-ready">✓ {{ t('cash_ai_page_ready_to_register') }}</p>
             {% endif %}
-            <div class="cash-ai-summary">
-                <p>{{ t('cash_type_' ~ (payload.movement_type or 'expense')) }} · {% if payload.amount is not none %}{{ payload.amount | money(payload.currency or 'ARS') }}{% else %}—{% endif %}</p>
-                <p>{{ payload.description or '—' }}</p>
-            </div>
+            <dl class="cash-ai-summary">
+                <div><dt>{{ t('cash_movement_type') }}</dt><dd>{{ t('cash_type_' ~ (payload.movement_type or 'expense')) }}</dd></div>
+                <div><dt>{{ t('cash_amount') }}</dt><dd>{% if payload.amount is not none %}{{ payload.amount | money(payload.currency or 'ARS') }}{% else %}—{% endif %}</dd></div>
+                <div><dt>{{ t('cash_merchant') }}</dt><dd>{{ payload.merchant or payload.description or '—' }}</dd></div>
+                <div><dt>{{ t('cash_category') }}</dt><dd>{% if payload.category %}{{ t('cash_cat_' ~ payload.category) }}{% else %}—{% endif %}</dd></div>
+                <div><dt>{{ t('cash_payment_method') }}</dt><dd>{% if payload.payment_method %}{{ t('cash_pay_' ~ payload.payment_method) }}{% else %}—{% endif %}</dd></div>
+            </dl>
             <form method="post" action="{{ url_for('cash_ai_review', draft_id=draft.id) }}" data-cash-ai-confirm>
                 <input type="hidden" name="action" value="confirm" data-cash-ai-action>
                 <input type="hidden" name="confirm_token" value="{{ draft.confirm_token }}">
@@ -196,54 +263,8 @@
                 <input type="hidden" name="movement_date" value="{{ payload.movement_date or '' }}">
                 <input type="hidden" name="notes" value="{{ payload.notes or '' }}">
                 {% if duplicates %}<input type="hidden" name="acknowledge_duplicates" value="1">{% endif %}
-                <button type="submit" class="cash-ai-btn cash-ai-btn--primary" data-cash-ai-set-action="confirm">{{ t('cash_ai_confirm') }}</button>
-                <button type="submit" class="cash-ai-btn cash-ai-btn--ghost" data-cash-ai-set-action="edit">{{ t('cash_ai_edit') }}</button>
-            </form>
-            {% elif draft and editing %}
-            <form method="post" action="{{ url_for('cash_ai_review', draft_id=draft.id) }}" class="cash-ai-confirm-form" data-cash-ai-confirm>
-                <input type="hidden" name="action" value="confirm" data-cash-ai-action>
-                <input type="hidden" name="confirm_token" value="{{ draft.confirm_token }}">
-                {% if duplicates %}<input type="hidden" name="acknowledge_duplicates" value="1">{% endif %}
-                <div class="cash-ai-confirm-form__grid">
-                    <label>{{ t('cash_movement_type') }}
-                        <select name="movement_type" required>
-                            <option value="income" {% if payload.movement_type == 'income' %}selected{% endif %}>{{ t('cash_type_income') }}</option>
-                            <option value="expense" {% if payload.movement_type == 'expense' %}selected{% endif %}>{{ t('cash_type_expense') }}</option>
-                        </select>
-                    </label>
-                    <label>{{ t('cash_currency') }}
-                        <select name="currency" required>
-                            {% for currency in currencies %}
-                            <option value="{{ currency }}" {% if payload.currency == currency %}selected{% endif %}>{{ currency }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                    <label>{{ t('cash_amount') }}<input type="text" name="amount" value="{{ payload.amount if payload.amount is not none else '' }}" required></label>
-                    <label>{{ t('cash_category') }}
-                        <select name="category" required>
-                            <optgroup label="{{ t('cash_type_income') }}">
-                                {% for category in income_categories %}
-                                <option value="{{ category }}" {% if payload.category == category %}selected{% endif %}>{{ t('cash_cat_' ~ category) }}</option>
-                                {% endfor %}
-                            </optgroup>
-                            <optgroup label="{{ t('cash_type_expense') }}">
-                                {% for category in expense_categories %}
-                                <option value="{{ category }}" {% if payload.category == category %}selected{% endif %}>{{ t('cash_cat_' ~ category) }}</option>
-                                {% endfor %}
-                            </optgroup>
-                        </select>
-                    </label>
-                    <label>{{ t('cash_description') }}<input type="text" name="description" value="{{ payload.description or '' }}" required></label>
-                    <label>{{ t('cash_payment_method') }}
-                        <select name="payment_method" required>
-                            {% for method in payment_methods %}
-                            <option value="{{ method }}" {% if payload.payment_method == method %}selected{% endif %}>{{ t('cash_pay_' ~ method) }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                    <label>{{ t('cash_movement_date') }}<input type="date" name="movement_date" value="{{ payload.movement_date or '' }}" required></label>
-                </div>
-                <button type="submit" class="cash-ai-btn cash-ai-btn--primary" data-cash-ai-set-action="confirm">{{ t('cash_ai_confirm') }}</button>
+                <button type="submit" class="cash-ai-btn cash-ai-btn--primary cash-ai-btn--block" data-cash-ai-set-action="confirm">{{ t('cash_ai_page_register') }}</button>
+                <button type="submit" class="cash-ai-link cash-ai-link--button" data-cash-ai-set-action="save">{{ t('cash_ai_page_save_for_later') }}</button>
             </form>
             {% else %}
             <p class="cash-ai-empty">{{ t('cash_ai_page_step_empty') }}</p>
@@ -252,43 +273,52 @@
     </section>
 
     <div class="cash-ai-bottom">
-        <section class="cash-ai-card">
+        <section class="cash-ai-card cash-ai-card--table">
             <h2>{{ t('cash_ai_page_recent_movements') }}</h2>
-            <table class="cash-ai-table">
-                <thead>
-                    <tr>
-                        <th>{{ t('cash_movement_date') }}</th>
-                        <th>{{ t('cash_movement_type') }}</th>
-                        <th>{{ t('cash_description') }}</th>
-                        <th>{{ t('cash_category') }}</th>
-                        <th>{{ t('cash_amount') }}</th>
-                        <th>{{ t('status') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for movement in cash_ai_panel.recent_movements %}
-                    <tr>
-                        <td>{{ movement.date | short_date }}</td>
-                        <td><span class="cash-ai-pill cash-ai-pill--{{ movement.type }}">{{ t('cash_type_' ~ movement.type) }}</span></td>
-                        <td>{{ movement.description }}</td>
-                        <td>{% if movement.category %}{{ t('cash_cat_' ~ movement.category) }}{% else %}—{% endif %}</td>
-                        <td>{{ movement.amount | money(movement.currency) }}</td>
-                        <td><span class="cash-ai-status cash-ai-status--success">{{ t('cash_status_' ~ movement.status) }}</span></td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="6">{{ t('cash_ai_page_no_movements') }}</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="cash-ai-table-wrap">
+                <table class="cash-ai-table">
+                    <thead>
+                        <tr>
+                            <th>{{ t('cash_movement_date') }}</th>
+                            <th>{{ t('cash_movement_type') }}</th>
+                            <th>{{ t('cash_ai_page_col_concept') }}</th>
+                            <th>{{ t('cash_category') }}</th>
+                            <th>{{ t('cash_payment_method') }}</th>
+                            <th>{{ t('cash_amount') }}</th>
+                            <th>{{ t('cash_currency') }}</th>
+                            <th>{{ t('status') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for movement in cash_ai_panel.recent_movements %}
+                        <tr>
+                            <td>{{ movement.date | short_date }}</td>
+                            <td><span class="cash-ai-pill cash-ai-pill--{{ movement.type }}">{{ t('cash_type_' ~ movement.type) }}</span></td>
+                            <td>{{ movement.merchant }}</td>
+                            <td>{% if movement.category %}{{ t('cash_cat_' ~ movement.category) }}{% else %}—{% endif %}</td>
+                            <td>{% if movement.payment_method %}{{ t('cash_pay_' ~ movement.payment_method) }}{% else %}—{% endif %}</td>
+                            <td>{{ movement.amount | money(movement.currency) }}</td>
+                            <td>{{ movement.currency }}</td>
+                            <td><span class="cash-ai-status cash-ai-status--success">{{ t('cash_status_' ~ movement.status) }}</span></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="8">{{ t('cash_ai_page_no_movements') }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </section>
 
-        <section class="cash-ai-card">
+        <section class="cash-ai-card cash-ai-card--activity">
             <h2>{{ t('cash_ai_page_activity_title') }}</h2>
             <ul class="cash-ai-activity">
                 {% for item in cash_ai_panel.activity %}
-                <li>
-                    <p>{{ item.text }}</p>
-                    <span>{{ item.time }}{% if item.confidence %} · {{ item.confidence }}%{% endif %}</span>
+                <li class="cash-ai-activity__item cash-ai-activity__item--{{ item.tone }}">
+                    <span class="cash-ai-activity__dot" aria-hidden="true"></span>
+                    <div>
+                        <p>{{ item.text }}</p>
+                        <span>{{ item.time }}{% if item.confidence %} · {{ item.confidence }}%{% endif %}</span>
+                    </div>
                 </li>
                 {% else %}
                 <li class="cash-ai-empty">{{ t('cash_ai_page_no_activity') }}</li>
@@ -303,8 +333,7 @@
 <script src="{{ url_for('static', filename='js/cash-ai-page.js') }}"></script>
 <script>
 (function () {
-    var forms = document.querySelectorAll("[data-cash-ai-confirm]");
-    forms.forEach(function (form) {
+    document.querySelectorAll("[data-cash-ai-confirm]").forEach(function (form) {
         var actionInput = form.querySelector("[data-cash-ai-action]");
         form.querySelectorAll("[data-cash-ai-set-action]").forEach(function (button) {
             button.addEventListener("click", function () {
@@ -320,6 +349,15 @@
             var button = uploadForm.querySelector("[data-cash-ai-submit]");
             if (button) button.disabled = true;
         });
+        var fileInput = uploadForm.querySelector('input[type="file"]');
+        var dropzone = uploadForm.querySelector(".cash-ai-dropzone strong");
+        if (fileInput && dropzone) {
+            fileInput.addEventListener("change", function () {
+                if (fileInput.files && fileInput.files[0]) {
+                    dropzone.textContent = fileInput.files[0].name;
+                }
+            });
+        }
     }
 })();
 </script>

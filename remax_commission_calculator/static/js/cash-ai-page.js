@@ -18,29 +18,62 @@
 
     var evolution = panel.evolution || {};
 
+    function formatMoney(value) {
+        var num = Number(value || 0);
+        if (num >= 1000000) {
+            return "$ " + (num / 1000000).toFixed(1).replace(".", ",") + "M";
+        }
+        if (num >= 1000) {
+            return "$ " + Math.round(num / 1000) + "k";
+        }
+        return "$ " + Math.round(num);
+    }
+
     new Chart(canvas, {
         type: "line",
         data: {
             labels: evolution.labels || [],
             datasets: [{
+                label: "Saldo neto (ARS)",
                 data: evolution.values || [],
                 borderColor: "#0d47ff",
                 backgroundColor: "rgba(13, 71, 255, 0.12)",
                 fill: true,
-                tension: 0.35,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: "#0d47ff",
+                pointBorderColor: "#fff",
+                pointBorderWidth: 2,
             }],
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: false } },
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function (ctx) {
+                            return formatMoney(ctx.parsed.y);
+                        },
+                    },
+                },
+            },
             scales: {
                 x: {
                     grid: { display: false },
-                    ticks: { color: "#94a3b8" },
+                    ticks: { color: "#94a3b8", font: { size: 11 } },
                 },
                 y: {
-                    grid: { color: "rgba(15, 23, 42, 0.08)" },
-                    ticks: { color: "#94a3b8" },
+                    beginAtZero: true,
+                    grid: { color: "rgba(15, 23, 42, 0.06)" },
+                    ticks: {
+                        color: "#94a3b8",
+                        font: { size: 11 },
+                        callback: function (value) {
+                            return formatMoney(value);
+                        },
+                    },
                 },
             },
         },
