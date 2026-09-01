@@ -115,8 +115,14 @@
             {% endfor %}
         </nav>
 
+        <form class="operations-mobile-toolbar hide-desktop" method="get" action="{{ url_for('operations_list') }}">
+            <input type="hidden" name="tab" value="{{ operations_panel.filters.tab }}">
+            <input type="search" name="q" value="{{ operations_panel.filters.q }}" placeholder="{{ t('operations_mobile_search_placeholder') }}" aria-label="{{ t('search') }}">
+            <button type="button" class="operations-btn operations-btn--ghost" onclick="document.querySelector('.operations-toolbar__more')?.setAttribute('open','open')">{{ t('filter') }}</button>
+        </form>
+
         {% if operations_panel.rows %}
-        <div class="table-wrapper">
+        <div class="table-wrapper hide-mobile">
             <table class="operations-table">
                 <thead>
                     <tr>
@@ -163,6 +169,32 @@
             </table>
         </div>
 
+        <ul class="entity-card-list hide-desktop" aria-label="{{ t('operations_page_title') }}">
+            {% for row in operations_panel.rows %}
+            <li class="entity-card">
+                <div class="entity-card__top">
+                    <div>
+                        <a href="{{ url_for('operations_detail', operation_id=row.db_id) }}" class="entity-card__id">{{ row.display_id }}</a>
+                        <p class="entity-card__title">{{ row.property_title }}</p>
+                        <p class="entity-card__sub">{{ row.property_subtitle }}</p>
+                    </div>
+                    <span class="entity-card__badge entity-card__badge--{{ row.workflow_status.tone }}">{{ row.workflow_status.label }}</span>
+                </div>
+                <div class="entity-card__row">
+                    <span>{{ row.client_name }}</span>
+                    <span class="entity-card__price money">{{ row.total_commission|money }}</span>
+                </div>
+                <div class="entity-card__row">
+                    <span class="entity-card__agent">
+                        <span class="entity-card__avatar">{{ row.agent_initials }}</span>
+                        {{ row.agent }}
+                    </span>
+                    <span>{{ row.date }}</span>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+
         <footer class="operations-pagination">
             <p>{{ t('operations_pagination_showing', from=operations_panel.pagination.from_row, to=operations_panel.pagination.to_row, total=operations_panel.pagination.total) }}</p>
             <div class="operations-pagination__controls">
@@ -205,5 +237,8 @@
         </div>
         {% endif %}
     </section>
+    {% if can_write() and can_create_operations %}
+    <a href="{{ url_for('operations_new') }}" class="mobile-fab hide-desktop" aria-label="{{ t('new_operation') }}">+</a>
+    {% endif %}
 </div>
 {% endblock %}

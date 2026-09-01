@@ -10,6 +10,15 @@
 
 {% block content %}
 <div class="login-page">
+    <div class="login-auth-toolbar hide-desktop">
+        <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
+            <a href="{{ url_for('set_language', language='es') }}" class="lang-link{% if current_language == 'es' %} active{% endif %}">ES</a>
+            <a href="{{ url_for('set_language', language='en') }}" class="lang-link{% if current_language == 'en' %} active{% endif %}">EN</a>
+        </div>
+        <button type="button" class="theme-toggle" aria-label="{{ t('theme_toggle_dark') }}" data-label-dark="{{ t('theme_toggle_dark') }}" data-label-light="{{ t('theme_toggle_light') }}">
+            <span class="theme-switch" aria-hidden="true"></span>
+        </button>
+    </div>
     <img
         class="login-page__waves"
         src="{{ url_for('static', filename='brand/login-waves.svg') }}"

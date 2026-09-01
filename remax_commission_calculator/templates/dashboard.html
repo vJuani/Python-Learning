@@ -10,6 +10,89 @@
 
 {% block content %}
 <div class="home-panel">
+    {% if current_user %}
+    {% set dash_first = (current_user.first_name or '').strip() %}
+    {% set dash_last = (current_user.last_name or '').strip() %}
+    {% set dash_name = (dash_first ~ ' ' ~ dash_last).strip() or current_user.username %}
+    {% set dash_parts = dash_name.split() %}
+    <section class="home-mobile-greeting hide-desktop" aria-label="{{ t('dashboard_summary_title') }}">
+        <span class="home-mobile-greeting__avatar">{{ dash_parts[0][0:1]|upper }}{% if dash_parts|length > 1 %}{{ dash_parts[1][0:1]|upper }}{% endif %}</span>
+        <div class="home-mobile-greeting__body">
+            <strong>{{ t('dashboard_mobile_greeting', name=dash_name) }}</strong>
+            <p>{{ t('dashboard_mobile_greeting_sub') }}</p>
+        </div>
+        <form method="get" action="{{ url_for('dashboard') }}">
+            <select name="period" class="home-panel__period-select" onchange="this.form.submit()" aria-label="{{ t('dashboard_period') }}">
+                {% for value, label in home_panel.period_options %}
+                <option value="{{ value }}" {% if home_panel.period == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </section>
+    <section class="home-mobile-kpis hide-desktop" aria-label="{{ t('dashboard_summary_title') }}">
+        <article class="home-mobile-kpi">
+            <span class="home-mobile-kpi__label">{{ t('dashboard_kpi_commissions_month') }}</span>
+            <strong class="money">{{ home_panel.kpis.commission_month|money }}</strong>
+            {% if home_panel.kpis.commission_change is not none %}<small>↑ {{ home_panel.kpis.commission_change }}%</small>{% endif %}
+        </article>
+        <article class="home-mobile-kpi">
+            <span class="home-mobile-kpi__label">{{ t('dashboard_kpi_operations_active') }}</span>
+            <strong>{{ home_panel.kpis.operations_active }}</strong>
+            {% if home_panel.kpis.operations_today %}<small>↑ {{ home_panel.kpis.operations_today }} {{ t('dashboard_kpi_updates_today_short') }}</small>{% endif %}
+        </article>
+        <article class="home-mobile-kpi">
+            <span class="home-mobile-kpi__label">{{ t('dashboard_kpi_pending_invoices') }}</span>
+            <strong>{{ home_panel.kpis.pending_invoices_count }}</strong>
+            <small class="money">{{ home_panel.kpis.pending_invoices_amount|money }}</small>
+        </article>
+        <article class="home-mobile-kpi">
+            <span class="home-mobile-kpi__label">{{ t('dashboard_kpi_properties_active') }}</span>
+            <strong>{{ home_panel.kpis.properties_active }}</strong>
+            {% if home_panel.kpis.properties_recent %}<small>↑ {{ home_panel.kpis.properties_recent }}</small>{% endif %}
+        </article>
+    </section>
+    {% if home_panel.tasks %}
+    <section class="home-mobile-section hide-desktop">
+        <div class="home-mobile-section__head">
+            <h2>{{ t('dashboard_mobile_next_task') }}</h2>
+        </div>
+        <p><strong>{{ home_panel.tasks[0].label }}</strong></p>
+        <span class="entity-card__sub">{{ home_panel.tasks[0].due_label }}</span>
+    </section>
+    {% endif %}
+    <section class="home-mobile-section hide-desktop">
+        <div class="home-mobile-section__head">
+            <h2>{{ t('dashboard_mobile_my_operations') }}</h2>
+            <a href="{{ url_for('operations_list') }}">{{ t('dashboard_mobile_view_all') }} →</a>
+        </div>
+        {% for operation in home_panel.active_operations[:5] %}
+        <div class="home-mobile-op">
+            <div>
+                {% if operation.db_id %}
+                <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}" class="home-mobile-op__id">{{ operation.id }}</a>
+                {% else %}
+                <span class="home-mobile-op__id">{{ operation.id }}</span>
+                {% endif %}
+                <div class="home-mobile-op__title">{{ operation.property }}</div>
+            </div>
+            <span class="entity-card__badge entity-card__badge--{{ operation.stage_tone }}">{{ operation.stage_label }}</span>
+            <span class="home-mobile-op__meta">{{ operation.updated_label }}</span>
+        </div>
+        {% else %}
+        <p class="entity-card__sub">{{ t('empty_operations_hint') }}</p>
+        {% endfor %}
+    </section>
+    <nav class="home-mobile-quick hide-desktop" aria-label="{{ t('dashboard_quick_actions_title') }}">
+        <a href="{{ url_for('properties_new') if can_write() else url_for('properties_list') }}"><span class="home-mobile-quick__icon">⌂</span>{{ t('dashboard_mobile_action_property') }}</a>
+        <a href="{{ url_for('billing_list') }}"><span class="home-mobile-quick__icon">📄</span>{{ t('dashboard_mobile_action_billing') }}</a>
+        <a href="{{ url_for('agents_list') if is_admin() else url_for('dashboard') }}"><span class="home-mobile-quick__icon">👤</span>{{ t('dashboard_mobile_action_clients') }}</a>
+        <a href="{{ url_for('operations_list') }}"><span class="home-mobile-quick__icon">📅</span>{{ t('dashboard_mobile_action_agenda') }}</a>
+    </nav>
+    {% if can_write() and can_create_operations %}
+    <a href="{{ url_for('operations_new') }}" class="mobile-fab mobile-fab--center hide-desktop" aria-label="{{ t('new_operation') }}">+</a>
+    {% endif %}
+    {% endif %}
+
     <header class="home-panel__header">
         <div class="home-panel__intro">
             <h1>{{ home_panel.title }}</h1>

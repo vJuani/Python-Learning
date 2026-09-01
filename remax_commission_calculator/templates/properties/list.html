@@ -163,8 +163,19 @@
                     </form>
                 </div>
 
+                <nav class="properties-status-tabs hide-desktop" aria-label="{{ t('status') }}">
+                    <a href="{{ url_for('properties_list', q=properties_panel.filters.q, type=properties_panel.filters.type, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if not properties_panel.filters.status %}is-active{% endif %}">
+                        {{ t('all') }}
+                    </a>
+                    {% for item in properties_panel.status_summary[:3] %}
+                    <a href="{{ url_for('properties_list', status=item.bucket, q=properties_panel.filters.q, type=properties_panel.filters.type, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if properties_panel.filters.status == item.bucket %}is-active{% endif %}">
+                        {{ item.label }} {{ item.count }}
+                    </a>
+                    {% endfor %}
+                </nav>
+
                 {% if properties_panel.rows %}
-                <div class="table-wrapper">
+                <div class="table-wrapper hide-mobile">
                     <table class="properties-table">
                         <thead>
                             <tr>
@@ -227,6 +238,25 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+
+                <div class="property-mobile-list hide-desktop">
+                    {% for row in properties_panel.rows %}
+                    <article class="property-mobile-card">
+                        <span class="property-mobile-card__thumb" aria-hidden="true"></span>
+                        <div>
+                            <span class="property-mobile-card__type">{{ row.category_label }}</span>
+                            <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__title">{{ row.title }}</a>
+                            <p class="property-mobile-card__addr">📍 {{ row.address }}</p>
+                            <p class="property-mobile-card__price money">{% if row.listing_price is not none %}{{ row.listing_price|money }}{% else %}—{% endif %}</p>
+                            <span class="entity-card__agent">
+                                <span class="entity-card__avatar">{{ row.agent_initials }}</span>
+                                {{ row.agent_name or '—' }}
+                            </span>
+                        </div>
+                        <span class="entity-card__badge entity-card__badge--{{ row.display_status.tone }}">{{ row.display_status.label }}</span>
+                    </article>
+                    {% endfor %}
                 </div>
 
                 <footer class="properties-pagination">

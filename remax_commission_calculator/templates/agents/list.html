@@ -103,7 +103,7 @@
                 </form>
 
                 {% if agents_panel.rows %}
-                <div class="table-wrapper">
+                <div class="table-wrapper hide-mobile">
                     <table class="agents-table">
                         <thead>
                             <tr>
@@ -177,6 +177,24 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+
+                <div class="agent-mobile-list hide-desktop">
+                    {% for row in agents_panel.rows %}
+                    <article class="agent-mobile-card">
+                        {% set parts = row.name.split() %}
+                        <span class="agent-mobile-card__avatar">{{ parts[0][0:1]|upper }}{% if parts|length > 1 %}{{ parts[1][0:1]|upper }}{% endif %}</span>
+                        <div>
+                            <a href="{{ url_for('agents_detail', agent_id=row.id) }}" class="agent-mobile-card__name">{{ row.name }}</a>
+                            <span class="agent-mobile-card__team">{{ row.team_label }} · {{ row.code }}</span>
+                        </div>
+                        <div class="agent-mobile-card__metrics">
+                            <span>{{ t('agents_col_active') }}: {{ row.active_count }}</span>
+                            <span>{{ t('agents_col_operations') }}: {{ row.operations }}</span>
+                        </div>
+                        <span class="agent-mobile-card__score agent-mobile-card__score--{{ row.performance_tone }}">{{ row.performance_score }}</span>
+                    </article>
+                    {% endfor %}
                 </div>
 
                 <footer class="agents-pagination">

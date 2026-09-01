@@ -1,0 +1,20 @@
+/**
+ * JRH One — Settings (mobile mockup)
+ */
+
+@media (max-width: 768px) {
+    body.is-settings-page .app-main-inner {
+        background: #f4f6f9;
+    }
+
+    body.is-settings-page .page-header.hide-desktop h2 {
+        font-size: 1.35rem;
+        margin: 0;
+    }
+
+    body.is-settings-page .page-header.hide-desktop p {
+        margin: 0.25rem 0 0;
+        color: #6b7280;
+        font-size: 0.86rem;
+    }
+}

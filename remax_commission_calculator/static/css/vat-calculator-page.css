@@ -1,0 +1,27 @@
+/**
+ * JRH One — VAT calculator (mobile mockup)
+ */
+
+@media (max-width: 768px) {
+    body.is-vat-page .app-main-inner {
+        background: #f4f6f9;
+    }
+
+    body.is-vat-page .page-header h2 {
+        font-size: 1.35rem;
+    }
+
+    body.is-vat-page .vat-calc-form .panel {
+        border-radius: 1rem;
+        border: 1px solid #eef2f7;
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+    }
+
+    body.is-vat-page .vat-calc-results {
+        margin-top: 0.85rem;
+        padding: 1rem;
+        border-radius: 1rem;
+        background: #fff;
+        border: 1px solid #eef2f7;
+    }
+}

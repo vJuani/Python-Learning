@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 
+{% block body_class %}is-vat-page {% endblock %}
+
 {% block title %}{{ t('vat_calc_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/vat-calculator-page.css') }}">
+{% endblock %}
 
 {% block content %}
 <section class="page-header">

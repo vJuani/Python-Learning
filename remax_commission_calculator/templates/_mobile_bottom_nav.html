@@ -40,16 +40,16 @@
     </a>
     {% if is_admin() %}
     <a
-        href="{{ url_for('agents_list') }}"
-        class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('agents_') %} active{% endif %}"
+        href="{{ url_for('reports_index') }}"
+        class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('reports') %} active{% endif %}"
     >
         <span class="mobile-bottom-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none">
-                <path d="M16 11a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 16 11Zm-8 0a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 8 11Z" stroke="currentColor" stroke-width="1.75"/>
-                <path d="M2.5 19a5 5 0 0 1 9 0M12.5 19a5 5 0 0 1 9 0" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                <path d="M12 3a9 9 0 1 0 9 9" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                <path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
             </svg>
         </span>
-        <span class="mobile-bottom-nav-label">{{ t('nav_agents') }}</span>
+        <span class="mobile-bottom-nav-label">{{ t('nav_reports') }}</span>
     </a>
     {% else %}
     <a
@@ -65,5 +65,13 @@
         <span class="mobile-bottom-nav-label">{{ t('nav_vat_calculator') }}</span>
     </a>
     {% endif %}
+    <button type="button" class="mobile-bottom-nav-item mobile-bottom-nav-item--more" data-mobile-nav-more aria-label="{{ t('nav_more') }}">
+        <span class="mobile-bottom-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+            </svg>
+        </span>
+        <span class="mobile-bottom-nav-label">{{ t('nav_more') }}</span>
+    </button>
 </nav>
 {% endif %}
