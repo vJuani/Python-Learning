@@ -1,0 +1,275 @@
+/**
+ * JRH One — Cash / Treasury page (desktop mockup)
+ */
+
+body.is-cash-page .site-footer {
+    display: none;
+}
+
+body.is-cash-page .app-main-inner {
+    max-width: none;
+    padding: 0;
+}
+
+.cash-page {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    gap: 0;
+    min-height: calc(100vh - 4rem);
+}
+
+.cash-page__filters {
+    padding: 1.25rem 1rem;
+    border-right: 1px solid #e5e7eb;
+    background: #fff;
+}
+
+.cash-page__filters h2 {
+    margin: 0 0 1rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6b7280;
+}
+
+.cash-page__filters form {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.cash-page__filters label {
+    display: grid;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    color: #374151;
+}
+
+.cash-page__filters input,
+.cash-page__filters select {
+    min-height: 2.35rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.65rem;
+    font: inherit;
+    background: #fff;
+}
+
+.cash-page__main {
+    padding: 1.25rem 1.5rem 1.5rem;
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+    background: #f8fafc;
+}
+
+.cash-page__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.cash-page__header h1 {
+    margin: 0 0 0.25rem;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #001c3d;
+    letter-spacing: -0.03em;
+}
+
+.cash-page__header p {
+    margin: 0;
+    color: #6b7280;
+    font-size: 0.92rem;
+}
+
+.cash-page__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.cash-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.45rem;
+    padding: 0.45rem 0.95rem;
+    border-radius: 0.7rem;
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.cash-btn--primary {
+    background: #1d4ed8;
+    color: #fff;
+}
+
+.cash-btn--outline {
+    background: #fff;
+    border-color: #d1d5db;
+    color: #001c3d;
+}
+
+.cash-btn--ghost {
+    background: #f8fafc;
+    border-color: #e5e7eb;
+    color: #374151;
+}
+
+.cash-btn--block {
+    width: 100%;
+}
+
+.cash-btn--small {
+    min-height: 2rem;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.78rem;
+}
+
+.cash-page__kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.cash-kpi-card {
+    padding: 0.95rem 1rem;
+    border-radius: 0.85rem;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.cash-kpi-card__label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #6b7280;
+}
+
+.cash-kpi-card strong {
+    font-size: 1.15rem;
+    color: #001c3d;
+    letter-spacing: -0.02em;
+}
+
+.cash-page__table-card {
+    padding: 0;
+    border-radius: 0.85rem;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+}
+
+.cash-page__table-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.cash-page__table-head h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.cash-page__table-head span {
+    font-size: 0.82rem;
+    color: #9ca3af;
+}
+
+.cash-table-wrap {
+    overflow-x: auto;
+}
+
+.cash-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+}
+
+.cash-table thead th {
+    padding: 0.7rem 0.75rem;
+    background: #001c3d;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.cash-table tbody td {
+    padding: 0.7rem 0.75rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+
+.cash-table__amount {
+    font-weight: 700;
+    color: #001c3d;
+}
+
+.cash-badge {
+    display: inline-flex;
+    margin-top: 0.15rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.cash-badge--ai {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.cash-badge--confirmed {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.cash-page__empty {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: #6b7280;
+}
+
+@media (max-width: 1100px) {
+    .cash-page {
+        grid-template-columns: 1fr;
+    }
+
+    .cash-page__filters {
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .cash-page__kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .cash-page__kpis {
+        grid-template-columns: 1fr;
+    }
+
+    .cash-page__header {
+        flex-direction: column;
+    }
+}

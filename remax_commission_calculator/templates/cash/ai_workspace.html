@@ -22,7 +22,8 @@
         </div>
         <div class="cash-ai-page__actions">
             <span class="cash-ai-page__date">{{ cash_ai_panel.date_label }}</span>
-            <a href="{{ url_for('cash_list') }}" class="cash-ai-btn cash-ai-btn--outline">{{ t('cash_ai_page_export') }}</a>
+            <a href="{{ url_for('cash_list') }}" class="cash-ai-btn cash-ai-btn--outline">{{ t('cash_ai_page_view_treasury') }}</a>
+            <a href="{{ url_for('cash_list') }}" class="cash-ai-btn cash-ai-btn--outline cash-ai-btn--icon">{{ t('cash_ai_page_export') }}</a>
         </div>
     </header>
 
@@ -72,46 +73,46 @@
         </article>
     </section>
 
-    <section class="cash-ai-evolution">
-        <div class="cash-ai-card cash-ai-card--chart">
+    <section class="cash-ai-evolution-row">
+        <article class="cash-ai-evolution-card">
             <h2>{{ t('cash_ai_page_evolution_title') }}</h2>
-            <p class="cash-ai-card__hint">{{ t('cash_ai_page_evolution_hint') }}</p>
-            <canvas id="cash-ai-evolution-chart" height="240"></canvas>
-        </div>
-        <div class="cash-ai-card cash-ai-card--balances">
-            <h2>{{ t('cash_ai_page_balances_title') }}</h2>
-            <ul class="cash-ai-balances">
-                <li>
-                    <span class="cash-ai-balances__flag">🇦🇷</span>
-                    <span>ARS</span>
-                    <strong>{{ cash_ai_panel.balances.ARS | money('ARS') }}</strong>
-                </li>
-                <li>
-                    <span class="cash-ai-balances__flag">🇺🇸</span>
-                    <span>USD</span>
-                    <strong>{{ cash_ai_panel.balances.USD | money('USD') }}</strong>
-                </li>
-            </ul>
-            <dl class="cash-ai-period">
-                <div>
-                    <dt>{{ t('cash_ai_page_period_start') }} ({{ cash_ai_panel.balances.period_start_label }})</dt>
-                    <dd>{{ cash_ai_panel.balances.period_start | money('ARS') }}</dd>
+            <div class="cash-ai-evolution-card__body">
+                <div class="cash-ai-evolution-card__chart">
+                    <p class="cash-ai-card__hint">{{ t('cash_ai_page_evolution_hint') }}</p>
+                    <canvas id="cash-ai-evolution-chart" height="240"></canvas>
                 </div>
-                <div>
-                    <dt>{{ t('cash_ai_page_period_end') }} ({{ cash_ai_panel.balances.period_end_label }})</dt>
-                    <dd>{{ cash_ai_panel.balances.period_end | money('ARS') }}</dd>
-                </div>
-                <div class="cash-ai-period__change">
-                    <dt>{{ t('cash_ai_page_period_change') }}</dt>
-                    <dd>
+                <div class="cash-ai-evolution-card__summary">
+                    <div>
+                        <span>{{ t('cash_ai_page_period_start') }} ({{ cash_ai_panel.balances.period_start_label }})</span>
+                        <strong>{{ cash_ai_panel.balances.period_start | money('ARS') }}</strong>
+                    </div>
+                    <div>
+                        <span>{{ t('cash_ai_page_period_end') }} ({{ cash_ai_panel.balances.period_end_label }})</span>
+                        <strong>{{ cash_ai_panel.balances.period_end | money('ARS') }}</strong>
+                    </div>
+                    <div class="cash-ai-evolution-card__variation">
+                        <span>{{ t('cash_ai_page_period_change') }}</span>
                         {% if cash_ai_panel.balances.period_change is not none %}
                         <em class="cash-ai-kpi-card__delta cash-ai-kpi-card__delta--up">↑ {{ cash_ai_panel.balances.period_change }}%</em>
                         {% endif %}
-                        <span>{{ cash_ai_panel.balances.period_change_amount | money('ARS') }}</span>
-                    </dd>
+                        <strong>{{ cash_ai_panel.balances.period_change_amount | money('ARS') }}</strong>
+                    </div>
                 </div>
-            </dl>
-        </div>
+            </div>
+        </article>
+        <article class="cash-ai-saldos-card">
+            <h2>{{ t('cash_ai_page_balances_title') }}</h2>
+            <ul class="cash-ai-balances">
+                <li>
+                    <span class="cash-ai-balances__label"><span class="cash-ai-balances__flag">🇦🇷</span> ARS</span>
+                    <strong>{{ cash_ai_panel.balances.ARS | money('ARS') }}</strong>
+                </li>
+                <li>
+                    <span class="cash-ai-balances__label"><span class="cash-ai-balances__flag">🇺🇸</span> USD</span>
+                    <strong>{{ cash_ai_panel.balances.USD | money('USD') }}</strong>
+                </li>
+            </ul>
+        </article>
     </section>
 
     <section class="cash-ai-workflow" aria-label="{{ t('cash_ai_page_workflow_aria') }}">
