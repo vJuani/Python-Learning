@@ -1,258 +1,384 @@
 {% extends "base.html" %}
 
-{% block title %}{{ t('properties_title') }} | {{ t('app_title') }}{% endblock %}
+{% block body_class %}is-properties-page {% endblock %}
 
-{% block sidebar %}
-<div class="sidebar-panel">
-    <h3 class="sidebar-title">{{ t('sidebar_filters') }}</h3>
+{% block title %}{{ t('properties_page_title') }} | {{ t('app_title') }}{% endblock %}
 
-    {% include "_sidebar_search.html" %}
-
-    {% if filter_errors %}
-    <div class="flash-messages">
-        {% for error in filter_errors %}
-        <p class="flash-message flash-error">{{ error }}</p>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    <form class="sidebar-filter-form filter-form" method="get" action="{{ url_for('properties_list') }}">
-        <div class="filter-grid">
-            <div class="form-group">
-                <label for="property_id">{{ t('property_id') }}</label>
-                <input
-                    type="text"
-                    id="property_id"
-                    name="property_id"
-                    class="form-input"
-                    placeholder="{{ t('placeholder_id_example') }}"
-                    value="{{ filters.property_id }}"
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="address">{{ t('address') }}</label>
-                <input
-                    type="text"
-                    id="address"
-                    name="address"
-                    class="form-input"
-                    placeholder="{{ t('placeholder_address') }}"
-                    value="{{ filters.address }}"
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="jurisdiction">{{ t('jurisdiction') }}</label>
-                <select id="jurisdiction" name="jurisdiction" class="form-input">
-                    <option value="">{{ t('all_jurisdictions') }}</option>
-                    {% for jurisdiction in jurisdictions %}
-                    <option
-                        value="{{ jurisdiction }}"
-                        {% if filters.jurisdiction == jurisdiction %}selected{% endif %}
-                    >
-                        {{ jurisdiction }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="agent_id">{{ t('related_agent') }}</label>
-                <select id="agent_id" name="agent_id" class="form-input">
-                    <option value="">{{ t('all_agents') }}</option>
-                    {% for agent in agents %}
-                    <option
-                        value="{{ agent.id }}"
-                        {% if filters.agent_id == agent.id|string %}selected{% endif %}
-                    >{{ agent.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="min_price">{{ t('min_price') }}</label>
-                <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    id="min_price"
-                    name="min_price"
-                    class="form-input"
-                    placeholder="{{ t('placeholder_amount') }}"
-                    value="{{ filters.min_price }}"
-                >
-                <small class="field-help">{{ t('uses_sale_price') }}</small>
-            </div>
-
-            <div class="form-group">
-                <label for="max_price">{{ t('max_price') }}</label>
-                <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    id="max_price"
-                    name="max_price"
-                    class="form-input"
-                    placeholder="{{ t('placeholder_amount') }}"
-                    value="{{ filters.max_price }}"
-                >
-                <small class="field-help">{{ t('uses_sale_price') }}</small>
-            </div>
-        </div>
-
-        <div class="sidebar-filter-actions">
-            <button type="submit" class="btn btn-primary btn-block">{{ t('sidebar_apply_filters') }}</button>
-            <a href="{{ url_for('properties_list') }}" class="btn btn-secondary btn-block">{{ t('clear_filters') }}</a>
-        </div>
-    </form>
-
-    <p class="sidebar-count">{{ property_count }} {{ t('found') }}</p>
-</div>
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/properties-page.css') }}">
 {% endblock %}
 
 {% block content %}
-<section class="page-header">
-    <div class="page-header-text">
-        <h2>{{ t('properties_title') }}</h2>
-    </div>
-
-    <div class="page-actions">
+<div class="properties-page">
+    <header class="properties-page__header">
+        <div>
+            <h1>{{ t('properties_page_title') }}</h1>
+            <p>{{ t('properties_page_subtitle') }}</p>
+        </div>
         {% if can_write() %}
-        <a href="{{ url_for('properties_new') }}" class="btn btn-primary">{{ t('new_property') }}</a>
+        <a href="{{ url_for('properties_new') }}" class="properties-btn properties-btn--primary">
+            + {{ t('new_property') }}
+        </a>
         {% endif %}
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
-    </div>
-</section>
+    </header>
 
-<section class="panel panel-list">
-    <div class="panel-header">
-        <h3 class="hide-mobile">{{ t('property_list') }}</h3>
-        <p class="results-meta">{{ t('results_found', count=property_count) }}</p>
-    </div>
-
-    {% if properties %}
-    <div class="entity-card-list hide-desktop">
-        {% for property_data in properties %}
-        <article class="entity-card entity-card-property">
-            <div class="entity-card-heading">
-                <div class="entity-card-heading-text">
-                    <h4 class="entity-card-title">{{ property_data.address }}</h4>
-                    {% if property_data.external_id %}
-                    <span class="entity-external-id">#{{ property_data.external_id }}</span>
-                    {% endif %}
-                </div>
-                <span class="entity-card-chevron" aria-hidden="true"></span>
-            </div>
-            <p class="entity-card-subtitle">{{ property_data.agent_name or '—' }}</p>
-            <p class="entity-card-price money">
-                {% if property_data.listing_price is not none %}
-                {{ property_data.listing_price|money }}
-                {% else %}
-                —
-                {% endif %}
-            </p>
-            <div class="entity-card-footer">
-                <span class="badge badge-soft">{{ t('property_status_' ~ (property_data.status or 'approved')) }}</span>
-                <a
-                    href="{{ url_for('properties_detail', property_id=property_data.id) }}"
-                    class="entity-card-cta"
-                >{{ t('view_property') }} →</a>
-            </div>
-            {% if can_write() %}
-            <div class="entity-card-actions">
-                <a
-                    href="{{ url_for('properties_edit', property_id=property_data.id) }}"
-                    class="btn btn-small btn-edit"
-                >{{ t('edit') }}</a>
-            </div>
-            {% endif %}
-            {% if property_data.status == 'rejected' and property_data.rejection_reason %}
-            <p class="entity-card-meta field-help">{{ property_data.rejection_reason }}</p>
-            {% endif %}
-        </article>
+    {% if filter_errors %}
+    <div class="properties-flash">
+        {% for error in filter_errors %}
+        <p>{{ error }}</p>
         {% endfor %}
-    </div>
-
-    <div class="table-wrapper hide-mobile">
-        <table class="table-dense">
-            <thead>
-                <tr>
-                    <th>{{ t('property') }}</th>
-                    <th>{{ t('agent') }}</th>
-                    <th>{{ t('property_value_label') }}</th>
-                    <th>{{ t('status') }}</th>
-                    <th class="col-actions">{{ t('actions') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for property_data in properties %}
-                <tr>
-                    <td>
-                        <div class="cell-stack">
-                            <strong>{{ property_data.address }}</strong>
-                            {% if property_data.external_id %}
-                            <span class="entity-external-id">#{{ property_data.external_id }}</span>
-                            {% endif %}
-                        </div>
-                    </td>
-                    <td>{{ property_data.agent_name or '—' }}</td>
-                    <td class="money">
-                        {% if property_data.listing_price is not none %}
-                        {{ property_data.listing_price|money }}
-                        {% else %}
-                        —
-                        {% endif %}
-                    </td>
-                    <td>
-                        <span class="badge badge-soft">{{ t('property_status_' ~ (property_data.status or 'approved')) }}</span>
-                        {% if property_data.status == 'rejected' and property_data.rejection_reason %}
-                        <small class="field-help">{{ property_data.rejection_reason }}</small>
-                        {% endif %}
-                    </td>
-                    <td class="table-actions col-actions">
-                        <a
-                            href="{{ url_for('properties_detail', property_id=property_data.id) }}"
-                            class="btn btn-small btn-secondary"
-                        >{{ t('view') }}</a>
-                        {% if can_write() %}
-                        <a
-                            href="{{ url_for('properties_edit', property_id=property_data.id) }}"
-                            class="btn btn-small btn-edit"
-                        >{{ t('edit') }}</a>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="empty-state">
-        <p class="empty-state-title">
-            {% if filter_errors %}
-            {{ t('fix_filter_values') }}
-            {% elif filters_active %}
-            {{ t('no_properties_match_filters') }}
-            {% else %}
-            {{ t('no_properties_found') }}
-            {% endif %}
-        </p>
-        <p class="empty-state-text">
-            {% if filter_errors %}
-            {{ t('correct_errors_retry') }}
-            {% elif filters_active %}
-            {{ t('adjust_filters') }}
-            {% else %}
-            {{ t('empty_properties_hint') }}
-            {% if can_write() %}
-            <a href="{{ url_for('properties_new') }}">{{ t('create_first_property') }}</a>
-            {% endif %}
-            {% endif %}
-        </p>
     </div>
     {% endif %}
 
-    {% include "_pagination.html" %}
-</section>
+    <section class="properties-kpis" aria-label="{{ t('properties_kpis_aria') }}">
+        <article class="properties-kpi-card">
+            <span class="properties-kpi-card__icon properties-kpi-card__icon--total" aria-hidden="true"></span>
+            <div>
+                <span class="properties-kpi-card__label">{{ t('properties_kpi_total') }}</span>
+                <strong>{{ properties_panel.kpis.total }}</strong>
+                {% if properties_panel.kpis.total_trend is not none %}
+                <span class="properties-kpi-card__trend properties-kpi-card__trend--up">
+                    ↑ {{ properties_panel.kpis.total_trend }}% {{ t('properties_vs_yesterday') }}
+                </span>
+                {% endif %}
+            </div>
+        </article>
+        <article class="properties-kpi-card">
+            <span class="properties-kpi-card__icon properties-kpi-card__icon--residential" aria-hidden="true"></span>
+            <div>
+                <span class="properties-kpi-card__label">{{ t('properties_kpi_residential') }}</span>
+                <strong>{{ properties_panel.kpis.residential }}</strong>
+                {% if properties_panel.kpis.residential_trend is not none %}
+                <span class="properties-kpi-card__trend properties-kpi-card__trend--up">
+                    ↑ {{ properties_panel.kpis.residential_trend }}% {{ t('properties_vs_yesterday') }}
+                </span>
+                {% endif %}
+            </div>
+        </article>
+        <article class="properties-kpi-card">
+            <span class="properties-kpi-card__icon properties-kpi-card__icon--commercial" aria-hidden="true"></span>
+            <div>
+                <span class="properties-kpi-card__label">{{ t('properties_kpi_commercial') }}</span>
+                <strong>{{ properties_panel.kpis.commercial }}</strong>
+                {% if properties_panel.kpis.commercial_trend is not none %}
+                <span class="properties-kpi-card__trend properties-kpi-card__trend--up">
+                    ↑ {{ properties_panel.kpis.commercial_trend }}% {{ t('properties_vs_yesterday') }}
+                </span>
+                {% endif %}
+            </div>
+        </article>
+        <article class="properties-kpi-card">
+            <span class="properties-kpi-card__icon properties-kpi-card__icon--occupancy" aria-hidden="true"></span>
+            <div>
+                <span class="properties-kpi-card__label">{{ t('properties_kpi_occupancy') }}</span>
+                <strong>{{ properties_panel.kpis.occupancy }}%</strong>
+            </div>
+        </article>
+    </section>
+
+    <div class="properties-page__layout">
+        <div class="properties-page__main">
+            <section class="properties-card">
+                <form class="properties-toolbar" method="get" action="{{ url_for('properties_list') }}">
+                    <div class="properties-toolbar__search">
+                        <input
+                            type="search"
+                            name="q"
+                            value="{{ properties_panel.filters.q }}"
+                            placeholder="{{ t('properties_search_placeholder') }}"
+                            aria-label="{{ t('search_properties') }}"
+                        >
+                    </div>
+                    <label class="properties-toolbar__filter">
+                        <span class="visually-hidden">{{ t('property_type') }}</span>
+                        <select name="type">
+                            <option value="">{{ t('properties_filter_type_all') }}</option>
+                            {% for property_type in properties_panel.property_types %}
+                            <option value="{{ property_type }}" {% if properties_panel.filters.type == property_type %}selected{% endif %}>
+                                {{ t('property_type_' ~ property_type) }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="properties-toolbar__filter">
+                        <span class="visually-hidden">{{ t('status') }}</span>
+                        <select name="status">
+                            <option value="">{{ t('properties_filter_status_all') }}</option>
+                            <option value="active" {% if properties_panel.filters.status == 'active' %}selected{% endif %}>{{ t('properties_status_active') }}</option>
+                            <option value="in_progress" {% if properties_panel.filters.status == 'in_progress' %}selected{% endif %}>{{ t('properties_status_in_progress') }}</option>
+                            <option value="pending" {% if properties_panel.filters.status == 'pending' %}selected{% endif %}>{{ t('properties_status_pending') }}</option>
+                            <option value="reserved" {% if properties_panel.filters.status == 'reserved' %}selected{% endif %}>{{ t('properties_status_reserved') }}</option>
+                            <option value="closed" {% if properties_panel.filters.status == 'closed' %}selected{% endif %}>{{ t('properties_status_closed') }}</option>
+                        </select>
+                    </label>
+                    <label class="properties-toolbar__filter">
+                        <span class="visually-hidden">{{ t('agent') }}</span>
+                        <select name="agent_id">
+                            <option value="">{{ t('all_agents') }}</option>
+                            {% for agent in properties_panel.agent_options %}
+                            <option value="{{ agent.id }}" {% if properties_panel.filters.agent_id|string == agent.id|string %}selected{% endif %}>{{ agent.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <details class="properties-toolbar__more">
+                        <summary class="properties-btn properties-btn--ghost">{{ t('properties_more_filters') }}</summary>
+                        <div class="properties-toolbar__more-panel">
+                            <label>
+                                <span>{{ t('jurisdiction') }}</span>
+                                <select name="jurisdiction">
+                                    <option value="">{{ t('all_jurisdictions') }}</option>
+                                    {% for jurisdiction in jurisdictions %}
+                                    <option value="{{ jurisdiction }}" {% if properties_panel.filters.jurisdiction == jurisdiction %}selected{% endif %}>{{ jurisdiction }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label>
+                                <span>{{ t('min_price') }}</span>
+                                <input type="number" step="0.01" min="0" name="min_price" value="{{ properties_panel.filters.min_price }}">
+                            </label>
+                            <label>
+                                <span>{{ t('max_price') }}</span>
+                                <input type="number" step="0.01" min="0" name="max_price" value="{{ properties_panel.filters.max_price }}">
+                            </label>
+                        </div>
+                    </details>
+                    <button type="submit" class="properties-btn properties-btn--ghost">{{ t('filter') }}</button>
+                </form>
+
+                <div class="properties-card__heading">
+                    <h2>{{ t('properties_list_title') }}</h2>
+                    <form method="get" action="{{ url_for('properties_list') }}" class="properties-sort">
+                        <input type="hidden" name="q" value="{{ properties_panel.filters.q }}">
+                        <input type="hidden" name="type" value="{{ properties_panel.filters.type }}">
+                        <input type="hidden" name="status" value="{{ properties_panel.filters.status }}">
+                        <input type="hidden" name="agent_id" value="{{ properties_panel.filters.agent_id }}">
+                        <label>
+                            <span>{{ t('properties_sort_by') }}</span>
+                            <select name="sort" onchange="this.form.submit()">
+                                <option value="recent" {% if properties_panel.filters.sort == 'recent' %}selected{% endif %}>{{ t('properties_sort_recent') }}</option>
+                                <option value="price_desc" {% if properties_panel.filters.sort == 'price_desc' %}selected{% endif %}>{{ t('properties_sort_price_desc') }}</option>
+                                <option value="price_asc" {% if properties_panel.filters.sort == 'price_asc' %}selected{% endif %}>{{ t('properties_sort_price_asc') }}</option>
+                            </select>
+                        </label>
+                    </form>
+                </div>
+
+                {% if properties_panel.rows %}
+                <div class="table-wrapper">
+                    <table class="properties-table">
+                        <thead>
+                            <tr>
+                                <th>{{ t('property') }}</th>
+                                <th>{{ t('properties_col_type') }}</th>
+                                <th>{{ t('properties_col_price') }}</th>
+                                <th>{{ t('properties_col_currency') }}</th>
+                                <th>{{ t('properties_col_agent') }}</th>
+                                <th>{{ t('status') }}</th>
+                                <th>{{ t('actions') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in properties_panel.rows %}
+                            <tr>
+                                <td>
+                                    <div class="properties-property-cell">
+                                        <span class="properties-thumb" aria-hidden="true"></span>
+                                        <div>
+                                            <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="properties-property-cell__title">{{ row.title }}</a>
+                                            <span class="properties-property-cell__address">{{ row.address }}</span>
+                                            <span class="properties-property-cell__code">{{ row.code }}</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="properties-type-cell">
+                                        <strong>{{ row.category_label }}</strong>
+                                        <span>{{ row.type_label }}</span>
+                                    </div>
+                                </td>
+                                <td class="money">
+                                    {% if row.listing_price is not none %}
+                                    {{ row.listing_price|money }}
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </td>
+                                <td>{{ row.currency }}</td>
+                                <td>
+                                    <div class="properties-agent-cell">
+                                        <span class="properties-avatar" aria-hidden="true">{{ row.agent_initials }}</span>
+                                        <span>{{ row.agent_name or '—' }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="properties-status properties-status--{{ row.display_status.tone }}">
+                                        {{ row.display_status.label }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="properties-actions">
+                                        <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="properties-action" title="{{ t('view') }}">👁</a>
+                                        {% if can_write() %}
+                                        <a href="{{ url_for('properties_edit', property_id=row.id) }}" class="properties-action" title="{{ t('edit') }}">⋮</a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <footer class="properties-pagination">
+                    <p>
+                        {{ t('properties_pagination_showing', from=properties_panel.pagination.from_row, to=properties_panel.pagination.to_row, total=properties_panel.pagination.total) }}
+                    </p>
+                    <div class="properties-pagination__controls">
+                        {% if properties_panel.pagination.page > 1 %}
+                        <a href="{{ url_for('properties_list', page=properties_panel.pagination.page - 1, per_page=properties_panel.pagination.per_page, q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort, jurisdiction=properties_panel.filters.jurisdiction, min_price=properties_panel.filters.min_price, max_price=properties_panel.filters.max_price) }}">‹</a>
+                        {% endif %}
+                        {% for p in range(1, properties_panel.pagination.total_pages + 1) %}
+                        {% if p <= 3 or p == properties_panel.pagination.total_pages or (p >= properties_panel.pagination.page - 1 and p <= properties_panel.pagination.page + 1) %}
+                        <a href="{{ url_for('properties_list', page=p, per_page=properties_panel.pagination.per_page, q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort, jurisdiction=properties_panel.filters.jurisdiction, min_price=properties_panel.filters.min_price, max_price=properties_panel.filters.max_price) }}" class="{% if p == properties_panel.pagination.page %}is-active{% endif %}">{{ p }}</a>
+                        {% elif p == 4 and properties_panel.pagination.total_pages > 5 %}
+                        <span>…</span>
+                        {% endif %}
+                        {% endfor %}
+                        {% if properties_panel.pagination.page < properties_panel.pagination.total_pages %}
+                        <a href="{{ url_for('properties_list', page=properties_panel.pagination.page + 1, per_page=properties_panel.pagination.per_page, q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort, jurisdiction=properties_panel.filters.jurisdiction, min_price=properties_panel.filters.min_price, max_price=properties_panel.filters.max_price) }}">›</a>
+                        {% endif %}
+                    </div>
+                    <label class="properties-pagination__size">
+                        {{ t('properties_show') }}
+                        <select name="per_page" form="properties-per-page-form" onchange="document.getElementById('properties-per-page-form').submit()">
+                            {% for size in [8, 12, 20, 50] %}
+                            <option value="{{ size }}" {% if properties_panel.pagination.per_page == size %}selected{% endif %}>{{ size }}</option>
+                            {% endfor %}
+                        </select>
+                        {{ t('properties_per_page') }}
+                    </label>
+                    <form id="properties-per-page-form" method="get" action="{{ url_for('properties_list') }}" hidden>
+                        <input type="hidden" name="q" value="{{ properties_panel.filters.q }}">
+                        <input type="hidden" name="type" value="{{ properties_panel.filters.type }}">
+                        <input type="hidden" name="status" value="{{ properties_panel.filters.status }}">
+                        <input type="hidden" name="agent_id" value="{{ properties_panel.filters.agent_id }}">
+                        <input type="hidden" name="sort" value="{{ properties_panel.filters.sort }}">
+                        <input type="hidden" name="jurisdiction" value="{{ properties_panel.filters.jurisdiction }}">
+                        <input type="hidden" name="min_price" value="{{ properties_panel.filters.min_price }}">
+                        <input type="hidden" name="max_price" value="{{ properties_panel.filters.max_price }}">
+                    </form>
+                </footer>
+                {% else %}
+                <div class="properties-empty">
+                    {% if filter_errors %}
+                    {{ t('fix_filter_values') }}
+                    {% elif filters_active %}
+                    {{ t('no_properties_match_filters') }}
+                    {% else %}
+                    {{ t('no_properties_found') }}
+                    {% endif %}
+                </div>
+                {% endif %}
+            </section>
+        </div>
+
+        <aside class="properties-page__aside">
+            <section class="properties-card">
+                <h2>{{ t('properties_featured_title') }}</h2>
+                <ul class="properties-featured-list">
+                    {% for row in properties_panel.featured %}
+                    <li>
+                        <span class="properties-thumb properties-thumb--small" aria-hidden="true"></span>
+                        <div>
+                            <a href="{{ url_for('properties_detail', property_id=row.id) }}">{{ row.title }}</a>
+                            <span class="money">{% if row.listing_price is not none %}{{ row.listing_price|money }}{% else %}—{% endif %}</span>
+                        </div>
+                        <span class="properties-status properties-status--{{ row.display_status.tone }}">{{ row.display_status.label }}</span>
+                    </li>
+                    {% else %}
+                    <li class="properties-empty-inline">{{ t('properties_no_featured') }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+
+            <section class="properties-card">
+                <div class="properties-card__heading">
+                    <h2>{{ t('properties_occupancy_title') }}</h2>
+                    <span class="properties-card__meta">{{ t('properties_this_month') }}</span>
+                </div>
+                <div class="properties-donut-wrap">
+                    <canvas id="properties-occupancy-chart" height="180" aria-label="{{ t('properties_occupancy_title') }}"></canvas>
+                    <div class="properties-donut-center">
+                        <strong>{{ properties_panel.occupancy_global }}%</strong>
+                        <span>{{ t('properties_occupancy_global') }}</span>
+                    </div>
+                </div>
+                <ul class="properties-legend">
+                    {% for item in properties_panel.occupancy_breakdown %}
+                    <li>
+                        <span class="properties-legend__dot properties-legend__dot--{{ loop.index }}"></span>
+                        <span>{{ item.label }}</span>
+                        <strong>{{ item.percent }}%</strong>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </section>
+
+            <section class="properties-card">
+                <h2>{{ t('properties_status_summary_title') }}</h2>
+                <ul class="properties-status-summary">
+                    {% for item in properties_panel.status_summary %}
+                    <li>
+                        <span class="properties-status-dot properties-status-dot--{{ item.tone }}"></span>
+                        <span>{{ item.label }}</span>
+                        <strong>{{ item.count }}</strong>
+                    </li>
+                    {% else %}
+                    <li class="properties-empty-inline">{{ t('properties_no_status_summary') }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+
+            <section class="properties-help-card">
+                <strong>{{ t('properties_help_title') }}</strong>
+                <p>{{ t('properties_help_text') }}</p>
+                <a href="{{ url_for('organization_settings') }}">{{ t('properties_help_cta') }} →</a>
+            </section>
+        </aside>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    window.__propertiesOccupancyChart = {{ properties_panel.occupancy_breakdown | tojson }};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" onerror="window.__chartJsFailed = true"></script>
+<script>
+(function () {
+    var payload = window.__propertiesOccupancyChart || [];
+    var canvas = document.getElementById("properties-occupancy-chart");
+    if (!canvas || !payload.length || typeof Chart === "undefined") return;
+
+    var colors = ["#0d47ff", "#22c55e"];
+    new Chart(canvas, {
+        type: "doughnut",
+        data: {
+            labels: payload.map(function (item) { return item.label; }),
+            datasets: [{
+                data: payload.map(function (item) { return item.percent; }),
+                backgroundColor: payload.map(function (_item, index) {
+                    return colors[index % colors.length];
+                }),
+                borderWidth: 2,
+                borderColor: "#ffffff"
+            }]
+        },
+        options: {
+            cutout: "68%",
+            plugins: { legend: { display: false } }
+        }
+    });
+})();
+</script>
 {% endblock %}

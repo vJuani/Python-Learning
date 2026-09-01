@@ -129,6 +129,7 @@ from modules.organization_reports import load_organization_report
 from modules.pdf_organization_report import build_organization_report_pdf
 from modules.excel_organization_report import build_organization_report_xlsx
 from modules.agents_directory import build_agents_directory
+from modules.properties_directory import build_properties_directory
 from modules.dashboard_home import build_home_panel
 from modules.organization_dashboard import (
     empty_organization_dashboard,
@@ -4231,10 +4232,10 @@ def properties_list():
             "property_id",
             ""
         ).strip(),
-        "address": request.args.get(
-            "address",
-            ""
-        ).strip(),
+        "address": (
+            request.args.get("q", "").strip()
+            or request.args.get("address", "").strip()
+        ),
         "jurisdiction": request.args.get(
             "jurisdiction",
             ""
@@ -4250,8 +4251,16 @@ def properties_list():
         "max_price": request.args.get(
             "max_price",
             ""
-        ).strip()
+        ).strip(),
+        "type": request.args.get("type", "").strip(),
+        "status": request.args.get("status", "").strip(),
+        "sort": request.args.get("sort", "recent").strip(),
     }
+
+    raw_panel_filters = dict(filters)
+    raw_panel_filters["q"] = filters["address"]
+    raw_panel_filters["per_page"] = request.args.get("per_page")
+    raw_panel_filters["page"] = request.args.get("page")
 
     agent_id, scope_blocked = get_agent_scope()
 
@@ -4291,40 +4300,24 @@ def properties_list():
     )
 
     property_count = len(properties)
-    per_page = parse_per_page(
-        request.args.get("per_page"),
-        default=DEFAULT_PER_PAGE,
-    )
-    pagination = paginate_list(
+    properties_panel = build_properties_directory(
+        organization_id,
         properties,
-        page=request.args.get("page", 1),
-        per_page=per_page,
+        raw_panel_filters,
+        agents=filter_agents if not scope_blocked else [],
+        language=get_current_language(),
     )
-    pagination_params = {
-        key: value
-        for key, value in filters.items()
-        if value
-    }
-    if per_page != DEFAULT_PER_PAGE:
-        pagination_params["per_page"] = per_page
 
     return render_template(
         "properties/list.html",
-        properties=pagination["items"],
+        properties_panel=properties_panel,
         filters=filters,
         filter_errors=localize_form_errors(filter_errors),
         property_count=property_count,
         jurisdictions=JURISDICTIONS,
-        agents=filter_agents if not scope_blocked else [],
         filters_active=has_active_property_filters(
             parsed_filters
         ),
-        pagination=pagination,
-        pagination_endpoint="properties_list",
-        pagination_params=pagination_params,
-        pagination_summary_key="pagination_showing_properties",
-        pagination_per_page_options=ALLOWED_PER_PAGE,
-        show_per_page_selector=True,
     )
 
 
