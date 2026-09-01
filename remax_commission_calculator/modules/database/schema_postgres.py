@@ -1363,54 +1363,11 @@ def create_postgres_schema():
                 """
             )
 
-        cursor.execute(
-            """
-            UPDATE invoices
-            SET side = 'buyer'
-            WHERE side IS NULL OR side = ''
-            """
-        )
-        cursor.execute(
-            """
-            UPDATE invoices
-            SET issuer_key = 'agent:' || agent_id::text
-            WHERE issuer_key IS NULL
-                AND agent_id IS NOT NULL
-            """
-        )
-        cursor.execute(
-            """
-            UPDATE invoices
-            SET issuer_key = 'legacy:' || id::text
-            WHERE issuer_key IS NULL
-            """
+        from .invoice_uniqueness_migration import (
+            migrate_invoices_active_uniqueness_postgres,
         )
 
-        cursor.execute(
-            """
-            DROP INDEX IF EXISTS
-            idx_invoices_one_active_per_operation
-            """
-        )
-        cursor.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS
-            idx_invoices_one_active_per_issuer_side
-            ON invoices (
-                organization_id,
-                operation_id,
-                side,
-                issuer_key
-            )
-            WHERE status IN (
-                'draft',
-                'ready_to_issue',
-                'issued',
-                'error'
-            )
-                AND issuer_key IS NOT NULL
-            """
-        )
+        migrate_invoices_active_uniqueness_postgres(cursor)
 
         for column_name, column_sql in (
             ("fiscal_voucher_type", "TEXT"),

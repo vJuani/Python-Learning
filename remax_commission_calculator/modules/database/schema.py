@@ -2223,23 +2223,6 @@ def _migrate_invoicing(cursor):
 
     cursor.execute(
         """
-        CREATE UNIQUE INDEX IF NOT EXISTS
-        idx_invoices_one_active_per_operation
-        ON invoices (
-            organization_id,
-            operation_id
-        )
-        WHERE status IN (
-            'draft',
-            'ready_to_issue',
-            'issued',
-            'error'
-        )
-        """
-    )
-
-    cursor.execute(
-        """
         CREATE INDEX IF NOT EXISTS
         idx_invoices_org_status
         ON invoices (
@@ -2273,6 +2256,14 @@ def _migrate_invoicing(cursor):
         )
         """
     )
+
+
+def _migrate_invoices_active_uniqueness(cursor):
+    from .invoice_uniqueness_migration import (
+        migrate_invoices_active_uniqueness_sqlite,
+    )
+
+    migrate_invoices_active_uniqueness_sqlite(cursor)
 
 
 def _migrate_invoicing_v2(cursor):
@@ -2458,54 +2449,7 @@ def _migrate_invoicing_v2(cursor):
                     """
                 )
 
-        cursor.execute(
-            """
-            UPDATE invoices
-            SET side = 'buyer'
-            WHERE side IS NULL OR side = ''
-            """
-        )
-        cursor.execute(
-            """
-            UPDATE invoices
-            SET issuer_key = 'agent:' || agent_id
-            WHERE issuer_key IS NULL
-                AND agent_id IS NOT NULL
-            """
-        )
-        cursor.execute(
-            """
-            UPDATE invoices
-            SET issuer_key = 'legacy:' || id
-            WHERE issuer_key IS NULL
-            """
-        )
-
-        cursor.execute(
-            """
-            DROP INDEX IF EXISTS
-            idx_invoices_one_active_per_operation
-            """
-        )
-        cursor.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS
-            idx_invoices_one_active_per_issuer_side
-            ON invoices (
-                organization_id,
-                operation_id,
-                side,
-                issuer_key
-            )
-            WHERE status IN (
-                'draft',
-                'ready_to_issue',
-                'issued',
-                'error'
-            )
-                AND issuer_key IS NOT NULL
-            """
-        )
+        _migrate_invoices_active_uniqueness(cursor)
 
     if (
         _table_exists(cursor, "agent_billing_profiles")
