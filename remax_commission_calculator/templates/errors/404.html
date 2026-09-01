@@ -2,14 +2,14 @@
 
 {% block body_class %}is-error-page {% endblock %}
 
-{% block title %}{{ t('error_500_title') }} | {{ t('app_title') }}{% endblock %}
+{% block title %}{{ t('error_404_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
 <div class="error-state-shell">
-    <section class="error-state-card" aria-labelledby="error-500-title">
-        <div class="error-state-code" aria-hidden="true">500</div>
-        <h1 id="error-500-title">{{ t('error_500_title') }}</h1>
-        <p>{{ t('error_500_message') }}</p>
+    <section class="error-state-card" aria-labelledby="error-404-title">
+        <div class="error-state-code" aria-hidden="true">404</div>
+        <h1 id="error-404-title">{{ t('error_404_title') }}</h1>
+        <p>{{ t('error_404_message') }}</p>
         <div class="error-state-actions">
             {% if current_user %}
             <a href="{{ url_for('dashboard') }}" class="btn btn-primary">{{ t('back_home') }}</a>

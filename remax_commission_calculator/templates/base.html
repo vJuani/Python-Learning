@@ -37,6 +37,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-one.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth-pages.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app-pages.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app-shell.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
     {% if organization_branding_css %}
     <style>
@@ -50,13 +51,13 @@
     {% endif %}
     {% block extra_css %}{% endblock %}
 </head>
-<body class="{% if current_user or guest_access %}has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password') %} is-auth-page{% endif %}">
+<body class="{% block body_class %}{% endblock %}{% if current_user or guest_access %} has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
     <aside class="app-rail" aria-label="{{ t('nav_aria') }}">
         <div class="app-rail-top">
             <a href="{{ url_for('dashboard') }}" class="app-rail-brand">
                 <span class="site-brand-logo-shell">
-                    {% with logo_variant='dark', logo_extra_class='site-brand-logo' %}
+                    {% with logo_variant='light', logo_extra_class='site-brand-logo app-rail-logo' %}
                     {% include "_brand_logo.html" %}
                     {% endwith %}
                 </span>
@@ -79,13 +80,22 @@
         </nav>
         <div class="app-rail-footer">
             {% if current_user %}
+            {% set rail_first = (current_user.first_name or '').strip() %}
+            {% set rail_last = (current_user.last_name or '').strip() %}
+            {% set rail_name = (rail_first ~ ' ' ~ rail_last).strip() or current_user.username %}
+            {% set rail_parts = rail_name.split() %}
             <div class="app-rail-user">
-                <strong>{{ current_user.username }}</strong>
-                <span>{{ t('role_' ~ current_user.role) }}</span>
+                <span class="app-rail-user-avatar" aria-hidden="true">
+                    {{ rail_parts[0][0:1]|upper }}{% if rail_parts|length > 1 %}{{ rail_parts[1][0:1]|upper }}{% endif %}
+                </span>
+                <div class="app-rail-user-text">
+                    <strong>{{ rail_name }}</strong>
+                    <span>{{ t('role_' ~ current_user.role) }}</span>
+                </div>
             </div>
-            <a href="{{ url_for('logout') }}" class="nav-link app-nav-link">{{ t('logout') }}</a>
+            <a href="{{ url_for('logout') }}" class="app-rail-logout">{{ t('logout') }}</a>
             {% else %}
-            <a href="{{ url_for('logout') }}" class="nav-link app-nav-link">{{ t('logout') }}</a>
+            <a href="{{ url_for('logout') }}" class="app-rail-logout">{{ t('logout') }}</a>
             {% endif %}
         </div>
     </aside>
@@ -108,6 +118,12 @@
             </div>
 
             {% if current_user or guest_access %}
+            <div class="header-zone header-zone-context hide-mobile">
+                {% if organization_display_name %}
+                <p class="header-org-name">{{ organization_display_name }}</p>
+                {% endif %}
+            </div>
+
             <nav id="main-nav" class="main-nav header-zone header-zone-center" aria-label="{{ t('nav_aria') }}">
                 <div class="mobile-drawer-brand hide-desktop">
                     <div class="mobile-drawer-brand-text">
@@ -210,61 +226,52 @@
                 </button>
 
                 <div class="header-tools header-tools-desktop">
-                    <button
-                        type="button"
-                        class="rail-toggle rail-toggle-header"
-                        aria-expanded="true"
-                        aria-controls="app-rail-nav"
-                        data-label-collapse="{{ t('rail_collapse') }}"
-                        data-label-expand="{{ t('rail_expand') }}"
-                        title="{{ t('rail_expand') }}"
-                        hidden
-                    >
-                        <span class="rail-toggle-icon" aria-hidden="true"></span>
-                        <span class="visually-hidden rail-toggle-text">{{ t('rail_expand') }}</span>
-                    </button>
-
-                    {% include "_nav_meta.html" %}
-
-                    <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
-                        <a
-                            href="{{ url_for('set_language', language='es') }}"
-                            class="lang-link{% if current_language == 'es' %} active{% endif %}"
-                        >ES</a>
-                        <a
-                            href="{{ url_for('set_language', language='en') }}"
-                            class="lang-link{% if current_language == 'en' %} active{% endif %}"
-                        >EN</a>
+                    <div class="header-tools-group header-tools-meta">
+                        {% include "_nav_meta.html" %}
                     </div>
-                    <button
-                        type="button"
-                        class="theme-toggle"
-                        aria-label="{{ t('theme_toggle_dark') }}"
-                        data-label-dark="{{ t('theme_toggle_dark') }}"
-                        data-label-light="{{ t('theme_toggle_light') }}"
-                        title="{{ t('theme_toggle_dark') }}"
-                    >
-                        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path
-                                d="M21 14.5A8.5 8.5 0 0 1 9.5 3 6.5 6.5 0 1 0 21 14.5Z"
-                                stroke="currentColor"
-                                stroke-width="1.75"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            />
-                        </svg>
-                        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.75" />
-                            <path
-                                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
-                                stroke="currentColor"
-                                stroke-width="1.75"
-                                stroke-linecap="round"
-                            />
-                        </svg>
-                    </button>
 
-                    <div class="header-account">
+                    <div class="header-tools-group header-tools-prefs">
+                        <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
+                            <a
+                                href="{{ url_for('set_language', language='es') }}"
+                                class="lang-link{% if current_language == 'es' %} active{% endif %}"
+                            >ES</a>
+                            <a
+                                href="{{ url_for('set_language', language='en') }}"
+                                class="lang-link{% if current_language == 'en' %} active{% endif %}"
+                            >EN</a>
+                        </div>
+                        <button
+                            type="button"
+                            class="theme-toggle"
+                            aria-label="{{ t('theme_toggle_dark') }}"
+                            data-label-dark="{{ t('theme_toggle_dark') }}"
+                            data-label-light="{{ t('theme_toggle_light') }}"
+                            title="{{ t('theme_toggle_dark') }}"
+                        >
+                            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path
+                                    d="M21 14.5A8.5 8.5 0 0 1 9.5 3 6.5 6.5 0 1 0 21 14.5Z"
+                                    stroke="currentColor"
+                                    stroke-width="1.75"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
+                            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.75" />
+                                <path
+                                    d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+                                    stroke="currentColor"
+                                    stroke-width="1.75"
+                                    stroke-linecap="round"
+                                />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="header-tools-group header-tools-account">
+                        <div class="header-account">
                         {% if current_user %}
                         <details class="nav-dropdown nav-account-dropdown">
                             <summary class="nav-user nav-account-toggle" title="{{ t('logged_in_as') }}">
@@ -296,6 +303,7 @@
                         </span>
                         <a href="{{ url_for('logout') }}" class="btn btn-small btn-secondary">{{ t('logout') }}</a>
                         {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -430,21 +438,15 @@
     </div>
 
     <footer class="site-footer">
-        <div class="container footer-content">
+        <div class="footer-content">
             <div class="footer-brand">
                 <div class="footer-brand-mark">
                     {% with logo_variant='icon', logo_extra_class='footer-brand-icon' %}
                     {% include "_brand_logo.html" %}
                     {% endwith %}
-                    <div>
-                        <p>{{ t('app_footer') }}</p>
-                        <p class="footer-slogan">{{ t('app_slogan') }}</p>
-                    </div>
+                    <p>{{ brand_name }} · {{ t('app_slogan') }}</p>
                 </div>
             </div>
-            {% if current_user or guest_access %}
-            <a href="{{ url_for('dashboard') }}" class="footer-link">{{ t('back_home') }}</a>
-            {% endif %}
         </div>
     </footer>
     </div>

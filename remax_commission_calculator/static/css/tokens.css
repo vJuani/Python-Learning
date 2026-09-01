@@ -93,14 +93,21 @@
     --header-height: 64px;
     --header-bg: rgba(255, 255, 255, 0.94);
     --footer-bg: rgba(242, 244, 248, 0.9);
-    --rail-width: 15.5rem;
-    --rail-collapsed-width: 4.25rem;
+    --rail-width: 16rem;
+    --rail-collapsed-width: 4.5rem;
     --rail-bg: var(--brand-navy);
     --rail-text: #e8eefc;
-    --rail-text-muted: rgba(232, 238, 252, 0.65);
-    --rail-border: rgba(255, 255, 255, 0.08);
-    --rail-active-bg: rgba(13, 71, 255, 0.22);
+    --rail-text-muted: rgba(232, 238, 252, 0.72);
+    --rail-border: rgba(255, 255, 255, 0.1);
+    --rail-active-bg: rgba(13, 71, 255, 0.18);
     --rail-active-border: var(--jrh-blue);
+    --rail-padding-x: 1rem;
+    --rail-nav-gap: 0.2rem;
+
+    /* App shell content */
+    --shell-max-width: 76rem;
+    --shell-gutter: 1.5rem;
+    --shell-gutter-lg: 2rem;
 
     /* Tables */
     --table-head-bg: var(--jrh-navy);

@@ -1540,11 +1540,9 @@ def process_operation_submission(
 
 @app.errorhandler(404)
 def handle_not_found(error):
-    flash_i18n("record_not_found", "error")
-
-    return redirect(
-        url_for("dashboard")
-    )
+    return render_template(
+        "errors/404.html"
+    ), 404
 
 
 @app.errorhandler(403)

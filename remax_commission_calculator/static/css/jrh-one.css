@@ -160,9 +160,7 @@ body.has-app-rail .app-rail-brand .brand-logo {
 
 body.has-app-rail .app-rail-nav .nav-link.active,
 body.has-app-rail .app-rail-nav .app-nav-link.active {
-    background: var(--rail-active-bg);
     color: var(--text-inverse);
-    border-left: 3px solid var(--rail-active-border);
     font-weight: var(--font-weight-semibold);
 }
 
