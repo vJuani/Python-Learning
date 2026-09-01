@@ -1,146 +1,328 @@
 {% extends "base.html" %}
 
-{% block title %}{{ t('agents_title') }} | {{ t('app_title') }}{% endblock %}
+{% block body_class %}is-agents-page {% endblock %}
+
+{% block title %}{{ t('agents_page_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agents-page.css') }}">
+{% endblock %}
 
 {% block content %}
-<section class="page-header">
-    <div class="page-header-text">
-        <h2>{{ t('agents_title') }}</h2>
-        <p class="results-meta">{{ t('results_found', count=agent_count) }}</p>
-    </div>
-
-    <div class="page-actions page-actions-stack">
-        {% if is_admin() %}
-        <a href="{{ url_for('agents_new') }}" class="btn btn-primary">+ {{ t('new_agent') }}</a>
-        {% endif %}
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
-    </div>
-</section>
-
-<section class="panel panel-search">
-    <form
-        class="autocomplete-form"
-        method="get"
-        action="{{ url_for('agents_list') }}"
-        data-autocomplete="agents"
-        data-suggest-url="{{ url_for('agents_suggest') }}"
-        data-min-chars="1"
-        data-debounce-ms="250"
-        data-empty-label="{{ t('no_agent_suggestions') }}"
-        autocomplete="off"
-    >
-        <div class="form-group autocomplete-field">
-            <label for="agent-search-q">{{ t('search_agent') }}</label>
-            <input
-                type="search"
-                id="agent-search-q"
-                name="q"
-                class="form-input"
-                placeholder="{{ t('search_agent_placeholder') }}"
-                value="{{ search_query }}"
-                role="combobox"
-                aria-autocomplete="list"
-                aria-expanded="false"
-                aria-controls="agent-suggest-list"
-                data-autocomplete-input
-            >
-            <ul
-                id="agent-suggest-list"
-                class="autocomplete-list"
-                role="listbox"
-                hidden
-                data-autocomplete-list
-            ></ul>
+<div class="agents-page">
+    <header class="agents-page__header">
+        <div>
+            <h1>{{ t('agents_page_title') }}</h1>
+            <p>{{ t('agents_page_subtitle') }}</p>
         </div>
-        {% if search_query %}
-        <a href="{{ url_for('agents_list') }}" class="btn btn-secondary btn-inline">{{ t('clear') }}</a>
-        {% endif %}
-    </form>
-</section>
+        <a href="{{ url_for('agents_new') }}" class="agents-btn agents-btn--primary">
+            + {{ t('new_agent') }}
+        </a>
+    </header>
 
-<section class="panel panel-list">
-    <div class="panel-header">
-        <h3>{{ t('agent_list') }}</h3>
-    </div>
-
-    {% if agents %}
-    <div class="entity-card-list hide-desktop">
-        {% for agent in agents %}
-        <article class="entity-card entity-card-agent">
-            <div class="entity-card-heading">
-                <div class="entity-card-agent-main">
-                    {% set name_parts = agent.name.split() %}
-                    <span class="entity-avatar" aria-hidden="true">
-                        {{ name_parts[0][0:1]|upper }}{% if name_parts|length > 1 %}{{ name_parts[1][0:1]|upper }}{% endif %}
-                    </span>
-                    <div class="entity-card-heading-text">
-                        <h4 class="entity-card-title">{{ agent.name }}</h4>
-                    </div>
-                </div>
-                <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
-            </div>
-            <div class="entity-card-footer entity-card-footer-actions">
-                <a
-                    href="{{ url_for('agents_detail', agent_id=agent.id) }}"
-                    class="entity-card-cta"
-                >{{ t('view') }} →</a>
-                {% if is_admin() %}
-                <a
-                    href="{{ url_for('agents_edit', agent_id=agent.id) }}"
-                    class="btn btn-small btn-outline"
-                >{{ t('edit') }}</a>
+    <section class="agents-kpis" aria-label="{{ t('agents_kpis_aria') }}">
+        <article class="agents-kpi-card">
+            <span class="agents-kpi-card__icon agents-kpi-card__icon--users" aria-hidden="true"></span>
+            <div>
+                <span class="agents-kpi-card__label">{{ t('agents_kpi_active') }}</span>
+                <strong>{{ agents_panel.kpis.active_agents }}</strong>
+                {% if agents_panel.kpis.active_agents_trend is not none %}
+                <span class="agents-kpi-card__trend agents-kpi-card__trend--up">
+                    ↑ {{ agents_panel.kpis.active_agents_trend }}% {{ t('agents_vs_previous_month') }}
+                </span>
                 {% endif %}
             </div>
         </article>
-        {% endfor %}
-    </div>
+        <article class="agents-kpi-card">
+            <span class="agents-kpi-card__icon agents-kpi-card__icon--ops" aria-hidden="true"></span>
+            <div>
+                <span class="agents-kpi-card__label">{{ t('agents_kpi_operations') }}</span>
+                <strong>{{ agents_panel.kpis.operations_month }}</strong>
+                {% if agents_panel.kpis.operations_trend is not none %}
+                <span class="agents-kpi-card__trend{% if agents_panel.kpis.operations_trend >= 0 %} agents-kpi-card__trend--up{% else %} agents-kpi-card__trend--down{% endif %}">
+                    {% if agents_panel.kpis.operations_trend >= 0 %}↑{% else %}↓{% endif %}
+                    {{ agents_panel.kpis.operations_trend|abs }}% {{ t('agents_vs_previous_month') }}
+                </span>
+                {% endif %}
+            </div>
+        </article>
+        <article class="agents-kpi-card">
+            <span class="agents-kpi-card__icon agents-kpi-card__icon--money" aria-hidden="true"></span>
+            <div>
+                <span class="agents-kpi-card__label">{{ t('agents_kpi_commissions') }}</span>
+                <strong class="money">{{ agents_panel.kpis.commission_month|money }}</strong>
+                {% if agents_panel.kpis.commission_trend is not none %}
+                <span class="agents-kpi-card__trend{% if agents_panel.kpis.commission_trend >= 0 %} agents-kpi-card__trend--up{% else %} agents-kpi-card__trend--down{% endif %}">
+                    {% if agents_panel.kpis.commission_trend >= 0 %}↑{% else %}↓{% endif %}
+                    {{ agents_panel.kpis.commission_trend|abs }}% {{ t('agents_vs_previous_month') }}
+                </span>
+                {% endif %}
+            </div>
+        </article>
+        <article class="agents-kpi-card">
+            <span class="agents-kpi-card__icon agents-kpi-card__icon--target" aria-hidden="true"></span>
+            <div>
+                <span class="agents-kpi-card__label">{{ t('agents_kpi_close_rate') }}</span>
+                <strong>{{ agents_panel.kpis.close_rate }}%</strong>
+            </div>
+        </article>
+    </section>
 
-    <div class="table-wrapper hide-mobile">
-        <table>
-            <thead>
-                <tr>
-                    <th>{{ t('name') }}</th>
-                    <th>{{ t('type') }}</th>
-                    <th class="col-actions">{{ t('actions') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for agent in agents %}
-                <tr>
-                    <td>{{ agent.name }}</td>
-                    <td>
-                        <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
-                    </td>
-                    <td class="table-actions col-actions">
-                        <a
-                            href="{{ url_for('agents_detail', agent_id=agent.id) }}"
-                            class="btn btn-small btn-secondary"
-                        >{{ t('view') }}</a>
-                        {% if is_admin() %}
-                        <a
-                            href="{{ url_for('agents_edit', agent_id=agent.id) }}"
-                            class="btn btn-small btn-edit"
-                        >{{ t('edit') }}</a>
+    <div class="agents-page__layout">
+        <div class="agents-page__main">
+            <section class="agents-card">
+                <form class="agents-toolbar" method="get" action="{{ url_for('agents_list') }}">
+                    <div class="agents-toolbar__search">
+                        <input
+                            type="search"
+                            name="q"
+                            value="{{ agents_panel.filters.q }}"
+                            placeholder="{{ t('agents_search_placeholder') }}"
+                            aria-label="{{ t('search_agent') }}"
+                        >
+                    </div>
+                    <label class="agents-toolbar__filter">
+                        <span class="visually-hidden">{{ t('agents_filter_team') }}</span>
+                        <select name="team">
+                            <option value="">{{ t('agents_filter_team_all') }}</option>
+                            {% for team in agents_panel.team_options %}
+                            <option value="{{ team.id }}" {% if agents_panel.filters.team|string == team.id|string %}selected{% endif %}>{{ team.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="agents-toolbar__filter">
+                        <span class="visually-hidden">{{ t('agents_filter_status') }}</span>
+                        <select name="status">
+                            <option value="">{{ t('agents_filter_status_all') }}</option>
+                            <option value="with_operations" {% if agents_panel.filters.status == 'with_operations' %}selected{% endif %}>{{ t('agents_filter_status_active') }}</option>
+                            <option value="billing_pending" {% if agents_panel.filters.status == 'billing_pending' %}selected{% endif %}>{{ t('agents_filter_status_billing') }}</option>
+                        </select>
+                    </label>
+                    <button type="submit" class="agents-btn agents-btn--ghost">{{ t('filter') }}</button>
+                    <a href="{{ url_for('reports_index') }}" class="agents-btn agents-btn--outline">{{ t('agents_export') }}</a>
+                </form>
+
+                {% if agents_panel.rows %}
+                <div class="table-wrapper">
+                    <table class="agents-table">
+                        <thead>
+                            <tr>
+                                <th>{{ t('agents_col_agent') }}</th>
+                                <th>{{ t('agents_col_team') }}</th>
+                                <th>{{ t('agents_col_contact') }}</th>
+                                <th>{{ t('agents_col_active') }}</th>
+                                <th>{{ t('agents_col_operations') }}</th>
+                                <th>{{ t('agents_col_commissions') }}</th>
+                                <th>{{ t('agents_col_billing') }}</th>
+                                <th>{{ t('agents_col_performance') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in agents_panel.rows %}
+                            <tr>
+                                <td>
+                                    <div class="agents-agent-cell">
+                                        {% set parts = row.name.split() %}
+                                        <span class="agents-avatar" aria-hidden="true">
+                                            {{ parts[0][0:1]|upper }}{% if parts|length > 1 %}{{ parts[1][0:1]|upper }}{% endif %}
+                                        </span>
+                                        <div>
+                                            <a href="{{ url_for('agents_detail', agent_id=row.id) }}" class="agents-agent-cell__name">{{ row.name }}</a>
+                                            <span class="agents-agent-cell__code">{{ row.code }}</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{{ row.team_label }}</td>
+                                <td>
+                                    <div class="agents-contact-cell">
+                                        <span>{{ row.email }}</span>
+                                        <span>{{ row.phone }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="agents-metric-cell">
+                                        <strong>{{ row.active_count }}</strong>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="agents-metric-cell">
+                                        <strong>{{ row.operations }}</strong>
+                                        {% if row.operations_trend is not none %}
+                                        <span class="agents-trend{% if row.operations_trend >= 0 %} is-up{% else %} is-down{% endif %}">
+                                            {% if row.operations_trend >= 0 %}↑{% else %}↓{% endif %} {{ row.operations_trend|abs }}%
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="agents-metric-cell">
+                                        <strong class="money">{{ row.commission|money }}</strong>
+                                        {% if row.commission_trend is not none %}
+                                        <span class="agents-trend{% if row.commission_trend >= 0 %} is-up{% else %} is-down{% endif %}">
+                                            {% if row.commission_trend >= 0 %}↑{% else %}↓{% endif %} {{ row.commission_trend|abs }}%
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="agents-billing agents-billing--{{ row.billing_status }}">{{ row.billing_label }}</span>
+                                </td>
+                                <td>
+                                    <div class="agents-performance">
+                                        <span class="agents-performance__label">{{ row.performance_label }}</span>
+                                        <span class="agents-performance__score agents-performance__score--{{ row.performance_tone }}">{{ row.performance_score }}</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <footer class="agents-pagination">
+                    <p>
+                        {{ t('agents_pagination_showing', from=agents_panel.pagination.from_row, to=agents_panel.pagination.to_row, total=agents_panel.pagination.total) }}
+                    </p>
+                    <div class="agents-pagination__controls">
+                        {% if agents_panel.pagination.page > 1 %}
+                        <a href="{{ url_for('agents_list', page=agents_panel.pagination.page - 1, per_page=agents_panel.pagination.per_page, q=agents_panel.filters.q, team=agents_panel.filters.team, status=agents_panel.filters.status) }}">‹</a>
                         {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        {% for p in range(1, agents_panel.pagination.total_pages + 1) %}
+                        {% if p <= 3 or p == agents_panel.pagination.total_pages or (p >= agents_panel.pagination.page - 1 and p <= agents_panel.pagination.page + 1) %}
+                        <a href="{{ url_for('agents_list', page=p, per_page=agents_panel.pagination.per_page, q=agents_panel.filters.q, team=agents_panel.filters.team, status=agents_panel.filters.status) }}" class="{% if p == agents_panel.pagination.page %}is-active{% endif %}">{{ p }}</a>
+                        {% elif p == 4 and agents_panel.pagination.total_pages > 5 %}
+                        <span>…</span>
+                        {% endif %}
+                        {% endfor %}
+                        {% if agents_panel.pagination.page < agents_panel.pagination.total_pages %}
+                        <a href="{{ url_for('agents_list', page=agents_panel.pagination.page + 1, per_page=agents_panel.pagination.per_page, q=agents_panel.filters.q, team=agents_panel.filters.team, status=agents_panel.filters.status) }}">›</a>
+                        {% endif %}
+                    </div>
+                    <form method="get" action="{{ url_for('agents_list') }}" class="agents-pagination__size">
+                        <input type="hidden" name="q" value="{{ agents_panel.filters.q }}">
+                        <input type="hidden" name="team" value="{{ agents_panel.filters.team }}">
+                        <input type="hidden" name="status" value="{{ agents_panel.filters.status }}">
+                        <label>
+                            {{ t('agents_show') }}
+                            <select name="per_page" onchange="this.form.submit()">
+                                {% for size in [8, 12, 20, 50] %}
+                                <option value="{{ size }}" {% if agents_panel.pagination.per_page == size %}selected{% endif %}>{{ size }}</option>
+                                {% endfor %}
+                            </select>
+                            {{ t('agents_per_page') }}
+                        </label>
+                    </form>
+                </footer>
+                {% else %}
+                <div class="agents-empty">{{ t('no_agents_title') }}</div>
+                {% endif %}
+            </section>
+
+            <section class="agents-banner">
+                <div>
+                    <strong>{{ t('agents_banner_title') }}</strong>
+                    <p>{{ t('agents_banner_text') }}</p>
+                </div>
+                <div class="agents-banner__links">
+                    <a href="{{ url_for('reports_index') }}">{{ t('agents_banner_reports') }}</a>
+                    {% if agents_panel.team_report_leader_id %}
+                    <a href="{{ url_for('team_report', team_leader_id=agents_panel.team_report_leader_id) }}">{{ t('agents_banner_compare') }}</a>
+                    {% else %}
+                    <a href="{{ url_for('reports_index') }}">{{ t('agents_banner_compare') }}</a>
+                    {% endif %}
+                    <a href="{{ url_for('reports_index', view='monthly') }}">{{ t('agents_banner_incentives') }}</a>
+                </div>
+            </section>
+        </div>
+
+        <aside class="agents-page__aside">
+            <section class="agents-card">
+                <h2>{{ t('agents_top_performers') }}</h2>
+                <ol class="agents-top-list">
+                    {% for row in agents_panel.top_performers %}
+                    <li>
+                        <span class="agents-top-list__rank">{{ loop.index }}</span>
+                        <div>
+                            <a href="{{ url_for('agents_detail', agent_id=row.id) }}">{{ row.name }}</a>
+                            <span>{{ row.team_label }}</span>
+                        </div>
+                        <span class="agents-performance__score agents-performance__score--{{ row.performance_tone }}">{{ row.performance_score }}</span>
+                    </li>
+                    {% else %}
+                    <li class="agents-empty-inline">{{ t('agents_no_performers') }}</li>
+                    {% endfor %}
+                </ol>
+            </section>
+
+            <section class="agents-card">
+                <h2>{{ t('agents_pending_actions') }}</h2>
+                <ul class="agents-pending-list">
+                    {% for item in agents_panel.pending_actions %}
+                    {% if item.count > 0 %}
+                    <li>
+                        <span>{{ item.label }}</span>
+                        <strong>{{ item.count }}</strong>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+            </section>
+
+            <section class="agents-card">
+                <h2>{{ t('agents_team_distribution') }}</h2>
+                <div class="agents-donut-wrap">
+                    <canvas id="agents-team-chart" height="180" aria-label="{{ t('agents_team_distribution') }}"></canvas>
+                    <div class="agents-donut-center">
+                        <strong>{{ agents_panel.distribution_total }}</strong>
+                        <span>{{ t('agents_total') }}</span>
+                    </div>
+                </div>
+                <ul class="agents-legend">
+                    {% for item in agents_panel.team_distribution %}
+                    <li>
+                        <span class="agents-legend__dot agents-legend__dot--{{ loop.index }}"></span>
+                        <span>{{ item.label }}</span>
+                        <strong>{{ item.count }}</strong>
+                        <em>{{ item.percent }}%</em>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </section>
+        </aside>
     </div>
-    {% else %}
-    <div class="empty-state">
-        <p class="empty-state-title">
-            {% if search_query %}{{ t('no_agents_match') }}{% else %}{{ t('no_agents_title') }}{% endif %}
-        </p>
-        <p class="empty-state-text">
-            {% if search_query %}
-            {{ t('empty_agents_hint') }}
-            {% elif is_admin() %}
-            <a href="{{ url_for('agents_new') }}">{{ t('create_first_agent') }}</a>
-            {% endif %}
-        </p>
-    </div>
-    {% endif %}
-</section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    window.__agentsTeamChart = {{ agents_panel.team_distribution | tojson }};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" onerror="window.__chartJsFailed = true"></script>
+<script>
+(function () {
+    var payload = window.__agentsTeamChart || [];
+    var canvas = document.getElementById("agents-team-chart");
+    if (!canvas || !payload.length || typeof Chart === "undefined") return;
+
+    var colors = ["#0d47ff", "#22c55e", "#f59e0b", "#8b5cf6", "#06b6d4", "#ef4444"];
+    new Chart(canvas, {
+        type: "doughnut",
+        data: {
+            labels: payload.map(function (item) { return item.label; }),
+            datasets: [{
+                data: payload.map(function (item) { return item.count; }),
+                backgroundColor: payload.map(function (_item, index) {
+                    return colors[index % colors.length];
+                }),
+                borderWidth: 2,
+                borderColor: "#ffffff"
+            }]
+        },
+        options: {
+            cutout: "68%",
+            plugins: { legend: { display: false } }
+        }
+    });
+})();
+</script>
 {% endblock %}

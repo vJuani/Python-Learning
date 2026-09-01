@@ -128,6 +128,7 @@ from modules.excel_operation_summary import build_operation_summary_xlsx
 from modules.organization_reports import load_organization_report
 from modules.pdf_organization_report import build_organization_report_pdf
 from modules.excel_organization_report import build_organization_report_xlsx
+from modules.agents_directory import build_agents_directory
 from modules.dashboard_home import build_home_panel
 from modules.organization_dashboard import (
     empty_organization_dashboard,
@@ -3643,25 +3644,17 @@ def _parse_team_leader_id(raw):
 @admin_required
 def agents_list():
     organization_id = require_user_organization()
-
-    search_query = request.args.get(
-        "q",
-        ""
-    ).strip()
-
-    if search_query:
-        agents = search_agents(
-            search_query,
-            organization_id
-        )
-    else:
-        agents = get_agents(organization_id)
+    agents = get_agents(organization_id)
+    agents_panel = build_agents_directory(
+        organization_id,
+        agents,
+        request.args,
+        language=get_current_language(),
+    )
 
     return render_template(
         "agents/list.html",
-        agents=agents,
-        search_query=search_query,
-        agent_count=len(agents)
+        agents_panel=agents_panel,
     )
 
 
