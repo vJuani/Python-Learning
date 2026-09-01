@@ -290,7 +290,9 @@ class OrganizationDashboardTests(unittest.TestCase):
             },
             follow_redirects=True,
         )
-        response = self.client.get("/")
+        response = self.client.get(
+            "/?period=custom&date_from=01/08/2026&date_to=31/08/2026"
+        )
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Hola, dash_admin", response.data)
         self.assertIn(b"USD 4.500,00", response.data)

@@ -2981,6 +2981,16 @@ def normalize_language(language):
     return DEFAULT_LANGUAGE
 
 
+def _translation_placeholders(text):
+    from string import Formatter
+
+    return [
+        field_name
+        for _, field_name, _, _ in Formatter().parse(text)
+        if field_name is not None
+    ]
+
+
 def translate(key, language=DEFAULT_LANGUAGE, **kwargs):
     language = normalize_language(language)
 
@@ -2989,8 +2999,6 @@ def translate(key, language=DEFAULT_LANGUAGE, **kwargs):
 
     if key == "app_footer":
         return get_brand_footer(language)
-
-    kwargs.setdefault("brand_name", get_brand_name())
 
     catalog = TRANSLATIONS.get(
         language,
@@ -3003,8 +3011,21 @@ def translate(key, language=DEFAULT_LANGUAGE, **kwargs):
         fallback = TRANSLATIONS[DEFAULT_LANGUAGE]
         text = fallback.get(key, key)
 
-    if kwargs:
-        return text.format(**kwargs)
+    format_kwargs = dict(kwargs)
+
+    if "{brand_name}" in text:
+        format_kwargs.setdefault("brand_name", get_brand_name())
+
+    if not format_kwargs:
+        return text
+
+    placeholders = _translation_placeholders(text)
+
+    if placeholders and all(
+        placeholder in format_kwargs
+        for placeholder in placeholders
+    ):
+        return text.format(**format_kwargs)
 
     return text
 
