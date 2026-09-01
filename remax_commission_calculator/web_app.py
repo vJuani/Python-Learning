@@ -128,6 +128,7 @@ from modules.excel_operation_summary import build_operation_summary_xlsx
 from modules.organization_reports import load_organization_report
 from modules.pdf_organization_report import build_organization_report_pdf
 from modules.excel_organization_report import build_organization_report_xlsx
+from modules.dashboard_home import build_home_panel
 from modules.organization_dashboard import (
     empty_organization_dashboard,
     load_organization_dashboard,
@@ -1059,11 +1060,17 @@ def resolve_owned_agent_id(form_agent_id):
 
 
 def get_empty_dashboard_context():
+    dashboard = empty_organization_dashboard(
+        language=get_current_language()
+    )
     return {
-        "dashboard": empty_organization_dashboard(
-            language=get_current_language()
-        ),
+        "dashboard": dashboard,
         "team_block": None,
+        "home_panel": build_home_panel(
+            0,
+            dashboard,
+            language=get_current_language(),
+        ),
     }
 
 
@@ -1129,9 +1136,22 @@ def get_dashboard_context(
                 language=language,
             )
 
+    home_panel = build_home_panel(
+        organization_id,
+        dashboard,
+        language=language,
+        scoped_agent_id=agent_id,
+        role=role,
+        can_manage_approvals=can_approve(user),
+        can_write=can_write(user),
+        can_create_operations=can_create_operations(organization_id),
+        user_id=user.get("id") if user else None,
+    )
+
     return {
         "dashboard": dashboard,
         "team_block": team_block,
+        "home_panel": home_panel,
     }
 
 

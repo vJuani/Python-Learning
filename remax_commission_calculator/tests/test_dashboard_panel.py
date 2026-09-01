@@ -197,7 +197,7 @@ class DashboardPanelRouteTests(unittest.TestCase):
         self._login_admin()
         response = self._get_panel()
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Hola, panel_admin", response.data)
+        self.assertIn(b"Panel ejecutivo", response.data)
         self.assertNotIn(b"Error del servidor", response.data)
 
     def test_panel_with_operations_returns_200(self):
