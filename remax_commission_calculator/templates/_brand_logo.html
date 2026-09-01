@@ -1,13 +1,7 @@
-{# Reusable brand logo — variant: light | dark | theme | icon | horizontal | full #}
+{# JRH One product logo — variant: light | dark | theme | icon | horizontal | full #}
 {% set logo_variant = logo_variant|default('light') %}
 {% set logo_extra_class = logo_extra_class|default('') %}
-{% if organization_logo_url %}
-<img
-    src="{{ organization_logo_url }}"
-    alt="{{ brand_name }}"
-    class="brand-logo brand-logo--org {{ logo_extra_class }}"
->
-{% elif logo_variant == 'theme' %}
+{% if logo_variant == 'theme' %}
 <img
     src="{{ brand_logo_light_url }}"
     alt="{{ brand_name }}"

@@ -536,6 +536,7 @@ def inject_organization_branding():
 def inject_product_branding():
     from modules.branding import (
         get_app_domain,
+        get_brand_asset_version,
         get_brand_email_footer_rel,
         get_brand_logo_dark_rel,
         get_brand_logo_light_rel,
@@ -545,32 +546,31 @@ def inject_product_branding():
         get_logo_icon_rel,
     )
 
+    def _brand_static_url(rel_path: str) -> str:
+        return url_for(
+            "static",
+            filename=rel_path,
+            v=get_brand_asset_version(rel_path),
+        )
+
+    icon_rel = get_logo_icon_rel()
+    light_rel = get_brand_logo_light_rel()
+    dark_rel = get_brand_logo_dark_rel()
+
     return {
         "brand_name": get_brand_name(),
         "brand_domain": get_app_domain(),
-        "brand_logo_horizontal_url": url_for(
-            "static",
-            filename=get_logo_horizontal_rel(),
+        "brand_logo_horizontal_url": _brand_static_url(
+            get_logo_horizontal_rel(),
         ),
-        "brand_logo_light_url": url_for(
-            "static",
-            filename=get_brand_logo_light_rel(),
+        "brand_logo_light_url": _brand_static_url(light_rel),
+        "brand_logo_dark_url": _brand_static_url(dark_rel),
+        "brand_logo_full_url": _brand_static_url(
+            get_logo_full_rel(),
         ),
-        "brand_logo_dark_url": url_for(
-            "static",
-            filename=get_brand_logo_dark_rel(),
-        ),
-        "brand_logo_full_url": url_for(
-            "static",
-            filename=get_logo_full_rel(),
-        ),
-        "brand_logo_icon_url": url_for(
-            "static",
-            filename=get_logo_icon_rel(),
-        ),
-        "brand_email_footer_url": url_for(
-            "static",
-            filename=get_brand_email_footer_rel(),
+        "brand_logo_icon_url": _brand_static_url(icon_rel),
+        "brand_email_footer_url": _brand_static_url(
+            get_brand_email_footer_rel(),
         ),
     }
 
@@ -578,9 +578,13 @@ def inject_product_branding():
 @app.get("/manifest.webmanifest")
 def web_manifest():
     from modules.branding import (
+        get_brand_asset_version,
         get_brand_name,
         get_logo_icon_rel,
     )
+
+    icon_rel = get_logo_icon_rel()
+    icon_v = get_brand_asset_version(icon_rel)
 
     return {
         "name": get_brand_name(),
@@ -594,7 +598,8 @@ def web_manifest():
             {
                 "src": url_for(
                     "static",
-                    filename=get_logo_icon_rel(),
+                    filename=icon_rel,
+                    v=icon_v,
                 ),
                 "sizes": "192x192",
                 "type": "image/png",
@@ -603,7 +608,8 @@ def web_manifest():
             {
                 "src": url_for(
                     "static",
-                    filename=get_logo_icon_rel(),
+                    filename=icon_rel,
+                    v=icon_v,
                 ),
                 "sizes": "512x512",
                 "type": "image/png",

@@ -33,12 +33,7 @@ BRAND_LOGO_LIGHT_REL = f"{BRAND_ASSET_DIR}/brand-logo-light.png"
 BRAND_LOGO_DARK_REL = f"{BRAND_ASSET_DIR}/brand-logo-dark.png"
 BRAND_EMAIL_FOOTER_REL = f"{BRAND_ASSET_DIR}/email-footer.png"
 
-# Legacy defaults until brand/ assets are uploaded.
-DEFAULT_LOGO_HORIZONTAL_REL = "images/jrh-one-logo-horizontal.jpg"
-DEFAULT_LOGO_FULL_REL = "images/jrh-one-logo-full.jpg"
-DEFAULT_LOGO_ICON_REL = "images/jrh-one-icon.jpg"
-
-# Legacy filenames kept for reference / manual fallback only.
+# Legacy filenames — deprecated; do not use for product UI (old Commission Calculator art).
 LEGACY_LOGO_HORIZONTAL_REL = "images/logo-horizontal.png"
 LEGACY_LOGO_FULL_REL = "images/logo-full.png"
 LEGACY_LOGO_ICON_REL = "images/logo-icon.png"
@@ -64,37 +59,39 @@ def _logo_rel(env_key: str, default_rel: str) -> str:
     return raw or default_rel
 
 
-def _resolve_brand_asset(canonical_rel: str, fallback_rel: str) -> str:
-    """Prefer canonical brand/ file when present; else legacy path."""
+def _resolve_brand_asset(canonical_rel: str) -> str:
+    """Return canonical brand/ path when the file exists."""
     if _resolve_static_path(canonical_rel).is_file():
         return canonical_rel
-    return fallback_rel
+    return canonical_rel
+
+
+def get_brand_asset_version(rel_path: str) -> int:
+    """Cache-buster from file mtime (0 if missing)."""
+    path = _resolve_static_path(rel_path)
+    if not path.is_file():
+        return 0
+    return int(path.stat().st_mtime)
 
 
 def get_brand_icon_rel() -> str:
     return _logo_rel(
         "APP_BRAND_ICON",
-        _resolve_brand_asset(BRAND_ICON_REL, DEFAULT_LOGO_ICON_REL),
+        _resolve_brand_asset(BRAND_ICON_REL),
     )
 
 
 def get_brand_logo_light_rel() -> str:
     return _logo_rel(
         "APP_BRAND_LOGO_LIGHT",
-        _resolve_brand_asset(
-            BRAND_LOGO_LIGHT_REL,
-            DEFAULT_LOGO_HORIZONTAL_REL,
-        ),
+        _resolve_brand_asset(BRAND_LOGO_LIGHT_REL),
     )
 
 
 def get_brand_logo_dark_rel() -> str:
     return _logo_rel(
         "APP_BRAND_LOGO_DARK",
-        _resolve_brand_asset(
-            BRAND_LOGO_DARK_REL,
-            DEFAULT_LOGO_HORIZONTAL_REL,
-        ),
+        _resolve_brand_asset(BRAND_LOGO_DARK_REL),
     )
 
 
@@ -151,7 +148,9 @@ def resolve_brand_logo_path(rel_path: str | None = None) -> Path | None:
 
     candidates.extend([
         get_logo_horizontal_path(),
-        _resolve_static_path(LEGACY_LOGO_HORIZONTAL_REL),
+        _resolve_static_path(BRAND_LOGO_LIGHT_REL),
+        _resolve_static_path(BRAND_LOGO_DARK_REL),
+        _resolve_static_path(BRAND_ICON_REL),
     ])
 
     for path in candidates:
