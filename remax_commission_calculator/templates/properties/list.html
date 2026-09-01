@@ -217,7 +217,7 @@
                                 </td>
                                 <td>
                                     <div class="properties-actions">
-                                        <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="properties-action" title="{{ t('view') }}">👁</a>
+                                        <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="properties-action" title="{{ t('properties_view') }}">👁</a>
                                         {% if can_write() %}
                                         <a href="{{ url_for('properties_edit', property_id=row.id) }}" class="properties-action" title="{{ t('edit') }}">⋮</a>
                                         {% endif %}

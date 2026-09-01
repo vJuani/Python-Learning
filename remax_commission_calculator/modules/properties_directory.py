@@ -201,6 +201,13 @@ def _occupancy_rate(items, operation_map):
     return round((occupied / len(items)) * 100, 1)
 
 
+def _submitted_at_sort_key(value):
+    parsed = _parse_submitted_date(value)
+    if parsed is None:
+        return ""
+    return parsed.strftime("%Y%m%d")
+
+
 def _sort_properties(rows, sort_key):
     if sort_key == "price_asc":
         return sorted(
@@ -224,7 +231,7 @@ def _sort_properties(rows, sort_key):
     return sorted(
         rows,
         key=lambda item: (
-            date_to_sortable(item.get("submitted_at") or ""),
+            _submitted_at_sort_key(item.get("submitted_at")),
             item["id"],
         ),
         reverse=True,
