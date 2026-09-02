@@ -217,13 +217,19 @@ body.is-login-page .flash-messages {
 .login-card__brand {
     display: flex;
     justify-content: center;
+    align-items: center;
+    width: 100%;
     margin-bottom: 0.85rem;
+    overflow: visible;
 }
 
 .login-card__logo {
-    width: 5.5rem;
+    display: block;
+    width: auto;
+    max-width: min(11rem, 100%);
     height: auto;
     object-fit: contain;
+    object-position: center;
 }
 
 .login-card__header {
@@ -515,6 +521,10 @@ body.is-login-page .flash-messages {
     .login-card {
         padding: 1.6rem 1.35rem 1.35rem;
         border-radius: 1.15rem;
+    }
+
+    .login-card__logo {
+        max-width: min(10rem, calc(100% - 0.5rem));
     }
 
     .login-form__row {
