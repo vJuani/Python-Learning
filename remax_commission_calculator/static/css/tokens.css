@@ -198,6 +198,22 @@
     --theme-toggle-hover: var(--accent-soft);
     --theme-toggle-icon: var(--text-muted);
 
+    /* Interactive surfaces (quick actions, tiles) */
+    --interactive-bg: #f8fafc;
+    --interactive-bg-hover: #eef4ff;
+    --interactive-border-hover: rgba(13, 71, 255, 0.28);
+
+    /* Placeholders (property thumbs, empty media) */
+    --placeholder-bg: #eef2f7;
+    --placeholder-icon: #94a3b8;
+
+    /* Charts */
+    --chart-line: var(--accent);
+    --chart-fill: rgba(13, 71, 255, 0.08);
+    --chart-point: var(--accent);
+    --chart-tick: var(--text-muted);
+    --chart-grid: rgba(148, 163, 184, 0.2);
+
     /* Page background */
     --body-gradient:
         radial-gradient(circle at top right, rgba(13, 71, 255, 0.06), transparent 32%),
@@ -220,8 +236,8 @@
 
     --text: #e5e7eb;
     --text-primary: #e5e7eb;
-    --text-secondary: #94a3b8;
-    --text-muted: #94a3b8;
+    --text-secondary: #b0bdd0;
+    --text-muted: #a8b4c7;
     --text-inverse: #ffffff;
     --text-link: #3b82f6;
     --text-link-hover: #60a5fa;
@@ -317,6 +333,19 @@
     --theme-toggle-bg: rgba(37, 99, 235, 0.12);
     --theme-toggle-hover: rgba(37, 99, 235, 0.22);
     --theme-toggle-icon: #93c5fd;
+
+    --interactive-bg: #162033;
+    --interactive-bg-hover: #1a2740;
+    --interactive-border-hover: rgba(59, 130, 246, 0.42);
+
+    --placeholder-bg: #1a2740;
+    --placeholder-icon: #64748b;
+
+    --chart-line: #3b82f6;
+    --chart-fill: rgba(59, 130, 246, 0.12);
+    --chart-point: #60a5fa;
+    --chart-tick: #a8b4c7;
+    --chart-grid: rgba(148, 163, 184, 0.12);
 
     --body-gradient:
         radial-gradient(circle at 12% 0%, rgba(37, 99, 235, 0.08), transparent 42%),

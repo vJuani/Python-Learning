@@ -364,12 +364,12 @@
             labels: payload.labels || [],
             datasets: [{
                 data: payload.values || [],
-                borderColor: "#0d47ff",
-                backgroundColor: "rgba(13, 71, 255, 0.08)",
+                borderColor: getComputedStyle(document.documentElement).getPropertyValue("--chart-line").trim() || "#2563eb",
+                backgroundColor: getComputedStyle(document.documentElement).getPropertyValue("--chart-fill").trim() || "rgba(37, 99, 235, 0.12)",
                 fill: true,
                 tension: 0.35,
                 pointRadius: 3,
-                pointBackgroundColor: "#0d47ff",
+                pointBackgroundColor: getComputedStyle(document.documentElement).getPropertyValue("--chart-point").trim() || "#3b82f6",
                 borderWidth: 2
             }]
         },
@@ -381,12 +381,21 @@
             },
             scales: {
                 x: {
-                    grid: { display: false },
-                    ticks: { color: "#9ca3af", font: { size: 11 } }
+                    grid: {
+                        display: true,
+                        color: getComputedStyle(document.documentElement).getPropertyValue("--chart-grid").trim() || "rgba(148, 163, 184, 0.12)"
+                    },
+                    ticks: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue("--chart-tick").trim() || "#94a3b8",
+                        font: { size: 11 }
+                    }
                 },
                 y: {
                     display: false,
-                    beginAtZero: true
+                    beginAtZero: true,
+                    grid: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue("--chart-grid").trim() || "rgba(148, 163, 184, 0.12)"
+                    }
                 }
             }
         }

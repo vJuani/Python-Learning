@@ -335,13 +335,23 @@
         gap: 0.35rem;
         padding: 0.65rem 0.35rem;
         border-radius: 0.85rem;
-        background: var(--surface);
+        background: var(--interactive-bg);
         border: 1px solid var(--border-soft);
         color: var(--text);
         font-size: 0.68rem;
         font-weight: 600;
         text-decoration: none;
         text-align: center;
+        transition:
+            background 0.15s ease,
+            border-color 0.15s ease,
+            color 0.15s ease;
+    }
+
+    .home-mobile-quick a:hover {
+        background: var(--interactive-bg-hover);
+        border-color: var(--interactive-border-hover);
+        color: var(--text-link);
     }
 
     .home-mobile-quick__icon {

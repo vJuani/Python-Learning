@@ -97,7 +97,7 @@
 }
 
 [data-theme="dark"] .home-kpi-card__icon,
-[data-theme="dark"] .home-quick-card__icon,
+[data-theme="dark"] .home-quick-action__icon,
 [data-theme="dark"] .cash-ai-kpi-card__icon {
     background: var(--accent-soft);
 }
@@ -278,16 +278,51 @@
 
 [data-theme="dark"] .home-task-item,
 [data-theme="dark"] .home-reminder-item,
-[data-theme="dark"] .home-quick-card,
+[data-theme="dark"] .home-quick-action,
 [data-theme="dark"] .home-mobile-op,
 [data-theme="dark"] .home-mobile-quick a {
-    background: var(--surface);
+    background: var(--interactive-bg);
     border-color: var(--border-soft);
+    color: var(--text);
 }
 
 [data-theme="dark"] .home-task-item:hover,
-[data-theme="dark"] .home-quick-card:hover {
-    background: var(--surface-hover);
+[data-theme="dark"] .home-reminder-item:hover,
+[data-theme="dark"] .home-quick-action:hover,
+[data-theme="dark"] .home-mobile-quick a:hover {
+    background: var(--interactive-bg-hover);
+    border-color: var(--interactive-border-hover);
+    color: var(--text-link);
+}
+
+[data-theme="dark"] .home-quick-action[aria-disabled="true"],
+[data-theme="dark"] .home-quick-action.is-disabled {
+    background: var(--surface-inset);
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+[data-theme="dark"] .home-property-item__thumb {
+    background-color: var(--placeholder-bg);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z' stroke='%2364748b' stroke-width='1.75' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] .home-commissions-breakdown {
+    background: var(--surface-inset);
+}
+
+[data-theme="dark"] .home-stage--negotiation {
+    color: #c4b5fd;
+}
+
+[data-theme="dark"] .home-card__link,
+[data-theme="dark"] a.home-table__id {
+    color: var(--text-link);
+}
+
+[data-theme="dark"] .home-card__link:hover,
+[data-theme="dark"] a.home-table__id:hover {
+    color: var(--text-link-hover);
 }
 
 [data-theme="dark"] .cash-ai-workflow-step.is-active,
@@ -420,4 +455,40 @@
 [data-theme="dark"] hr,
 [data-theme="dark"] .summary-divider {
     border-color: var(--border-soft);
+}
+
+/* ── Global interaction states ───────────────────────────── */
+[data-theme="dark"] a:focus-visible,
+[data-theme="dark"] button:focus-visible,
+[data-theme="dark"] .btn:focus-visible,
+[data-theme="dark"] .nav-link:focus-visible,
+[data-theme="dark"] .app-nav-link:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+}
+
+[data-theme="dark"] body.has-app-rail .app-rail-nav .nav-link:focus-visible,
+[data-theme="dark"] body.has-app-rail .app-rail-nav .app-nav-link:focus-visible {
+    background: var(--rail-active-bg);
+    color: var(--accent);
+}
+
+[data-theme="dark"] .lang-link.active {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+}
+
+[data-theme="dark"] .theme-toggle:hover,
+[data-theme="dark"] .theme-toggle-row:hover {
+    background: var(--theme-toggle-hover);
+}
+
+[data-theme="dark"] select.form-input:disabled,
+[data-theme="dark"] .form-input:disabled,
+[data-theme="dark"] .btn:disabled,
+[data-theme="dark"] .btn.is-disabled {
+    background: var(--btn-disabled-bg);
+    color: var(--btn-disabled-text);
+    border-color: var(--border-soft);
+    opacity: 0.85;
 }
