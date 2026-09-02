@@ -206,6 +206,49 @@
                 currencySelect ? currencySelect.value : 'USD'
             );
         }
+
+        var paymentConfirm = movementForm.querySelector('[data-aa-payment-confirm]');
+        if (paymentConfirm) {
+            paymentConfirm.hidden = type !== 'payment';
+        }
+        if (type === 'payment') {
+            updatePaymentConfirm();
+        }
+    }
+
+    function updatePaymentConfirm() {
+        if (!movementForm) return;
+        var confirmBlock = movementForm.querySelector('[data-aa-payment-confirm]');
+        if (!confirmBlock || confirmBlock.hidden) return;
+
+        var currencySelect = movementForm.querySelector('[data-aa-currency-select]');
+        var amountInput = movementForm.querySelector('[data-aa-amount-input]');
+        var applySelect = movementForm.querySelector('[data-aa-apply-payment]');
+        var paymentMethod = movementForm.querySelector('[data-aa-payment-method]');
+        var currency = currencySelect ? currencySelect.value : 'USD';
+        var amount = parseMoney(amountInput ? amountInput.value : '');
+
+        var paymentEl = confirmBlock.querySelector('[data-aa-confirm-payment]');
+        var appliedEl = confirmBlock.querySelector('[data-aa-confirm-applied]');
+        var cashEl = confirmBlock.querySelector('[data-aa-confirm-cash]');
+        var methodEl = confirmBlock.querySelector('[data-aa-confirm-method]');
+
+        if (paymentEl) {
+            paymentEl.textContent = amount > 0 ? formatMoney(amount, currency) : '—';
+        }
+        if (cashEl) {
+            cashEl.textContent = amount > 0 ? formatMoney(amount, currency) : '—';
+        }
+        if (appliedEl && applySelect) {
+            var selected = applySelect.options[applySelect.selectedIndex];
+            appliedEl.textContent = selected ? selected.textContent : '—';
+        }
+        if (methodEl && paymentMethod) {
+            var methodOption = paymentMethod.options[paymentMethod.selectedIndex];
+            methodEl.textContent = methodOption && methodOption.value
+                ? methodOption.textContent
+                : '—';
+        }
     }
 
     document.querySelectorAll('[data-aa-open-movement]').forEach(function (btn) {
@@ -339,7 +382,21 @@
         }
 
         if (fxRate) fxRate.addEventListener('input', updateFxEquivalent);
-        if (amountInput) amountInput.addEventListener('input', updateFxEquivalent);
+        if (amountInput) {
+            amountInput.addEventListener('input', function () {
+                updateFxEquivalent();
+                updatePaymentConfirm();
+            });
+        }
+
+        var applySelect = movementForm.querySelector('[data-aa-apply-payment]');
+        if (applySelect) {
+            applySelect.addEventListener('change', updatePaymentConfirm);
+        }
+        var paymentMethod = movementForm.querySelector('[data-aa-payment-method]');
+        if (paymentMethod) {
+            paymentMethod.addEventListener('change', updatePaymentConfirm);
+        }
 
         initOperationAutocomplete();
     }

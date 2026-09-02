@@ -155,6 +155,7 @@ class AgentAccountV2Tests(unittest.TestCase):
                 "amount": "75",
                 "description": "Pago fee",
                 "movement_date": "2026-09-02",
+                "payment_method": "transfer",
             },
             created_by_user_id=self.admin_a,
         )
@@ -191,6 +192,7 @@ class AgentAccountV2Tests(unittest.TestCase):
                 "amount": "75",
                 "description": "Pago USD",
                 "movement_date": "2026-09-02",
+                "payment_method": "transfer",
                 "exchange_rate": "1480",
             },
             created_by_user_id=self.admin_a,
@@ -363,6 +365,7 @@ class AgentAccountV2Tests(unittest.TestCase):
                 "amount": "75",
                 "description": "Pago",
                 "movement_date": "2026-09-07",
+                "payment_method": "transfer",
             },
             created_by_user_id=self.admin_a,
         )

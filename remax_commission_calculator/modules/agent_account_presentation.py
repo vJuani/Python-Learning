@@ -236,6 +236,7 @@ def build_movement_detail_display(
     *,
     language="es",
     movement_lookup=None,
+    payment_allocations=None,
 ):
     movement_lookup = movement_lookup or {}
     currency = movement.get("currency") or "USD"
@@ -340,12 +341,61 @@ def build_movement_detail_display(
         )
 
     if movement_type == "payment" and movement.get("source_id"):
-        linked = movement_lookup.get(movement["source_id"])
-        if linked:
+        if movement.get("source_type") == "cash":
+            add(
+                "agent_account_payment_cash_origin",
+                translate(
+                    "agent_account_payment_cash_origin",
+                    language=language,
+                ),
+            )
+            add(
+                "agent_account_cash_movement",
+                f"#{movement.get('source_id')}",
+            )
+        elif movement.get("source_type") == "manual":
+            linked = movement_lookup.get(
+                movement.get("source_id")
+            )
+            if linked:
+                add(
+                    "agent_account_apply_payment_to",
+                    linked.get("description"),
+                )
+
+    if movement_type == "payment" and movement.get(
+        "payment_method"
+    ):
+        add(
+            "agent_account_payment_method",
+            translate(
+                f"agent_account_pay_{movement['payment_method']}",
+                language=language,
+            ),
+        )
+
+    if payment_allocations:
+        for allocation in payment_allocations:
+            label = allocation.get("charge_description") or "—"
             add(
                 "agent_account_apply_payment_to",
-                linked.get("description"),
+                (
+                    f"{label} — "
+                    f"{format_money(allocation['amount'], currency=movement.get('currency') or 'USD', language=language)}"
+                ),
             )
+    elif (
+        movement_type == "payment"
+        and not movement.get("source_id")
+        and not payment_allocations
+    ):
+        add(
+            "agent_account_apply_payment_to",
+            translate(
+                "agent_account_payment_general",
+                language=language,
+            ),
+        )
 
     if movement.get("created_by_username"):
         add(
@@ -386,15 +436,21 @@ def format_pending_charge_option(charge, *, language="es"):
         currency=charge["currency"],
         language=language,
     )
+    status_suffix = ""
+    payment_status = charge.get("payment_status")
+    if payment_status == "partially_paid":
+        status_suffix = " · parcialmente pagado"
+    label = (
+        f"{charge['description']} — {amount_text} "
+        f"pendiente{status_suffix}"
+    )
     return {
         "id": charge["id"],
         "description": charge["description"],
         "currency": charge["currency"],
         "pending_amount": charge["pending_amount"],
-        "label": (
-            f"{charge['description']} — {amount_text} "
-            f"pendiente"
-        ),
+        "payment_status": payment_status,
+        "label": label,
     }
 
 
@@ -403,6 +459,7 @@ def enrich_movement_for_display(
     *,
     language="es",
     movement_lookup=None,
+    organization_id=None,
 ):
     enriched = dict(movement)
     enriched["display_amount"] = movement_display_amount(
@@ -422,10 +479,28 @@ def enrich_movement_for_display(
         movement_is_internal_reversal(movement)
     )
     lookup = movement_lookup or {}
+    if (
+        organization_id
+        and movement.get("movement_type") == "payment"
+    ):
+        from modules.database.agent_account_payment_repository import (
+            list_payment_allocations,
+        )
+
+        enriched["payment_allocations"] = (
+            list_payment_allocations(
+                organization_id,
+                movement["id"],
+            )
+        )
+    else:
+        enriched["payment_allocations"] = []
+
     enriched["display_detail"] = build_movement_detail_display(
         movement,
         language=language,
         movement_lookup=lookup,
+        payment_allocations=enriched["payment_allocations"],
     )
     return enriched
 

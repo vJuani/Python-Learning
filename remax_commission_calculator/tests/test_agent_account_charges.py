@@ -199,6 +199,7 @@ class AgentAccountChargesTests(unittest.TestCase):
                 "amount": "78,65",
                 "description": "Pago recibido",
                 "movement_date": "2026-09-02",
+                "payment_method": "transfer",
             },
             created_by_user_id=self.admin_a,
         )
@@ -378,6 +379,7 @@ class AgentAccountChargesTests(unittest.TestCase):
                 "amount": "78,65",
                 "description": "Pago recibido",
                 "movement_date": "2026-09-02",
+                "payment_method": "transfer",
             },
             created_by_user_id=self.admin_a,
         )

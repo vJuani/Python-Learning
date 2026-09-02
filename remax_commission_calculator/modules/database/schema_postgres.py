@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v10"
+POSTGRES_SCHEMA_VERSION = "postgres_v11"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -1421,6 +1421,55 @@ def create_postgres_schema():
             WHERE (billing_period IS NULL OR BTRIM(billing_period) = '')
                 AND period_label IS NOT NULL
                 AND BTRIM(period_label) <> ''
+            """
+        )
+
+        cursor.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS agent_account_payment_allocations (
+                id {_ID},
+                organization_id BIGINT NOT NULL,
+                payment_movement_id BIGINT NOT NULL,
+                charge_movement_id BIGINT,
+                currency TEXT NOT NULL,
+                amount {_MONEY} NOT NULL,
+                created_at TEXT NOT NULL,
+
+                FOREIGN KEY (organization_id)
+                    REFERENCES organizations(id)
+                    ON DELETE RESTRICT,
+                FOREIGN KEY (payment_movement_id)
+                    REFERENCES agent_account_movements(id)
+                    ON DELETE RESTRICT,
+                FOREIGN KEY (charge_movement_id)
+                    REFERENCES agent_account_movements(id)
+                    ON DELETE RESTRICT,
+
+                CHECK (currency IN ('USD', 'ARS')),
+                CHECK (amount > 0)
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_aa_payment_alloc_org_payment
+            ON agent_account_payment_allocations (
+                organization_id,
+                payment_movement_id
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_aa_payment_alloc_org_charge
+            ON agent_account_payment_allocations (
+                organization_id,
+                charge_movement_id
+            )
             """
         )
 

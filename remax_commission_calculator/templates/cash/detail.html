@@ -79,6 +79,21 @@
                 <td>{{ movement.reversal_reason }}</td>
             </tr>
             {% endif %}
+            {% if linked_agent_payment %}
+            <tr>
+                <th scope="row">{{ t('cash_source_agent_account') }}</th>
+                <td>
+                    <a href="{{ url_for('agent_account_detail', agent_id=linked_agent_payment.agent_id) }}">
+                        {{ t('agent_account_view_payment') }} #{{ linked_agent_payment.id }}
+                    </a>
+                </td>
+            </tr>
+            {% elif movement.source == 'agent_account_payment' %}
+            <tr>
+                <th scope="row">{{ t('cash_source_agent_account') }}</th>
+                <td>{{ t('cash_source_agent_account_label') }}</td>
+            </tr>
+            {% endif %}
         </tbody>
     </table>
 

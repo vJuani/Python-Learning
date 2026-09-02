@@ -35,6 +35,9 @@ from modules.database import (
     get_agent_account_movement,
     list_agent_account_movements,
 )
+from modules.database.agent_account_payment_repository import (
+    list_payment_allocations,
+)
 from modules.database.agent_account_repository import (
     list_pending_charges,
 )
@@ -122,11 +125,17 @@ class AgentAccountUxTests(unittest.TestCase):
                 "currency": "USD",
                 "amount": "78,65",
                 "movement_date": "2026-09-02",
+                "payment_method": "transfer",
                 "applied_to_movement_id": str(charge["id"]),
             },
             created_by_user_id=self.admin_a,
         )
-        self.assertEqual(payment["source_id"], charge["id"])
+        self.assertEqual(payment["source_type"], "cash")
+        allocations = list_payment_allocations(
+            self.org_a,
+            payment["id"],
+        )
+        self.assertEqual(allocations[0]["charge_movement_id"], charge["id"])
         self.assertEqual(
             list_pending_charges(
                 self.org_a,
@@ -148,6 +157,7 @@ class AgentAccountUxTests(unittest.TestCase):
                     "currency": "ARS",
                     "amount": "1000",
                     "movement_date": "2026-09-02",
+                    "payment_method": "transfer",
                     "applied_to_movement_id": str(charge["id"]),
                 },
                 created_by_user_id=self.admin_a,

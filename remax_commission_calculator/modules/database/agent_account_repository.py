@@ -436,6 +436,9 @@ def get_agent_balances(organization_id, agent_id):
     }
 
 
+PAYMENT_TOLERANCE = 0.0001
+
+
 DEBIT_MOVEMENT_TYPES = (
     MOVEMENT_TYPE_CHARGE,
     MOVEMENT_TYPE_FEE,
@@ -462,11 +465,25 @@ def list_pending_charges(
                 m.id,
                 m.description,
                 m.currency,
-                COALESCE(m.gross_amount, m.amount) AS pending_amount,
+                (
+                    COALESCE(m.gross_amount, m.amount)
+                    - COALESCE((
+                        SELECT SUM(a.amount)
+                        FROM agent_account_payment_allocations AS a
+                        JOIN agent_account_movements AS p
+                            ON p.id = a.payment_movement_id
+                            AND p.organization_id = a.organization_id
+                        WHERE a.organization_id = m.organization_id
+                            AND a.charge_movement_id = m.id
+                            AND p.status = ?
+                            AND COALESCE(p.is_internal_reversal, 0) = 0
+                    ), 0)
+                ) AS pending_amount,
                 m.billing_period,
                 m.period_label,
                 m.charge_category,
-                m.movement_date
+                m.movement_date,
+                COALESCE(m.gross_amount, m.amount) AS gross_amount
             FROM agent_account_movements AS m
             WHERE m.organization_id = ?
                 AND m.agent_id = ?
@@ -475,35 +492,52 @@ def list_pending_charges(
                 AND m.status = ?
                 AND COALESCE(m.is_internal_reversal, 0) = 0
                 AND m.reversed_movement_id IS NULL
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM agent_account_movements AS p
-                    WHERE p.organization_id = m.organization_id
-                        AND p.agent_id = m.agent_id
-                        AND p.movement_type = 'payment'
-                        AND p.status = ?
-                        AND COALESCE(p.is_internal_reversal, 0) = 0
-                        AND p.source_id = m.id
-                )
+                AND (
+                    COALESCE(m.gross_amount, m.amount)
+                    - COALESCE((
+                        SELECT SUM(a.amount)
+                        FROM agent_account_payment_allocations AS a
+                        JOIN agent_account_movements AS p
+                            ON p.id = a.payment_movement_id
+                            AND p.organization_id = a.organization_id
+                        WHERE a.organization_id = m.organization_id
+                            AND a.charge_movement_id = m.id
+                            AND p.status = ?
+                            AND COALESCE(p.is_internal_reversal, 0) = 0
+                    ), 0)
+                ) > ?
             ORDER BY m.movement_date DESC, m.id DESC
             """,
             (
+                STATUS_CONFIRMED,
                 organization_id,
                 agent_id,
                 currency,
                 STATUS_CONFIRMED,
                 STATUS_CONFIRMED,
+                PAYMENT_TOLERANCE,
             ),
         )
         rows = cursor.fetchall()
         pending = []
         for row in rows:
+            pending_amount = float(row[3] or 0)
+            gross_amount = float(row[8] or row[3] or 0)
+            from modules.database.agent_account_payment_repository import (
+                derive_charge_payment_status,
+            )
+
             pending.append(
                 {
                     "id": row[0],
                     "description": row[1],
                     "currency": row[2],
-                    "pending_amount": float(row[3] or 0),
+                    "pending_amount": pending_amount,
+                    "gross_amount": gross_amount,
+                    "payment_status": derive_charge_payment_status(
+                        pending_amount,
+                        gross_amount,
+                    ),
                     "billing_period": row[4] or row[5],
                     "charge_category": row[6],
                     "movement_date": row[7],
@@ -523,15 +557,49 @@ def get_pending_charge_for_payment(
     organization_id = require_organization_id(
         organization_id
     )
-    pending = list_pending_charges(
-        organization_id,
-        agent_id,
-        currency,
-    )
-    for charge in pending:
-        if charge["id"] == movement_id:
-            return charge
-    return None
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        from modules.database.agent_account_payment_repository import (
+            get_charge_remaining_amount,
+        )
+
+        charge_state = get_charge_remaining_amount(
+            cursor,
+            organization_id,
+            movement_id,
+        )
+        if charge_state is None:
+            return None
+        if (
+            charge_state["agent_id"] != agent_id
+            or charge_state["currency"] != currency
+            or charge_state["remaining_amount"] <= PAYMENT_TOLERANCE
+        ):
+            return None
+
+        cursor.execute(
+            """
+            SELECT description, billing_period, period_label
+            FROM agent_account_movements
+            WHERE id = ?
+                AND organization_id = ?
+            """,
+            (movement_id, organization_id),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return {
+            "id": movement_id,
+            "description": row[0],
+            "currency": currency,
+            "pending_amount": charge_state["remaining_amount"],
+            "gross_amount": charge_state["gross_amount"],
+            "billing_period": row[1] or row[2],
+        }
+    finally:
+        connection.close()
 
 
 def list_agent_account_movements(

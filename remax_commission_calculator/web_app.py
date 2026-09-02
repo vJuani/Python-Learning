@@ -6509,6 +6509,7 @@ def cash_detail(movement_id):
         abort(404)
 
     original = None
+    linked_agent_payment = None
 
     if movement.get("reversal_of_movement_id"):
         original = get_cash_movement(
@@ -6516,10 +6517,24 @@ def cash_detail(movement_id):
             organization_id,
         )
 
+    if movement.get("source") == "agent_account_payment":
+        from modules.database import get_agent_account_movement
+
+        try:
+            payment_id = int(movement.get("source_reference") or 0)
+        except (TypeError, ValueError):
+            payment_id = 0
+        if payment_id:
+            linked_agent_payment = get_agent_account_movement(
+                payment_id,
+                organization_id,
+            )
+
     return render_template(
         "cash/detail.html",
         movement=movement,
         original=original,
+        linked_agent_payment=linked_agent_payment,
         balances=get_balances(organization_id),
     )
 

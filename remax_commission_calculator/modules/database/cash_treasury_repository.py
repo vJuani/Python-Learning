@@ -359,6 +359,8 @@ def create_cash_movement_atomic(
     receipt_number=None,
     signed_delta=None,
     allow_negative=False,
+    connection=None,
+    manage_transaction=True,
 ):
     """
     Insert a confirmed movement and update cached balance
@@ -388,14 +390,17 @@ def create_cash_movement_atomic(
 
     now = _now_iso()
     backend = get_database_backend()
-    connection = get_connection()
+    owns_connection = connection is None
+    if owns_connection:
+        connection = get_connection()
     cursor = connection.cursor()
 
     try:
-        if backend == BACKEND_SQLITE:
-            cursor.execute("BEGIN IMMEDIATE")
-        else:
-            cursor.execute("BEGIN")
+        if manage_transaction:
+            if backend == BACKEND_SQLITE:
+                cursor.execute("BEGIN IMMEDIATE")
+            else:
+                cursor.execute("BEGIN")
 
         if backend == BACKEND_POSTGRES:
             cursor.execute(
@@ -462,7 +467,8 @@ def create_cash_movement_atomic(
             and signed_delta < 0
             and balance_after < -1e-9
         ):
-            connection.rollback()
+            if manage_transaction:
+                connection.rollback()
             raise ValueError("insufficient_balance")
 
         cursor.execute(
@@ -551,13 +557,16 @@ def create_cash_movement_atomic(
             ),
         )
 
-        connection.commit()
+        if manage_transaction:
+            connection.commit()
         return movement_id
     except Exception:
-        connection.rollback()
+        if manage_transaction:
+            connection.rollback()
         raise
     finally:
-        connection.close()
+        if owns_connection:
+            connection.close()
 
 
 def reverse_cash_movement_atomic(
@@ -566,6 +575,8 @@ def reverse_cash_movement_atomic(
     *,
     reversed_by_user_id,
     reversal_reason,
+    connection=None,
+    manage_transaction=True,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -577,14 +588,17 @@ def reverse_cash_movement_atomic(
 
     now = _now_iso()
     backend = get_database_backend()
-    connection = get_connection()
+    owns_connection = connection is None
+    if owns_connection:
+        connection = get_connection()
     cursor = connection.cursor()
 
     try:
-        if backend == BACKEND_SQLITE:
-            cursor.execute("BEGIN IMMEDIATE")
-        else:
-            cursor.execute("BEGIN")
+        if manage_transaction:
+            if backend == BACKEND_SQLITE:
+                cursor.execute("BEGIN IMMEDIATE")
+            else:
+                cursor.execute("BEGIN")
 
         cursor.execute(
             MOVEMENTS_BASE_QUERY
@@ -599,15 +613,18 @@ def reverse_cash_movement_atomic(
         )
 
         if original is None:
-            connection.rollback()
+            if manage_transaction:
+                connection.rollback()
             raise ValueError("movement_not_found")
 
         if original["status"] != "confirmed":
-            connection.rollback()
+            if manage_transaction:
+                connection.rollback()
             raise ValueError("already_reversed")
 
         if original["movement_type"] == "reversal":
-            connection.rollback()
+            if manage_transaction:
+                connection.rollback()
             raise ValueError("cannot_reverse_reversal")
 
         currency = original["currency"]
@@ -645,7 +662,8 @@ def reverse_cash_movement_atomic(
         account_row = cursor.fetchone()
 
         if account_row is None:
-            connection.rollback()
+            if manage_transaction:
+                connection.rollback()
             raise ValueError("account_missing")
 
         account_id = account_row[0]
@@ -653,7 +671,8 @@ def reverse_cash_movement_atomic(
         balance_after = balance_before + signed_delta
 
         if balance_after < -1e-9:
-            connection.rollback()
+            if manage_transaction:
+                connection.rollback()
             raise ValueError("insufficient_balance")
 
         cursor.execute(
@@ -748,13 +767,16 @@ def reverse_cash_movement_atomic(
             ),
         )
 
-        connection.commit()
+        if manage_transaction:
+            connection.commit()
         return reversal_id
     except Exception:
-        connection.rollback()
+        if manage_transaction:
+            connection.rollback()
         raise
     finally:
-        connection.close()
+        if owns_connection:
+            connection.close()
 
 
 def find_duplicate_cash_movements(

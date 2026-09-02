@@ -18,6 +18,7 @@ from modules.agent_account_presentation import (
 from modules.database.agent_account_repository import (
     CURRENCIES,
     MOVEMENT_TYPES,
+    SOURCE_CASH,
     SOURCE_MANUAL,
     SOURCE_OPERATION,
     STATUS_CONFIRMED,
@@ -25,6 +26,7 @@ from modules.database.agent_account_repository import (
     create_agent_account_movement_atomic,
     get_agent_account_metadata,
     get_agent_balances,
+    get_agent_account_movement,
     get_movement_by_idempotency_key,
     get_pending_charge_for_payment,
     list_agent_account_movements,
@@ -34,10 +36,16 @@ from modules.database.agent_account_repository import (
     sum_payments_collected_month,
     sum_receivable_balances,
 )
+from modules.database.agent_account_payment_repository import (
+    cancel_agent_payment_atomic,
+    list_payment_allocations,
+    register_agent_payment_atomic,
+)
 from modules.database.operations_repository import (
     get_operation_record,
     search_operations_for_agent_account,
 )
+from modules.database import get_agent_record
 from modules.database.tenant import require_organization_id
 
 
@@ -216,6 +224,14 @@ def validate_movement_payload(
 
     if (
         movement_type == "payment"
+        and not payment_method
+    ):
+        raise AgentAccountError(
+            "agent_account_err_payment_method_required"
+        )
+
+    if (
+        movement_type == "payment"
         and payment_method
         and payment_method not in PAYMENT_METHODS
     ):
@@ -254,6 +270,7 @@ def validate_movement_payload(
     exchange_rate_date = None
     exchange_rate_source = None
     equivalent_amount_ars = None
+    charge_movement_id = None
 
     if movement_type == "payment":
         applied_raw = (
@@ -280,7 +297,7 @@ def validate_movement_payload(
                 raise AgentAccountError(
                     "agent_account_err_invalid_applied_charge"
                 )
-            source_id = applied_id
+            charge_movement_id = applied_id
 
     if currency == "USD":
         raw_rate = payload.get("exchange_rate")
@@ -325,6 +342,7 @@ def validate_movement_payload(
         "reference_text": None,
         "source_type": source_type,
         "source_id": source_id,
+        "charge_movement_id": charge_movement_id,
     }
     validated["reference_text"] = _build_reference_text(
         payload,
@@ -359,6 +377,60 @@ def create_movement(
         )
         if existing is not None:
             return existing
+
+    if validated["movement_type"] == "payment":
+        agent = get_agent_record(agent_id, organization_id)
+        agent_name = agent.get("name") if agent else None
+        try:
+            return register_agent_payment_atomic(
+                organization_id,
+                agent_id,
+                currency=validated["currency"],
+                amount=validated["amount"],
+                payment_method=validated["payment_method"],
+                movement_date=validated["movement_date"],
+                description=validated["description"],
+                created_by_user_id=created_by_user_id,
+                idempotency_key=idempotency_key,
+                exchange_rate=validated.get("exchange_rate"),
+                exchange_rate_date=validated.get(
+                    "exchange_rate_date"
+                ),
+                exchange_rate_source=validated.get(
+                    "exchange_rate_source"
+                ),
+                equivalent_amount_ars=validated.get(
+                    "equivalent_amount_ars"
+                ),
+                reference_text=validated.get("reference_text"),
+                notes=validated.get("notes"),
+                charge_movement_id=validated.get(
+                    "charge_movement_id"
+                ),
+                agent_name=agent_name,
+            )
+        except ValueError as error:
+            key = str(error)
+            if key == "invalid_amount":
+                raise AgentAccountError(
+                    "agent_account_err_invalid_amount"
+                ) from error
+            if key == "invalid_currency":
+                raise AgentAccountError(
+                    "agent_account_err_invalid_currency"
+                ) from error
+            if key in (
+                "invalid_applied_charge",
+                "payment_method_required",
+            ):
+                raise AgentAccountError(
+                    "agent_account_err_invalid_applied_charge"
+                    if key == "invalid_applied_charge"
+                    else "agent_account_err_payment_method_required"
+                ) from error
+            raise AgentAccountError(
+                "agent_account_err_create_failed"
+            ) from error
 
     try:
         return create_agent_account_movement_atomic(
@@ -425,6 +497,22 @@ def cancel_movement(
         )
 
     try:
+        movement = get_agent_account_movement(
+            movement_id,
+            organization_id,
+        )
+        if (
+            movement is not None
+            and movement.get("movement_type") == "payment"
+            and movement.get("source_type") == SOURCE_CASH
+        ):
+            return cancel_agent_payment_atomic(
+                organization_id,
+                movement_id,
+                created_by_user_id=created_by_user_id,
+                reversal_reason=reason,
+            )
+
         return reverse_agent_account_movement_atomic(
             organization_id,
             movement_id,
@@ -484,6 +572,7 @@ def _load_display_movements(
             movement,
             language=language,
             movement_lookup=lookup,
+            organization_id=organization_id,
         )
         for movement in visible
     ]

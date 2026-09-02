@@ -43,13 +43,14 @@
         <div class="aa-form__section" data-aa-section="payment" hidden>
             <label class="aa-field">
                 <span>{{ t('agent_account_payment_method') }}</span>
-                <select name="payment_method">
+                <select name="payment_method" required data-aa-payment-method>
                     <option value="">{{ t('agent_account_optional') }}</option>
                     {% for method in payment_methods %}
                     <option value="{{ method }}">{{ t('agent_account_pay_' ~ method) }}</option>
                     {% endfor %}
                 </select>
             </label>
+            <p class="aa-form__hint">{{ t('agent_account_payment_cash_notice') }}</p>
         </div>
 
         <div class="aa-form__section" data-aa-section="commission" hidden>
@@ -102,9 +103,31 @@
             </label>
         </div>
 
+        <div class="aa-form__section aa-payment-confirm" data-aa-payment-confirm hidden>
+            <h3>{{ t('agent_account_payment_confirm_title') }}</h3>
+            <div class="aa-vat-summary">
+                <div class="aa-vat-summary__row">
+                    <span>{{ t('agent_account_register_payment') }}</span>
+                    <strong data-aa-confirm-payment>—</strong>
+                </div>
+                <div class="aa-vat-summary__row">
+                    <span>{{ t('agent_account_payment_confirm_applied_to') }}</span>
+                    <strong data-aa-confirm-applied>—</strong>
+                </div>
+                <div class="aa-vat-summary__row">
+                    <span>{{ t('agent_account_payment_confirm_cash_income') }}</span>
+                    <strong data-aa-confirm-cash>—</strong>
+                </div>
+                <div class="aa-vat-summary__row">
+                    <span>{{ t('agent_account_payment_method') }}</span>
+                    <strong data-aa-confirm-method>—</strong>
+                </div>
+            </div>
+        </div>
+
         <footer class="aa-dialog__footer">
             <button type="button" class="aa-btn aa-btn--ghost" data-aa-dialog-close>{{ t('cancel') }}</button>
-            <button type="submit" class="aa-btn aa-btn--primary">{{ t('agent_account_confirm') }}</button>
+            <button type="submit" class="aa-btn aa-btn--primary" data-aa-payment-submit>{{ t('agent_account_confirm') }}</button>
         </footer>
     </form>
 </dialog>

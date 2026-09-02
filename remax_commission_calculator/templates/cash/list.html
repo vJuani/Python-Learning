@@ -139,6 +139,8 @@
                                 <strong>{{ movement.display_id }}</strong>
                                 {% if movement.source == 'ai' %}
                                 <span class="cash-badge cash-badge--ai">{{ t('cash_source_ai_short') }}</span>
+                                {% elif movement.source == 'agent_account_payment' %}
+                                <span class="cash-badge cash-badge--source">{{ t('cash_source_agent_account_short') }}</span>
                                 {% endif %}
                             </td>
                             <td>{{ movement.movement_date | short_date }}</td>

@@ -2867,6 +2867,58 @@ def _migrate_agent_account(cursor):
 
     _migrate_agent_account_v2(cursor)
     _migrate_agent_account_v3(cursor)
+    _migrate_agent_account_v4(cursor)
+
+
+def _migrate_agent_account_v4(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS agent_account_payment_allocations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            payment_movement_id INTEGER NOT NULL,
+            charge_movement_id INTEGER,
+            currency TEXT NOT NULL,
+            amount REAL NOT NULL,
+            created_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (payment_movement_id)
+                REFERENCES agent_account_movements(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (charge_movement_id)
+                REFERENCES agent_account_movements(id)
+                ON DELETE RESTRICT,
+
+            CHECK (currency IN ('USD', 'ARS')),
+            CHECK (amount > 0)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_aa_payment_alloc_org_payment
+        ON agent_account_payment_allocations (
+            organization_id,
+            payment_movement_id
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_aa_payment_alloc_org_charge
+        ON agent_account_payment_allocations (
+            organization_id,
+            charge_movement_id
+        )
+        """
+    )
 
 
 def _migrate_agent_account_v3(cursor):
