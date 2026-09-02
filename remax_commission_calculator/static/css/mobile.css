@@ -22,9 +22,53 @@
         min-height: var(--header-height);
     }
 
-    .site-brand-logo,
-    .brand-logo {
+    .site-brand-logo:not(.site-brand-logo--lockup),
+    .brand-logo:not(.site-brand-logo--lockup) {
         max-height: 1.6rem;
+    }
+
+    .site-brand-logo--lockup {
+        display: block;
+        width: 100%;
+        max-width: 120px;
+        height: auto;
+        max-height: none;
+        object-fit: contain;
+    }
+
+    .mobile-drawer-brand {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+        gap: 0.75rem;
+    }
+
+    .mobile-drawer-brand-logo {
+        display: block;
+        width: 100%;
+        max-width: 155px;
+        height: auto;
+        object-fit: contain;
+    }
+
+    .main-nav-links .nav-link,
+    .main-nav-links .app-nav-link {
+        justify-content: flex-start;
+        text-align: left;
+        gap: 0.65rem;
+        padding: 0.65rem 0.85rem;
+    }
+
+    .main-nav-links .nav-link.active,
+    .main-nav-links .app-nav-link.active {
+        justify-content: flex-start;
+        text-align: left;
+    }
+
+    .main-nav-links .app-nav-link__icon {
+        width: 1.15rem;
+        height: 1.15rem;
+        flex-shrink: 0;
     }
 
     .app-main-inner {
@@ -123,9 +167,16 @@
         margin-bottom: var(--space-3);
     }
 
-    /* Mobile nav drawer */
-    .main-nav.is-open {
-        padding: var(--space-4);
+    .main-nav-tools-mobile .header-nav-meta,
+    .main-nav-tools-mobile .nav-dropdown,
+    .main-nav-tools-mobile .nav-bell-link {
+        justify-content: flex-start;
+        text-align: left;
+    }
+
+    .main-nav-tools-mobile .nav-dropdown-toggle {
+        width: 100%;
+        justify-content: flex-start;
     }
 
     .mobile-drawer-brand {

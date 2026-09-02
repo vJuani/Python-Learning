@@ -119,11 +119,17 @@
                     href="{% if current_user or guest_access %}{{ url_for('dashboard') }}{% else %}{{ url_for('login') }}{% endif %}"
                     class="site-brand"
                 >
-                    <span class="site-brand-logo-shell">
+                    <span class="site-brand-logo-shell hide-mobile">
                         {% with logo_variant='theme', logo_extra_class='site-brand-logo' %}
                         {% include "_brand_logo.html" %}
                         {% endwith %}
                     </span>
+                    <img
+                        src="{{ brand_login_header_lockup_url }}"
+                        alt="{{ brand_name }}"
+                        class="site-brand-logo site-brand-logo--lockup hide-desktop"
+                        decoding="async"
+                    >
                 </a>
             </div>
 
@@ -148,6 +154,12 @@
 
             <nav id="main-nav" class="main-nav header-zone header-zone-center" aria-label="{{ t('nav_aria') }}">
                 <div class="mobile-drawer-brand hide-desktop">
+                    <img
+                        src="{{ brand_login_header_lockup_url }}"
+                        alt=""
+                        class="mobile-drawer-brand-logo"
+                        decoding="async"
+                    >
                     <div class="mobile-drawer-brand-text">
                         <strong>{{ brand_name }}</strong>
                         <span>{{ t('app_slogan') }}</span>

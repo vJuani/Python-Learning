@@ -530,12 +530,12 @@ textarea.form-input:focus {
     }
 
     .mobile-bottom-nav-item.active {
-        color: var(--text-inverse);
+        color: var(--accent);
     }
 
     .mobile-bottom-nav-item.active .mobile-bottom-nav-icon {
-        background: var(--rail-active-bg);
-        color: var(--text-inverse);
+        background: var(--accent-soft);
+        color: var(--accent);
     }
 }
 
