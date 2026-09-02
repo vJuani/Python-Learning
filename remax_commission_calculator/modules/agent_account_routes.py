@@ -26,6 +26,13 @@ from modules.agent_account import (
     create_movement,
 )
 from modules.agent_account_presentation import PAYMENT_METHODS
+from modules.agent_account_charges import (
+    CHARGE_CATEGORIES,
+    DEFAULT_VAT_RATE,
+    RECURRENCE_TYPES,
+    VAT_MODES,
+    charge_category_label_key,
+)
 from modules.auth import (
     admin_required,
     get_current_user,
@@ -169,6 +176,20 @@ def register_agent_account_routes(app, helpers):
                 "type",
                 "payment",
             ),
+            charge_categories=[
+                {
+                    "id": category,
+                    "label_key": charge_category_label_key(
+                        category
+                    ),
+                }
+                for category in CHARGE_CATEGORIES
+            ],
+            vat_modes=VAT_MODES,
+            recurrence_types=RECURRENCE_TYPES,
+            default_vat_rate_percent=float(
+                DEFAULT_VAT_RATE * 100
+            ),
         )
 
     def _create_movement_from_form(agent_id):
@@ -195,6 +216,12 @@ def register_agent_account_routes(app, helpers):
                 "notes",
                 "period_label",
                 "operation_reference",
+                "charge_category",
+                "vat_mode",
+                "vat_rate",
+                "billing_period",
+                "recurring",
+                "recurrence_type",
             )
         }
         idempotency_key = (

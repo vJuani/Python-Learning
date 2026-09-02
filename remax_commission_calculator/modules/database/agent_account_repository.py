@@ -83,6 +83,17 @@ AGENT_ACCOUNT_V2_COLUMNS = (
     ("is_internal_reversal", "INTEGER NOT NULL DEFAULT 0"),
 )
 
+AGENT_ACCOUNT_V3_COLUMNS = (
+    ("charge_category", "TEXT"),
+    ("net_amount", "REAL"),
+    ("vat_rate", "REAL"),
+    ("vat_amount", "REAL"),
+    ("gross_amount", "REAL"),
+    ("billing_period", "TEXT"),
+    ("recurring", "INTEGER NOT NULL DEFAULT 0"),
+    ("recurrence_type", "TEXT DEFAULT 'one_time'"),
+)
+
 
 def _now_iso():
     return datetime.utcnow().replace(
@@ -115,43 +126,48 @@ def _build_movement_dict(row):
         "reversal_reason": row[17],
     }
 
-    if len(row) > 18:
-        base.update(
-            {
-                "exchange_rate": (
-                    float(row[18])
-                    if row[18] is not None
-                    else None
-                ),
-                "exchange_rate_date": row[19],
-                "exchange_rate_source": row[20],
-                "equivalent_amount_ars": (
-                    float(row[21])
-                    if row[21] is not None
-                    else None
-                ),
-                "payment_method": row[22],
-                "reference_text": row[23],
-                "notes": row[24],
-                "period_label": row[25],
-                "cancelled_at": row[26],
-                "cancelled_by_user_id": row[27],
-                "cancellation_reason": row[28],
-                "is_internal_reversal": bool(
-                    row[29] or 0
-                ),
-                "created_by_username": (
-                    row[30] if len(row) > 30 else None
-                ),
-                "cancelled_by_username": (
-                    row[31] if len(row) > 31 else None
-                ),
-                "agent_name": (
-                    row[32] if len(row) > 32 else None
-                ),
-            }
+    _extend_movement_from_row(base, row)
+
+    if (
+        not base.get("cancellation_reason")
+        and base.get("status") == STATUS_REVERSED
+        and base.get("reversal_reason")
+    ):
+        base["cancellation_reason"] = base["reversal_reason"]
+
+    _apply_movement_defaults(base)
+    return base
+
+
+def _apply_movement_defaults(movement):
+    gross = movement.get("gross_amount")
+    if gross is None:
+        gross = movement.get("amount")
+        movement["gross_amount"] = float(gross or 0)
+    if movement.get("net_amount") is None:
+        movement["net_amount"] = float(
+            movement.get("gross_amount") or 0
         )
-    else:
+    if movement.get("vat_amount") is None:
+        movement["vat_amount"] = 0.0
+    if movement.get("vat_rate") is None:
+        movement["vat_rate"] = 0.0
+    if movement.get("charge_category") is None:
+        movement["charge_category"] = None
+    if not movement.get("billing_period") and movement.get(
+        "period_label"
+    ):
+        movement["billing_period"] = movement["period_label"]
+    if movement.get("recurring") is None:
+        movement["recurring"] = 0
+    if not movement.get("recurrence_type"):
+        movement["recurrence_type"] = "one_time"
+
+    return movement
+
+
+def _extend_movement_from_row(base, row):
+    if len(row) <= 18:
         base.update(
             {
                 "exchange_rate": None,
@@ -175,16 +191,59 @@ def _build_movement_dict(row):
                 "agent_name": (
                     row[19] if len(row) > 19 else None
                 ),
+                "charge_category": None,
+                "net_amount": None,
+                "vat_rate": None,
+                "vat_amount": None,
+                "gross_amount": None,
+                "billing_period": None,
+                "recurring": 0,
+                "recurrence_type": "one_time",
             }
         )
+        return base
 
-    if (
-        not base.get("cancellation_reason")
-        and base.get("status") == STATUS_REVERSED
-        and base.get("reversal_reason")
-    ):
-        base["cancellation_reason"] = base["reversal_reason"]
-
+    base.update(
+        {
+            "exchange_rate": (
+                float(row[18]) if row[18] is not None else None
+            ),
+            "exchange_rate_date": row[19],
+            "exchange_rate_source": row[20],
+            "equivalent_amount_ars": (
+                float(row[21]) if row[21] is not None else None
+            ),
+            "payment_method": row[22],
+            "reference_text": row[23],
+            "notes": row[24],
+            "period_label": row[25],
+            "cancelled_at": row[26],
+            "cancelled_by_user_id": row[27],
+            "cancellation_reason": row[28],
+            "is_internal_reversal": bool(row[29] or 0),
+            "created_by_username": row[30] if len(row) > 30 else None,
+            "cancelled_by_username": row[31] if len(row) > 31 else None,
+            "agent_name": row[32] if len(row) > 32 else None,
+            "charge_category": row[33] if len(row) > 33 else None,
+            "net_amount": (
+                float(row[34]) if len(row) > 34 and row[34] is not None else None
+            ),
+            "vat_rate": (
+                float(row[35]) if len(row) > 35 and row[35] is not None else None
+            ),
+            "vat_amount": (
+                float(row[36]) if len(row) > 36 and row[36] is not None else None
+            ),
+            "gross_amount": (
+                float(row[37]) if len(row) > 37 and row[37] is not None else None
+            ),
+            "billing_period": row[38] if len(row) > 38 else None,
+            "recurring": int(row[39] or 0) if len(row) > 39 else 0,
+            "recurrence_type": (
+                row[40] if len(row) > 40 and row[40] else "one_time"
+            ),
+        }
+    )
     return base
 
 
@@ -222,7 +281,15 @@ MOVEMENTS_BASE_QUERY = """
         m.is_internal_reversal,
         creator.username,
         canceller.username,
-        a.name
+        a.name,
+        m.charge_category,
+        m.net_amount,
+        m.vat_rate,
+        m.vat_amount,
+        m.gross_amount,
+        m.billing_period,
+        m.recurring,
+        m.recurrence_type
     FROM agent_account_movements AS m
     LEFT JOIN users AS creator
         ON m.created_by_user_id = creator.id
@@ -703,6 +770,14 @@ def create_agent_account_movement_atomic(
     reference_text=None,
     notes=None,
     period_label=None,
+    charge_category=None,
+    net_amount=None,
+    vat_rate=None,
+    vat_amount=None,
+    gross_amount=None,
+    billing_period=None,
+    recurring=0,
+    recurrence_type="one_time",
 ):
     organization_id = require_organization_id(
         organization_id
@@ -788,10 +863,19 @@ def create_agent_account_movement_atomic(
                 reference_text,
                 notes,
                 period_label,
-                is_internal_reversal
+                is_internal_reversal,
+                charge_category,
+                net_amount,
+                vat_rate,
+                vat_amount,
+                gross_amount,
+                billing_period,
+                recurring,
+                recurrence_type
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, 0
+                ?, ?, ?, ?, ?, ?, ?, ?, 0,
+                ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -822,6 +906,20 @@ def create_agent_account_movement_atomic(
                 reference_text,
                 notes,
                 period_label,
+                charge_category,
+                float(net_amount)
+                if net_amount is not None
+                else None,
+                float(vat_rate) if vat_rate is not None else None,
+                float(vat_amount)
+                if vat_amount is not None
+                else None,
+                float(gross_amount)
+                if gross_amount is not None
+                else float(amount),
+                billing_period,
+                int(recurring or 0),
+                recurrence_type or "one_time",
             ),
         )
         connection.commit()

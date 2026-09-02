@@ -9,7 +9,12 @@
 {% endblock %}
 
 {% block content %}
-<div class="aa-page aa-detail">
+<div class="aa-page aa-detail"
+     data-aa-title-payment="{{ t('agent_account_register_payment') }}"
+     data-aa-title-commission="{{ t('agent_account_credit_commission') }}"
+     data-aa-title-adjustment="{{ t('agent_account_manual_adjustment') }}"
+     data-aa-title-charge="{{ t('agent_account_register_charge') }}"
+     data-aa-vat-rate="{{ default_vat_rate_percent | int }}">
     <header class="aa-detail__header">
         <div>
             <a href="{{ url_for('agent_account_index') }}" class="aa-back">{{ t('agent_account_back') }}</a>
@@ -27,7 +32,14 @@
         {% if can_manage %}
         <div class="aa-detail__actions">
             <button type="button" class="aa-btn aa-btn--outline" data-aa-open-movement="payment">{{ t('agent_account_register_payment') }}</button>
-            <button type="button" class="aa-btn aa-btn--primary" data-aa-open-movement="fee">{{ t('agent_account_register_movement') }}</button>
+            <button type="button" class="aa-btn aa-btn--primary" data-aa-open-charge>{{ t('agent_account_register_charge') }}</button>
+            <div class="aa-actions-more">
+                <button type="button" class="aa-btn aa-btn--ghost aa-actions-more__toggle" data-aa-more-toggle aria-expanded="false">{{ t('agent_account_more') }} ▾</button>
+                <div class="aa-actions-more__panel" hidden>
+                    <button type="button" class="aa-actions-more__item" data-aa-open-movement="commission">{{ t('agent_account_credit_commission') }}</button>
+                    <button type="button" class="aa-actions-more__item" data-aa-open-movement="adjustment">{{ t('agent_account_manual_adjustment') }}</button>
+                </div>
+            </div>
         </div>
         {% endif %}
     </header>
@@ -97,6 +109,7 @@
 
 {% if can_manage %}
 {% include "agent_account/_movement_form.html" %}
+{% include "agent_account/_charge_form.html" %}
 {% endif %}
 {% endblock %}
 

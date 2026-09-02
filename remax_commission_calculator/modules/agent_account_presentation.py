@@ -128,9 +128,16 @@ def movement_is_internal_reversal(movement):
 
 
 def movement_display_amount(movement, *, language="es"):
-    amount = abs(float(movement.get("amount") or 0))
     movement_type = movement.get("movement_type") or ""
     currency = movement.get("currency") or "USD"
+
+    if movement_type in DEBT_DISPLAY_TYPES:
+        gross = movement.get("gross_amount")
+        amount = abs(
+            float(gross if gross is not None else movement.get("amount") or 0)
+        )
+    else:
+        amount = abs(float(movement.get("amount") or 0))
 
     if movement_type == "adjustment":
         delta = float(movement.get("balance_after") or 0) - float(

@@ -2866,6 +2866,80 @@ def _migrate_agent_account(cursor):
     )
 
     _migrate_agent_account_v2(cursor)
+    _migrate_agent_account_v3(cursor)
+
+
+def _migrate_agent_account_v3(cursor):
+    if not _table_exists(cursor, "agent_account_movements"):
+        return
+
+    for column_name, column_sql in (
+        ("charge_category", "TEXT"),
+        ("net_amount", "REAL"),
+        ("vat_rate", "REAL"),
+        ("vat_amount", "REAL"),
+        ("gross_amount", "REAL"),
+        ("billing_period", "TEXT"),
+        ("recurring", "INTEGER NOT NULL DEFAULT 0"),
+        ("recurrence_type", "TEXT DEFAULT 'one_time'"),
+    ):
+        if not _column_exists(
+            cursor,
+            "agent_account_movements",
+            column_name,
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE agent_account_movements
+                ADD COLUMN {column_name} {column_sql}
+                """
+            )
+
+    cursor.execute(
+        """
+        UPDATE agent_account_movements
+        SET gross_amount = amount
+        WHERE gross_amount IS NULL
+        """
+    )
+    cursor.execute(
+        """
+        UPDATE agent_account_movements
+        SET net_amount = amount
+        WHERE net_amount IS NULL
+        """
+    )
+    cursor.execute(
+        """
+        UPDATE agent_account_movements
+        SET vat_amount = 0
+        WHERE vat_amount IS NULL
+        """
+    )
+    cursor.execute(
+        """
+        UPDATE agent_account_movements
+        SET vat_rate = 0
+        WHERE vat_rate IS NULL
+        """
+    )
+    cursor.execute(
+        """
+        UPDATE agent_account_movements
+        SET recurrence_type = 'one_time'
+        WHERE recurrence_type IS NULL
+            OR recurrence_type = ''
+        """
+    )
+    cursor.execute(
+        """
+        UPDATE agent_account_movements
+        SET billing_period = period_label
+        WHERE (billing_period IS NULL OR billing_period = '')
+            AND period_label IS NOT NULL
+            AND period_label != ''
+        """
+    )
 
 
 def _migrate_agent_account_v2(cursor):

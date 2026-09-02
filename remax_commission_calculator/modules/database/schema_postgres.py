@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v9"
+POSTGRES_SCHEMA_VERSION = "postgres_v10"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -1357,6 +1357,70 @@ def create_postgres_schema():
                     original.cancellation_reason IS NULL
                     OR BTRIM(original.cancellation_reason) = ''
                 )
+            """
+        )
+
+        for column_name, column_sql in (
+            ("charge_category", "TEXT"),
+            ("net_amount", f"{_MONEY}"),
+            ("vat_rate", f"{_MONEY}"),
+            ("vat_amount", f"{_MONEY}"),
+            ("gross_amount", f"{_MONEY}"),
+            ("billing_period", "TEXT"),
+            ("recurring", f"{_FLAG} NOT NULL DEFAULT 0"),
+            ("recurrence_type", "TEXT DEFAULT 'one_time'"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE agent_account_movements
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        cursor.execute(
+            """
+            UPDATE agent_account_movements
+            SET gross_amount = amount
+            WHERE gross_amount IS NULL
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE agent_account_movements
+            SET net_amount = amount
+            WHERE net_amount IS NULL
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE agent_account_movements
+            SET vat_amount = 0
+            WHERE vat_amount IS NULL
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE agent_account_movements
+            SET vat_rate = 0
+            WHERE vat_rate IS NULL
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE agent_account_movements
+            SET recurrence_type = 'one_time'
+            WHERE recurrence_type IS NULL
+                OR BTRIM(recurrence_type) = ''
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE agent_account_movements
+            SET billing_period = period_label
+            WHERE (billing_period IS NULL OR BTRIM(billing_period) = '')
+                AND period_label IS NOT NULL
+                AND BTRIM(period_label) <> ''
             """
         )
 

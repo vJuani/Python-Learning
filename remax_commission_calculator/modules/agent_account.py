@@ -108,6 +108,19 @@ def _build_reference_text(payload, validated):
 
 
 def validate_movement_payload(payload, *, language="es"):
+    charge_category = (
+        payload.get("charge_category") or ""
+    ).strip().lower()
+    if charge_category:
+        from modules.agent_account_charges import (
+            validate_charge_payload,
+        )
+
+        return validate_charge_payload(
+            payload,
+            language=language,
+        )
+
     movement_type = (payload.get("movement_type") or "").strip()
     currency = (payload.get("currency") or "").strip().upper()
     description = (payload.get("description") or "").strip()
@@ -272,14 +285,25 @@ def create_movement(
             created_by_user_id=created_by_user_id,
             source_type=SOURCE_MANUAL,
             idempotency_key=idempotency_key,
-            exchange_rate=validated["exchange_rate"],
-            exchange_rate_date=validated["exchange_rate_date"],
-            exchange_rate_source=validated["exchange_rate_source"],
-            equivalent_amount_ars=validated["equivalent_amount_ars"],
-            payment_method=validated["payment_method"],
-            reference_text=validated["reference_text"],
-            notes=validated["notes"],
-            period_label=validated["period_label"],
+            exchange_rate=validated.get("exchange_rate"),
+            exchange_rate_date=validated.get("exchange_rate_date"),
+            exchange_rate_source=validated.get("exchange_rate_source"),
+            equivalent_amount_ars=validated.get("equivalent_amount_ars"),
+            payment_method=validated.get("payment_method"),
+            reference_text=validated.get("reference_text"),
+            notes=validated.get("notes"),
+            period_label=validated.get("period_label"),
+            charge_category=validated.get("charge_category"),
+            net_amount=validated.get("net_amount"),
+            vat_rate=validated.get("vat_rate"),
+            vat_amount=validated.get("vat_amount"),
+            gross_amount=validated.get("gross_amount"),
+            billing_period=validated.get("billing_period"),
+            recurring=validated.get("recurring", 0),
+            recurrence_type=validated.get(
+                "recurrence_type",
+                "one_time",
+            ),
         )
     except ValueError as error:
         key = str(error)
