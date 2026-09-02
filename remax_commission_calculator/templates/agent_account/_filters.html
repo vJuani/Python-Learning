@@ -1,0 +1,44 @@
+<form class="aa-filters-form" method="get" action="{{ request.path }}">
+    <label class="aa-field">
+        <span>{{ t('agent_account_currency') }}</span>
+        <select name="currency">
+            <option value="">{{ t('agent_account_all_currencies') }}</option>
+            {% for currency in currencies %}
+            <option value="{{ currency }}" {% if filters.currency == currency %}selected{% endif %}>{{ currency }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="aa-field">
+        <span>{{ t('agent_account_movement_type') }}</span>
+        <select name="movement_type">
+            <option value="">{{ t('agent_account_all_types') }}</option>
+            {% for movement_type in movement_types %}
+            <option value="{{ movement_type }}" {% if filters.movement_type == movement_type %}selected{% endif %}>{{ t('agent_account_type_' ~ movement_type) }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="aa-field">
+        <span>{{ t('agent_account_date_from') }}</span>
+        <input type="date" name="date_from" value="{{ filters.date_from }}">
+    </label>
+    <label class="aa-field">
+        <span>{{ t('agent_account_date_to') }}</span>
+        <input type="date" name="date_to" value="{{ filters.date_to }}">
+    </label>
+    <label class="aa-field">
+        <span>{{ t('agent_account_status_column') }}</span>
+        <select name="status">
+            <option value="">{{ t('agent_account_all_statuses') }}</option>
+            <option value="confirmed" {% if filters.status == 'confirmed' %}selected{% endif %}>{{ t('agent_account_status_normal') }}</option>
+            <option value="reversed" {% if filters.status == 'reversed' %}selected{% endif %}>{{ t('agent_account_status_cancelled') }}</option>
+        </select>
+    </label>
+    <label class="aa-check">
+        <input type="checkbox" name="show_cancelled" value="1" {% if filters.show_cancelled %}checked{% endif %}>
+        <span>{{ t('agent_account_show_cancelled') }}</span>
+    </label>
+    <button type="submit" class="aa-btn aa-btn--primary aa-btn--block">{{ t('sidebar_apply_filters') }}</button>
+    {% if filters_active %}
+    <a href="{{ request.path }}" class="aa-btn aa-btn--ghost aa-btn--block">{{ t('clear_filters') }}</a>
+    {% endif %}
+</form>

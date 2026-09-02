@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v8"
+POSTGRES_SCHEMA_VERSION = "postgres_v9"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -1311,6 +1311,54 @@ def create_postgres_schema():
                 {column_name} {column_sql}
                 """
             )
+
+        for column_name, column_sql in (
+            ("exchange_rate", f"{_MONEY}"),
+            ("exchange_rate_date", "TEXT"),
+            ("exchange_rate_source", "TEXT"),
+            ("equivalent_amount_ars", f"{_MONEY}"),
+            ("payment_method", "TEXT"),
+            ("reference_text", "TEXT"),
+            ("notes", "TEXT"),
+            ("period_label", "TEXT"),
+            ("cancelled_at", "TEXT"),
+            ("cancelled_by_user_id", "BIGINT"),
+            ("cancellation_reason", "TEXT"),
+            ("is_internal_reversal", f"{_FLAG} NOT NULL DEFAULT 0"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE agent_account_movements
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        cursor.execute(
+            """
+            UPDATE agent_account_movements
+            SET is_internal_reversal = 1
+            WHERE reversed_movement_id IS NOT NULL
+                AND COALESCE(is_internal_reversal, 0) = 0
+            """
+        )
+
+        cursor.execute(
+            """
+            UPDATE agent_account_movements AS original
+            SET
+                cancellation_reason = rev.reversal_reason,
+                cancelled_at = rev.created_at,
+                cancelled_by_user_id = rev.created_by_user_id
+            FROM agent_account_movements AS rev
+            WHERE rev.reversed_movement_id = original.id
+                AND original.status = 'reversed'
+                AND (
+                    original.cancellation_reason IS NULL
+                    OR BTRIM(original.cancellation_reason) = ''
+                )
+            """
+        )
 
         cursor.execute(
             """

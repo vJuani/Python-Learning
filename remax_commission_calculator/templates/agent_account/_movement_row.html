@@ -1,0 +1,81 @@
+{% macro movement_row(movement, can_manage=false) %}
+{% set is_cancelled = movement.status == 'reversed' %}
+<tr class="aa-history-row{% if is_cancelled %} aa-history-row--cancelled{% endif %}">
+    <td><time datetime="{{ movement.movement_date }}">{{ movement.movement_date | short_date }}</time></td>
+    <td>
+        <div class="aa-history-row__concept">{{ movement.description }}</div>
+        {% if is_cancelled and movement.cancellation_reason %}
+        <div class="aa-history-row__audit">
+            {{ t('agent_account_cancelled_by', user=movement.cancelled_by_username or '—', date=(movement.cancelled_at or '')[:10] | short_date) }}
+            · {{ t('agent_account_cancel_reason_label') }}: {{ movement.cancellation_reason }}
+        </div>
+        {% endif %}
+    </td>
+    <td><span class="aa-type-pill aa-type-pill--{{ movement.movement_type }}">{{ t('agent_account_type_' ~ movement.movement_type) }}</span></td>
+    <td class="aa-amount aa-amount--{{ movement.display_amount.tone }}">{{ movement.display_amount.formatted }}</td>
+    <td class="aa-balance-inline aa-balance-inline--{{ movement.display_balance_after.tone }}">
+        {{ movement.display_balance_after.formatted }}
+        {% if movement.display_balance_after.tone == 'debt' %}
+        <span class="aa-balance-inline__hint">{{ t('agent_account_balance_pending_short') }}</span>
+        {% elif movement.display_balance_after.tone == 'credit' %}
+        <span class="aa-balance-inline__hint">{{ t('agent_account_balance_in_favor_short') }}</span>
+        {% endif %}
+    </td>
+    <td class="aa-reference">{{ movement.reference_text or '—' }}</td>
+    <td>
+        {% if is_cancelled %}
+        <span class="aa-badge aa-badge--cancelled">{{ t('agent_account_status_cancelled') }}</span>
+        {% endif %}
+    </td>
+    <td class="aa-actions-cell">
+        {% if can_manage and not is_cancelled %}
+        <div class="aa-row-menu">
+            <button type="button" class="aa-row-menu__toggle" aria-label="{{ t('agent_account_actions') }}" data-aa-menu-toggle>⋯</button>
+            <div class="aa-row-menu__panel" hidden>
+                <button
+                    type="button"
+                    class="aa-row-menu__item aa-row-menu__item--danger"
+                    data-aa-cancel-open
+                    data-movement-id="{{ movement.id }}"
+                    data-movement-label="{{ movement.description }}"
+                    data-movement-amount="{{ movement.display_amount.formatted }}"
+                >{{ t('agent_account_cancel_movement') }}</button>
+            </div>
+        </div>
+        {% endif %}
+    </td>
+</tr>
+{% endmacro %}
+
+{% macro movement_card(movement, can_manage=false) %}
+{% set is_cancelled = movement.status == 'reversed' %}
+<article class="aa-move-card{% if is_cancelled %} aa-move-card--cancelled{% endif %}">
+    <header class="aa-move-card__header">
+        <div>
+            <span class="aa-type-pill aa-type-pill--{{ movement.movement_type }}">{{ t('agent_account_type_' ~ movement.movement_type) }}</span>
+            <h3>{{ movement.description }}</h3>
+        </div>
+        <span class="aa-amount aa-amount--{{ movement.display_amount.tone }}">{{ movement.display_amount.formatted }}</span>
+    </header>
+    <p class="aa-move-card__meta">
+        <time datetime="{{ movement.movement_date }}">{{ movement.movement_date | short_date }}</time>
+        {% if movement.reference_text %} · {{ movement.reference_text }}{% endif %}
+        {% if movement.payment_method %} · {{ t('agent_account_pay_' ~ movement.payment_method) }}{% endif %}
+    </p>
+    <p class="aa-move-card__balance aa-balance-inline--{{ movement.display_balance_after.tone }}">
+        {{ t('agent_account_balance_after') }}: {{ movement.display_balance_after.formatted }}
+    </p>
+    {% if is_cancelled %}
+    <p class="aa-move-card__audit">{{ t('agent_account_status_cancelled') }}{% if movement.cancellation_reason %} · {{ movement.cancellation_reason }}{% endif %}</p>
+    {% elif can_manage %}
+    <button
+        type="button"
+        class="aa-btn aa-btn--ghost aa-btn--small aa-btn--block"
+        data-aa-cancel-open
+        data-movement-id="{{ movement.id }}"
+        data-movement-label="{{ movement.description }}"
+        data-movement-amount="{{ movement.display_amount.formatted }}"
+    >{{ t('agent_account_cancel_movement') }}</button>
+    {% endif %}
+</article>
+{% endmacro %}

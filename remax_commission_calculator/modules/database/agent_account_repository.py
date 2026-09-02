@@ -61,6 +61,28 @@ SOURCE_TYPES = (
 
 CURRENCIES = ("ARS", "USD")
 
+PAYMENT_METHODS = (
+    "transfer",
+    "cash",
+    "card",
+    "other",
+)
+
+AGENT_ACCOUNT_V2_COLUMNS = (
+    ("exchange_rate", "REAL"),
+    ("exchange_rate_date", "TEXT"),
+    ("exchange_rate_source", "TEXT"),
+    ("equivalent_amount_ars", "REAL"),
+    ("payment_method", "TEXT"),
+    ("reference_text", "TEXT"),
+    ("notes", "TEXT"),
+    ("period_label", "TEXT"),
+    ("cancelled_at", "TEXT"),
+    ("cancelled_by_user_id", "INTEGER"),
+    ("cancellation_reason", "TEXT"),
+    ("is_internal_reversal", "INTEGER NOT NULL DEFAULT 0"),
+)
+
 
 def _now_iso():
     return datetime.utcnow().replace(
@@ -72,7 +94,7 @@ def _build_movement_dict(row):
     if row is None:
         return None
 
-    return {
+    base = {
         "id": row[0],
         "organization_id": row[1],
         "agent_id": row[2],
@@ -91,9 +113,79 @@ def _build_movement_dict(row):
         "created_at": row[15],
         "reversed_movement_id": row[16],
         "reversal_reason": row[17],
-        "created_by_username": row[18] if len(row) > 18 else None,
-        "agent_name": row[19] if len(row) > 19 else None,
     }
+
+    if len(row) > 18:
+        base.update(
+            {
+                "exchange_rate": (
+                    float(row[18])
+                    if row[18] is not None
+                    else None
+                ),
+                "exchange_rate_date": row[19],
+                "exchange_rate_source": row[20],
+                "equivalent_amount_ars": (
+                    float(row[21])
+                    if row[21] is not None
+                    else None
+                ),
+                "payment_method": row[22],
+                "reference_text": row[23],
+                "notes": row[24],
+                "period_label": row[25],
+                "cancelled_at": row[26],
+                "cancelled_by_user_id": row[27],
+                "cancellation_reason": row[28],
+                "is_internal_reversal": bool(
+                    row[29] or 0
+                ),
+                "created_by_username": (
+                    row[30] if len(row) > 30 else None
+                ),
+                "cancelled_by_username": (
+                    row[31] if len(row) > 31 else None
+                ),
+                "agent_name": (
+                    row[32] if len(row) > 32 else None
+                ),
+            }
+        )
+    else:
+        base.update(
+            {
+                "exchange_rate": None,
+                "exchange_rate_date": None,
+                "exchange_rate_source": None,
+                "equivalent_amount_ars": None,
+                "payment_method": None,
+                "reference_text": None,
+                "notes": None,
+                "period_label": None,
+                "cancelled_at": None,
+                "cancelled_by_user_id": None,
+                "cancellation_reason": None,
+                "is_internal_reversal": bool(
+                    base.get("reversed_movement_id")
+                ),
+                "created_by_username": (
+                    row[18] if len(row) > 18 else None
+                ),
+                "cancelled_by_username": None,
+                "agent_name": (
+                    row[19] if len(row) > 19 else None
+                ),
+            }
+        )
+
+    if (
+        not base.get("cancellation_reason")
+        and base.get("status") == STATUS_REVERSED
+        and base.get("reversal_reason")
+    ):
+        base["cancellation_reason"] = base["reversal_reason"]
+
+    return base
 
 
 MOVEMENTS_BASE_QUERY = """
@@ -116,11 +208,26 @@ MOVEMENTS_BASE_QUERY = """
         m.created_at,
         m.reversed_movement_id,
         m.reversal_reason,
-        u.username,
+        m.exchange_rate,
+        m.exchange_rate_date,
+        m.exchange_rate_source,
+        m.equivalent_amount_ars,
+        m.payment_method,
+        m.reference_text,
+        m.notes,
+        m.period_label,
+        m.cancelled_at,
+        m.cancelled_by_user_id,
+        m.cancellation_reason,
+        m.is_internal_reversal,
+        creator.username,
+        canceller.username,
         a.name
     FROM agent_account_movements AS m
-    LEFT JOIN users AS u
-        ON m.created_by_user_id = u.id
+    LEFT JOIN users AS creator
+        ON m.created_by_user_id = creator.id
+    LEFT JOIN users AS canceller
+        ON m.cancelled_by_user_id = canceller.id
     JOIN agents AS a
         ON m.agent_id = a.id
         AND m.organization_id = a.organization_id
@@ -272,6 +379,7 @@ def list_agent_account_movements(
     date_from=None,
     date_to=None,
     limit=None,
+    include_internal_reversals=False,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -302,6 +410,12 @@ def list_agent_account_movements(
     if date_to:
         clauses.append("m.movement_date <= ?")
         params.append(date_to)
+
+    if not include_internal_reversals:
+        clauses.append(
+            "COALESCE(m.is_internal_reversal, 0) = 0"
+        )
+        clauses.append("m.reversed_movement_id IS NULL")
 
     query = (
         MOVEMENTS_BASE_QUERY
@@ -401,8 +515,12 @@ def list_agents_account_summary(
                     "balance_usd": balance_usd,
                     "last_movement_date": row[5],
                     "has_pending_balance": (
-                        abs(balance_ars) > 1e-9
-                        or abs(balance_usd) > 1e-9
+                        balance_ars < -1e-9
+                        or balance_usd < -1e-9
+                    ),
+                    "has_credit_balance": (
+                        balance_ars > 1e-9
+                        or balance_usd > 1e-9
                     ),
                 }
             )
@@ -451,10 +569,114 @@ def count_movements_in_month(
             FROM agent_account_movements
             WHERE organization_id = ?
                 AND movement_date LIKE ?
+                AND COALESCE(is_internal_reversal, 0) = 0
+                AND reversed_movement_id IS NULL
             """,
             (organization_id, f"{prefix}%"),
         )
         return int(cursor.fetchone()[0] or 0)
+    finally:
+        connection.close()
+
+
+def sum_receivable_balances(organization_id):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    summaries = list_agents_account_summary(
+        organization_id
+    )
+    receivable = {currency: 0.0 for currency in CURRENCIES}
+    pending_agents = 0
+
+    for row in summaries:
+        for currency_key, balance in (
+            ("ARS", row["balance_ars"]),
+            ("USD", row["balance_usd"]),
+        ):
+            if balance < -1e-9:
+                receivable[currency_key] += abs(balance)
+        if row["has_pending_balance"]:
+            pending_agents += 1
+
+    return {
+        "receivable": receivable,
+        "pending_agents": pending_agents,
+    }
+
+
+def sum_payments_collected_month(
+    organization_id,
+    *,
+    year_month,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    prefix = year_month.strip()
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        totals = {currency: 0.0 for currency in CURRENCIES}
+        cursor.execute(
+            """
+            SELECT currency, COALESCE(SUM(amount), 0)
+            FROM agent_account_movements
+            WHERE organization_id = ?
+                AND movement_type = ?
+                AND status = ?
+                AND movement_date LIKE ?
+                AND COALESCE(is_internal_reversal, 0) = 0
+                AND reversed_movement_id IS NULL
+            GROUP BY currency
+            """,
+            (
+                organization_id,
+                MOVEMENT_TYPE_PAYMENT,
+                STATUS_CONFIRMED,
+                f"{prefix}%",
+            ),
+        )
+        for row in cursor.fetchall():
+            totals[row[0]] = float(row[1] or 0)
+        return totals
+    finally:
+        connection.close()
+
+
+def get_agent_account_metadata(
+    organization_id,
+    agent_id,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT
+                MIN(movement_date),
+                MAX(movement_date)
+            FROM agent_account_movements
+            WHERE organization_id = ?
+                AND agent_id = ?
+                AND COALESCE(is_internal_reversal, 0) = 0
+                AND reversed_movement_id IS NULL
+            """,
+            (organization_id, agent_id),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return {
+                "first_movement_date": None,
+                "last_movement_date": None,
+            }
+        return {
+            "first_movement_date": row[0],
+            "last_movement_date": row[1],
+        }
     finally:
         connection.close()
 
@@ -473,6 +695,14 @@ def create_agent_account_movement_atomic(
     source_type=SOURCE_MANUAL,
     source_id=None,
     idempotency_key=None,
+    exchange_rate=None,
+    exchange_rate_date=None,
+    exchange_rate_source=None,
+    equivalent_amount_ars=None,
+    payment_method=None,
+    reference_text=None,
+    notes=None,
+    period_label=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -549,9 +779,19 @@ def create_agent_account_movement_atomic(
                 movement_date,
                 idempotency_key,
                 created_by_user_id,
-                created_at
+                created_at,
+                exchange_rate,
+                exchange_rate_date,
+                exchange_rate_source,
+                equivalent_amount_ars,
+                payment_method,
+                reference_text,
+                notes,
+                period_label,
+                is_internal_reversal
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, 0
             )
             """,
             (
@@ -570,6 +810,18 @@ def create_agent_account_movement_atomic(
                 idempotency_key,
                 created_by_user_id,
                 now,
+                float(exchange_rate)
+                if exchange_rate is not None
+                else None,
+                exchange_rate_date,
+                exchange_rate_source,
+                float(equivalent_amount_ars)
+                if equivalent_amount_ars is not None
+                else None,
+                payment_method,
+                reference_text,
+                notes,
+                period_label,
             ),
         )
         connection.commit()
@@ -640,19 +892,26 @@ def reverse_agent_account_movement_atomic(
         cursor.execute(
             """
             UPDATE agent_account_movements
-            SET status = ?
+            SET
+                status = ?,
+                cancelled_at = ?,
+                cancelled_by_user_id = ?,
+                cancellation_reason = ?
             WHERE id = ?
                 AND organization_id = ?
             """,
             (
                 STATUS_REVERSED,
+                now,
+                created_by_user_id,
+                reversal_reason or "",
                 movement_id,
                 organization_id,
             ),
         )
 
         reversal_description = (
-            f"Reversal of movement #{movement_id}"
+            f"[internal] Cancellation of #{movement_id}"
         )
         if original[5]:
             reversal_description += f": {original[5]}"
@@ -676,9 +935,10 @@ def reverse_agent_account_movement_atomic(
                 created_by_user_id,
                 created_at,
                 reversed_movement_id,
-                reversal_reason
+                reversal_reason,
+                is_internal_reversal
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1
             )
             """,
             (

@@ -7071,6 +7071,7 @@ register_agent_account_routes(
     helpers={
         "require_user_organization": require_user_organization,
         "flash_i18n": flash_i18n,
+        "get_current_language": get_current_language,
     },
 )
 

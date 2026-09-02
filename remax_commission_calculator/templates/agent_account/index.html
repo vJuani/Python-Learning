@@ -1,64 +1,66 @@
 {% extends "base.html" %}
+{% from "agent_account/_balance_card.html" import balance_card %}
 
 {% block body_class %}is-agent-account-page {% endblock %}
-
 {% block title %}{{ t('agent_account_page_title') }} | {{ t('app_title') }}{% endblock %}
-
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/agent-account-page.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="agent-account-page">
-    <header class="agent-account-page__header">
+<div class="aa-page">
+    <header class="aa-page__header">
         <div>
             <h1>{{ t('agent_account_page_title') }}</h1>
-            <p>{{ t('agent_account_page_subtitle') }}</p>
+            <p>{{ t('agent_account_page_subtitle_v2') }}</p>
         </div>
     </header>
 
-    <section class="agent-account-kpis" aria-label="{{ t('agent_account_kpis_aria') }}">
-        <article class="agent-account-kpi-card">
-            <span class="agent-account-kpi-card__label">{{ t('agent_account_balance_ars') }}</span>
-            <strong>{{ panel.kpis.balance_ars | money('ARS') }}</strong>
+    <section class="aa-kpis" aria-label="{{ t('agent_account_kpis_aria') }}">
+        <article class="aa-kpi aa-kpi--debt">
+            <span class="aa-kpi__icon" aria-hidden="true">↘</span>
+            <div>
+                <span class="aa-kpi__label">{{ t('agent_account_kpi_receivable_ars') }}</span>
+                <strong>{{ panel.kpis.receivable_ars | money('ARS') }}</strong>
+            </div>
         </article>
-        <article class="agent-account-kpi-card">
-            <span class="agent-account-kpi-card__label">{{ t('agent_account_balance_usd') }}</span>
-            <strong>{{ panel.kpis.balance_usd | money('USD') }}</strong>
+        <article class="aa-kpi aa-kpi--debt">
+            <span class="aa-kpi__icon" aria-hidden="true">↘</span>
+            <div>
+                <span class="aa-kpi__label">{{ t('agent_account_kpi_receivable_usd') }}</span>
+                <strong>{{ panel.kpis.receivable_usd | money('USD') }}</strong>
+            </div>
         </article>
-        <article class="agent-account-kpi-card">
-            <span class="agent-account-kpi-card__label">{{ t('agent_account_pending_agents') }}</span>
-            <strong>{{ panel.kpis.pending_agents }}</strong>
+        <article class="aa-kpi aa-kpi--neutral">
+            <span class="aa-kpi__icon" aria-hidden="true">◎</span>
+            <div>
+                <span class="aa-kpi__label">{{ t('agent_account_pending_agents') }}</span>
+                <strong>{{ panel.kpis.pending_agents }}</strong>
+            </div>
         </article>
-        <article class="agent-account-kpi-card">
-            <span class="agent-account-kpi-card__label">{{ t('agent_account_movements_month') }}</span>
-            <strong>{{ panel.kpis.movements_month }}</strong>
+        <article class="aa-kpi aa-kpi--credit">
+            <span class="aa-kpi__icon" aria-hidden="true">↗</span>
+            <div>
+                <span class="aa-kpi__label">{{ t('agent_account_kpi_collected_month') }}</span>
+                <strong>{{ panel.kpis.collected_month_ars | money('ARS') }} · {{ panel.kpis.collected_month_usd | money('USD') }}</strong>
+            </div>
         </article>
     </section>
 
-    <section class="agent-account-card">
-        <form class="agent-account-toolbar" method="get" action="{{ url_for('agent_account_index') }}">
-            <div class="agent-account-toolbar__search">
-                <input
-                    type="search"
-                    name="q"
-                    value="{{ panel.filters.q }}"
-                    placeholder="{{ t('agent_account_search_placeholder') }}"
-                >
-            </div>
-            <button type="submit" class="agent-account-btn agent-account-btn--primary">{{ t('search') }}</button>
-            {% if panel.filters.q %}
-            <a href="{{ url_for('agent_account_index') }}" class="agent-account-btn agent-account-btn--ghost">{{ t('clear_filters') }}</a>
-            {% endif %}
+    <section class="aa-panel">
+        <form class="aa-search" method="get" action="{{ url_for('agent_account_index') }}">
+            <input type="search" name="q" value="{{ panel.filters.q }}" placeholder="{{ t('agent_account_search_placeholder') }}" aria-label="{{ t('search') }}">
+            <button type="submit" class="aa-btn aa-btn--primary aa-btn--icon" aria-label="{{ t('search') }}">⌕</button>
         </form>
 
-        <div class="agent-account-table-wrap" role="region" aria-label="{{ t('agent_account_agents_list') }}">
-            <table class="agent-account-table agent-account-table--desktop">
+        <div class="aa-agent-table-wrap">
+            <table class="aa-table aa-table--desktop">
                 <thead>
                     <tr>
                         <th>{{ t('agent') }}</th>
-                        <th>{{ t('agent_account_balance_ars') }}</th>
-                        <th>{{ t('agent_account_balance_usd') }}</th>
+                        <th>ARS</th>
+                        <th>USD</th>
+                        <th>{{ t('agent_account_list_status') }}</th>
                         <th>{{ t('agent_account_last_movement') }}</th>
                         <th></th>
                     </tr>
@@ -66,43 +68,42 @@
                 <tbody>
                     {% for row in panel.agents %}
                     <tr>
-                        <td>{{ row.agent_name }}</td>
-                        <td class="money">{{ row.balance_ars | money('ARS') }}</td>
-                        <td class="money">{{ row.balance_usd | money('USD') }}</td>
-                        <td>{{ row.last_movement_date or '—' }}</td>
                         <td>
-                            <a
-                                href="{{ url_for('agent_account_detail', agent_id=row.agent_id) }}"
-                                class="agent-account-btn agent-account-btn--outline agent-account-btn--small"
-                            >{{ t('agent_account_view_account') }}</a>
+                            <div class="aa-agent-cell">
+                                <span class="aa-avatar" aria-hidden="true">{{ row.agent_name[:1] | upper }}</span>
+                                <span>{{ row.agent_name }}</span>
+                            </div>
                         </td>
+                        <td class="aa-balance-inline aa-balance-inline--{{ row.display_ars.tone }}">{{ row.display_ars.formatted }}</td>
+                        <td class="aa-balance-inline aa-balance-inline--{{ row.display_usd.tone }}">{{ row.display_usd.formatted }}</td>
+                        <td><span class="aa-status-chip aa-status-chip--{{ row.list_status }}">{{ t('agent_account_list_status_' ~ row.list_status) }}</span></td>
+                        <td>{{ (row.last_movement_date or '—') | short_date }}</td>
+                        <td><a href="{{ url_for('agent_account_detail', agent_id=row.agent_id) }}" class="aa-btn aa-btn--outline aa-btn--small">{{ t('agent_account_view_account') }}</a></td>
                     </tr>
                     {% else %}
-                    <tr>
-                        <td colspan="5">{{ t('agent_account_no_agents') }}</td>
-                    </tr>
+                    <tr><td colspan="6">{{ t('agent_account_no_agents') }}</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
 
-            <div class="agent-account-agent-cards agent-account-agent-cards--mobile">
+            <div class="aa-agent-cards">
                 {% for row in panel.agents %}
-                <article class="agent-account-agent-card">
+                <article class="aa-agent-card">
                     <header>
-                        <strong>{{ row.agent_name }}</strong>
-                        <span>{{ row.last_movement_date or '—' }}</span>
+                        <span class="aa-avatar">{{ row.agent_name[:1] | upper }}</span>
+                        <div>
+                            <strong>{{ row.agent_name }}</strong>
+                            <span class="aa-status-chip aa-status-chip--{{ row.list_status }}">{{ t('agent_account_list_status_' ~ row.list_status) }}</span>
+                        </div>
                     </header>
-                    <div class="agent-account-agent-card__balances">
-                        <span>ARS {{ row.balance_ars | money('ARS') }}</span>
-                        <span>USD {{ row.balance_usd | money('USD') }}</span>
+                    <div class="aa-agent-card__balances">
+                        <span class="aa-balance-inline--{{ row.display_ars.tone }}">ARS {{ row.display_ars.formatted }}</span>
+                        <span class="aa-balance-inline--{{ row.display_usd.tone }}">USD {{ row.display_usd.formatted }}</span>
                     </div>
-                    <a
-                        href="{{ url_for('agent_account_detail', agent_id=row.agent_id) }}"
-                        class="agent-account-btn agent-account-btn--primary agent-account-btn--block"
-                    >{{ t('agent_account_view_account') }}</a>
+                    <a href="{{ url_for('agent_account_detail', agent_id=row.agent_id) }}" class="aa-btn aa-btn--primary aa-btn--block">{{ t('agent_account_view_account') }}</a>
                 </article>
                 {% else %}
-                <p>{{ t('agent_account_no_agents') }}</p>
+                <p class="aa-empty">{{ t('agent_account_no_agents') }}</p>
                 {% endfor %}
             </div>
         </div>

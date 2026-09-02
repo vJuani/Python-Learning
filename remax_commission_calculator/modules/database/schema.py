@@ -2865,6 +2865,81 @@ def _migrate_agent_account(cursor):
         """
     )
 
+    _migrate_agent_account_v2(cursor)
+
+
+def _migrate_agent_account_v2(cursor):
+    if not _table_exists(cursor, "agent_account_movements"):
+        return
+
+    for column_name, column_sql in (
+        ("exchange_rate", "REAL"),
+        ("exchange_rate_date", "TEXT"),
+        ("exchange_rate_source", "TEXT"),
+        ("equivalent_amount_ars", "REAL"),
+        ("payment_method", "TEXT"),
+        ("reference_text", "TEXT"),
+        ("notes", "TEXT"),
+        ("period_label", "TEXT"),
+        ("cancelled_at", "TEXT"),
+        ("cancelled_by_user_id", "INTEGER"),
+        ("cancellation_reason", "TEXT"),
+        ("is_internal_reversal", "INTEGER NOT NULL DEFAULT 0"),
+    ):
+        if not _column_exists(
+            cursor,
+            "agent_account_movements",
+            column_name,
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE agent_account_movements
+                ADD COLUMN {column_name} {column_sql}
+                """
+            )
+
+    cursor.execute(
+        """
+        UPDATE agent_account_movements
+        SET is_internal_reversal = 1
+        WHERE reversed_movement_id IS NOT NULL
+            AND COALESCE(is_internal_reversal, 0) = 0
+        """
+    )
+
+    cursor.execute(
+        """
+        UPDATE agent_account_movements AS original
+        SET
+            cancellation_reason = (
+                SELECT rev.reversal_reason
+                FROM agent_account_movements AS rev
+                WHERE rev.reversed_movement_id = original.id
+                ORDER BY rev.id DESC
+                LIMIT 1
+            ),
+            cancelled_at = (
+                SELECT rev.created_at
+                FROM agent_account_movements AS rev
+                WHERE rev.reversed_movement_id = original.id
+                ORDER BY rev.id DESC
+                LIMIT 1
+            ),
+            cancelled_by_user_id = (
+                SELECT rev.created_by_user_id
+                FROM agent_account_movements AS rev
+                WHERE rev.reversed_movement_id = original.id
+                ORDER BY rev.id DESC
+                LIMIT 1
+            )
+        WHERE original.status = 'reversed'
+            AND (
+                original.cancellation_reason IS NULL
+                OR original.cancellation_reason = ''
+            )
+        """
+    )
+
 
 def migrate_schema(create_backup=True):
     # Commit external_id before the bulk transaction so a later

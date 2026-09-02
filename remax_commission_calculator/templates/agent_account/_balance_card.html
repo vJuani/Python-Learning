@@ -1,0 +1,7 @@
+{% macro balance_card(currency, display, compact=false) %}
+<article class="aa-balance-card aa-balance-card--{{ display.tone }}{% if compact %} aa-balance-card--compact{% endif %}">
+    <span class="aa-balance-card__currency">{{ currency }}</span>
+    <span class="aa-balance-card__label">{{ t(display.label_key) }}</span>
+    <strong class="aa-balance-card__value">{{ display.formatted }}</strong>
+</article>
+{% endmacro %}

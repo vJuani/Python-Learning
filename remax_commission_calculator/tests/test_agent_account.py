@@ -333,7 +333,7 @@ class AgentAccountTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn(
-            b"agent-account-agent-cards--mobile",
+            b"aa-agent-cards",
             response.data,
         )
         self._login("aa_agent_a")
@@ -348,7 +348,7 @@ class AgentAccountTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn(
-            b"agent-account-movement-cards--mobile",
+            b"aa-move-cards",
             response.data,
         )
 

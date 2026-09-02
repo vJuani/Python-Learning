@@ -1,126 +1,75 @@
 {% extends "base.html" %}
+{% from "agent_account/_balance_card.html" import balance_card with context %}
+{% from "agent_account/_movement_row.html" import movement_card with context %}
 
 {% block body_class %}is-agent-account-page is-agent-account-my {% endblock %}
-
 {% block title %}{{ t('agent_account_my_title') }} | {{ t('app_title') }}{% endblock %}
-
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/agent-account-page.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="agent-account-page agent-account-my">
-    <header class="agent-account-page__header">
+<div class="aa-page aa-my">
+    <header class="aa-detail__header">
         <div>
             <h1>{{ t('agent_account_my_title') }}</h1>
             <p>{{ t('agent_account_my_subtitle') }}</p>
         </div>
+        <button type="button" class="aa-btn aa-btn--ghost aa-btn--small aa-filters-toggle" data-aa-filters-open>{{ t('agent_account_filters') }}</button>
     </header>
 
-    <section class="agent-account-kpis agent-account-kpis--detail">
-        <article class="agent-account-kpi-card">
-            <span class="agent-account-kpi-card__label">{{ t('agent_account_balance_ars') }}</span>
-            <strong>{{ detail.balances.ARS | money('ARS') }}</strong>
-        </article>
-        <article class="agent-account-kpi-card">
-            <span class="agent-account-kpi-card__label">{{ t('agent_account_balance_usd') }}</span>
-            <strong>{{ detail.balances.USD | money('USD') }}</strong>
-        </article>
+    <section class="aa-balance-grid aa-balance-grid--compact">
+        {{ balance_card('ARS', detail.display_balances.ARS, compact=true) }}
+        {{ balance_card('USD', detail.display_balances.USD, compact=true) }}
     </section>
 
-    <div class="agent-account-detail__layout agent-account-detail__layout--single">
-        <aside class="agent-account-filters" aria-label="{{ t('sidebar_filters') }}">
-            <h2>{{ t('sidebar_filters') }}</h2>
-            <form method="get" action="{{ url_for('my_agent_account') }}">
-                <label>
-                    <span>{{ t('agent_account_currency') }}</span>
-                    <select name="currency">
-                        <option value="">{{ t('agent_account_all_currencies') }}</option>
-                        {% for currency in currencies %}
-                        <option value="{{ currency }}" {% if filters.currency == currency %}selected{% endif %}>{{ currency }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>
-                    <span>{{ t('agent_account_movement_type') }}</span>
-                    <select name="movement_type">
-                        <option value="">{{ t('agent_account_all_types') }}</option>
-                        {% for movement_type in movement_types %}
-                        <option value="{{ movement_type }}" {% if filters.movement_type == movement_type %}selected{% endif %}>{{ t('agent_account_type_' ~ movement_type) }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>
-                    <span>{{ t('agent_account_date_from') }}</span>
-                    <input type="date" name="date_from" value="{{ filters.date_from }}">
-                </label>
-                <label>
-                    <span>{{ t('agent_account_date_to') }}</span>
-                    <input type="date" name="date_to" value="{{ filters.date_to }}">
-                </label>
-                <button type="submit" class="agent-account-btn agent-account-btn--primary agent-account-btn--block">{{ t('sidebar_apply_filters') }}</button>
-                {% if filters_active %}
-                <a href="{{ url_for('my_agent_account') }}" class="agent-account-btn agent-account-btn--ghost agent-account-btn--block">{{ t('clear_filters') }}</a>
-                {% endif %}
-            </form>
-        </aside>
-
-        <section class="agent-account-card agent-account-history">
-            <h2>{{ t('agent_account_recent_movements') }}</h2>
-
-            <div class="agent-account-table-wrap">
-                <table class="agent-account-table agent-account-table--desktop">
-                    <thead>
-                        <tr>
-                            <th>{{ t('date') }}</th>
-                            <th>{{ t('agent_account_concept') }}</th>
-                            <th>{{ t('agent_account_movement_type') }}</th>
-                            <th>{{ t('amount') }}</th>
-                            <th>{{ t('agent_account_balance_after') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for movement in detail.movements %}
-                        {% set signed = movement_signed_display(movement) %}
-                        <tr>
-                            <td>{{ movement.movement_date }}</td>
-                            <td>{{ movement.description }}</td>
-                            <td>{{ t('agent_account_type_' ~ movement.movement_type) }}</td>
-                            <td class="money{% if signed >= 0 %} agent-account-amount--credit{% else %} agent-account-amount--debit{% endif %}">
-                                {{ signed | money(movement.currency) }}
-                            </td>
-                            <td class="money">{{ movement.balance_after | money(movement.currency) }}</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5">{{ t('agent_account_no_movements') }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-
-                <div class="agent-account-movement-cards agent-account-movement-cards--mobile">
+    <section class="aa-panel aa-history">
+        <h2>{{ t('agent_account_recent_movements') }}</h2>
+        {% if detail.movements %}
+        <div class="aa-move-cards aa-move-cards--always">
+            {% for movement in detail.movements %}
+            {{ movement_card(movement, false) }}
+            {% endfor %}
+        </div>
+        <div class="aa-table-wrap aa-table-wrap--desktop-only">
+            <table class="aa-table aa-table--history aa-table--desktop">
+                <thead>
+                    <tr>
+                        <th>{{ t('date') }}</th>
+                        <th>{{ t('agent_account_concept') }}</th>
+                        <th>{{ t('agent_account_amount_label') }}</th>
+                        <th>{{ t('agent_account_balance_after') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
                     {% for movement in detail.movements %}
-                    {% set signed = movement_signed_display(movement) %}
-                    <article class="agent-account-movement-card">
-                        <header>
-                            <time>{{ movement.movement_date }}</time>
-                            <span>{{ t('agent_account_type_' ~ movement.movement_type) }}</span>
-                        </header>
-                        <p class="agent-account-movement-card__concept">{{ movement.description }}</p>
-                        <div class="agent-account-movement-card__amounts">
-                            <span class="{% if signed >= 0 %}agent-account-amount--credit{% else %}agent-account-amount--debit{% endif %}">
-                                {{ signed | money(movement.currency) }}
-                            </span>
-                            <span>{{ t('agent_account_balance_after') }}: {{ movement.balance_after | money(movement.currency) }}</span>
-                        </div>
-                    </article>
-                    {% else %}
-                    <p>{{ t('agent_account_no_movements') }}</p>
+                    <tr>
+                        <td>{{ movement.movement_date | short_date }}</td>
+                        <td>{{ movement.description }}</td>
+                        <td class="aa-amount aa-amount--{{ movement.display_amount.tone }}">{{ movement.display_amount.formatted }}</td>
+                        <td class="aa-balance-inline aa-balance-inline--{{ movement.display_balance_after.tone }}">{{ movement.display_balance_after.formatted }}</td>
+                    </tr>
                     {% endfor %}
-                </div>
-            </div>
-        </section>
-    </div>
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="aa-empty-state">
+            <p>{{ t('agent_account_empty_history') }}</p>
+        </div>
+        {% endif %}
+    </section>
 </div>
+
+<dialog class="aa-dialog aa-dialog--filters" id="aa-filters-dialog">
+    <div class="aa-dialog__header">
+        <h2>{{ t('agent_account_filters') }}</h2>
+        <button type="button" class="aa-dialog__close" data-aa-dialog-close>×</button>
+    </div>
+    {% include "agent_account/_filters.html" %}
+</dialog>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/agent-account-page.js') }}"></script>
 {% endblock %}

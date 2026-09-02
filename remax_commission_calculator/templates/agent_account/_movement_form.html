@@ -1,0 +1,130 @@
+<dialog id="aa-movement-dialog" class="aa-dialog">
+    <form method="post" action="{{ url_for('agent_account_create_movement', agent_id=agent.id) }}" class="aa-form" data-aa-movement-form>
+        <header class="aa-dialog__header">
+            <h2 data-aa-form-title>{{ t('agent_account_register_payment') }}</h2>
+            <button type="button" class="aa-dialog__close" data-aa-dialog-close aria-label="{{ t('agent_account_close') }}">×</button>
+        </header>
+
+        <input type="hidden" name="idempotency_key" value="{{ form_idempotency_key }}">
+        <input type="hidden" name="movement_type" value="{{ default_movement_type }}" data-aa-movement-type-input>
+
+        <div class="aa-form__section">
+            <label class="aa-field aa-field--amount">
+                <span>{{ t('agent_account_amount_label') }}</span>
+                <div class="aa-money-input" data-aa-money-input>
+                    <span class="aa-money-input__prefix" data-aa-currency-prefix>USD</span>
+                    <input type="text" name="amount" inputmode="decimal" autocomplete="off" placeholder="0,00" required data-aa-amount-input>
+                </div>
+            </label>
+        </div>
+
+        <div class="aa-form__grid">
+            <label class="aa-field">
+                <span>{{ t('agent_account_currency') }}</span>
+                <select name="currency" required data-aa-currency-select>
+                    {% for currency in currencies %}
+                    <option value="{{ currency }}" {% if currency == 'USD' %}selected{% endif %}>{{ currency }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="aa-field">
+                <span>{{ t('date') }}</span>
+                <input type="date" name="movement_date" value="{{ today_iso }}" required>
+            </label>
+        </div>
+
+        <div class="aa-form__section" data-aa-section="payment" hidden>
+            <label class="aa-field">
+                <span>{{ t('agent_account_payment_method') }}</span>
+                <select name="payment_method">
+                    <option value="">{{ t('agent_account_optional') }}</option>
+                    {% for method in payment_methods %}
+                    <option value="{{ method }}">{{ t('agent_account_pay_' ~ method) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <div class="aa-form__section" data-aa-section="fee" hidden>
+            <label class="aa-field">
+                <span>{{ t('agent_account_period_label') }}</span>
+                <input type="text" name="period_label" placeholder="{{ t('agent_account_period_placeholder') }}">
+            </label>
+        </div>
+
+        <div class="aa-form__section" data-aa-section="commission" hidden>
+            <label class="aa-field">
+                <span>{{ t('agent_account_operation_reference') }}</span>
+                <input type="text" name="operation_reference" placeholder="COM-000005">
+            </label>
+        </div>
+
+        <div class="aa-form__section" data-aa-section="adjustment" hidden>
+            <label class="aa-field">
+                <span>{{ t('agent_account_adjustment_direction') }}</span>
+                <select name="adjustment_direction">
+                    <option value="credit">{{ t('agent_account_adjustment_credit') }}</option>
+                    <option value="debit">{{ t('agent_account_adjustment_debit') }}</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="aa-form__section aa-form__section--fx" data-aa-fx-block hidden>
+            <h3>{{ t('agent_account_fx_block_title') }}</h3>
+            <div class="aa-form__grid">
+                <label class="aa-field">
+                    <span>{{ t('agent_account_exchange_rate') }}</span>
+                    <input type="text" name="exchange_rate" inputmode="decimal" placeholder="1.480,00" data-aa-fx-rate>
+                </label>
+                <label class="aa-field">
+                    <span>{{ t('agent_account_exchange_rate_date') }}</span>
+                    <input type="date" name="exchange_rate_date" value="{{ today_iso }}">
+                </label>
+            </div>
+            <input type="hidden" name="exchange_rate_source" value="manual">
+            <p class="aa-form__hint" data-aa-fx-equivalent hidden></p>
+        </div>
+
+        <label class="aa-field">
+            <span>{{ t('agent_account_concept') }}</span>
+            <textarea name="description" rows="2" placeholder="{{ t('agent_account_concept_placeholder') }}"></textarea>
+        </label>
+
+        <label class="aa-field">
+            <span>{{ t('agent_account_reference_optional') }}</span>
+            <input type="text" name="reference_text" placeholder="{{ t('agent_account_reference_placeholder') }}">
+        </label>
+
+        <label class="aa-field">
+            <span>{{ t('agent_account_notes_optional') }}</span>
+            <textarea name="notes" rows="2"></textarea>
+        </label>
+
+        <footer class="aa-dialog__footer">
+            <button type="button" class="aa-btn aa-btn--ghost" data-aa-dialog-close>{{ t('cancel') }}</button>
+            <button type="submit" class="aa-btn aa-btn--primary">{{ t('agent_account_confirm') }}</button>
+        </footer>
+    </form>
+</dialog>
+
+<dialog id="aa-cancel-dialog" class="aa-dialog aa-dialog--danger">
+    <form method="post" action="" class="aa-form" data-aa-cancel-form>
+        <header class="aa-dialog__header">
+            <h2>{{ t('agent_account_cancel_dialog_title') }}</h2>
+            <button type="button" class="aa-dialog__close" data-aa-dialog-close aria-label="{{ t('agent_account_close') }}">×</button>
+        </header>
+        <p class="aa-cancel-summary">
+            {{ t('agent_account_cancel_dialog_intro') }}
+            <strong data-aa-cancel-label></strong>
+            — <span data-aa-cancel-amount></span>
+        </p>
+        <label class="aa-field">
+            <span>{{ t('agent_account_cancel_reason_label') }}</span>
+            <textarea name="cancellation_reason" rows="3" required placeholder="{{ t('agent_account_cancel_reason_placeholder') }}"></textarea>
+        </label>
+        <footer class="aa-dialog__footer">
+            <button type="button" class="aa-btn aa-btn--ghost" data-aa-dialog-close>{{ t('cancel') }}</button>
+            <button type="submit" class="aa-btn aa-btn--danger">{{ t('agent_account_cancel_confirm') }}</button>
+        </footer>
+    </form>
+</dialog>

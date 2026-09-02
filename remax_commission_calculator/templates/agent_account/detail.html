@@ -1,233 +1,105 @@
 {% extends "base.html" %}
+{% from "agent_account/_balance_card.html" import balance_card with context %}
+{% from "agent_account/_movement_row.html" import movement_row, movement_card with context %}
 
 {% block body_class %}is-agent-account-page is-agent-account-detail {% endblock %}
-
 {% block title %}{{ t('agent_account_detail_title', name=agent.name) }} | {{ t('app_title') }}{% endblock %}
-
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/agent-account-page.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="agent-account-page agent-account-detail">
-    <header class="agent-account-page__header">
+<div class="aa-page aa-detail">
+    <header class="aa-detail__header">
         <div>
-            <a href="{{ url_for('agent_account_index') }}" class="agent-account-back">{{ t('agent_account_back') }}</a>
+            <a href="{{ url_for('agent_account_index') }}" class="aa-back">{{ t('agent_account_back') }}</a>
             <h1>{{ agent.name }}</h1>
-            <p>{{ t('agent_account_detail_subtitle') }}</p>
+            <p>{{ t('agent_account_detail_subtitle_v2') }}</p>
+            {% if detail.metadata.last_movement_date %}
+            <p class="aa-detail__meta">
+                {{ t('agent_account_last_movement') }}: {{ detail.metadata.last_movement_date | short_date }}
+                {% if detail.metadata.first_movement_date %}
+                · {{ t('agent_account_records_since') }} {{ detail.metadata.first_movement_date | short_date }}
+                {% endif %}
+            </p>
+            {% endif %}
         </div>
         {% if can_manage %}
-        <button
-            type="button"
-            class="agent-account-btn agent-account-btn--primary"
-            data-agent-account-open="new-movement"
-        >+ {{ t('agent_account_new_movement') }}</button>
+        <div class="aa-detail__actions">
+            <button type="button" class="aa-btn aa-btn--outline" data-aa-open-movement="payment">{{ t('agent_account_register_payment') }}</button>
+            <button type="button" class="aa-btn aa-btn--primary" data-aa-open-movement="fee">{{ t('agent_account_register_movement') }}</button>
+        </div>
         {% endif %}
     </header>
 
-    <section class="agent-account-kpis agent-account-kpis--detail">
-        <article class="agent-account-kpi-card">
-            <span class="agent-account-kpi-card__label">{{ t('agent_account_balance_ars') }}</span>
-            <strong>{{ detail.balances.ARS | money('ARS') }}</strong>
-        </article>
-        <article class="agent-account-kpi-card">
-            <span class="agent-account-kpi-card__label">{{ t('agent_account_balance_usd') }}</span>
-            <strong>{{ detail.balances.USD | money('USD') }}</strong>
-        </article>
+    <section class="aa-balance-grid">
+        {{ balance_card('ARS', detail.display_balances.ARS) }}
+        {{ balance_card('USD', detail.display_balances.USD) }}
     </section>
 
-    <div class="agent-account-detail__layout">
-        <aside class="agent-account-filters" aria-label="{{ t('sidebar_filters') }}">
-            <h2>{{ t('sidebar_filters') }}</h2>
-            <form method="get" action="{{ url_for('agent_account_detail', agent_id=agent.id) }}">
-                <label>
-                    <span>{{ t('agent_account_currency') }}</span>
-                    <select name="currency">
-                        <option value="">{{ t('agent_account_all_currencies') }}</option>
-                        {% for currency in currencies %}
-                        <option value="{{ currency }}" {% if filters.currency == currency %}selected{% endif %}>{{ currency }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>
-                    <span>{{ t('agent_account_movement_type') }}</span>
-                    <select name="movement_type">
-                        <option value="">{{ t('agent_account_all_types') }}</option>
-                        {% for movement_type in movement_types %}
-                        <option value="{{ movement_type }}" {% if filters.movement_type == movement_type %}selected{% endif %}>{{ t('agent_account_type_' ~ movement_type) }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>
-                    <span>{{ t('agent_account_date_from') }}</span>
-                    <input type="date" name="date_from" value="{{ filters.date_from }}">
-                </label>
-                <label>
-                    <span>{{ t('agent_account_date_to') }}</span>
-                    <input type="date" name="date_to" value="{{ filters.date_to }}">
-                </label>
-                <button type="submit" class="agent-account-btn agent-account-btn--primary agent-account-btn--block">{{ t('sidebar_apply_filters') }}</button>
-                {% if filters_active %}
-                <a href="{{ url_for('agent_account_detail', agent_id=agent.id) }}" class="agent-account-btn agent-account-btn--ghost agent-account-btn--block">{{ t('clear_filters') }}</a>
-                {% endif %}
-            </form>
+    <div class="aa-detail__layout">
+        <aside class="aa-filters aa-filters--desktop" aria-label="{{ t('sidebar_filters') }}">
+            {% include "agent_account/_filters.html" %}
         </aside>
 
-        <section class="agent-account-card agent-account-history">
-            <h2>{{ t('agent_account_history') }}</h2>
+        <section class="aa-panel aa-history">
+            <div class="aa-history__toolbar">
+                <h2>{{ t('agent_account_history') }}</h2>
+                <button type="button" class="aa-btn aa-btn--ghost aa-btn--small aa-filters-toggle" data-aa-filters-open>{{ t('agent_account_filters') }}</button>
+            </div>
 
-            <div class="agent-account-table-wrap">
-                <table class="agent-account-table agent-account-table--desktop">
+            {% if detail.movements %}
+            <div class="aa-table-wrap">
+                <table class="aa-table aa-table--history aa-table--desktop">
                     <thead>
                         <tr>
                             <th>{{ t('date') }}</th>
                             <th>{{ t('agent_account_concept') }}</th>
                             <th>{{ t('agent_account_movement_type') }}</th>
-                            <th>{{ t('amount') }}</th>
+                            <th>{{ t('agent_account_amount_label') }}</th>
                             <th>{{ t('agent_account_balance_after') }}</th>
-                            <th>{{ t('status') }}</th>
+                            <th>{{ t('agent_account_reference_column') }}</th>
+                            <th>{{ t('agent_account_status_column') }}</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for movement in detail.movements %}
-                        {% set signed = movement_signed_display(movement) %}
-                        <tr class="agent-account-row agent-account-row--{{ movement.status }}">
-                            <td>{{ movement.movement_date }}</td>
-                            <td>{{ movement.description }}</td>
-                            <td>{{ t('agent_account_type_' ~ movement.movement_type) }}</td>
-                            <td class="money{% if signed >= 0 %} agent-account-amount--credit{% else %} agent-account-amount--debit{% endif %}">
-                                {{ signed | money(movement.currency) }}
-                            </td>
-                            <td class="money">{{ movement.balance_after | money(movement.currency) }}</td>
-                            <td>{{ t('agent_account_status_' ~ movement.status) }}</td>
-                            <td>
-                                {% if can_manage and movement.status == 'confirmed' and not movement.reversed_movement_id %}
-                                <form method="post" action="{{ url_for('agent_account_reverse_movement', movement_id=movement.id) }}" class="agent-account-reverse-form">
-                                    <input type="text" name="reversal_reason" placeholder="{{ t('agent_account_reversal_reason') }}" required>
-                                    <button type="submit" class="agent-account-btn agent-account-btn--outline agent-account-btn--small">{{ t('agent_account_reverse') }}</button>
-                                </form>
-                                {% elif movement.reversed_movement_id %}
-                                <span class="agent-account-meta">{{ t('agent_account_reversal_of', id=movement.reversed_movement_id) }}</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="7">{{ t('agent_account_no_movements') }}</td>
-                        </tr>
+                        {{ movement_row(movement, can_manage) }}
                         {% endfor %}
                     </tbody>
                 </table>
-
-                <div class="agent-account-movement-cards agent-account-movement-cards--mobile">
+                <div class="aa-move-cards">
                     {% for movement in detail.movements %}
-                    {% set signed = movement_signed_display(movement) %}
-                    <article class="agent-account-movement-card agent-account-row--{{ movement.status }}">
-                        <header>
-                            <time>{{ movement.movement_date }}</time>
-                            <span>{{ t('agent_account_type_' ~ movement.movement_type) }}</span>
-                        </header>
-                        <p class="agent-account-movement-card__concept">{{ movement.description }}</p>
-                        <div class="agent-account-movement-card__amounts">
-                            <span class="{% if signed >= 0 %}agent-account-amount--credit{% else %}agent-account-amount--debit{% endif %}">
-                                {{ signed | money(movement.currency) }}
-                            </span>
-                            <span>{{ t('agent_account_balance_after') }}: {{ movement.balance_after | money(movement.currency) }}</span>
-                        </div>
-                        <footer>
-                            <span>{{ t('agent_account_status_' ~ movement.status) }}</span>
-                            {% if can_manage and movement.status == 'confirmed' and not movement.reversed_movement_id %}
-                            <form method="post" action="{{ url_for('agent_account_reverse_movement', movement_id=movement.id) }}" class="agent-account-reverse-form">
-                                <input type="text" name="reversal_reason" placeholder="{{ t('agent_account_reversal_reason') }}" required>
-                                <button type="submit" class="agent-account-btn agent-account-btn--outline agent-account-btn--small agent-account-btn--block">{{ t('agent_account_reverse') }}</button>
-                            </form>
-                            {% endif %}
-                        </footer>
-                    </article>
-                    {% else %}
-                    <p>{{ t('agent_account_no_movements') }}</p>
+                    {{ movement_card(movement, can_manage) }}
                     {% endfor %}
                 </div>
             </div>
+            {% else %}
+            <div class="aa-empty-state">
+                <p>{{ t('agent_account_empty_history') }}</p>
+                {% if can_manage %}
+                <button type="button" class="aa-btn aa-btn--primary" data-aa-open-movement="payment">{{ t('agent_account_register_first_movement') }}</button>
+                {% endif %}
+            </div>
+            {% endif %}
         </section>
     </div>
 </div>
 
-{% if can_manage %}
-<dialog id="agent-account-new-movement" class="agent-account-dialog">
-    <form method="post" action="{{ url_for('agent_account_create_movement', agent_id=agent.id) }}" class="agent-account-form">
-        <header>
-            <h2>{{ t('agent_account_new_movement') }}</h2>
-            <button type="button" class="agent-account-dialog__close" data-agent-account-close aria-label="{{ t('agent_account_close') }}">×</button>
-        </header>
-        <input type="hidden" name="idempotency_key" value="{{ form_idempotency_key }}">
-        <label>
-            <span>{{ t('agent_account_currency') }}</span>
-            <select name="currency" required>
-                {% for currency in currencies %}
-                <option value="{{ currency }}">{{ currency }}</option>
-                {% endfor %}
-            </select>
-        </label>
-        <label>
-            <span>{{ t('agent_account_movement_type') }}</span>
-            <select name="movement_type" required data-agent-account-type>
-                {% for movement_type in movement_types %}
-                <option value="{{ movement_type }}">{{ t('agent_account_type_' ~ movement_type) }}</option>
-                {% endfor %}
-            </select>
-        </label>
-        <label class="agent-account-adjustment-field" hidden>
-            <span>{{ t('agent_account_adjustment_direction') }}</span>
-            <select name="adjustment_direction">
-                <option value="credit">{{ t('agent_account_adjustment_credit') }}</option>
-                <option value="debit">{{ t('agent_account_adjustment_debit') }}</option>
-            </select>
-        </label>
-        <label>
-            <span>{{ t('amount') }}</span>
-            <input type="number" name="amount" min="0.01" step="0.01" required>
-        </label>
-        <label>
-            <span>{{ t('date') }}</span>
-            <input type="date" name="movement_date" value="{{ today_iso }}">
-        </label>
-        <label>
-            <span>{{ t('agent_account_concept') }}</span>
-            <textarea name="description" rows="3" required></textarea>
-        </label>
-        <footer>
-            <button type="button" class="agent-account-btn agent-account-btn--ghost" data-agent-account-close>{{ t('cancel') }}</button>
-            <button type="submit" class="agent-account-btn agent-account-btn--primary">{{ t('agent_account_confirm') }}</button>
-        </footer>
-    </form>
+<dialog class="aa-dialog aa-dialog--filters" id="aa-filters-dialog">
+    <div class="aa-dialog__header">
+        <h2>{{ t('agent_account_filters') }}</h2>
+        <button type="button" class="aa-dialog__close" data-aa-dialog-close>×</button>
+    </div>
+    {% include "agent_account/_filters.html" %}
 </dialog>
+
+{% if can_manage %}
+{% include "agent_account/_movement_form.html" %}
 {% endif %}
 {% endblock %}
 
 {% block extra_js %}
-<script>
-(function () {
-    var dialog = document.getElementById('agent-account-new-movement');
-    if (!dialog) return;
-
-    document.querySelectorAll('[data-agent-account-open="new-movement"]').forEach(function (btn) {
-        btn.addEventListener('click', function () { dialog.showModal(); });
-    });
-    document.querySelectorAll('[data-agent-account-close]').forEach(function (btn) {
-        btn.addEventListener('click', function () { dialog.close(); });
-    });
-
-    var typeSelect = dialog.querySelector('[data-agent-account-type]');
-    var adjustmentField = dialog.querySelector('.agent-account-adjustment-field');
-    if (typeSelect && adjustmentField) {
-        var syncAdjustment = function () {
-            adjustmentField.hidden = typeSelect.value !== 'adjustment';
-        };
-        typeSelect.addEventListener('change', syncAdjustment);
-        syncAdjustment();
-    }
-})();
-</script>
+<script src="{{ url_for('static', filename='js/agent-account-page.js') }}"></script>
 {% endblock %}

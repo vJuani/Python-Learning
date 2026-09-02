@@ -22,10 +22,10 @@ from modules.agent_account import (
     build_agent_detail_view,
     build_my_account_view,
     build_staff_index_view,
+    cancel_movement,
     create_movement,
-    movement_signed_display,
-    reverse_movement,
 )
+from modules.agent_account_presentation import PAYMENT_METHODS
 from modules.auth import (
     admin_required,
     get_current_user,
@@ -35,9 +35,13 @@ from modules.auth import (
 from modules.database import (
     get_agent_account_movement,
     get_agent_record,
-    get_agents,
 )
-from modules.database.agent_account_repository import CURRENCIES
+from modules.database.agent_account_repository import (
+    CURRENCIES,
+    STATUS_CONFIRMED,
+    STATUS_REVERSED,
+)
+from modules.i18n import translate
 
 
 def register_agent_account_routes(app, helpers):
@@ -45,6 +49,7 @@ def register_agent_account_routes(app, helpers):
         "require_user_organization"
     ]
     flash_i18n = helpers["flash_i18n"]
+    get_current_language = helpers["get_current_language"]
 
     def _require_admin_organization():
         organization_id = require_user_organization()
@@ -77,6 +82,7 @@ def register_agent_account_routes(app, helpers):
             "movement_type",
             "",
         ).strip()
+        status = request.args.get("status", "").strip()
         return {
             "currency": (
                 currency if currency in CURRENCIES else ""
@@ -84,6 +90,12 @@ def register_agent_account_routes(app, helpers):
             "movement_type": (
                 movement_type
                 if movement_type in MOVEMENT_TYPES
+                else ""
+            ),
+            "status": (
+                status
+                if status
+                in (STATUS_CONFIRMED, STATUS_REVERSED)
                 else ""
             ),
             "date_from": request.args.get(
@@ -94,6 +106,10 @@ def register_agent_account_routes(app, helpers):
                 "date_to",
                 "",
             ).strip(),
+            "show_cancelled": request.args.get(
+                "show_cancelled"
+            )
+            == "1",
         }
 
     @app.route("/agent-accounts")
@@ -101,15 +117,16 @@ def register_agent_account_routes(app, helpers):
     def agent_account_index():
         organization_id = _require_admin_organization()
         search_query = request.args.get("q", "").strip()
+        language = get_current_language()
         panel = build_staff_index_view(
             organization_id,
             search_query=search_query or None,
+            language=language,
         )
 
         return render_template(
             "agent_account/index.html",
             panel=panel,
-            agents=get_agents(organization_id),
         )
 
     @app.route("/agent-accounts/<int:agent_id>")
@@ -121,13 +138,19 @@ def register_agent_account_routes(app, helpers):
         if not is_admin(current_user):
             return redirect(url_for("my_agent_account"))
 
+        language = get_current_language()
         filters = _parse_detail_filters()
         detail = build_agent_detail_view(
             organization_id,
             agent_id,
             filters=filters,
+            language=language,
         )
-        filters_active = any(filters.values())
+        filters_active = any(
+            value
+            for key, value in filters.items()
+            if key != "show_cancelled" and value
+        ) or filters.get("show_cancelled")
 
         return render_template(
             "agent_account/detail.html",
@@ -137,19 +160,18 @@ def register_agent_account_routes(app, helpers):
             filters_active=filters_active,
             movement_types=MOVEMENT_TYPES,
             currencies=CURRENCIES,
+            payment_methods=PAYMENT_METHODS,
             adjustment_directions=ADJUSTMENT_DIRECTIONS,
-            movement_signed_display=movement_signed_display,
             can_manage=True,
             form_idempotency_key=str(uuid.uuid4()),
             today_iso=date.today().isoformat(),
+            default_movement_type=request.args.get(
+                "type",
+                "payment",
+            ),
         )
 
-    @app.route(
-        "/agent-accounts/<int:agent_id>/movements",
-        methods=["POST"],
-    )
-    @admin_required
-    def agent_account_create_movement(agent_id):
+    def _create_movement_from_form(agent_id):
         organization_id = _require_admin_organization()
         agent = get_agent_record(agent_id, organization_id)
         if agent is None:
@@ -157,20 +179,23 @@ def register_agent_account_routes(app, helpers):
 
         current_user = get_current_user()
         payload = {
-            "movement_type": request.form.get(
-                "movement_type"
-            ),
-            "currency": request.form.get("currency"),
-            "amount": request.form.get("amount"),
-            "description": request.form.get(
-                "description"
-            ),
-            "movement_date": request.form.get(
-                "movement_date"
-            ),
-            "adjustment_direction": request.form.get(
-                "adjustment_direction"
-            ),
+            key: request.form.get(key)
+            for key in (
+                "movement_type",
+                "currency",
+                "amount",
+                "description",
+                "movement_date",
+                "adjustment_direction",
+                "exchange_rate",
+                "exchange_rate_date",
+                "exchange_rate_source",
+                "payment_method",
+                "reference_text",
+                "notes",
+                "period_label",
+                "operation_reference",
+            )
         }
         idempotency_key = (
             request.form.get("idempotency_key") or ""
@@ -183,6 +208,7 @@ def register_agent_account_routes(app, helpers):
                 payload,
                 created_by_user_id=current_user["id"],
                 idempotency_key=idempotency_key,
+                language=get_current_language(),
             )
             flash_i18n(
                 "agent_account_flash_created",
@@ -199,14 +225,20 @@ def register_agent_account_routes(app, helpers):
         )
 
     @app.route(
-        "/agent-accounts/movements/<int:movement_id>/reverse",
+        "/agent-accounts/<int:agent_id>/movements",
         methods=["POST"],
     )
     @admin_required
-    def agent_account_reverse_movement(movement_id):
+    def agent_account_create_movement(agent_id):
+        return _create_movement_from_form(agent_id)
+
+    def _cancel_movement_from_form(movement_id):
         organization_id = _require_admin_organization()
         current_user = get_current_user()
-        reason = request.form.get("reversal_reason", "")
+        reason = request.form.get(
+            "cancellation_reason",
+            request.form.get("reversal_reason", ""),
+        )
 
         movement = get_agent_account_movement(
             movement_id,
@@ -216,14 +248,14 @@ def register_agent_account_routes(app, helpers):
             abort(404)
 
         try:
-            reverse_movement(
+            cancel_movement(
                 organization_id,
                 movement_id,
                 created_by_user_id=current_user["id"],
                 reason=reason,
             )
             flash_i18n(
-                "agent_account_flash_reversed",
+                "agent_account_flash_cancelled",
                 "success",
             )
         except AgentAccountError as error:
@@ -235,6 +267,22 @@ def register_agent_account_routes(app, helpers):
                 agent_id=movement["agent_id"],
             )
         )
+
+    @app.route(
+        "/agent-accounts/movements/<int:movement_id>/cancel",
+        methods=["POST"],
+    )
+    @admin_required
+    def agent_account_cancel_movement(movement_id):
+        return _cancel_movement_from_form(movement_id)
+
+    @app.route(
+        "/agent-accounts/movements/<int:movement_id>/reverse",
+        methods=["POST"],
+    )
+    @admin_required
+    def agent_account_reverse_movement(movement_id):
+        return _cancel_movement_from_form(movement_id)
 
     @app.route("/my-account")
     @login_required
@@ -251,13 +299,19 @@ def register_agent_account_routes(app, helpers):
         if agent is None:
             abort(404)
 
+        language = get_current_language()
         filters = _parse_detail_filters()
         detail = build_my_account_view(
             organization_id,
             agent_id,
             filters=filters,
+            language=language,
         )
-        filters_active = any(filters.values())
+        filters_active = any(
+            value
+            for key, value in filters.items()
+            if key != "show_cancelled" and value
+        ) or filters.get("show_cancelled")
 
         return render_template(
             "agent_account/my_account.html",
@@ -267,5 +321,4 @@ def register_agent_account_routes(app, helpers):
             filters_active=filters_active,
             movement_types=MOVEMENT_TYPES,
             currencies=CURRENCIES,
-            movement_signed_display=movement_signed_display,
         )
