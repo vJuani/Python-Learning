@@ -601,4 +601,17 @@ document.addEventListener("DOMContentLoaded", function () {
             window.scrollTo({ top: 0, behavior: "smooth" });
         });
     }
+
+    var operationsMobileFiltersOpen = document.querySelector("[data-operations-mobile-filters-open]");
+    var operationsMobileAdvanced = document.querySelector(".operations-mobile-advanced");
+    if (operationsMobileFiltersOpen && operationsMobileAdvanced) {
+        operationsMobileFiltersOpen.addEventListener("click", function () {
+            operationsMobileAdvanced.setAttribute("open", "open");
+        });
+        operationsMobileAdvanced.addEventListener("click", function (event) {
+            if (event.target === operationsMobileAdvanced) {
+                operationsMobileAdvanced.removeAttribute("open");
+            }
+        });
+    }
 });
