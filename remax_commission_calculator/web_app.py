@@ -7064,6 +7064,16 @@ register_billing_routes(
     },
 )
 
+from modules.agent_account_routes import register_agent_account_routes
+
+register_agent_account_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "flash_i18n": flash_i18n,
+    },
+)
+
 
 if __name__ == "__main__":
     from modules.database import create_tables

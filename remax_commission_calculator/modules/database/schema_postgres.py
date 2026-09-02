@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v7"
+POSTGRES_SCHEMA_VERSION = "postgres_v8"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -678,6 +678,99 @@ SCHEMA_STATEMENTS = (
     )
     """,
     f"""
+    CREATE TABLE IF NOT EXISTS agent_account_movements (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        agent_id BIGINT NOT NULL,
+        movement_type TEXT NOT NULL,
+        currency TEXT NOT NULL,
+        amount {_MONEY} NOT NULL,
+        description TEXT NOT NULL,
+        balance_before {_MONEY} NOT NULL,
+        balance_after {_MONEY} NOT NULL,
+        status TEXT NOT NULL DEFAULT 'confirmed',
+        source_type TEXT NOT NULL DEFAULT 'manual',
+        source_id BIGINT,
+        movement_date TEXT NOT NULL,
+        idempotency_key TEXT,
+        created_by_user_id BIGINT,
+        created_at TEXT NOT NULL,
+        reversed_movement_id BIGINT,
+        reversal_reason TEXT,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+
+        FOREIGN KEY (agent_id)
+            REFERENCES agents(id)
+            ON DELETE RESTRICT,
+
+        FOREIGN KEY (created_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+
+        FOREIGN KEY (reversed_movement_id)
+            REFERENCES agent_account_movements(id)
+            ON DELETE SET NULL,
+
+        CHECK (
+            movement_type IN (
+                'charge',
+                'credit',
+                'payment',
+                'fee',
+                'commission',
+                'adjustment'
+            )
+        ),
+        CHECK (currency IN ('USD', 'ARS')),
+        CHECK (amount > 0),
+        CHECK (status IN ('confirmed', 'reversed')),
+        CHECK (
+            source_type IN (
+                'manual',
+                'invoice',
+                'cash',
+                'operation',
+                'fee',
+                'commission',
+                'system'
+            )
+        )
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_agent_account_org_agent_currency
+    ON agent_account_movements (
+        organization_id,
+        agent_id,
+        currency,
+        movement_date,
+        id
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_agent_account_org_date
+    ON agent_account_movements (
+        organization_id,
+        movement_date,
+        id
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS
+    idx_agent_account_idempotency
+    ON agent_account_movements (
+        organization_id,
+        idempotency_key
+    )
+    WHERE idempotency_key IS NOT NULL
+        AND idempotency_key <> ''
+    """,
+    f"""
     CREATE TABLE IF NOT EXISTS cash_accounts (
         id {_ID},
         organization_id BIGINT NOT NULL,
@@ -1109,6 +1202,7 @@ POSTGRES_TABLES = (
     "csv_import_batches",
     "integration_sync_runs",
     "agent_wallet_movements",
+    "agent_account_movements",
     "cash_accounts",
     "cash_movements",
     "cash_ai_drafts",

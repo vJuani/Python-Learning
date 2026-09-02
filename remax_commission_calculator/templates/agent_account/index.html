@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-agent-account-page {% endblock %}
+
+{% block title %}{{ t('agent_account_page_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agent-account-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="agent-account-page">
+    <header class="agent-account-page__header">
+        <div>
+            <h1>{{ t('agent_account_page_title') }}</h1>
+            <p>{{ t('agent_account_page_subtitle') }}</p>
+        </div>
+    </header>
+
+    <section class="agent-account-kpis" aria-label="{{ t('agent_account_kpis_aria') }}">
+        <article class="agent-account-kpi-card">
+            <span class="agent-account-kpi-card__label">{{ t('agent_account_balance_ars') }}</span>
+            <strong>{{ panel.kpis.balance_ars | money('ARS') }}</strong>
+        </article>
+        <article class="agent-account-kpi-card">
+            <span class="agent-account-kpi-card__label">{{ t('agent_account_balance_usd') }}</span>
+            <strong>{{ panel.kpis.balance_usd | money('USD') }}</strong>
+        </article>
+        <article class="agent-account-kpi-card">
+            <span class="agent-account-kpi-card__label">{{ t('agent_account_pending_agents') }}</span>
+            <strong>{{ panel.kpis.pending_agents }}</strong>
+        </article>
+        <article class="agent-account-kpi-card">
+            <span class="agent-account-kpi-card__label">{{ t('agent_account_movements_month') }}</span>
+            <strong>{{ panel.kpis.movements_month }}</strong>
+        </article>
+    </section>
+
+    <section class="agent-account-card">
+        <form class="agent-account-toolbar" method="get" action="{{ url_for('agent_account_index') }}">
+            <div class="agent-account-toolbar__search">
+                <input
+                    type="search"
+                    name="q"
+                    value="{{ panel.filters.q }}"
+                    placeholder="{{ t('agent_account_search_placeholder') }}"
+                >
+            </div>
+            <button type="submit" class="agent-account-btn agent-account-btn--primary">{{ t('search') }}</button>
+            {% if panel.filters.q %}
+            <a href="{{ url_for('agent_account_index') }}" class="agent-account-btn agent-account-btn--ghost">{{ t('clear_filters') }}</a>
+            {% endif %}
+        </form>
+
+        <div class="agent-account-table-wrap" role="region" aria-label="{{ t('agent_account_agents_list') }}">
+            <table class="agent-account-table agent-account-table--desktop">
+                <thead>
+                    <tr>
+                        <th>{{ t('agent') }}</th>
+                        <th>{{ t('agent_account_balance_ars') }}</th>
+                        <th>{{ t('agent_account_balance_usd') }}</th>
+                        <th>{{ t('agent_account_last_movement') }}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in panel.agents %}
+                    <tr>
+                        <td>{{ row.agent_name }}</td>
+                        <td class="money">{{ row.balance_ars | money('ARS') }}</td>
+                        <td class="money">{{ row.balance_usd | money('USD') }}</td>
+                        <td>{{ row.last_movement_date or '—' }}</td>
+                        <td>
+                            <a
+                                href="{{ url_for('agent_account_detail', agent_id=row.agent_id) }}"
+                                class="agent-account-btn agent-account-btn--outline agent-account-btn--small"
+                            >{{ t('agent_account_view_account') }}</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5">{{ t('agent_account_no_agents') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="agent-account-agent-cards agent-account-agent-cards--mobile">
+                {% for row in panel.agents %}
+                <article class="agent-account-agent-card">
+                    <header>
+                        <strong>{{ row.agent_name }}</strong>
+                        <span>{{ row.last_movement_date or '—' }}</span>
+                    </header>
+                    <div class="agent-account-agent-card__balances">
+                        <span>ARS {{ row.balance_ars | money('ARS') }}</span>
+                        <span>USD {{ row.balance_usd | money('USD') }}</span>
+                    </div>
+                    <a
+                        href="{{ url_for('agent_account_detail', agent_id=row.agent_id) }}"
+                        class="agent-account-btn agent-account-btn--primary agent-account-btn--block"
+                    >{{ t('agent_account_view_account') }}</a>
+                </article>
+                {% else %}
+                <p>{{ t('agent_account_no_agents') }}</p>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

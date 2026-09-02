@@ -1,0 +1,371 @@
+/**
+ * JRH One — Agent current account (cuenta corriente)
+ */
+
+body.is-agent-account-page .site-footer {
+    display: none;
+}
+
+body.is-agent-account-page .app-main-inner {
+    max-width: none;
+}
+
+.agent-account-page {
+    display: grid;
+    gap: 1rem;
+}
+
+.agent-account-page__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.agent-account-page__header h1 {
+    margin: 0 0 0.3rem;
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+}
+
+.agent-account-page__header p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+}
+
+.agent-account-back {
+    display: inline-block;
+    margin-bottom: 0.35rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.agent-account-back:hover {
+    color: var(--text);
+}
+
+.agent-account-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.agent-account-kpis--detail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 36rem;
+}
+
+.agent-account-kpi-card {
+    padding: 0.95rem 1rem;
+    border-radius: 0.85rem;
+    border: 1px solid var(--border-subtle, #e5e7eb);
+    background: var(--surface);
+}
+
+.agent-account-kpi-card__label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.agent-account-kpi-card strong {
+    font-size: 1.25rem;
+}
+
+.agent-account-card {
+    padding: 1rem;
+    border-radius: 0.95rem;
+    border: 1px solid var(--border-subtle, #e5e7eb);
+    background: var(--surface);
+}
+
+.agent-account-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+}
+
+.agent-account-toolbar__search {
+    flex: 1 1 14rem;
+}
+
+.agent-account-toolbar__search input {
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.45rem 0.75rem;
+    border-radius: 0.65rem;
+    border: 1px solid var(--border-subtle, #e5e7eb);
+    background: var(--content-bg);
+    color: var(--text);
+    font: inherit;
+}
+
+.agent-account-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.5rem;
+    padding: 0.45rem 1rem;
+    border-radius: 0.7rem;
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.agent-account-btn--primary {
+    background: var(--brand-primary, #0d47ff);
+    color: #fff;
+}
+
+.agent-account-btn--outline {
+    background: var(--surface);
+    border-color: var(--border-subtle, #e5e7eb);
+    color: var(--text);
+}
+
+.agent-account-btn--ghost {
+    background: var(--content-bg);
+    border-color: var(--border-subtle, #e5e7eb);
+    color: var(--text);
+}
+
+.agent-account-btn--block {
+    width: 100%;
+}
+
+.agent-account-btn--small {
+    min-height: 2rem;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.8rem;
+}
+
+.agent-account-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.agent-account-table th,
+.agent-account-table td {
+    padding: 0.65rem 0.5rem;
+    border-bottom: 1px solid var(--border-subtle, #e5e7eb);
+    text-align: left;
+    vertical-align: top;
+}
+
+.agent-account-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.agent-account-row--reversed {
+    opacity: 0.65;
+}
+
+.agent-account-amount--credit {
+    color: var(--success, #059669);
+}
+
+.agent-account-amount--debit {
+    color: var(--danger, #dc2626);
+}
+
+.agent-account-detail__layout {
+    display: grid;
+    grid-template-columns: 16rem minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.agent-account-detail__layout--single {
+    grid-template-columns: 14rem minmax(0, 1fr);
+}
+
+.agent-account-filters h2 {
+    margin: 0 0 0.75rem;
+    font-size: 0.95rem;
+}
+
+.agent-account-filters label {
+    display: grid;
+    gap: 0.3rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
+}
+
+.agent-account-filters select,
+.agent-account-filters input,
+.agent-account-form select,
+.agent-account-form input,
+.agent-account-form textarea {
+    width: 100%;
+    min-height: 2.4rem;
+    padding: 0.4rem 0.65rem;
+    border-radius: 0.6rem;
+    border: 1px solid var(--border-subtle, #e5e7eb);
+    background: var(--content-bg);
+    color: var(--text);
+    font: inherit;
+}
+
+.agent-account-form textarea {
+    min-height: 5rem;
+    resize: vertical;
+}
+
+.agent-account-reverse-form {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 10rem;
+}
+
+.agent-account-reverse-form input {
+    min-height: 2rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border-subtle, #e5e7eb);
+    background: var(--content-bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.8rem;
+}
+
+.agent-account-meta {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.agent-account-agent-cards--mobile,
+.agent-account-movement-cards--mobile {
+    display: none;
+}
+
+.agent-account-agent-card,
+.agent-account-movement-card {
+    padding: 0.85rem;
+    border-radius: 0.8rem;
+    border: 1px solid var(--border-subtle, #e5e7eb);
+    background: var(--content-bg);
+}
+
+.agent-account-agent-card + .agent-account-agent-card,
+.agent-account-movement-card + .agent-account-movement-card {
+    margin-top: 0.65rem;
+}
+
+.agent-account-agent-card header,
+.agent-account-movement-card header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.45rem;
+    font-size: 0.85rem;
+}
+
+.agent-account-agent-card__balances,
+.agent-account-movement-card__amounts {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0.5rem 0 0.75rem;
+    font-size: 0.9rem;
+}
+
+.agent-account-movement-card__concept {
+    margin: 0;
+    font-size: 0.92rem;
+}
+
+.agent-account-movement-card footer {
+    display: grid;
+    gap: 0.45rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.agent-account-dialog {
+    width: min(28rem, calc(100vw - 2rem));
+    padding: 0;
+    border: 1px solid var(--border-subtle, #e5e7eb);
+    border-radius: 0.95rem;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.agent-account-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.agent-account-form {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem;
+}
+
+.agent-account-form header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.agent-account-form header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.agent-account-dialog__close {
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.agent-account-form footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+@media (max-width: 900px) {
+    .agent-account-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .agent-account-detail__layout,
+    .agent-account-detail__layout--single {
+        grid-template-columns: 1fr;
+    }
+
+    .agent-account-table--desktop {
+        display: none;
+    }
+
+    .agent-account-agent-cards--mobile,
+    .agent-account-movement-cards--mobile {
+        display: block;
+    }
+}
+
+@media (max-width: 520px) {
+    .agent-account-kpis,
+    .agent-account-kpis--detail {
+        grid-template-columns: 1fr;
+    }
+}

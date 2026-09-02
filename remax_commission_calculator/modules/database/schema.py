@@ -2760,6 +2760,112 @@ def _migrate_operation_creation(cursor):
             )
 
 
+def _migrate_agent_account(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS agent_account_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            agent_id INTEGER NOT NULL,
+            movement_type TEXT NOT NULL,
+            currency TEXT NOT NULL,
+            amount REAL NOT NULL,
+            description TEXT NOT NULL,
+            balance_before REAL NOT NULL,
+            balance_after REAL NOT NULL,
+            status TEXT NOT NULL DEFAULT 'confirmed',
+            source_type TEXT NOT NULL DEFAULT 'manual',
+            source_id INTEGER,
+            movement_date TEXT NOT NULL,
+            idempotency_key TEXT,
+            created_by_user_id INTEGER,
+            created_at TEXT NOT NULL,
+            reversed_movement_id INTEGER,
+            reversal_reason TEXT,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (agent_id)
+                REFERENCES agents(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (created_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (reversed_movement_id)
+                REFERENCES agent_account_movements(id)
+                ON DELETE SET NULL,
+
+            CHECK (
+                movement_type IN (
+                    'charge',
+                    'credit',
+                    'payment',
+                    'fee',
+                    'commission',
+                    'adjustment'
+                )
+            ),
+            CHECK (currency IN ('USD', 'ARS')),
+            CHECK (amount > 0),
+            CHECK (
+                status IN ('confirmed', 'reversed')
+            ),
+            CHECK (
+                source_type IN (
+                    'manual',
+                    'invoice',
+                    'cash',
+                    'operation',
+                    'fee',
+                    'commission',
+                    'system'
+                )
+            )
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_agent_account_org_agent_currency
+        ON agent_account_movements (
+            organization_id,
+            agent_id,
+            currency,
+            movement_date,
+            id
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_agent_account_org_date
+        ON agent_account_movements (
+            organization_id,
+            movement_date,
+            id
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_agent_account_idempotency
+        ON agent_account_movements (
+            organization_id,
+            idempotency_key
+        )
+        WHERE idempotency_key IS NOT NULL
+            AND idempotency_key != ''
+        """
+    )
+
+
 def migrate_schema(create_backup=True):
     # Commit external_id before the bulk transaction so a later
     # rollback cannot drop the column on an existing Railway DB.
@@ -2980,6 +3086,7 @@ def migrate_schema(create_backup=True):
         _migrate_arca_prep(cursor)
         _migrate_arca_integration(cursor)
         _migrate_operation_creation(cursor)
+        _migrate_agent_account(cursor)
 
         _validate_migration(
             cursor,

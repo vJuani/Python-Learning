@@ -57,6 +57,17 @@
 </a>
 {% if is_admin() %}
 <a
+    href="{{ url_for('agent_account_index') }}"
+    class="nav-link app-nav-link app-nav-link--agent-account{% if request.endpoint and request.endpoint.startswith('agent_account') %} active{% endif %}"
+>
+    <svg class="app-nav-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 7h16v12H4z" stroke="currentColor" stroke-width="1.75"/>
+        <path d="M8 11h8M8 15h5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+        <path d="M8 4h8" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+    </svg>
+    <span class="app-nav-link__label">{{ t('nav_agent_account') }}</span>
+</a>
+<a
     href="{{ url_for('cash_ai_new') }}"
     class="nav-link app-nav-link app-nav-link--cash-ai{% if request.endpoint and request.endpoint.startswith('cash_ai') %} active{% endif %}"
 >
@@ -124,6 +135,17 @@
         <path d="M3 19c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
     </svg>
     <span class="app-nav-link__label">{{ t('nav_team_report') }}</span>
+</a>
+<a
+    href="{{ url_for('my_agent_account') }}"
+    class="nav-link app-nav-link app-nav-link--my-account{% if request.endpoint == 'my_agent_account' %} active{% endif %}"
+>
+    <svg class="app-nav-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 7h16v12H4z" stroke="currentColor" stroke-width="1.75"/>
+        <path d="M8 11h8M8 15h5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+        <path d="M8 4h8" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+    </svg>
+    <span class="app-nav-link__label">{{ t('nav_my_agent_account') }}</span>
 </a>
 <a
     href="{{ url_for('my_wallet') }}"
