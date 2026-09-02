@@ -4,7 +4,7 @@
 
 @media (max-width: 768px) {
     body.is-vat-page .app-main-inner {
-        background: #f4f6f9;
+        background: var(--bg);
     }
 
     body.is-vat-page .page-header h2 {
@@ -13,7 +13,7 @@
 
     body.is-vat-page .vat-calc-form .panel {
         border-radius: 1rem;
-        border: 1px solid #eef2f7;
+        border: 1px solid var(--border-soft);
         box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
     }
 
@@ -21,7 +21,7 @@
         margin-top: 0.85rem;
         padding: 1rem;
         border-radius: 1rem;
-        background: #fff;
-        border: 1px solid #eef2f7;
+        background: var(--surface);
+        border: 1px solid var(--border-soft);
     }
 }

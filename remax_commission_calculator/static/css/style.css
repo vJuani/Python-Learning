@@ -3838,7 +3838,7 @@ a.dashboard-quick-card:hover {
     :root:not([data-theme="dark"]) .status-approved,
     :root:not([data-theme="dark"]) .badge.status-approved {
         background: #dbeafe;
-        color: #1d4ed8;
+        color: var(--accent-ink);
         border-color: #93c5fd;
     }
 
@@ -4481,7 +4481,7 @@ a.dashboard-quick-card:hover {
         width: 1.05rem;
         height: 1.05rem;
         border-radius: 999px;
-        background: #fff;
+        background: var(--surface);
         transition: transform 0.2s ease;
     }
 

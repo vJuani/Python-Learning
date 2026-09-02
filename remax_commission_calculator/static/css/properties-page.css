@@ -31,7 +31,7 @@ body.is-properties-page .app-main-inner {
 
 .properties-page__header p {
     margin: 0;
-    color: #6b7280;
+    color: var(--text-muted);
     font-size: 0.92rem;
 }
 
@@ -65,9 +65,9 @@ body.is-properties-page .app-main-inner {
 }
 
 .properties-btn--ghost {
-    background: #f8fafc;
+    background: var(--content-bg);
     border-color: #e5e7eb;
-    color: #374151;
+    color: var(--text);
 }
 
 .properties-kpis {
@@ -80,9 +80,9 @@ body.is-properties-page .app-main-inner {
     display: flex;
     gap: 0.75rem;
     padding: 0.95rem 1rem;
-    border: 1px solid #edf0f5;
+    border: 1px solid var(--border-soft);
     border-radius: 1rem;
-    background: #fff;
+    background: var(--surface);
     box-shadow: 0 1px 2px rgba(10, 22, 51, 0.04);
 }
 
@@ -90,7 +90,7 @@ body.is-properties-page .app-main-inner {
     width: 2.35rem;
     height: 2.35rem;
     border-radius: 0.75rem;
-    background: #eef4ff;
+    background: var(--accent-soft);
     flex-shrink: 0;
     position: relative;
 }
@@ -131,7 +131,7 @@ body.is-properties-page .app-main-inner {
 .properties-kpi-card__label {
     display: block;
     font-size: 0.78rem;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .properties-kpi-card strong {
@@ -162,9 +162,9 @@ body.is-properties-page .app-main-inner {
 }
 
 .properties-card {
-    border: 1px solid #edf0f5;
+    border: 1px solid var(--border-soft);
     border-radius: 1rem;
-    background: #fff;
+    background: var(--surface);
     box-shadow: 0 1px 2px rgba(10, 22, 51, 0.04);
     padding: 1rem;
 }
@@ -185,7 +185,7 @@ body.is-properties-page .app-main-inner {
 
 .properties-card__meta {
     font-size: 0.72rem;
-    color: #9ca3af;
+    color: var(--text-muted);
 }
 
 .properties-toolbar {
@@ -207,12 +207,12 @@ body.is-properties-page .app-main-inner {
 .properties-sort select {
     width: 100%;
     min-height: 2.4rem;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-soft);
     border-radius: 0.65rem;
     padding: 0.45rem 0.75rem;
     font: inherit;
     font-size: 0.84rem;
-    background: #fff;
+    background: var(--surface);
 }
 
 .properties-toolbar__filter {
@@ -233,16 +233,16 @@ body.is-properties-page .app-main-inner {
     width: 100%;
     margin-top: 0.55rem;
     padding: 0.75rem;
-    border: 1px solid #edf0f5;
+    border: 1px solid var(--border-soft);
     border-radius: 0.75rem;
-    background: #f8fafc;
+    background: var(--content-bg);
 }
 
 .properties-toolbar__more-panel label {
     display: grid;
     gap: 0.25rem;
     font-size: 0.78rem;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .properties-sort label {
@@ -250,7 +250,7 @@ body.is-properties-page .app-main-inner {
     align-items: center;
     gap: 0.45rem;
     font-size: 0.78rem;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .properties-table {
@@ -265,14 +265,14 @@ body.is-properties-page .app-main-inner {
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #6b7280;
-    background: #f8fafc;
+    color: var(--text-muted);
+    background: var(--content-bg);
     border-bottom: 1px solid #edf0f5;
 }
 
 .properties-table td {
     padding: 0.75rem 0.45rem;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid var(--border-soft);
     vertical-align: middle;
 }
 
@@ -298,19 +298,19 @@ body.is-properties-page .app-main-inner {
 .properties-property-cell__title {
     display: block;
     font-weight: 600;
-    color: #111827;
+    color: var(--text);
     text-decoration: none;
 }
 
 .properties-property-cell__title:hover {
-    color: #0d47ff;
+    color: var(--accent);
 }
 
 .properties-property-cell__address,
 .properties-property-cell__code {
     display: block;
     font-size: 0.72rem;
-    color: #9ca3af;
+    color: var(--text-muted);
 }
 
 .properties-type-cell strong {
@@ -320,7 +320,7 @@ body.is-properties-page .app-main-inner {
 .properties-type-cell span {
     display: block;
     font-size: 0.72rem;
-    color: #9ca3af;
+    color: var(--text-muted);
 }
 
 .properties-agent-cell {
@@ -336,8 +336,8 @@ body.is-properties-page .app-main-inner {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #eef4ff;
-    color: #0d47ff;
+    background: var(--accent-soft);
+    color: var(--accent);
     font-size: 0.65rem;
     font-weight: 700;
 }
@@ -357,8 +357,8 @@ body.is-properties-page .app-main-inner {
 }
 
 .properties-status--progress {
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
 }
 
 .properties-status--pending {
@@ -388,8 +388,8 @@ body.is-properties-page .app-main-inner {
     width: 1.75rem;
     height: 1.75rem;
     border-radius: 0.45rem;
-    background: #f8fafc;
-    color: #374151;
+    background: var(--content-bg);
+    color: var(--text);
     text-decoration: none;
 }
 
@@ -403,7 +403,7 @@ body.is-properties-page .app-main-inner {
     padding-top: 0.75rem;
     border-top: 1px solid #f3f4f6;
     font-size: 0.78rem;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .properties-pagination__controls {
@@ -420,7 +420,7 @@ body.is-properties-page .app-main-inner {
     height: 1.75rem;
     border-radius: 0.45rem;
     text-decoration: none;
-    color: #374151;
+    color: var(--text);
 }
 
 .properties-pagination__controls a.is-active {
@@ -430,7 +430,7 @@ body.is-properties-page .app-main-inner {
 
 .properties-pagination__size select {
     margin: 0 0.25rem;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-soft);
     border-radius: 0.45rem;
     padding: 0.15rem 0.35rem;
     font: inherit;
@@ -458,14 +458,14 @@ body.is-properties-page .app-main-inner {
     display: block;
     font-size: 0.82rem;
     font-weight: 600;
-    color: #111827;
+    color: var(--text);
     text-decoration: none;
 }
 
 .properties-featured-list span {
     display: block;
     font-size: 0.72rem;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .properties-donut-wrap {
@@ -490,7 +490,7 @@ body.is-properties-page .app-main-inner {
 
 .properties-donut-center span {
     font-size: 0.72rem;
-    color: #9ca3af;
+    color: var(--text-muted);
     text-align: center;
 }
 
@@ -528,7 +528,7 @@ body.is-properties-page .app-main-inner {
     padding: 1rem;
     border-radius: 1rem;
     background: linear-gradient(180deg, #f8fbff, #eef4ff);
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--border-soft);
 }
 
 .properties-help-card strong {
@@ -545,14 +545,14 @@ body.is-properties-page .app-main-inner {
 .properties-help-card a {
     font-size: 0.82rem;
     font-weight: 600;
-    color: #0d47ff;
+    color: var(--accent);
     text-decoration: none;
 }
 
 .properties-empty,
 .properties-empty-inline {
     padding: 1rem 0.25rem;
-    color: #9ca3af;
+    color: var(--text-muted);
     font-size: 0.84rem;
 }
 

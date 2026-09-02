@@ -8,47 +8,47 @@ body.is-billing-ai-page .app-main-inner { max-width: none; }
 .billing-ai-page { display: grid; gap: 1rem; }
 .billing-ai-page__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .billing-ai-page__header h1 { margin: 0 0 0.3rem; font-size: 1.75rem; font-weight: 700; }
-.billing-ai-page__header p { margin: 0; color: #6b7280; font-size: 0.92rem; }
+.billing-ai-page__header p { margin: 0; color: var(--text-muted); font-size: 0.92rem; }
 .billing-ai-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 2.5rem; padding: 0.45rem 1rem; border-radius: 0.7rem; font: inherit; font-size: 0.88rem; font-weight: 600; text-decoration: none; border: 1px solid transparent; cursor: pointer; }
-.billing-ai-btn--primary { background: #0d47ff; color: #fff; }
-.billing-ai-btn--outline { background: #fff; border-color: #e5e7eb; color: #374151; }
+.billing-ai-btn--primary { background: var(--accent); color: var(--btn-primary-text); }
+.billing-ai-btn--outline { background: var(--surface); border-color: var(--border-soft); color: var(--text); }
 .billing-ai-btn--block { width: 100%; margin-top: 0.75rem; }
 .billing-ai-workspace { display: grid; grid-template-columns: minmax(18rem, 1.1fr) minmax(20rem, 1.2fr) minmax(16rem, 0.9fr); gap: 1rem; align-items: start; }
-.billing-ai-chat, .billing-ai-preview, .billing-ai-extracted { border: 1px solid #edf0f5; border-radius: 1rem; background: #fff; box-shadow: 0 1px 2px rgba(10, 22, 51, 0.04); padding: 1rem; min-height: 34rem; display: grid; grid-template-rows: 1fr auto auto; gap: 0.75rem; }
+.billing-ai-chat, .billing-ai-preview, .billing-ai-extracted { border: 1px solid var(--border-soft); border-radius: 1rem; background: var(--surface); box-shadow: 0 1px 2px rgba(10, 22, 51, 0.04); padding: 1rem; min-height: 34rem; display: grid; grid-template-rows: 1fr auto auto; gap: 0.75rem; }
 .billing-ai-chat__messages { display: grid; gap: 0.75rem; align-content: start; overflow: auto; max-height: 28rem; }
 .billing-ai-message { display: flex; gap: 0.55rem; align-items: flex-start; }
 .billing-ai-message--user { justify-content: flex-end; }
-.billing-ai-message--user .billing-ai-message__bubble { background: #eef4ff; color: #1e3a8a; }
-.billing-ai-message__avatar { width: 1.75rem; height: 1.75rem; border-radius: 999px; background: #0d47ff; color: #fff; font-size: 0.62rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
-.billing-ai-message__bubble { max-width: 85%; padding: 0.65rem 0.8rem; border-radius: 0.85rem; background: #f8fafc; font-size: 0.84rem; line-height: 1.45; }
-.billing-ai-chat__suggestions { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; font-size: 0.76rem; color: #6b7280; }
-.billing-ai-chip { border: 1px solid #dbeafe; background: #f8fbff; color: #0d47ff; border-radius: 999px; padding: 0.25rem 0.65rem; font: inherit; font-size: 0.72rem; cursor: pointer; }
+.billing-ai-message--user .billing-ai-message__bubble { background: var(--accent-soft); color: var(--accent-ink); }
+.billing-ai-message__avatar { width: 1.75rem; height: 1.75rem; border-radius: 999px; background: var(--accent); color: var(--btn-primary-text); font-size: 0.62rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.billing-ai-message__bubble { max-width: 85%; padding: 0.65rem 0.8rem; border-radius: 0.85rem; background: var(--content-bg); font-size: 0.84rem; line-height: 1.45; }
+.billing-ai-chat__suggestions { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; font-size: 0.76rem; color: var(--text-muted); }
+.billing-ai-chip { border: 1px solid var(--border-soft); background: var(--card-muted); color: var(--accent); border-radius: 999px; padding: 0.25rem 0.65rem; font: inherit; font-size: 0.72rem; cursor: pointer; }
 .billing-ai-chat__form { display: grid; grid-template-columns: 1fr auto; gap: 0.55rem; align-items: end; }
-.billing-ai-chat__form textarea { width: 100%; min-height: 3.5rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; padding: 0.65rem 0.75rem; font: inherit; resize: vertical; }
+.billing-ai-chat__form textarea { width: 100%; min-height: 3.5rem; border: 1px solid var(--border-soft); border-radius: 0.75rem; padding: 0.65rem 0.75rem; font: inherit; resize: vertical; }
 .billing-ai-preview h2, .billing-ai-extracted h2 { margin: 0 0 0.5rem; font-size: 0.95rem; }
-.billing-ai-invoice-card { border: 1px solid #edf0f5; border-radius: 0.85rem; padding: 1rem; display: grid; gap: 0.65rem; }
-.billing-ai-invoice-card__badge { align-self: start; display: inline-flex; padding: 0.18rem 0.55rem; border-radius: 999px; background: #fff7ed; color: #c2410c; font-size: 0.72rem; font-weight: 700; }
+.billing-ai-invoice-card { border: 1px solid var(--border-soft); border-radius: 0.85rem; padding: 1rem; display: grid; gap: 0.65rem; }
+.billing-ai-invoice-card__badge { align-self: start; display: inline-flex; padding: 0.18rem 0.55rem; border-radius: 999px; background: var(--warning-soft); color: var(--warning-ink); font-size: 0.72rem; font-weight: 700; }
 .billing-ai-invoice-card header { display: grid; gap: 0.15rem; }
 .billing-ai-invoice-card dl { margin: 0; display: grid; gap: 0.45rem; }
 .billing-ai-invoice-card dl div { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.82rem; }
-.billing-ai-invoice-card__total { color: #0d47ff; font-size: 1rem; font-weight: 700; }
-.billing-ai-preview__empty, .billing-ai-empty { color: #9ca3af; font-size: 0.84rem; padding: 2rem 0.5rem; text-align: center; }
+.billing-ai-invoice-card__total { color: var(--accent); font-size: 1rem; font-weight: 700; }
+.billing-ai-preview__empty, .billing-ai-empty { color: var(--text-muted); font-size: 0.84rem; padding: 2rem 0.5rem; text-align: center; }
 .billing-ai-fields { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
-.billing-ai-fields li { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.82rem; padding-bottom: 0.45rem; border-bottom: 1px solid #f3f4f6; }
-.billing-ai-fields span { color: #6b7280; }
-.billing-ai-note { margin: 0.75rem 0 0; padding: 0.65rem 0.75rem; border-radius: 0.65rem; background: #eff6ff; color: #1d4ed8; font-size: 0.78rem; }
-.billing-ai-link { display: inline-block; margin-top: 0.65rem; color: #0d47ff; font-size: 0.82rem; font-weight: 600; text-decoration: none; }
+.billing-ai-fields li { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.82rem; padding-bottom: 0.45rem; border-bottom: 1px solid var(--border-soft); }
+.billing-ai-fields span { color: var(--text-muted); }
+.billing-ai-note { margin: 0.75rem 0 0; padding: 0.65rem 0.75rem; border-radius: 0.65rem; background: var(--accent-soft); color: var(--accent-ink); font-size: 0.78rem; }
+.billing-ai-link { display: inline-block; margin-top: 0.65rem; color: var(--accent); font-size: 0.82rem; font-weight: 600; text-decoration: none; }
 .billing-ai-options { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
-.billing-ai-options a { color: #0d47ff; font-size: 0.82rem; }
-.billing-ai-found { font-size: 0.82rem; color: #374151; }
-.billing-ai-history { border: 1px solid #edf0f5; border-radius: 1rem; background: #fff; padding: 1rem; }
+.billing-ai-options a { color: var(--accent); font-size: 0.82rem; }
+.billing-ai-found { font-size: 0.82rem; color: var(--text); }
+.billing-ai-history { border: 1px solid var(--border-soft); border-radius: 1rem; background: var(--surface); padding: 1rem; }
 .billing-ai-history__tabs { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
-.billing-ai-history__tabs a { text-decoration: none; color: #6b7280; font-size: 0.84rem; }
-.billing-ai-history__tabs a.is-active { color: #0d47ff; font-weight: 700; }
+.billing-ai-history__tabs a { text-decoration: none; color: var(--text-muted); font-size: 0.84rem; }
+.billing-ai-history__tabs a.is-active { color: var(--accent); font-weight: 700; }
 .billing-ai-history__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
-.billing-ai-history__card { border: 1px solid #edf0f5; border-radius: 0.75rem; padding: 0.85rem; display: grid; gap: 0.35rem; }
+.billing-ai-history__card { border: 1px solid var(--border-soft); border-radius: 0.75rem; padding: 0.85rem; display: grid; gap: 0.35rem; }
 .billing-ai-history__table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-.billing-ai-history__table th, .billing-ai-history__table td { padding: 0.55rem; border-bottom: 1px solid #f3f4f6; text-align: left; }
+.billing-ai-history__table th, .billing-ai-history__table td { padding: 0.55rem; border-bottom: 1px solid var(--border-soft); text-align: left; }
 
 @media (max-width: 1200px) {
     .billing-ai-workspace { grid-template-columns: 1fr; }

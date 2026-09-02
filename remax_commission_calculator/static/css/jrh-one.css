@@ -569,7 +569,18 @@ textarea.form-input:focus {
 
 /* ── Dark mode tune ──────────────────────────────────────── */
 [data-theme="dark"] .saas-kpi-grid .stat-card {
+    background: var(--surface);
+    border-color: var(--border-soft);
     border-top-color: var(--accent);
+    box-shadow: var(--shadow-xs);
+}
+
+[data-theme="dark"] .saas-kpi-grid .stat-label {
+    color: var(--text-muted);
+}
+
+[data-theme="dark"] .saas-kpi-grid .stat-value {
+    color: var(--text);
 }
 
 [data-theme="dark"] .dashboard-welcome-text h1,

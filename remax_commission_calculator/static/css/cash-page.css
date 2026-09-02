@@ -21,7 +21,7 @@ body.is-cash-page .app-main-inner {
 .cash-page__filters {
     padding: 1.25rem 1rem;
     border-right: 1px solid #e5e7eb;
-    background: #fff;
+    background: var(--surface);
 }
 
 .cash-page__filters h2 {
@@ -30,7 +30,7 @@ body.is-cash-page .app-main-inner {
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .cash-page__filters form {
@@ -42,17 +42,17 @@ body.is-cash-page .app-main-inner {
     display: grid;
     gap: 0.3rem;
     font-size: 0.8rem;
-    color: #374151;
+    color: var(--text);
 }
 
 .cash-page__filters input,
 .cash-page__filters select {
     min-height: 2.35rem;
     padding: 0.4rem 0.6rem;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-soft);
     border-radius: 0.65rem;
     font: inherit;
-    background: #fff;
+    background: var(--surface);
 }
 
 .cash-page__main {
@@ -60,7 +60,7 @@ body.is-cash-page .app-main-inner {
     display: grid;
     gap: 1rem;
     align-content: start;
-    background: #f8fafc;
+    background: var(--content-bg);
 }
 
 .cash-page__header {
@@ -80,7 +80,7 @@ body.is-cash-page .app-main-inner {
 
 .cash-page__header p {
     margin: 0;
-    color: #6b7280;
+    color: var(--text-muted);
     font-size: 0.92rem;
 }
 
@@ -112,15 +112,15 @@ body.is-cash-page .app-main-inner {
 }
 
 .cash-btn--outline {
-    background: #fff;
+    background: var(--surface);
     border-color: #d1d5db;
     color: #001c3d;
 }
 
 .cash-btn--ghost {
-    background: #f8fafc;
+    background: var(--content-bg);
     border-color: #e5e7eb;
-    color: #374151;
+    color: var(--text);
 }
 
 .cash-btn--block {
@@ -142,8 +142,8 @@ body.is-cash-page .app-main-inner {
 .cash-kpi-card {
     padding: 0.95rem 1rem;
     border-radius: 0.85rem;
-    background: #fff;
-    border: 1px solid #e5e7eb;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
@@ -154,7 +154,7 @@ body.is-cash-page .app-main-inner {
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .cash-kpi-card strong {
@@ -166,8 +166,8 @@ body.is-cash-page .app-main-inner {
 .cash-page__table-card {
     padding: 0;
     border-radius: 0.85rem;
-    background: #fff;
-    border: 1px solid #e5e7eb;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
     overflow: hidden;
 }
 
@@ -176,19 +176,19 @@ body.is-cash-page .app-main-inner {
     align-items: center;
     justify-content: space-between;
     padding: 0.85rem 1rem;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--border-soft);
 }
 
 .cash-page__table-head h2 {
     margin: 0;
     font-size: 0.95rem;
     font-weight: 600;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .cash-page__table-head span {
     font-size: 0.82rem;
-    color: #9ca3af;
+    color: var(--text-muted);
 }
 
 .cash-table-wrap {
@@ -215,7 +215,7 @@ body.is-cash-page .app-main-inner {
 
 .cash-table tbody td {
     padding: 0.7rem 0.75rem;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--border-soft);
     vertical-align: middle;
 }
 
@@ -240,13 +240,13 @@ body.is-cash-page .app-main-inner {
 
 .cash-badge--confirmed {
     background: #dbeafe;
-    color: #1d4ed8;
+    color: var(--accent-ink);
 }
 
 .cash-page__empty {
     padding: 2rem 1rem;
     text-align: center;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 @media (max-width: 1100px) {

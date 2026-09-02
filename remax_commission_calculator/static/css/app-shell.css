@@ -83,8 +83,8 @@
         margin-left: auto;
         padding: 0.1rem 0.4rem;
         border-radius: 999px;
-        background: #dbeafe;
-        color: #1d4ed8;
+        background: var(--accent-soft);
+        color: var(--accent-ink);
         font-size: 0.62rem;
         font-weight: 700;
         letter-spacing: 0.02em;
@@ -180,20 +180,20 @@
         padding: 0.55rem 3.25rem 0.55rem 2.65rem;
         border: 1px solid var(--border-soft);
         border-radius: 0.75rem;
-        background: #f8fafc;
+        background: var(--content-bg);
         color: var(--text);
         font: inherit;
         font-size: 0.88rem;
     }
 
     .header-search-input::placeholder {
-        color: #9ca3af;
+        color: var(--text-muted);
     }
 
     .header-search-input:focus {
         outline: none;
         border-color: #c7d7fe;
-        background: #fff;
+        background: var(--surface);
         box-shadow: 0 0 0 3px rgba(13, 71, 255, 0.1);
     }
 
@@ -204,7 +204,7 @@
         transform: translateY(-50%);
         width: 1rem;
         height: 1rem;
-        color: #9ca3af;
+        color: var(--text-muted);
         pointer-events: none;
     }
 
@@ -216,8 +216,8 @@
         padding: 0.1rem 0.4rem;
         border: 1px solid var(--border-soft);
         border-radius: 0.35rem;
-        background: #fff;
-        color: #9ca3af;
+        background: var(--surface);
+        color: var(--text-muted);
         font-size: 0.68rem;
         line-height: 1.2;
     }
@@ -229,7 +229,7 @@
         padding: 0.2rem 0.2rem 0.2rem 0.65rem;
         border: 1px solid var(--border-soft);
         border-radius: 999px;
-        background: #fff;
+        background: var(--surface);
         cursor: pointer;
         list-style: none;
     }
@@ -246,7 +246,7 @@
         height: 2rem;
         border-radius: 999px;
         background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-        color: #1d4ed8;
+        color: var(--accent-ink);
         font-size: 0.72rem;
         font-weight: 700;
         flex-shrink: 0;
@@ -261,13 +261,13 @@
 
     .header-account-chip__text strong {
         font-size: 0.82rem;
-        color: #111827;
+        color: var(--text);
         line-height: 1.2;
     }
 
     .header-account-chip__text span {
         font-size: 0.72rem;
-        color: #6b7280;
+        color: var(--text-muted);
         line-height: 1.2;
     }
 }
@@ -294,15 +294,15 @@
 .app-rail-promo {
     margin-top: auto;
     padding: 0.85rem;
-    border: 1px solid #e8edf5;
+    border: 1px solid var(--border-soft);
     border-radius: 0.85rem;
-    background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    background: linear-gradient(180deg, var(--card-muted) 0%, var(--surface) 100%);
 }
 
 .app-rail-promo strong {
     display: block;
     font-size: 0.82rem;
-    color: #111827;
+    color: var(--text);
     margin-bottom: 0.25rem;
 }
 
@@ -310,7 +310,7 @@
     margin: 0 0 0.65rem;
     font-size: 0.72rem;
     line-height: 1.45;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .app-rail-promo__link {
@@ -319,7 +319,7 @@
     gap: 0.25rem;
     font-size: 0.75rem;
     font-weight: 600;
-    color: #0d47ff;
+    color: var(--accent);
     text-decoration: none;
 }
 
