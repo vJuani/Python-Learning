@@ -18,8 +18,8 @@ body.is-auth-page .site-header {
     box-shadow: var(--shadow-xs);
 }
 
-body.is-auth-page .site-brand-logo,
-body.is-auth-page .brand-logo {
+body.is-auth-page .site-header .site-brand-logo,
+body.is-auth-page .site-header .brand-logo {
     max-height: 1.75rem;
 }
 

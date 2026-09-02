@@ -205,7 +205,7 @@ body.is-login-page .flash-messages {
 
 .login-card {
     width: min(25rem, 100%);
-    padding: 2.1rem 2rem 1.75rem;
+    padding: 2.25rem 2rem 1.75rem;
     border: 1px solid #edf0f5;
     border-radius: 1.35rem;
     background: #ffffff;
@@ -219,15 +219,16 @@ body.is-login-page .flash-messages {
     justify-content: center;
     align-items: center;
     width: 100%;
-    margin-bottom: 0.85rem;
+    margin: 0 auto 1.5rem;
     overflow: visible;
 }
 
-.login-card__logo {
+.login-card .auth-brand-logo {
     display: block;
-    width: auto;
-    max-width: min(9.5rem, 72%);
+    width: 100%;
+    max-width: 220px;
     height: auto;
+    max-height: none;
     margin: 0 auto;
     object-fit: contain;
     object-position: center;
@@ -524,8 +525,8 @@ body.is-login-page .flash-messages {
         border-radius: 1.15rem;
     }
 
-    .login-card__logo {
-        max-width: min(10rem, calc(100% - 0.5rem));
+    .login-card .auth-brand-logo {
+        max-width: min(220px, calc(100% - 0.5rem));
     }
 
     .login-form__row {
