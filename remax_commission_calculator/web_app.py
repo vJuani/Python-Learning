@@ -578,6 +578,9 @@ def inject_product_branding():
         "brand_email_footer_url": _brand_static_url(
             get_brand_email_footer_rel(),
         ),
+        "brand_login_card_mark_url": _brand_static_url(
+            "brand/login-card-mark.png",
+        ),
     }
 
 

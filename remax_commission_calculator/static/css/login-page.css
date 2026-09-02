@@ -226,8 +226,9 @@ body.is-login-page .flash-messages {
 .login-card__logo {
     display: block;
     width: auto;
-    max-width: min(11rem, 100%);
+    max-width: min(9.5rem, 72%);
     height: auto;
+    margin: 0 auto;
     object-fit: contain;
     object-position: center;
 }
