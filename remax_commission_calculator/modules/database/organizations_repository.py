@@ -208,4 +208,19 @@ def add_organization(name, is_active=True):
         name
     )
 
+    from .treasury_accounts_repository import (
+        ensure_legacy_default_accounts,
+    )
+
+    bootstrap = get_connection()
+    bootstrap_cursor = bootstrap.cursor()
+    try:
+        ensure_legacy_default_accounts(
+            bootstrap_cursor,
+            organization_id,
+        )
+        bootstrap.commit()
+    finally:
+        bootstrap.close()
+
     return organization_id

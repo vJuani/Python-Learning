@@ -8,14 +8,20 @@ from datetime import date, datetime
 
 from modules.database.cash_treasury_repository import (
     create_cash_movement_atomic,
+    create_internal_transfer_atomic,
     get_cash_account,
     get_cash_movement,
-    list_cash_accounts,
     list_cash_movements,
     reverse_cash_movement_atomic,
     sum_movements_by_type,
 )
 from modules.database.tenant import require_organization_id
+from modules.database.treasury_accounts_repository import (
+    get_treasury_account,
+    list_treasury_accounts,
+    suggest_treasury_account_for_payment,
+    sum_treasury_balances_by_currency,
+)
 
 
 CURRENCIES = ("ARS", "USD")
@@ -162,15 +168,17 @@ def get_balances(organization_id):
     organization_id = require_organization_id(
         organization_id
     )
-    accounts = {
-        item["currency"]: item["cached_balance"]
-        for item in list_cash_accounts(organization_id)
-    }
+    return sum_treasury_balances_by_currency(
+        organization_id
+    )
 
-    return {
-        "ARS": float(accounts.get("ARS", 0) or 0),
-        "USD": float(accounts.get("USD", 0) or 0),
-    }
+
+def get_treasury_accounts(organization_id, *, currency=None):
+    return list_treasury_accounts(
+        organization_id,
+        currency=currency,
+        active_only=True,
+    )
 
 
 def month_bounds(today=None):
@@ -179,25 +187,39 @@ def month_bounds(today=None):
     return start.isoformat(), today.isoformat()
 
 
-def build_cash_kpis(organization_id, today=None):
+def build_cash_kpis(
+    organization_id,
+    today=None,
+    *,
+    treasury_account_id=None,
+    currency_view=None,
+):
     balances = get_balances(organization_id)
     date_from, date_to = month_bounds(today)
     income = {}
     expense = {}
 
-    for currency in CURRENCIES:
+    currencies = (
+        (currency_view,)
+        if currency_view in CURRENCIES
+        else CURRENCIES
+    )
+
+    for currency in currencies:
         income[currency] = sum_movements_by_type(
             organization_id,
             currency=currency,
             movement_type=TYPE_INCOME,
             date_from=date_from,
             date_to=date_to,
+            treasury_account_id=treasury_account_id,
         ) + sum_movements_by_type(
             organization_id,
             currency=currency,
             movement_type=TYPE_OPENING,
             date_from=date_from,
             date_to=date_to,
+            treasury_account_id=treasury_account_id,
         )
         expense[currency] = sum_movements_by_type(
             organization_id,
@@ -205,6 +227,7 @@ def build_cash_kpis(organization_id, today=None):
             movement_type=TYPE_EXPENSE,
             date_from=date_from,
             date_to=date_to,
+            treasury_account_id=treasury_account_id,
         )
 
     return {
@@ -277,6 +300,21 @@ def validate_movement_payload(raw, *, require_type=True):
     if values["payment_method"] not in PAYMENT_METHODS:
         errors.append("cash_err_payment_method_invalid")
 
+    treasury_account_raw = (
+        raw.get("treasury_account_id") or ""
+    ).strip()
+    if treasury_account_raw:
+        try:
+            values["treasury_account_id"] = int(
+                treasury_account_raw
+            )
+        except ValueError:
+            errors.append(
+                "cash_err_treasury_account_invalid"
+            )
+    else:
+        values["treasury_account_id"] = None
+
     return errors, values
 
 
@@ -287,8 +325,43 @@ def preview_movement(organization_id, values):
     currency = values["currency"]
     amount = float(values["amount_value"])
     movement_type = values["movement_type"]
-    balances = get_balances(organization_id)
-    balance_before = balances.get(currency, 0.0)
+
+    treasury_account_id = values.get(
+        "treasury_account_id"
+    )
+    if treasury_account_id:
+        account = get_treasury_account(
+            treasury_account_id,
+            organization_id,
+        )
+        if account is None:
+            raise CashTreasuryError(
+                "cash_err_treasury_account_invalid"
+            )
+        if account["currency"] != currency:
+            raise CashTreasuryError(
+                "cash_err_treasury_currency_mismatch"
+            )
+        balance_before = float(
+            account["cached_balance"]
+        )
+        treasury_account_name = account["name"]
+    else:
+        suggested = suggest_treasury_account_for_payment(
+            organization_id,
+            currency,
+            values["payment_method"],
+        )
+        if suggested is None:
+            raise CashTreasuryError(
+                "cash_err_treasury_account_missing"
+            )
+        treasury_account_id = suggested["id"]
+        balance_before = float(
+            suggested["cached_balance"]
+        )
+        treasury_account_name = suggested["name"]
+
     delta = signed_delta_for_type(movement_type, amount)
     balance_after = balance_before + delta
 
@@ -310,6 +383,8 @@ def preview_movement(organization_id, values):
         "balance_before": balance_before,
         "balance_after": balance_after,
         "signed_delta": delta,
+        "treasury_account_id": treasury_account_id,
+        "treasury_account_name": treasury_account_name,
     }
 
 
@@ -353,12 +428,24 @@ def confirm_movement(
                 receipt_number
                 or values.get("receipt_number")
             ),
+            treasury_account_id=preview.get(
+                "treasury_account_id"
+            ),
         )
     except ValueError as error:
         if str(error) == "insufficient_balance":
             raise CashTreasuryError(
                 "cash_err_insufficient_balance",
                 currency=preview["currency"],
+            ) from error
+        if str(error) in (
+            "invalid_treasury_account",
+            "inactive_treasury_account",
+            "treasury_currency_mismatch",
+            "treasury_account_missing",
+        ):
+            raise CashTreasuryError(
+                "cash_err_treasury_account_invalid"
             ) from error
         raise
 
@@ -497,6 +584,17 @@ def filter_movements(organization_id, filters):
         except (IndexError, ValueError):
             movement_number = None
 
+    treasury_account_id = filters.get(
+        "treasury_account_id"
+    )
+    if treasury_account_id:
+        try:
+            treasury_account_id = int(
+                treasury_account_id
+            )
+        except (ValueError, TypeError):
+            treasury_account_id = None
+
     items = list_cash_movements(
         organization_id,
         currency=filters.get("currency") or None,
@@ -512,6 +610,7 @@ def filter_movements(organization_id, filters):
         date_to=filters.get("date_to") or None,
         search=None if movement_number else (search or None),
         status=filters.get("status") or None,
+        treasury_account_id=treasury_account_id,
     )
 
     if movement_number is not None:
@@ -553,6 +652,60 @@ def period_summary(organization_id, filters):
         elif item["movement_type"] == TYPE_OPENING:
             summary[currency]["opening"] += amount
 
+        if item.get("source") == "internal_transfer":
+            continue
+
         summary[currency]["net"] += float(delta)
 
     return summary
+
+
+def create_internal_transfer(
+    organization_id,
+    *,
+    from_account_id,
+    to_account_id,
+    amount,
+    movement_date,
+    user_id,
+    description=None,
+    notes=None,
+    idempotency_key=None,
+):
+    try:
+        result = create_internal_transfer_atomic(
+            organization_id,
+            from_account_id=from_account_id,
+            to_account_id=to_account_id,
+            amount=amount,
+            movement_date=movement_date,
+            created_by_user_id=user_id,
+            description=description,
+            notes=notes,
+            idempotency_key=idempotency_key,
+        )
+    except ValueError as error:
+        key = str(error)
+        mapping = {
+            "invalid_amount": "cash_err_amount_invalid",
+            "same_account_transfer": (
+                "cash_err_transfer_same_account"
+            ),
+            "cross_currency_transfer": (
+                "cash_err_transfer_cross_currency"
+            ),
+            "insufficient_balance": (
+                "cash_err_insufficient_balance"
+            ),
+            "invalid_treasury_account": (
+                "cash_err_treasury_account_invalid"
+            ),
+            "inactive_treasury_account": (
+                "cash_err_treasury_account_inactive"
+            ),
+        }
+        raise CashTreasuryError(
+            mapping.get(key, "cash_err_transfer_failed")
+        ) from error
+
+    return result

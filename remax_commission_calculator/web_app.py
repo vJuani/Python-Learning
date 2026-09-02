@@ -174,10 +174,19 @@ from modules.cash_treasury import (
     confirm_movement,
     filter_movements,
     get_balances,
+    create_internal_transfer,
+    get_treasury_accounts,
     preview_movement,
     reverse_movement,
     set_opening_balances,
     validate_movement_payload,
+)
+from modules.database.treasury_accounts_repository import (
+    ACCOUNT_TYPES,
+    create_treasury_account,
+    get_treasury_account,
+    get_treasury_account_summaries,
+    update_treasury_account,
 )
 from modules.cash_ai_service import (
     AI_PAYMENT_METHODS,
@@ -6260,7 +6269,12 @@ def operations_delete(operation_id):
     )
 
 
-def _cash_form_context(form_values=None, errors=None, preview=None):
+def _cash_form_context(
+    form_values=None,
+    errors=None,
+    preview=None,
+    organization_id=None,
+):
     form_values = form_values or {
         "movement_type": TYPE_INCOME,
         "currency": "ARS",
@@ -6270,7 +6284,14 @@ def _cash_form_context(form_values=None, errors=None, preview=None):
         "payment_method": "cash",
         "movement_date": date.today().isoformat(),
         "notes": "",
+        "treasury_account_id": "",
     }
+
+    treasury_accounts = []
+    if organization_id is not None:
+        treasury_accounts = get_treasury_accounts(
+            organization_id
+        )
 
     return {
         "form_values": form_values,
@@ -6280,6 +6301,8 @@ def _cash_form_context(form_values=None, errors=None, preview=None):
         "payment_methods": CASH_PAYMENT_METHODS,
         "income_categories": INCOME_CATEGORIES,
         "expense_categories": EXPENSE_CATEGORIES,
+        "treasury_accounts": treasury_accounts,
+        "treasury_account_types": ACCOUNT_TYPES,
         "categories": categories_for_type(
             form_values.get("movement_type") or TYPE_INCOME
         ),
@@ -6290,6 +6313,14 @@ def _cash_form_context(form_values=None, errors=None, preview=None):
 @admin_required
 def cash_list():
     organization_id = require_user_organization()
+    view = request.args.get(
+        "view",
+        "consolidated",
+    ).strip().lower()
+    treasury_account_raw = request.args.get(
+        "treasury_account_id",
+        "",
+    ).strip()
     filters = {
         "q": request.args.get("q", "").strip(),
         "currency": request.args.get(
@@ -6324,6 +6355,8 @@ def cash_list():
             "status",
             "",
         ).strip(),
+        "treasury_account_id": treasury_account_raw,
+        "view": view,
     }
 
     filter_args = dict(filters)
@@ -6338,14 +6371,49 @@ def cash_list():
     else:
         filter_args["user_id"] = None
 
-    if filter_args.get("currency") not in CASH_CURRENCIES:
+    if view == "ars":
+        filter_args["currency"] = "ARS"
+    elif view == "usd":
+        filter_args["currency"] = "USD"
+    elif filter_args.get("currency") not in CASH_CURRENCIES:
         filter_args["currency"] = None
+
+    treasury_account_id = None
+    if treasury_account_raw:
+        try:
+            treasury_account_id = int(
+                treasury_account_raw
+            )
+            account = get_treasury_account(
+                treasury_account_id,
+                organization_id,
+            )
+            if account is None:
+                treasury_account_id = None
+            else:
+                filter_args["treasury_account_id"] = (
+                    treasury_account_id
+                )
+        except ValueError:
+            treasury_account_id = None
 
     movements = filter_movements(
         organization_id,
         filter_args,
     )
-    kpis = build_cash_kpis(organization_id)
+    currency_view = (
+        filter_args["currency"]
+        if filter_args.get("currency") in CASH_CURRENCIES
+        else None
+    )
+    kpis = build_cash_kpis(
+        organization_id,
+        treasury_account_id=treasury_account_id,
+        currency_view=currency_view,
+    )
+    treasury_accounts = get_treasury_account_summaries(
+        organization_id
+    )
     per_page = parse_per_page(
         request.args.get("per_page"),
         default=DEFAULT_CASH_PER_PAGE,
@@ -6385,6 +6453,10 @@ def cash_list():
         pagination_summary_key="pagination_showing_cash",
         pagination_per_page_options=CASH_PER_PAGE_OPTIONS,
         show_per_page_selector=True,
+        treasury_accounts=treasury_accounts,
+        cash_view=view,
+        selected_treasury_account_id=treasury_account_id,
+        treasury_account_types=ACCOUNT_TYPES,
     )
 
 
@@ -6400,7 +6472,9 @@ def cash_new():
     if request.method == "GET":
         return render_template(
             "cash/form.html",
-            **_cash_form_context(),
+            **_cash_form_context(
+                organization_id=organization_id,
+            ),
         )
 
     form_values = {
@@ -6430,6 +6504,10 @@ def cash_new():
             "",
         ).strip(),
         "notes": request.form.get("notes", "").strip(),
+        "treasury_account_id": request.form.get(
+            "treasury_account_id",
+            "",
+        ).strip(),
     }
     action = request.form.get("action", "preview")
     errors, values = validate_movement_payload(form_values)
@@ -6440,6 +6518,7 @@ def cash_new():
             **_cash_form_context(
                 form_values,
                 localize_form_errors(errors),
+                organization_id=organization_id,
             ),
         )
 
@@ -6456,6 +6535,7 @@ def cash_new():
                 localize_form_errors(
                     [error.message_key]
                 ),
+                organization_id=organization_id,
             ),
         )
 
@@ -6465,6 +6545,7 @@ def cash_new():
             **_cash_form_context(
                 form_values,
                 preview=preview,
+                organization_id=organization_id,
             ),
         )
 
@@ -6483,6 +6564,7 @@ def cash_new():
                     [error.message_key]
                 ),
                 preview=preview,
+                organization_id=organization_id,
             ),
         )
 
@@ -6575,6 +6657,199 @@ def cash_reverse(movement_id):
             "cash_detail",
             movement_id=movement_id,
         )
+    )
+
+
+@app.route("/cash/treasury-accounts", methods=["GET", "POST"])
+@admin_required
+def cash_treasury_accounts():
+    organization_id = require_user_organization()
+    current_user = get_current_user()
+
+    if request.method == "POST":
+        try:
+            create_treasury_account(
+                organization_id,
+                name=request.form.get("name", ""),
+                account_type=request.form.get(
+                    "account_type",
+                    "",
+                ),
+                currency=request.form.get(
+                    "currency",
+                    "",
+                ),
+                bank_name=request.form.get("bank_name"),
+                account_reference=request.form.get(
+                    "account_reference"
+                ),
+                is_default=bool(
+                    request.form.get("is_default")
+                ),
+                created_by_user_id=current_user["id"],
+            )
+            flash_i18n(
+                "treasury_account_created",
+                "success",
+            )
+        except ValueError:
+            flash_i18n(
+                "treasury_err_create_failed",
+                "error",
+            )
+
+        return redirect(url_for("cash_treasury_accounts"))
+
+    accounts = get_treasury_account_summaries(
+        organization_id
+    )
+    return render_template(
+        "cash/treasury_accounts.html",
+        accounts=accounts,
+        treasury_account_types=ACCOUNT_TYPES,
+        currencies=CASH_CURRENCIES,
+    )
+
+
+@app.route(
+    "/cash/treasury-accounts/<int:account_id>",
+    methods=["POST"],
+)
+@admin_required
+def cash_treasury_account_update(account_id):
+    organization_id = require_user_organization()
+    action = request.form.get("action", "update")
+
+    try:
+        if action == "deactivate":
+            update_treasury_account(
+                organization_id,
+                account_id,
+                is_active=False,
+            )
+            flash_i18n(
+                "treasury_account_deactivated",
+                "success",
+            )
+        elif action == "activate":
+            update_treasury_account(
+                organization_id,
+                account_id,
+                is_active=True,
+            )
+            flash_i18n(
+                "treasury_account_activated",
+                "success",
+            )
+        elif action == "default":
+            update_treasury_account(
+                organization_id,
+                account_id,
+                is_default=True,
+            )
+            flash_i18n(
+                "treasury_account_default_set",
+                "success",
+            )
+        else:
+            update_treasury_account(
+                organization_id,
+                account_id,
+                name=request.form.get("name"),
+                bank_name=request.form.get("bank_name"),
+                account_reference=request.form.get(
+                    "account_reference"
+                ),
+            )
+            flash_i18n(
+                "treasury_account_updated",
+                "success",
+            )
+    except ValueError:
+        flash_i18n("treasury_err_update_failed", "error")
+
+    return redirect(url_for("cash_treasury_accounts"))
+
+
+@app.route("/cash/transfer", methods=["GET", "POST"])
+@admin_required
+def cash_transfer():
+    organization_id = require_user_organization()
+    current_user = get_current_user()
+    accounts = get_treasury_accounts(organization_id)
+
+    if request.method == "GET":
+        return render_template(
+            "cash/transfer.html",
+            accounts=accounts,
+            currencies=CASH_CURRENCIES,
+            today_iso=date.today().isoformat(),
+        )
+
+    try:
+        create_internal_transfer(
+            organization_id,
+            from_account_id=int(
+                request.form.get("from_account_id")
+            ),
+            to_account_id=int(
+                request.form.get("to_account_id")
+            ),
+            amount=request.form.get("amount"),
+            movement_date=(
+                request.form.get("movement_date")
+                or date.today().isoformat()
+            ),
+            user_id=current_user["id"],
+            description=request.form.get("description"),
+            notes=request.form.get("notes"),
+            idempotency_key=(
+                request.form.get("idempotency_key") or None
+            ),
+        )
+        flash_i18n("cash_transfer_success", "success")
+        return redirect(url_for("cash_list"))
+    except (ValueError, TypeError, CashTreasuryError) as error:
+        message_key = (
+            error.message_key
+            if isinstance(error, CashTreasuryError)
+            else "cash_err_transfer_failed"
+        )
+        flash_i18n(message_key, "error")
+        return render_template(
+            "cash/transfer.html",
+            accounts=accounts,
+            currencies=CASH_CURRENCIES,
+            today_iso=date.today().isoformat(),
+            form_values=request.form,
+        )
+
+
+@app.route("/cash/treasury-accounts.json")
+@admin_required
+def cash_treasury_accounts_json():
+    organization_id = require_user_organization()
+    currency = request.args.get(
+        "currency",
+        "",
+    ).strip().upper()
+    accounts = get_treasury_accounts(
+        organization_id,
+        currency=currency or None,
+    )
+    return jsonify(
+        {
+            "accounts": [
+                {
+                    "id": account["id"],
+                    "name": account["name"],
+                    "currency": account["currency"],
+                    "account_type": account["account_type"],
+                    "is_default": account["is_default"],
+                }
+                for account in accounts
+            ]
+        }
     )
 
 

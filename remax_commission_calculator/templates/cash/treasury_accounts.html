@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('treasury_accounts_manage') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cash-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('treasury_accounts_manage') }}</h2>
+        <p>{{ t('treasury_accounts_manage_subtitle') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('cash_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>{{ t('treasury_accounts_create') }}</h3>
+    <form method="post" class="agent-form">
+        <div class="form-group">
+            <label for="name">{{ t('treasury_account_name') }}</label>
+            <input type="text" id="name" name="name" class="form-input" required>
+        </div>
+        <div class="form-group">
+            <label for="account_type">{{ t('treasury_account_type') }}</label>
+            <select id="account_type" name="account_type" class="form-input" required>
+                {% for account_type in treasury_account_types %}
+                <option value="{{ account_type }}">{{ t('treasury_type_' ~ account_type) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="currency">{{ t('cash_currency') }}</label>
+            <select id="currency" name="currency" class="form-input" required>
+                {% for currency in currencies %}
+                <option value="{{ currency }}">{{ currency }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="bank_name">{{ t('treasury_bank_name') }}</label>
+            <input type="text" id="bank_name" name="bank_name" class="form-input">
+        </div>
+        <div class="form-group">
+            <label for="account_reference">{{ t('treasury_account_reference') }}</label>
+            <input type="text" id="account_reference" name="account_reference" class="form-input">
+        </div>
+        <label class="checkbox-inline">
+            <input type="checkbox" name="is_default" value="1"> {{ t('treasury_account_default') }}
+        </label>
+        <button type="submit" class="btn btn-primary">{{ t('treasury_accounts_create') }}</button>
+    </form>
+</section>
+
+<section class="panel">
+    <h3>{{ t('treasury_accounts_section') }}</h3>
+    <div class="cash-treasury-accounts__grid">
+        {% for account in accounts %}
+        <article class="cash-treasury-card">
+            <h4>{{ account.name }}</h4>
+            <p>{{ t('treasury_type_' ~ account.account_type) }} · {{ account.currency }}</p>
+            <strong>{{ account.cached_balance | money(account.currency) }}</strong>
+            {% if not account.is_active %}<span class="cash-badge">{{ t('treasury_account_inactive') }}</span>{% endif %}
+            {% if account.is_default %}<span class="cash-badge">{{ t('treasury_account_default') }}</span>{% endif %}
+            <form method="post" action="{{ url_for('cash_treasury_account_update', account_id=account.id) }}">
+                <input type="hidden" name="name" value="{{ account.name }}">
+                {% if account.is_active %}
+                <button type="submit" name="action" value="deactivate" class="btn btn-secondary btn-small">{{ t('deactivate') }}</button>
+                {% else %}
+                <button type="submit" name="action" value="activate" class="btn btn-secondary btn-small">{{ t('activate') }}</button>
+                {% endif %}
+                <button type="submit" name="action" value="default" class="btn btn-secondary btn-small">{{ t('treasury_set_default') }}</button>
+            </form>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

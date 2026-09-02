@@ -13,6 +13,16 @@
     <aside class="cash-page__filters" aria-label="{{ t('sidebar_filters') }}">
         <h2>{{ t('sidebar_filters') }}</h2>
         <form method="get" action="{{ url_for('cash_list') }}">
+            {% if filters.view %}<input type="hidden" name="view" value="{{ filters.view }}">{% endif %}
+            <label>
+                <span>{{ t('treasury_account') }}</span>
+                <select name="treasury_account_id">
+                    <option value="">{{ t('treasury_all_accounts') }}</option>
+                    {% for account in treasury_accounts %}
+                    <option value="{{ account.id }}" {% if selected_treasury_account_id == account.id %}selected{% endif %}>{{ account.name }} ({{ account.currency }})</option>
+                    {% endfor %}
+                </select>
+            </label>
             <label>
                 <span>{{ t('search') }}</span>
                 <input type="search" name="q" value="{{ filters.q }}" placeholder="{{ t('cash_search_placeholder') }}">
@@ -78,11 +88,37 @@
                 <p>{{ t('cash_page_subtitle') }}</p>
             </div>
             <div class="cash-page__actions">
+                <a href="{{ url_for('cash_treasury_accounts') }}" class="cash-btn cash-btn--outline">{{ t('treasury_accounts_manage') }}</a>
+                <a href="{{ url_for('cash_transfer') }}" class="cash-btn cash-btn--outline">{{ t('cash_transfer') }}</a>
                 <a href="{{ url_for('cash_opening_balance') }}" class="cash-btn cash-btn--outline">{{ t('cash_opening') }}</a>
                 <a href="{{ url_for('cash_new') }}" class="cash-btn cash-btn--outline">{{ t('cash_new') }}</a>
                 <a href="{{ url_for('cash_ai_new') }}" class="cash-btn cash-btn--primary">✨ {{ t('cash_ai_cta') }}</a>
             </div>
         </header>
+
+        <nav class="cash-view-switch" aria-label="{{ t('treasury_view_switch') }}">
+            <a href="{{ url_for('cash_list', view='consolidated') }}" class="cash-view-switch__item {% if cash_view == 'consolidated' %}is-active{% endif %}">{{ t('treasury_view_consolidated') }}</a>
+            <a href="{{ url_for('cash_list', view='ars') }}" class="cash-view-switch__item {% if cash_view == 'ars' %}is-active{% endif %}">ARS</a>
+            <a href="{{ url_for('cash_list', view='usd') }}" class="cash-view-switch__item {% if cash_view == 'usd' %}is-active{% endif %}">USD</a>
+        </nav>
+
+        <section class="cash-treasury-accounts" aria-label="{{ t('treasury_accounts_section') }}">
+            <header class="cash-treasury-accounts__head">
+                <h2>{{ t('treasury_accounts_section') }}</h2>
+            </header>
+            <div class="cash-treasury-accounts__grid">
+                {% for account in treasury_accounts if account.is_active %}
+                <a href="{{ url_for('cash_list', treasury_account_id=account.id, view=cash_view) }}" class="cash-treasury-card {% if selected_treasury_account_id == account.id %}is-selected{% endif %}">
+                    <span class="cash-treasury-card__name">{{ account.name }}</span>
+                    <span class="cash-treasury-card__meta">{{ t('treasury_type_' ~ account.account_type) }} · {{ account.currency }}</span>
+                    <strong class="cash-treasury-card__balance">{{ account.cached_balance | money(account.currency) }}</strong>
+                    {% if account.last_movement %}
+                    <span class="cash-treasury-card__last">{{ account.last_movement.description }}</span>
+                    {% endif %}
+                </a>
+                {% endfor %}
+            </div>
+        </section>
 
         <section class="cash-page__kpis" aria-label="{{ t('cash_page_kpis_aria') }}">
             <article class="cash-kpi-card">
@@ -126,6 +162,7 @@
                             <th>{{ t('cash_movement_date') }}</th>
                             <th>{{ t('cash_movement_type') }}</th>
                             <th>{{ t('cash_description') }}</th>
+                            <th>{{ t('treasury_account') }}</th>
                             <th>{{ t('cash_category') }}</th>
                             <th>{{ t('cash_amount') }}</th>
                             <th>{{ t('cash_status') }}</th>
@@ -146,6 +183,7 @@
                             <td>{{ movement.movement_date | short_date }}</td>
                             <td>{{ t('cash_type_' ~ movement.movement_type) }}</td>
                             <td>{{ movement.description }}</td>
+                            <td>{{ movement.treasury_account_name or '—' }}</td>
                             <td>{{ t('cash_cat_' ~ movement.category) }}</td>
                             <td class="cash-table__amount">{{ movement.amount | money(movement.currency) }}</td>
                             <td><span class="cash-badge cash-badge--confirmed">{{ t('cash_status_' ~ movement.status) }}</span></td>

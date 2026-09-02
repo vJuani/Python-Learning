@@ -497,6 +497,9 @@ def update_draft_from_form(
             "payment_method": form_values.get(
                 "payment_method"
             ),
+            "treasury_account_id": form_values.get(
+                "treasury_account_id"
+            ),
             "receipt_number": (
                 form_values.get("receipt_number") or ""
             ).strip() or None,
@@ -571,6 +574,9 @@ def build_review_context(organization_id, draft):
             "payment_method": payload["payment_method"],
             "movement_date": payload["movement_date"],
             "notes": payload.get("notes") or "",
+            "treasury_account_id": payload.get(
+                "treasury_account_id"
+            ),
         }
         errors, values = validate_movement_payload(form)
 
@@ -760,6 +766,9 @@ def confirm_ai_draft(
         "movement_date": payload.get("movement_date")
         or date.today().isoformat(),
         "notes": payload.get("notes") or "",
+        "treasury_account_id": payload.get(
+            "treasury_account_id"
+        ),
     }
     errors, values = validate_movement_payload(form)
 

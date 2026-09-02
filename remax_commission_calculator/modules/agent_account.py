@@ -299,6 +299,19 @@ def validate_movement_payload(
                 )
             charge_movement_id = applied_id
 
+    treasury_account_id = None
+    if movement_type == "payment":
+        treasury_raw = (
+            payload.get("treasury_account_id") or ""
+        ).strip()
+        if treasury_raw:
+            try:
+                treasury_account_id = int(treasury_raw)
+            except ValueError:
+                raise AgentAccountError(
+                    "agent_account_err_invalid_treasury_account"
+                ) from None
+
     if currency == "USD":
         raw_rate = payload.get("exchange_rate")
         if raw_rate is not None and str(raw_rate).strip():
@@ -343,6 +356,7 @@ def validate_movement_payload(
         "source_type": source_type,
         "source_id": source_id,
         "charge_movement_id": charge_movement_id,
+        "treasury_account_id": treasury_account_id,
     }
     validated["reference_text"] = _build_reference_text(
         payload,
@@ -406,6 +420,9 @@ def create_movement(
                 notes=validated.get("notes"),
                 charge_movement_id=validated.get(
                     "charge_movement_id"
+                ),
+                treasury_account_id=validated.get(
+                    "treasury_account_id"
                 ),
                 agent_name=agent_name,
             )

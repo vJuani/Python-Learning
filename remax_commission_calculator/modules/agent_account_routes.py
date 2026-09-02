@@ -232,6 +232,7 @@ def register_agent_account_routes(app, helpers):
                 "recurrence_type",
                 "applied_to_movement_id",
                 "operation_id",
+                "treasury_account_id",
             )
         }
         idempotency_key = (
@@ -292,6 +293,48 @@ def register_agent_account_routes(app, helpers):
             )
         ]
         return jsonify({"charges": charges})
+
+    @app.route(
+        "/agent-accounts/treasury-accounts",
+        methods=["GET"],
+    )
+    @admin_required
+    def agent_account_treasury_accounts():
+        organization_id = _require_admin_organization()
+        currency = request.args.get(
+            "currency",
+            "",
+        ).strip().upper()
+        from modules.database.treasury_accounts_repository import (
+            list_treasury_accounts,
+            suggest_treasury_account_for_payment,
+        )
+
+        payment_method = request.args.get(
+            "payment_method",
+            "",
+        ).strip()
+        accounts = list_treasury_accounts(
+            organization_id,
+            currency=currency if currency in CURRENCIES else None,
+            active_only=True,
+        )
+        suggested = None
+        if currency in CURRENCIES and payment_method:
+            suggested = suggest_treasury_account_for_payment(
+                organization_id,
+                currency,
+                payment_method,
+            )
+
+        return jsonify(
+            {
+                "accounts": accounts,
+                "suggested_id": (
+                    suggested["id"] if suggested else None
+                ),
+            }
+        )
 
     @app.route(
         "/agent-accounts/<int:agent_id>/operations/search",

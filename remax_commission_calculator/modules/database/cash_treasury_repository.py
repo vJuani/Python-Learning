@@ -17,6 +17,9 @@ from .connection import (
     get_connection,
 )
 from .tenant import require_organization_id
+from .treasury_accounts_repository import (
+    resolve_treasury_account_id,
+)
 
 
 def _now_iso():
@@ -72,6 +75,8 @@ def _build_movement_dict(row):
         "attachment_content_type": row[26],
         "attachment_original_name": row[27],
         "created_by_username": row[28],
+        "treasury_account_id": row[29],
+        "treasury_account_name": row[30],
         "display_id": (
             f"CAJ-{int(row[2]):06d}"
             if row[2] is not None
@@ -110,10 +115,15 @@ MOVEMENTS_BASE_QUERY = """
         m.attachment_hash,
         m.attachment_content_type,
         m.attachment_original_name,
-        u.username
+        u.username,
+        m.treasury_account_id,
+        ta.name
     FROM cash_movements AS m
     LEFT JOIN users AS u
         ON m.created_by_user_id = u.id
+    LEFT JOIN treasury_accounts AS ta
+        ON m.treasury_account_id = ta.id
+        AND ta.organization_id = m.organization_id
 """
 
 
@@ -207,6 +217,8 @@ def list_cash_movements(
     date_to=None,
     search=None,
     status=None,
+    treasury_account_id=None,
+    exclude_internal_transfers=False,
     limit=None,
 ):
     organization_id = require_organization_id(
@@ -246,6 +258,13 @@ def list_cash_movements(
     if status:
         clauses.append("m.status = ?")
         params.append(status)
+
+    if treasury_account_id:
+        clauses.append("m.treasury_account_id = ?")
+        params.append(int(treasury_account_id))
+
+    if exclude_internal_transfers:
+        clauses.append("m.source <> 'internal_transfer'")
 
     if search:
         like = f"%{search.strip()}%"
@@ -294,6 +313,8 @@ def sum_movements_by_type(
     date_from=None,
     date_to=None,
     status="confirmed",
+    treasury_account_id=None,
+    exclude_internal_transfers=True,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -319,6 +340,13 @@ def sum_movements_by_type(
         clauses.append("movement_date <= ?")
         params.append(date_to)
 
+    if treasury_account_id:
+        clauses.append("treasury_account_id = ?")
+        params.append(int(treasury_account_id))
+
+    if exclude_internal_transfers:
+        clauses.append("source <> 'internal_transfer'")
+
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -335,6 +363,104 @@ def sum_movements_by_type(
         return float(row[0] or 0)
     finally:
         connection.close()
+
+
+def _lock_treasury_account(
+    cursor,
+    organization_id,
+    treasury_account_id,
+    *,
+    for_update=False,
+):
+    backend = get_database_backend()
+    lock_clause = ""
+    if for_update and backend == BACKEND_POSTGRES:
+        lock_clause = " FOR UPDATE"
+
+    cursor.execute(
+        f"""
+        SELECT
+            id,
+            currency,
+            cached_balance,
+            is_active
+        FROM treasury_accounts
+        WHERE id = ?
+            AND organization_id = ?
+        {lock_clause}
+        """,
+        (treasury_account_id, organization_id),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise ValueError("invalid_treasury_account")
+    if not bool(row[3]):
+        raise ValueError("inactive_treasury_account")
+    return {
+        "id": row[0],
+        "currency": row[1],
+        "cached_balance": float(row[2] or 0),
+    }
+
+
+def _sync_consolidated_cash_account(
+    cursor,
+    organization_id,
+    currency,
+    signed_delta,
+    now,
+    *,
+    for_update=False,
+):
+    backend = get_database_backend()
+    lock_clause = ""
+    if for_update and backend == BACKEND_POSTGRES:
+        lock_clause = " FOR UPDATE"
+
+    cursor.execute(
+        f"""
+        SELECT id, cached_balance
+        FROM cash_accounts
+        WHERE organization_id = ?
+            AND currency = ?
+        {lock_clause}
+        """,
+        (organization_id, currency),
+    )
+    row = cursor.fetchone()
+
+    if row is None:
+        execute_insert(
+            cursor,
+            """
+            INSERT INTO cash_accounts (
+                organization_id,
+                currency,
+                cached_balance,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                organization_id,
+                currency,
+                max(0.0, signed_delta),
+                now,
+            ),
+        )
+        return
+
+    new_balance = float(row[1] or 0) + signed_delta
+    cursor.execute(
+        """
+        UPDATE cash_accounts
+        SET cached_balance = ?,
+            updated_at = ?
+        WHERE id = ?
+            AND organization_id = ?
+        """,
+        (new_balance, now, row[0], organization_id),
+    )
 
 
 def create_cash_movement_atomic(
@@ -359,6 +485,8 @@ def create_cash_movement_atomic(
     receipt_number=None,
     signed_delta=None,
     allow_negative=False,
+    treasury_account_id=None,
+    payment_method_for_default=None,
     connection=None,
     manage_transaction=True,
 ):
@@ -395,6 +523,15 @@ def create_cash_movement_atomic(
         connection = get_connection()
     cursor = connection.cursor()
 
+    resolved_account_id = resolve_treasury_account_id(
+        organization_id,
+        currency,
+        treasury_account_id=treasury_account_id,
+        payment_method=(
+            payment_method_for_default or payment_method
+        ),
+    )
+
     try:
         if manage_transaction:
             if backend == BACKEND_SQLITE:
@@ -402,64 +539,19 @@ def create_cash_movement_atomic(
             else:
                 cursor.execute("BEGIN")
 
-        if backend == BACKEND_POSTGRES:
-            cursor.execute(
-                """
-                SELECT id, cached_balance
-                FROM cash_accounts
-                WHERE organization_id = ?
-                    AND currency = ?
-                FOR UPDATE
-                """,
-                (organization_id, currency),
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT id, cached_balance
-                FROM cash_accounts
-                WHERE organization_id = ?
-                    AND currency = ?
-                """,
-                (organization_id, currency),
-            )
+        treasury_account = _lock_treasury_account(
+            cursor,
+            organization_id,
+            resolved_account_id,
+            for_update=True,
+        )
 
-        account_row = cursor.fetchone()
+        if treasury_account["currency"] != currency:
+            if manage_transaction:
+                connection.rollback()
+            raise ValueError("treasury_currency_mismatch")
 
-        if account_row is None:
-            account_id = execute_insert(
-                cursor,
-                """
-                INSERT INTO cash_accounts (
-                    organization_id,
-                    currency,
-                    cached_balance,
-                    updated_at
-                )
-                VALUES (?, ?, 0, ?)
-                """,
-                (organization_id, currency, now),
-            )
-            balance_before = 0.0
-
-            if backend == BACKEND_POSTGRES:
-                cursor.execute(
-                    """
-                    SELECT id, cached_balance
-                    FROM cash_accounts
-                    WHERE id = ?
-                    FOR UPDATE
-                    """,
-                    (account_id,),
-                )
-                account_row = cursor.fetchone()
-                balance_before = float(
-                    account_row[1] or 0
-                )
-        else:
-            account_id = account_row[0]
-            balance_before = float(account_row[1] or 0)
-
+        balance_before = treasury_account["cached_balance"]
         balance_after = balance_before + signed_delta
 
         if (
@@ -507,12 +599,13 @@ def create_cash_movement_atomic(
                 receipt_number,
                 attachment_hash,
                 attachment_content_type,
-                attachment_original_name
+                attachment_original_name,
+                treasury_account_id
             )
             VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 'confirmed', ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -538,23 +631,31 @@ def create_cash_movement_atomic(
                 attachment_hash,
                 attachment_content_type,
                 attachment_original_name,
+                resolved_account_id,
             ),
         )
 
         cursor.execute(
             """
-            UPDATE cash_accounts
-            SET cached_balance = ?,
-                updated_at = ?
+            UPDATE treasury_accounts
+            SET cached_balance = ?
             WHERE id = ?
                 AND organization_id = ?
             """,
             (
                 balance_after,
-                now,
-                account_id,
+                resolved_account_id,
                 organization_id,
             ),
+        )
+
+        _sync_consolidated_cash_account(
+            cursor,
+            organization_id,
+            currency,
+            signed_delta,
+            now,
+            for_update=True,
         )
 
         if manage_transaction:
@@ -629,6 +730,9 @@ def reverse_cash_movement_atomic(
 
         currency = original["currency"]
         amount = float(original["amount"])
+        treasury_account_id = original.get(
+            "treasury_account_id"
+        )
 
         # Opposite delta of the original effect.
         original_delta = (
@@ -637,37 +741,45 @@ def reverse_cash_movement_atomic(
         )
         signed_delta = -float(original_delta)
 
-        if backend == BACKEND_POSTGRES:
-            cursor.execute(
-                """
-                SELECT id, cached_balance
-                FROM cash_accounts
-                WHERE organization_id = ?
-                    AND currency = ?
-                FOR UPDATE
-                """,
-                (organization_id, currency),
+        if treasury_account_id:
+            treasury_account = _lock_treasury_account(
+                cursor,
+                organization_id,
+                treasury_account_id,
+                for_update=True,
             )
+            balance_before = treasury_account[
+                "cached_balance"
+            ]
         else:
-            cursor.execute(
-                """
-                SELECT id, cached_balance
-                FROM cash_accounts
-                WHERE organization_id = ?
-                    AND currency = ?
-                """,
-                (organization_id, currency),
-            )
+            if backend == BACKEND_POSTGRES:
+                cursor.execute(
+                    """
+                    SELECT id, cached_balance
+                    FROM cash_accounts
+                    WHERE organization_id = ?
+                        AND currency = ?
+                    FOR UPDATE
+                    """,
+                    (organization_id, currency),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT id, cached_balance
+                    FROM cash_accounts
+                    WHERE organization_id = ?
+                        AND currency = ?
+                    """,
+                    (organization_id, currency),
+                )
+            account_row = cursor.fetchone()
+            if account_row is None:
+                if manage_transaction:
+                    connection.rollback()
+                raise ValueError("account_missing")
+            balance_before = float(account_row[1] or 0)
 
-        account_row = cursor.fetchone()
-
-        if account_row is None:
-            if manage_transaction:
-                connection.rollback()
-            raise ValueError("account_missing")
-
-        account_id = account_row[0]
-        balance_before = float(account_row[1] or 0)
         balance_after = balance_before + signed_delta
 
         if balance_after < -1e-9:
@@ -706,11 +818,12 @@ def reverse_cash_movement_atomic(
                 reversal_of_movement_id,
                 reversal_reason,
                 balance_before,
-                balance_after
+                balance_after,
+                treasury_account_id
             )
             VALUES (
                 ?, ?, 'reversal', ?, ?, ?, ?, ?, ?, ?, ?,
-                'confirmed', ?, 'manual', ?, ?, ?, ?
+                'confirmed', ?, 'manual', ?, ?, ?, ?, ?
             )
             """,
             (
@@ -729,6 +842,7 @@ def reverse_cash_movement_atomic(
                 reason,
                 balance_before,
                 balance_after,
+                treasury_account_id,
             ),
         )
 
@@ -751,20 +865,28 @@ def reverse_cash_movement_atomic(
             ),
         )
 
-        cursor.execute(
-            """
-            UPDATE cash_accounts
-            SET cached_balance = ?,
-                updated_at = ?
-            WHERE id = ?
-                AND organization_id = ?
-            """,
-            (
-                balance_after,
-                now,
-                account_id,
-                organization_id,
-            ),
+        if treasury_account_id:
+            cursor.execute(
+                """
+                UPDATE treasury_accounts
+                SET cached_balance = ?
+                WHERE id = ?
+                    AND organization_id = ?
+                """,
+                (
+                    balance_after,
+                    treasury_account_id,
+                    organization_id,
+                ),
+            )
+
+        _sync_consolidated_cash_account(
+            cursor,
+            organization_id,
+            currency,
+            signed_delta,
+            now,
+            for_update=True,
         )
 
         if manage_transaction:
@@ -877,5 +999,139 @@ def find_duplicate_cash_movements(
                     matches.append(item)
 
         return matches[:limit]
+    finally:
+        connection.close()
+
+
+INTERNAL_TRANSFER_CATEGORY = "internal_transfer"
+
+
+def create_internal_transfer_atomic(
+    organization_id,
+    *,
+    from_account_id,
+    to_account_id,
+    amount,
+    movement_date,
+    created_by_user_id,
+    description=None,
+    notes=None,
+    idempotency_key=None,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    amount = float(amount)
+    if amount <= 0:
+        raise ValueError("invalid_amount")
+
+    if from_account_id == to_account_id:
+        raise ValueError("same_account_transfer")
+
+    backend = get_database_backend()
+    connection = get_connection()
+    cursor = connection.cursor()
+    now = _now_iso()
+
+    try:
+        if backend == BACKEND_SQLITE:
+            cursor.execute("BEGIN IMMEDIATE")
+        else:
+            cursor.execute("BEGIN")
+
+        if idempotency_key:
+            token = f"transfer:{idempotency_key}"
+            cursor.execute(
+                """
+                SELECT id
+                FROM cash_movements
+                WHERE organization_id = ?
+                    AND source = 'internal_transfer'
+                    AND source_reference = ?
+                LIMIT 1
+                """,
+                (organization_id, token),
+            )
+            existing = cursor.fetchone()
+            if existing is not None:
+                connection.commit()
+                return {
+                    "out_movement_id": existing[0],
+                    "in_movement_id": None,
+                }
+
+        source_account = _lock_treasury_account(
+            cursor,
+            organization_id,
+            from_account_id,
+            for_update=True,
+        )
+        dest_account = _lock_treasury_account(
+            cursor,
+            organization_id,
+            to_account_id,
+            for_update=True,
+        )
+
+        if source_account["currency"] != dest_account["currency"]:
+            connection.rollback()
+            raise ValueError("cross_currency_transfer")
+
+        currency = source_account["currency"]
+        transfer_ref = (
+            f"transfer:{idempotency_key}"
+            if idempotency_key
+            else f"transfer:{now}:{from_account_id}:{to_account_id}:{amount}"
+        )
+        label = description or (
+            f"Transfer {source_account['id']} → {dest_account['id']}"
+        )
+
+        out_id = create_cash_movement_atomic(
+            organization_id,
+            movement_type="adjustment",
+            currency=currency,
+            amount=amount,
+            category=INTERNAL_TRANSFER_CATEGORY,
+            description=f"Transfer out — {label}",
+            payment_method="transfer",
+            movement_date=movement_date,
+            created_by_user_id=created_by_user_id,
+            notes=notes,
+            source="internal_transfer",
+            source_reference=transfer_ref,
+            signed_delta=-amount,
+            treasury_account_id=from_account_id,
+            connection=connection,
+            manage_transaction=False,
+        )
+
+        in_id = create_cash_movement_atomic(
+            organization_id,
+            movement_type="adjustment",
+            currency=currency,
+            amount=amount,
+            category=INTERNAL_TRANSFER_CATEGORY,
+            description=f"Transfer in — {label}",
+            payment_method="transfer",
+            movement_date=movement_date,
+            created_by_user_id=created_by_user_id,
+            notes=notes,
+            source="internal_transfer",
+            source_reference=transfer_ref,
+            signed_delta=amount,
+            treasury_account_id=to_account_id,
+            connection=connection,
+            manage_transaction=False,
+        )
+
+        connection.commit()
+        return {
+            "out_movement_id": out_id,
+            "in_movement_id": in_id,
+        }
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         connection.close()

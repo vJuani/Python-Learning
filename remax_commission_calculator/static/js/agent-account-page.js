@@ -125,6 +125,43 @@
         return selected ? selected.value : 'none';
     }
 
+    function fetchTreasuryAccounts(currency, paymentMethod) {
+        if (!agentId) return Promise.resolve({ accounts: [], suggested_id: null });
+        var params = new URLSearchParams({ currency: currency || 'USD' });
+        if (paymentMethod) params.set('payment_method', paymentMethod);
+        return fetch('/agent-accounts/treasury-accounts?' + params.toString(), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        }).then(function (response) {
+            if (!response.ok) throw new Error('treasury_accounts_failed');
+            return response.json();
+        }).catch(function () {
+            return { accounts: [], suggested_id: null };
+        });
+    }
+
+    function renderTreasuryAccountsSelect(currency, paymentMethod, selectedValue) {
+        if (!movementForm) return;
+        var select = movementForm.querySelector('[data-aa-treasury-account]');
+        if (!select) return;
+        fetchTreasuryAccounts(currency, paymentMethod).then(function (payload) {
+            select.innerHTML = '';
+            var auto = document.createElement('option');
+            auto.value = '';
+            auto.textContent = 'Automática según medio';
+            select.appendChild(auto);
+            payload.accounts.forEach(function (account) {
+                var option = document.createElement('option');
+                option.value = String(account.id);
+                option.textContent = account.name + ' (' + account.currency + ')';
+                select.appendChild(option);
+            });
+            var preferred = selectedValue || payload.suggested_id;
+            if (preferred) select.value = String(preferred);
+            updatePaymentConfirm();
+        });
+    }
+
     function fetchPendingCharges(currency) {
         if (!agentId) return Promise.resolve([]);
         var cacheKey = currency || 'USD';
@@ -205,6 +242,11 @@
             renderPendingChargesSelect(
                 currencySelect ? currencySelect.value : 'USD'
             );
+            var paymentMethod = movementForm.querySelector('[data-aa-payment-method]');
+            renderTreasuryAccountsSelect(
+                currencySelect ? currencySelect.value : 'USD',
+                paymentMethod ? paymentMethod.value : ''
+            );
         }
 
         var paymentConfirm = movementForm.querySelector('[data-aa-payment-confirm]');
@@ -248,6 +290,14 @@
             methodEl.textContent = methodOption && methodOption.value
                 ? methodOption.textContent
                 : '—';
+        }
+        var treasuryEl = confirmBlock.querySelector('[data-aa-confirm-treasury]');
+        var treasurySelect = movementForm.querySelector('[data-aa-treasury-account]');
+        if (treasuryEl && treasurySelect) {
+            var treasuryOption = treasurySelect.options[treasurySelect.selectedIndex];
+            treasuryEl.textContent = treasuryOption && treasuryOption.value
+                ? treasuryOption.textContent
+                : 'Automática según medio';
         }
     }
 
@@ -395,7 +445,14 @@
         }
         var paymentMethod = movementForm.querySelector('[data-aa-payment-method]');
         if (paymentMethod) {
-            paymentMethod.addEventListener('change', updatePaymentConfirm);
+            paymentMethod.addEventListener('change', function () {
+                var currencySelect = movementForm.querySelector('[data-aa-currency-select]');
+                renderTreasuryAccountsSelect(
+                    currencySelect ? currencySelect.value : 'USD',
+                    paymentMethod.value
+                );
+                updatePaymentConfirm();
+            });
         }
 
         initOperationAutocomplete();

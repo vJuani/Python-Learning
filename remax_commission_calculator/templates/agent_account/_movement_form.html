@@ -42,6 +42,15 @@
 
         <div class="aa-form__section" data-aa-section="payment" hidden>
             <label class="aa-field">
+                <span>{{ t('treasury_account_destination') }}</span>
+                <select name="treasury_account_id" data-aa-treasury-account required>
+                    <option value="">{{ t('treasury_account_auto') }}</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="aa-form__section" data-aa-section="payment" hidden>
+            <label class="aa-field">
                 <span>{{ t('agent_account_payment_method') }}</span>
                 <select name="payment_method" required data-aa-payment-method>
                     <option value="">{{ t('agent_account_optional') }}</option>
@@ -117,6 +126,10 @@
                 <div class="aa-vat-summary__row">
                     <span>{{ t('agent_account_payment_confirm_cash_income') }}</span>
                     <strong data-aa-confirm-cash>—</strong>
+                </div>
+                <div class="aa-vat-summary__row">
+                    <span>{{ t('treasury_account_destination') }}</span>
+                    <strong data-aa-confirm-treasury>—</strong>
                 </div>
                 <div class="aa-vat-summary__row">
                     <span>{{ t('agent_account_payment_method') }}</span>

@@ -201,6 +201,7 @@ def register_agent_payment_atomic(
     charge_movement_id=None,
     agent_name=None,
     cash_description=None,
+    treasury_account_id=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -378,6 +379,8 @@ def register_agent_payment_atomic(
             notes=notes,
             source=CASH_SOURCE_AGENT_ACCOUNT_PAYMENT,
             source_reference=str(payment_id),
+            treasury_account_id=treasury_account_id,
+            payment_method_for_default=payment_method,
             connection=connection,
             manage_transaction=False,
         )

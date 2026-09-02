@@ -2040,6 +2040,110 @@ def _migrate_cash_treasury(cursor):
     )
 
 
+def _migrate_treasury_accounts(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS treasury_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            account_type TEXT NOT NULL,
+            currency TEXT NOT NULL,
+            bank_name TEXT,
+            account_reference TEXT,
+            is_default INTEGER NOT NULL DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            cached_balance REAL NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            created_by_user_id INTEGER,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (created_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+
+            CHECK (
+                account_type IN (
+                    'cash',
+                    'bank',
+                    'digital_wallet',
+                    'other'
+                )
+            ),
+            CHECK (currency IN ('USD', 'ARS'))
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_treasury_accounts_org_currency
+        ON treasury_accounts (
+            organization_id,
+            currency,
+            is_active
+        )
+        """
+    )
+
+    if not _column_exists(
+        cursor,
+        "cash_movements",
+        "treasury_account_id",
+    ):
+        cursor.execute(
+            """
+            ALTER TABLE cash_movements
+            ADD COLUMN treasury_account_id INTEGER
+            REFERENCES treasury_accounts(id)
+            """
+        )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_cash_movements_treasury_account
+        ON cash_movements (
+            organization_id,
+            treasury_account_id,
+            status
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM organizations
+        """
+    )
+    org_rows = cursor.fetchall()
+
+    if not org_rows:
+        cursor.execute(
+            """
+            SELECT DISTINCT organization_id
+            FROM cash_movements
+            """
+        )
+        org_rows = cursor.fetchall()
+
+    from .treasury_accounts_repository import (
+        ensure_legacy_default_accounts,
+    )
+
+    seen = set()
+    for row in org_rows:
+        org_id = row[0]
+        if org_id in seen:
+            continue
+        seen.add(org_id)
+        ensure_legacy_default_accounts(cursor, org_id)
+
+
 def _migrate_invoicing(cursor):
     for column_name, column_sql in (
         ("invoice_amount", "REAL"),
@@ -3288,6 +3392,7 @@ def migrate_schema(create_backup=True):
         _migrate_arca_integration(cursor)
         _migrate_operation_creation(cursor)
         _migrate_agent_account(cursor)
+        _migrate_treasury_accounts(cursor)
 
         _validate_migration(
             cursor,

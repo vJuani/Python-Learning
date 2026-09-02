@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v11"
+POSTGRES_SCHEMA_VERSION = "postgres_v12"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -787,6 +787,47 @@ SCHEMA_STATEMENTS = (
     )
     """,
     f"""
+    CREATE TABLE IF NOT EXISTS treasury_accounts (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        name TEXT NOT NULL,
+        account_type TEXT NOT NULL,
+        currency TEXT NOT NULL,
+        bank_name TEXT,
+        account_reference TEXT,
+        is_default {_FLAG} NOT NULL DEFAULT 0,
+        is_active {_FLAG} NOT NULL DEFAULT 1,
+        cached_balance {_MONEY} NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        created_by_user_id BIGINT,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+        FOREIGN KEY (created_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+
+        CHECK (
+            account_type IN (
+                'cash',
+                'bank',
+                'digital_wallet',
+                'other'
+            )
+        ),
+        CHECK (currency IN ('USD', 'ARS'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_treasury_accounts_org_currency
+        ON treasury_accounts (
+            organization_id,
+            currency,
+            is_active
+        )
+    """,
+    f"""
     CREATE TABLE IF NOT EXISTS cash_movements (
         id {_ID},
         organization_id BIGINT NOT NULL,
@@ -816,6 +857,7 @@ SCHEMA_STATEMENTS = (
         attachment_hash TEXT,
         attachment_content_type TEXT,
         attachment_original_name TEXT,
+        treasury_account_id BIGINT,
 
         FOREIGN KEY (organization_id)
             REFERENCES organizations(id)
@@ -828,6 +870,9 @@ SCHEMA_STATEMENTS = (
             ON DELETE SET NULL,
         FOREIGN KEY (reversal_of_movement_id)
             REFERENCES cash_movements(id)
+            ON DELETE SET NULL,
+        FOREIGN KEY (treasury_account_id)
+            REFERENCES treasury_accounts(id)
             ON DELETE SET NULL,
 
         CHECK (
@@ -855,15 +900,15 @@ SCHEMA_STATEMENTS = (
     """,
     """
     CREATE INDEX IF NOT EXISTS idx_cash_movements_org_currency
-    ON cash_movements (
-        organization_id,
-        currency,
-        status
-    )
+        ON cash_movements (
+            organization_id,
+            currency,
+            status
+        )
     """,
     """
     CREATE INDEX IF NOT EXISTS idx_cash_accounts_org
-    ON cash_accounts (organization_id)
+        ON cash_accounts (organization_id)
     """,
     """
     CREATE INDEX IF NOT EXISTS idx_cash_movements_attachment_hash
@@ -1303,6 +1348,7 @@ def create_postgres_schema():
             ("attachment_hash", "TEXT"),
             ("attachment_content_type", "TEXT"),
             ("attachment_original_name", "TEXT"),
+            ("treasury_account_id", "BIGINT"),
         ):
             cursor.execute(
                 f"""
@@ -1727,6 +1773,33 @@ def create_postgres_schema():
             cursor,
             POSTGRES_SCHEMA_VERSION,
         ):
+            from .treasury_accounts_repository import (
+                ensure_legacy_default_accounts,
+            )
+
+            cursor.execute(
+                """
+                SELECT id FROM organizations
+                """
+            )
+            for org_row in cursor.fetchall():
+                ensure_legacy_default_accounts(
+                    cursor,
+                    org_row[0],
+                )
+
+            cursor.execute(
+                """
+                SELECT DISTINCT organization_id
+                FROM cash_movements
+                """
+            )
+            for org_row in cursor.fetchall():
+                ensure_legacy_default_accounts(
+                    cursor,
+                    org_row[0],
+                )
+
             _record_schema_version(
                 cursor,
                 POSTGRES_SCHEMA_VERSION,

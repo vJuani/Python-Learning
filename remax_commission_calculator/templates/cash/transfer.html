@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('cash_transfer') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('cash_transfer') }}</h2>
+        <p>{{ t('cash_transfer_subtitle') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('cash_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <form method="post" class="agent-form">
+        <input type="hidden" name="idempotency_key" value="{{ form_values.idempotency_key if form_values else '' }}">
+        <div class="form-group">
+            <label for="from_account_id">{{ t('cash_transfer_from') }}</label>
+            <select id="from_account_id" name="from_account_id" class="form-input" required>
+                {% for account in accounts %}
+                <option value="{{ account.id }}" data-currency="{{ account.currency }}">{{ account.name }} ({{ account.currency }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="to_account_id">{{ t('cash_transfer_to') }}</label>
+            <select id="to_account_id" name="to_account_id" class="form-input" required>
+                {% for account in accounts %}
+                <option value="{{ account.id }}" data-currency="{{ account.currency }}">{{ account.name }} ({{ account.currency }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="amount">{{ t('cash_amount') }}</label>
+            <input type="text" id="amount" name="amount" class="form-input" required>
+        </div>
+        <div class="form-group">
+            <label for="movement_date">{{ t('cash_movement_date') }}</label>
+            <input type="date" id="movement_date" name="movement_date" class="form-input" value="{{ today_iso }}" required>
+        </div>
+        <div class="form-group">
+            <label for="description">{{ t('cash_description') }}</label>
+            <input type="text" id="description" name="description" class="form-input">
+        </div>
+        <button type="submit" class="btn btn-primary">{{ t('cash_transfer_confirm') }}</button>
+    </form>
+</section>
+{% endblock %}

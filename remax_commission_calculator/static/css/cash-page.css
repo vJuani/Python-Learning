@@ -269,6 +269,79 @@ body.is-cash-page .app-main-inner {
         grid-template-columns: 1fr;
     }
 
+}
+
+.cash-view-switch {
+    display: flex;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.cash-view-switch__item {
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid #d1d5db;
+    text-decoration: none;
+    color: #374151;
+    font-size: 0.875rem;
+}
+
+.cash-view-switch__item.is-active {
+    background: #111827;
+    color: #fff;
+    border-color: #111827;
+}
+
+.cash-treasury-accounts {
+    margin-bottom: 1.25rem;
+}
+
+.cash-treasury-accounts__head h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+}
+
+.cash-treasury-accounts__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+}
+
+.cash-treasury-card {
+    display: block;
+    padding: 0.9rem 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+    text-decoration: none;
+    color: inherit;
+}
+
+.cash-treasury-card.is-selected {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 1px #2563eb;
+}
+
+.cash-treasury-card__name {
+    display: block;
+    font-weight: 600;
+}
+
+.cash-treasury-card__meta,
+.cash-treasury-card__last {
+    display: block;
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+.cash-treasury-card__balance {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 1.1rem;
+}
+
+@media (max-width: 640px) {
     .cash-page__header {
         flex-direction: column;
     }

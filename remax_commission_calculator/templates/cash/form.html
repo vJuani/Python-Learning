@@ -68,6 +68,16 @@
         </div>
 
         <div class="form-group">
+            <label for="treasury_account_id">{{ t('treasury_account') }}</label>
+            <select id="treasury_account_id" name="treasury_account_id" class="form-input" data-cash-treasury-account>
+                <option value="">{{ t('treasury_account_auto') }}</option>
+                {% for account in treasury_accounts %}
+                <option value="{{ account.id }}" data-currency="{{ account.currency }}" data-type="{{ account.account_type }}" {% if form_values.treasury_account_id|string == account.id|string %}selected{% endif %}>{{ account.name }} ({{ account.currency }})</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
             <label for="payment_method">{{ t('cash_payment_method') }}</label>
             <select id="payment_method" name="payment_method" class="form-input" required>
                 {% for method in payment_methods %}
