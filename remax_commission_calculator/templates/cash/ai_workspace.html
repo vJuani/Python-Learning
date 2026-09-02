@@ -282,7 +282,7 @@
     </section>
 
     <div class="cash-ai-bottom">
-        <section class="cash-ai-card cash-ai-card--table">
+        <section class="cash-ai-card cash-ai-card--table hide-mobile">
             <h2>{{ t('cash_ai_page_recent_movements') }}</h2>
             <div class="cash-ai-table-wrap">
                 <table class="cash-ai-table">
@@ -318,7 +318,33 @@
             </div>
         </section>
 
-        <section class="cash-ai-card cash-ai-card--activity">
+        <section class="cash-ai-card cash-ai-mobile-movements hide-desktop">
+            <div class="cash-ai-mobile-movements__head">
+                <h2>{{ t('cash_ai_page_recent_movements') }}</h2>
+                <a href="{{ url_for('cash_list') }}">{{ t('dashboard_mobile_view_all') }} →</a>
+            </div>
+            <ul class="cash-ai-mobile-movements__list">
+                {% for movement in cash_ai_panel.recent_movements %}
+                <li class="cash-ai-mobile-movement">
+                    <span class="cash-ai-mobile-movement__icon cash-ai-mobile-movement__icon--{{ movement.type }}" aria-hidden="true">
+                        {% if movement.type == 'income' %}↑{% else %}↓{% endif %}
+                    </span>
+                    <div class="cash-ai-mobile-movement__body">
+                        <strong>{{ movement.merchant }}</strong>
+                        <span>{{ movement.date | short_date }}{% if movement.category %} · {{ t('cash_cat_' ~ movement.category) }}{% endif %}</span>
+                    </div>
+                    <div class="cash-ai-mobile-movement__amount">
+                        <strong>{{ movement.amount | money(movement.currency) }}</strong>
+                        <span class="cash-ai-status cash-ai-status--success">{{ t('cash_status_' ~ movement.status) }}</span>
+                    </div>
+                </li>
+                {% else %}
+                <li class="cash-ai-empty">{{ t('cash_ai_page_no_movements') }}</li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <section class="cash-ai-card cash-ai-card--activity hide-mobile">
             <h2>{{ t('cash_ai_page_activity_title') }}</h2>
             <ul class="cash-ai-activity">
                 {% for item in cash_ai_panel.activity %}
