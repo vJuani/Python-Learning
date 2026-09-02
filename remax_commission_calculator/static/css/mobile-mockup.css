@@ -631,7 +631,12 @@
         width: 4.75rem;
         height: 4.25rem;
         border-radius: 0.65rem;
-        background: linear-gradient(135deg, #dbeafe, #e0f2fe);
+        background-color: var(--placeholder-bg);
+        border: 1px solid var(--border-soft);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z' stroke='%2394a3b8' stroke-width='1.75' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 1.5rem;
     }
 
     .property-mobile-card__type {
