@@ -62,16 +62,60 @@
                 <small>{{ t('cash_ai_page_net_vs_yesterday', amount=cash_ai_panel.kpis.net_yesterday | money('ARS')) }}</small>
             </div>
         </article>
-        <article class="cash-ai-kpi-card cash-ai-kpi-card--pending">
-            <span class="cash-ai-kpi-card__icon" aria-hidden="true"></span>
-            <div>
-                <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_pending') }}</span>
-                <strong>{{ cash_ai_panel.kpis.pending_amount | money('ARS') }}</strong>
-                <small>{{ t('cash_ai_page_receipts_count', count=cash_ai_panel.kpis.pending_receipts) }}</small>
-            </div>
-            <span class="cash-ai-kpi-card__badge">{{ cash_ai_panel.kpis.pending_count }}</span>
+        <article class="cash-ai-kpi-card cash-ai-kpi-card--pending cash-ai-kpi-card--action">
+            <button
+                type="button"
+                class="cash-ai-kpi-card__trigger"
+                data-cash-ai-pending-open
+                aria-expanded="false"
+                aria-controls="cash-ai-pending-panel"
+                aria-label="{{ t('cash_ai_page_pending_review_open') }}"
+            >
+                <span class="cash-ai-kpi-card__icon" aria-hidden="true"></span>
+                <div class="cash-ai-kpi-card__content">
+                    <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_pending') }}</span>
+                    <strong>{{ cash_ai_panel.kpis.pending_amount | money('ARS') }}</strong>
+                    <small>{{ t('cash_ai_page_receipts_count', count=cash_ai_panel.kpis.pending_receipts) }}</small>
+                </div>
+                {% if cash_ai_panel.kpis.pending_count %}
+                <span class="cash-ai-kpi-card__badge">{{ cash_ai_panel.kpis.pending_count }}</span>
+                {% endif %}
+                <span class="cash-ai-kpi-card__chevron" aria-hidden="true">›</span>
+            </button>
         </article>
     </section>
+
+    <div class="cash-ai-pending-panel" id="cash-ai-pending-panel" hidden>
+        <button type="button" class="cash-ai-pending-panel__backdrop" data-cash-ai-pending-close aria-label="{{ t('nav_close') }}"></button>
+        <section class="cash-ai-pending-panel__sheet" role="dialog" aria-modal="true" aria-labelledby="cash-ai-pending-panel-title">
+            <header class="cash-ai-pending-panel__head">
+                <h2 id="cash-ai-pending-panel-title">{{ t('cash_ai_page_pending_review_title') }}</h2>
+                <button type="button" class="cash-ai-pending-panel__close" data-cash-ai-pending-close aria-label="{{ t('nav_close') }}">×</button>
+            </header>
+            <ul class="cash-ai-pending-panel__list">
+                {% for item in cash_ai_panel.pending_review %}
+                <li class="cash-ai-pending-panel__item">
+                    <a href="{{ url_for('cash_ai_review', draft_id=item.id) }}" class="cash-ai-pending-panel__link">
+                        <span class="cash-ai-pending-panel__icon" aria-hidden="true">📄</span>
+                        <span class="cash-ai-pending-panel__body">
+                            <strong>{{ item.name }}</strong>
+                            {% if item.merchant %}
+                            <span>{{ item.merchant }}</span>
+                            {% endif %}
+                            <span>{{ item.date }}{% if item.amount is not none %} · {{ item.amount | money(item.currency) }}{% endif %}</span>
+                        </span>
+                        <span class="cash-ai-pending-panel__meta">
+                            <span class="cash-ai-status cash-ai-status--{{ item.status_tone }}">{{ item.status_label }}</span>
+                            <span class="cash-ai-pending-panel__action">{{ t('cash_ai_page_pending_review_action') }} →</span>
+                        </span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="cash-ai-empty">{{ t('cash_ai_page_pending_review_empty') }}</li>
+                {% endfor %}
+            </ul>
+        </section>
+    </div>
 
     <section class="cash-ai-evolution-row">
         <article class="cash-ai-evolution-card">
@@ -393,6 +437,30 @@
                 }
             });
         }
+    }
+
+    var pendingPanel = document.getElementById("cash-ai-pending-panel");
+    var pendingOpen = document.querySelector("[data-cash-ai-pending-open]");
+    if (pendingPanel && pendingOpen) {
+        function openPendingPanel() {
+            pendingPanel.hidden = false;
+            pendingOpen.setAttribute("aria-expanded", "true");
+            document.body.style.overflow = "hidden";
+        }
+        function closePendingPanel() {
+            pendingPanel.hidden = true;
+            pendingOpen.setAttribute("aria-expanded", "false");
+            document.body.style.overflow = "";
+        }
+        pendingOpen.addEventListener("click", openPendingPanel);
+        pendingPanel.querySelectorAll("[data-cash-ai-pending-close]").forEach(function (button) {
+            button.addEventListener("click", closePendingPanel);
+        });
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && !pendingPanel.hidden) {
+                closePendingPanel();
+            }
+        });
     }
 })();
 </script>

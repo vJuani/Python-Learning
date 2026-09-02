@@ -237,7 +237,7 @@ body.is-cash-ai-page .app-main-inner {
 .cash-ai-kpi-card__badge {
     position: absolute;
     top: 0.85rem;
-    right: 0.85rem;
+    right: 2rem;
     min-width: 1.45rem;
     height: 1.45rem;
     padding: 0 0.35rem;
@@ -249,6 +249,193 @@ body.is-cash-ai-page .app-main-inner {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+}
+
+.cash-ai-kpi-card--action {
+    padding: 0;
+    overflow: hidden;
+}
+
+.cash-ai-kpi-card__trigger {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    width: 100%;
+    height: 100%;
+    padding: 1rem 1.05rem;
+    border: none;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.cash-ai-kpi-card__trigger:hover,
+.cash-ai-kpi-card__trigger:focus-visible {
+    background: #f8fbff;
+    outline: none;
+    box-shadow: inset 0 0 0 2px rgba(13, 71, 255, 0.18);
+}
+
+.cash-ai-kpi-card__content {
+    flex: 1;
+    min-width: 0;
+}
+
+.cash-ai-kpi-card__chevron {
+    position: absolute;
+    top: 50%;
+    right: 0.85rem;
+    transform: translateY(-50%);
+    color: #0d47ff;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.cash-ai-pending-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    display: grid;
+    place-items: end center;
+}
+
+.cash-ai-pending-panel[hidden] {
+    display: none;
+}
+
+.cash-ai-pending-panel__backdrop {
+    position: absolute;
+    inset: 0;
+    border: none;
+    background: rgba(15, 23, 42, 0.45);
+    cursor: pointer;
+}
+
+.cash-ai-pending-panel__sheet {
+    position: relative;
+    z-index: 1;
+    width: min(28rem, calc(100% - 1.5rem));
+    max-height: min(80vh, 36rem);
+    margin-bottom: 1rem;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+.cash-ai-pending-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.95rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.cash-ai-pending-panel__head h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.cash-ai-pending-panel__close {
+    width: 2rem;
+    height: 2rem;
+    border: none;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #64748b;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cash-ai-pending-panel__list {
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0;
+    overflow-y: auto;
+}
+
+.cash-ai-pending-panel__item {
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.cash-ai-pending-panel__item:last-child {
+    border-bottom: none;
+}
+
+.cash-ai-pending-panel__link {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    align-items: center;
+    padding: 0.85rem 1rem;
+    color: inherit;
+    text-decoration: none;
+    transition: background 0.15s ease;
+}
+
+.cash-ai-pending-panel__link:hover {
+    background: #f8fbff;
+}
+
+.cash-ai-pending-panel__icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.65rem;
+    background: #eef4ff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.cash-ai-pending-panel__body {
+    min-width: 0;
+    display: grid;
+    gap: 0.1rem;
+}
+
+.cash-ai-pending-panel__body strong {
+    font-size: 0.84rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cash-ai-pending-panel__body span {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cash-ai-pending-panel__meta {
+    display: grid;
+    justify-items: end;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.cash-ai-pending-panel__action {
+    color: #0d47ff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.cash-ai-pending-panel__list .cash-ai-empty {
+    padding: 1.25rem 1rem;
 }
 
 /* Evolution + balances */
@@ -1158,8 +1345,33 @@ body.is-cash-ai-page .app-main-inner {
         white-space: nowrap;
     }
 
-    .cash-ai-mobile-movement__amount .cash-ai-status {
-        margin-top: 0.15rem;
-        font-size: 0.62rem;
+    .cash-ai-kpi-card__badge {
+        right: 1.75rem;
+    }
+
+    .cash-ai-pending-panel {
+        place-items: end stretch;
+    }
+
+    .cash-ai-pending-panel__sheet {
+        width: 100%;
+        max-height: min(85vh, 40rem);
+        margin: 0;
+        border-radius: 1rem 1rem 0 0;
+    }
+
+    .cash-ai-pending-panel__link {
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-rows: auto auto;
+    }
+
+    .cash-ai-pending-panel__meta {
+        grid-column: 2;
+        grid-row: 2;
+        justify-items: start;
+        flex-direction: row;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
 }

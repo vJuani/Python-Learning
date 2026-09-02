@@ -340,6 +340,23 @@ def build_cash_ai_workspace(
             }
         )
 
+    pending_review_rows = []
+    for draft in pending_drafts:
+        payload = draft.get("draft_payload") or {}
+        pending_review_rows.append(
+            {
+                "id": draft.get("id"),
+                "name": draft.get("attachment_original_name")
+                or _t("cash_ai_page_receipt_unnamed", language),
+                "merchant": payload.get("merchant") or payload.get("description"),
+                "date": (draft.get("created_at") or "")[:10],
+                "amount": payload.get("amount"),
+                "currency": payload.get("currency") or "ARS",
+                "status_label": _draft_status_label(draft, language),
+                "status_tone": _draft_status_tone(draft),
+            }
+        )
+
     return {
         "date_label": _format_today_label(language, today),
         "kpis": {
@@ -374,6 +391,7 @@ def build_cash_ai_workspace(
             "period_change_amount": period_change_amount,
         },
         "recent_receipts": receipt_rows,
+        "pending_review": pending_review_rows,
         "recent_movements": movement_rows,
         "activity": _activity_feed(drafts, language),
     }
