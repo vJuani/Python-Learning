@@ -589,6 +589,64 @@ def filter_operations(
     return build_operation_dict(rows)
 
 
+def search_operations_for_agent_account(
+    organization_id,
+    agent_id,
+    query="",
+    *,
+    limit=15,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    limit = max(1, min(int(limit or 15), 30))
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    conditions = [
+        "operations.organization_id = ?",
+        "operations.agent_id = ?",
+        "operations.status = 'approved'",
+    ]
+    params = [organization_id, agent_id]
+    q = (query or "").strip()
+
+    if q:
+        search_parts = []
+        numeric_id = None
+        cleaned = q.upper().replace("COM-", "").strip()
+        try:
+            numeric_id = int(cleaned)
+        except ValueError:
+            numeric_id = None
+
+        if numeric_id is not None:
+            search_parts.append("operations.id = ?")
+            params.append(numeric_id)
+
+        like = f"%{q}%"
+        search_parts.append(
+            "LOWER(properties.address) LIKE LOWER(?)"
+        )
+        params.append(like)
+        search_parts.append(
+            "LOWER(operations.operation_date) LIKE LOWER(?)"
+        )
+        params.append(like)
+        conditions.append("(" + " OR ".join(search_parts) + ")")
+
+    cursor.execute(
+        OPERATIONS_BASE_QUERY
+        + " WHERE "
+        + " AND ".join(conditions)
+        + " ORDER BY operations.id DESC LIMIT ?",
+        (*params, limit),
+    )
+    rows = cursor.fetchall()
+    connection.close()
+    return build_operation_dict(rows)
+
+
 def list_operations_for_property(
     property_id,
     organization_id,

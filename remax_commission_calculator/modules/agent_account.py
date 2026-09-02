@@ -19,17 +19,24 @@ from modules.database.agent_account_repository import (
     CURRENCIES,
     MOVEMENT_TYPES,
     SOURCE_MANUAL,
+    SOURCE_OPERATION,
     STATUS_CONFIRMED,
     STATUS_REVERSED,
     create_agent_account_movement_atomic,
     get_agent_account_metadata,
     get_agent_balances,
     get_movement_by_idempotency_key,
+    get_pending_charge_for_payment,
     list_agent_account_movements,
     list_agents_account_summary,
+    list_pending_charges,
     reverse_agent_account_movement_atomic,
     sum_payments_collected_month,
     sum_receivable_balances,
+)
+from modules.database.operations_repository import (
+    get_operation_record,
+    search_operations_for_agent_account,
 )
 from modules.database.tenant import require_organization_id
 
@@ -107,7 +114,13 @@ def _build_reference_text(payload, validated):
     return validated["description"]
 
 
-def validate_movement_payload(payload, *, language="es"):
+def validate_movement_payload(
+    payload,
+    *,
+    language="es",
+    organization_id=None,
+    agent_id=None,
+):
     charge_category = (
         payload.get("charge_category") or ""
     ).strip().lower()
@@ -147,12 +160,56 @@ def validate_movement_payload(payload, *, language="es"):
         raise AgentAccountError(
             "agent_account_err_description_required"
         )
+
+    source_type = SOURCE_MANUAL
+    source_id = None
+
+    if movement_type == "commission":
+        operation_raw = (
+            payload.get("operation_id") or ""
+        ).strip()
+        if operation_raw:
+            if organization_id is None or agent_id is None:
+                raise AgentAccountError(
+                    "agent_account_err_invalid_operation"
+                )
+            try:
+                operation_db_id = int(operation_raw)
+            except ValueError:
+                raise AgentAccountError(
+                    "agent_account_err_invalid_operation"
+                ) from None
+            operation = get_operation_record(
+                operation_db_id,
+                organization_id,
+            )
+            if operation is None or operation.get(
+                "agent_db_id"
+            ) != agent_id:
+                raise AgentAccountError(
+                    "agent_account_err_invalid_operation"
+                )
+            source_type = SOURCE_OPERATION
+            source_id = operation_db_id
+            payload = dict(payload)
+            payload["operation_reference"] = operation.get(
+                "id"
+            ) or f"COM-{operation_db_id:06d}"
+
     if movement_type != "adjustment" and not description:
         if movement_type == "fee" and period_label:
             description = f"Fee {period_label}"
         elif movement_type == "payment":
             description = "Pago recibido"
-        else:
+        elif movement_type == "commission":
+            operation_ref = (
+                payload.get("operation_reference") or ""
+            ).strip()
+            if operation_ref:
+                description = f"Comisión · {operation_ref}"
+            elif source_id:
+                description = f"Comisión · COM-{source_id:06d}"
+        if not description:
             raise AgentAccountError(
                 "agent_account_err_description_required"
             )
@@ -198,6 +255,33 @@ def validate_movement_payload(payload, *, language="es"):
     exchange_rate_source = None
     equivalent_amount_ars = None
 
+    if movement_type == "payment":
+        applied_raw = (
+            payload.get("applied_to_movement_id") or ""
+        ).strip()
+        if applied_raw and applied_raw != "general":
+            if organization_id is None or agent_id is None:
+                raise AgentAccountError(
+                    "agent_account_err_invalid_applied_charge"
+                )
+            try:
+                applied_id = int(applied_raw)
+            except ValueError:
+                raise AgentAccountError(
+                    "agent_account_err_invalid_applied_charge"
+                ) from None
+            charge = get_pending_charge_for_payment(
+                organization_id,
+                agent_id,
+                applied_id,
+                currency,
+            )
+            if charge is None:
+                raise AgentAccountError(
+                    "agent_account_err_invalid_applied_charge"
+                )
+            source_id = applied_id
+
     if currency == "USD":
         raw_rate = payload.get("exchange_rate")
         if raw_rate is not None and str(raw_rate).strip():
@@ -239,6 +323,8 @@ def validate_movement_payload(payload, *, language="es"):
         "exchange_rate_source": exchange_rate_source,
         "equivalent_amount_ars": equivalent_amount_ars,
         "reference_text": None,
+        "source_type": source_type,
+        "source_id": source_id,
     }
     validated["reference_text"] = _build_reference_text(
         payload,
@@ -262,6 +348,8 @@ def create_movement(
     validated = validate_movement_payload(
         payload,
         language=language,
+        organization_id=organization_id,
+        agent_id=agent_id,
     )
 
     if idempotency_key:
@@ -283,7 +371,11 @@ def create_movement(
             description=validated["description"],
             movement_date=validated["movement_date"],
             created_by_user_id=created_by_user_id,
-            source_type=SOURCE_MANUAL,
+            source_type=validated.get(
+                "source_type",
+                SOURCE_MANUAL,
+            ),
+            source_id=validated.get("source_id"),
             idempotency_key=idempotency_key,
             exchange_rate=validated.get("exchange_rate"),
             exchange_rate_date=validated.get("exchange_rate_date"),
@@ -386,10 +478,12 @@ def _load_display_movements(
         movements,
         show_cancelled=show_cancelled,
     )
+    lookup = {movement["id"]: movement for movement in visible}
     return [
         enrich_movement_for_display(
             movement,
             language=language,
+            movement_lookup=lookup,
         )
         for movement in visible
     ]

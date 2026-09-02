@@ -28,10 +28,18 @@
         {% endif %}
     </td>
     <td class="aa-actions-cell">
-        {% if can_manage and not is_cancelled %}
         <div class="aa-row-menu">
             <button type="button" class="aa-row-menu__toggle" aria-label="{{ t('agent_account_actions') }}" data-aa-menu-toggle>⋯</button>
             <div class="aa-row-menu__panel" hidden>
+                <button
+                    type="button"
+                    class="aa-row-menu__item"
+                    data-aa-detail-open
+                    data-movement-title="{{ movement.description }}"
+                    data-movement-meta="{{ movement.movement_date | short_date }} · {{ movement.display_amount.formatted }}"
+                    data-movement-detail='{{ movement.display_detail | tojson }}'
+                >{{ t('agent_account_view_detail') }}</button>
+                {% if can_manage and not is_cancelled %}
                 <button
                     type="button"
                     class="aa-row-menu__item aa-row-menu__item--danger"
@@ -40,9 +48,9 @@
                     data-movement-label="{{ movement.description }}"
                     data-movement-amount="{{ movement.display_amount.formatted }}"
                 >{{ t('agent_account_cancel_movement') }}</button>
+                {% endif %}
             </div>
         </div>
-        {% endif %}
     </td>
 </tr>
 {% endmacro %}
@@ -67,15 +75,27 @@
     </p>
     {% if is_cancelled %}
     <p class="aa-move-card__audit">{{ t('agent_account_status_cancelled') }}{% if movement.cancellation_reason %} · {{ movement.cancellation_reason }}{% endif %}</p>
-    {% elif can_manage %}
-    <button
-        type="button"
-        class="aa-btn aa-btn--ghost aa-btn--small aa-btn--block"
-        data-aa-cancel-open
-        data-movement-id="{{ movement.id }}"
-        data-movement-label="{{ movement.description }}"
-        data-movement-amount="{{ movement.display_amount.formatted }}"
-    >{{ t('agent_account_cancel_movement') }}</button>
+    {% else %}
+    <div class="aa-move-card__actions">
+        <button
+            type="button"
+            class="aa-btn aa-btn--ghost aa-btn--small"
+            data-aa-detail-open
+            data-movement-title="{{ movement.description }}"
+            data-movement-meta="{{ movement.movement_date | short_date }} · {{ movement.display_amount.formatted }}"
+            data-movement-detail='{{ movement.display_detail | tojson }}'
+        >{{ t('agent_account_view_detail') }}</button>
+        {% if can_manage %}
+        <button
+            type="button"
+            class="aa-btn aa-btn--ghost aa-btn--small aa-btn--block"
+            data-aa-cancel-open
+            data-movement-id="{{ movement.id }}"
+            data-movement-label="{{ movement.description }}"
+            data-movement-amount="{{ movement.display_amount.formatted }}"
+        >{{ t('agent_account_cancel_movement') }}</button>
+        {% endif %}
+    </div>
     {% endif %}
 </article>
 {% endmacro %}

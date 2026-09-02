@@ -3,14 +3,17 @@
  */
 (function () {
     var pageRoot = document.querySelector('.aa-detail') || document.body;
+    var agentId = pageRoot.dataset.aaAgentId;
     var movementDialog = document.getElementById('aa-movement-dialog');
     var chargeDialog = document.getElementById('aa-charge-dialog');
     var cancelDialog = document.getElementById('aa-cancel-dialog');
+    var detailDialog = document.getElementById('aa-detail-dialog');
     var filtersDialog = document.getElementById('aa-filters-dialog');
     var movementForm = document.querySelector('[data-aa-movement-form]');
     var chargeForm = document.querySelector('[data-aa-charge-form]');
     var cancelForm = document.querySelector('[data-aa-cancel-form]');
     var defaultVatRate = parseFloat(pageRoot.dataset.aaVatRate || '21') / 100;
+    var pendingChargesCache = {};
 
     var titles = {
         payment: pageRoot.dataset.aaTitlePayment || 'Registrar pago',
@@ -60,6 +63,9 @@
         document.querySelectorAll('[data-aa-more-toggle]').forEach(function (btn) {
             btn.setAttribute('aria-expanded', 'false');
         });
+        document.querySelectorAll('.aa-autocomplete-list').forEach(function (list) {
+            list.hidden = true;
+        });
     });
 
     function parseMoney(value) {
@@ -86,13 +92,14 @@
     }
 
     function computeVatBreakdown(amount, vatMode, vatRate) {
-        if (!amount || amount <= 0) {
-            return null;
-        }
         var net;
         var vat;
         var gross;
-        if (vatMode === 'none') {
+        if (!amount || amount <= 0) {
+            net = 0;
+            vat = 0;
+            gross = 0;
+        } else if (vatMode === 'none') {
             net = amount;
             vat = 0;
             gross = amount;
@@ -118,6 +125,53 @@
         return selected ? selected.value : 'none';
     }
 
+    function fetchPendingCharges(currency) {
+        if (!agentId) return Promise.resolve([]);
+        var cacheKey = currency || 'USD';
+        if (pendingChargesCache[cacheKey]) {
+            return Promise.resolve(pendingChargesCache[cacheKey]);
+        }
+        return fetch('/agent-accounts/' + agentId + '/pending-charges?currency=' + encodeURIComponent(cacheKey), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        }).then(function (response) {
+            if (!response.ok) throw new Error('pending_charges_failed');
+            return response.json();
+        }).then(function (payload) {
+            pendingChargesCache[cacheKey] = payload.charges || [];
+            return pendingChargesCache[cacheKey];
+        }).catch(function () {
+            return [];
+        });
+    }
+
+    function renderPendingChargesSelect(currency, selectedValue) {
+        if (!movementForm) return;
+        var select = movementForm.querySelector('[data-aa-apply-payment]');
+        if (!select) return;
+        fetchPendingCharges(currency).then(function (charges) {
+            var generalOption = select.querySelector('option[value="general"]');
+            select.innerHTML = '';
+            if (generalOption) {
+                select.appendChild(generalOption);
+            } else {
+                var base = document.createElement('option');
+                base.value = 'general';
+                base.textContent = 'Pago a cuenta / saldo general';
+                select.appendChild(base);
+            }
+            charges.forEach(function (charge) {
+                var option = document.createElement('option');
+                option.value = String(charge.id);
+                option.textContent = charge.label;
+                select.appendChild(option);
+            });
+            if (selectedValue) {
+                select.value = selectedValue;
+            }
+        });
+    }
+
     function syncMovementForm(type) {
         if (!movementForm) return;
         var typeInput = movementForm.querySelector('[data-aa-movement-type-input]');
@@ -126,7 +180,8 @@
         if (titleEl) titleEl.textContent = titles[type] || titles.payment;
 
         movementForm.querySelectorAll('[data-aa-section]').forEach(function (section) {
-            section.hidden = section.getAttribute('data-aa-section') !== type;
+            var sectionType = section.getAttribute('data-aa-section');
+            section.hidden = sectionType !== type;
         });
 
         var adjustmentSection = movementForm.querySelector('[data-aa-section="adjustment"]');
@@ -145,11 +200,18 @@
             var showFx = currencySelect.value === 'USD' && ['payment', 'commission'].indexOf(type) >= 0;
             fxBlock.hidden = !showFx;
         }
+
+        if (type === 'payment') {
+            renderPendingChargesSelect(
+                currencySelect ? currencySelect.value : 'USD'
+            );
+        }
     }
 
     document.querySelectorAll('[data-aa-open-movement]').forEach(function (btn) {
         btn.addEventListener('click', function () {
             if (!movementDialog) return;
+            pendingChargesCache = {};
             syncMovementForm(btn.getAttribute('data-aa-open-movement') || 'payment');
             movementDialog.showModal();
         });
@@ -163,12 +225,22 @@
         });
     });
 
+    function syncRecurrenceVisibility() {
+        if (!chargeForm) return;
+        var switchInput = chargeForm.querySelector('[data-aa-recurring-switch]');
+        var recurrenceField = chargeForm.querySelector('[data-aa-recurrence-field]');
+        if (!switchInput || !recurrenceField) return;
+        recurrenceField.hidden = !switchInput.checked;
+    }
+
     function syncChargeForm() {
         if (!chargeForm) return;
         var category = chargeForm.querySelector('[data-aa-charge-category]');
         var categoryValue = category ? category.value : 'fee';
         var isOther = categoryValue === 'other';
         var isJrh = categoryValue === 'jrh_subscription';
+        var recurrenceType = chargeForm.querySelector('[data-aa-recurrence-type]');
+        var recurringSwitch = chargeForm.querySelector('[data-aa-recurring-switch]');
 
         chargeForm.querySelectorAll('[data-aa-charge-section="description"]').forEach(function (section) {
             var textarea = section.querySelector('[data-aa-charge-description]');
@@ -182,6 +254,15 @@
             section.hidden = !isJrh;
         });
 
+        if (isJrh && recurrenceType) {
+            recurrenceType.value = 'monthly';
+        }
+
+        if (isJrh && recurringSwitch && !recurringSwitch.dataset.userTouched) {
+            recurringSwitch.checked = true;
+        }
+
+        syncRecurrenceVisibility();
         updateChargeVatSummary();
     }
 
@@ -199,7 +280,7 @@
 
         if (amountLabel) {
             if (vatMode === 'gross_includes_vat') {
-                amountLabel.textContent = chargeForm.dataset.labelGross || 'Importe final (IVA incluido)';
+                amountLabel.textContent = chargeForm.dataset.labelGross || 'Importe final';
             } else if (vatMode === 'add_vat') {
                 amountLabel.textContent = chargeForm.dataset.labelNet || 'Importe neto';
             } else {
@@ -207,25 +288,21 @@
             }
         }
 
-        if (!breakdown || !summary) {
-            if (summary) summary.hidden = true;
-            if (submitBtn) submitBtn.textContent = titles.charge;
-            return;
-        }
-
-        summary.hidden = false;
-        var netEl = summary.querySelector('[data-aa-vat-net]');
-        var vatEl = summary.querySelector('[data-aa-vat-amount]');
-        var grossEl = summary.querySelector('[data-aa-vat-gross]');
-        var rateLabel = summary.querySelector('[data-aa-vat-rate-label]');
-        if (netEl) netEl.textContent = formatMoney(breakdown.net, currency);
-        if (vatEl) vatEl.textContent = formatMoney(breakdown.vat, currency);
-        if (grossEl) grossEl.textContent = formatMoney(breakdown.gross, currency);
+        if (summary) summary.hidden = false;
+        var netEl = summary ? summary.querySelector('[data-aa-vat-net]') : null;
+        var vatEl = summary ? summary.querySelector('[data-aa-vat-amount]') : null;
+        var grossEl = summary ? summary.querySelector('[data-aa-vat-gross]') : null;
+        var rateLabel = summary ? summary.querySelector('[data-aa-vat-rate-label]') : null;
+        if (netEl) netEl.textContent = amount > 0 ? formatMoney(breakdown.net, currency) : '—';
+        if (vatEl) vatEl.textContent = amount > 0 ? formatMoney(breakdown.vat, currency) : '—';
+        if (grossEl) grossEl.textContent = amount > 0 ? formatMoney(breakdown.gross, currency) : '—';
         if (rateLabel) {
             rateLabel.textContent = 'IVA ' + Math.round(defaultVatRate * 100) + '%';
         }
         if (submitBtn) {
-            submitBtn.textContent = titles.charge + ' ' + formatMoney(breakdown.gross, currency);
+            submitBtn.textContent = amount > 0
+                ? titles.charge + ' ' + formatMoney(breakdown.gross, currency)
+                : titles.charge;
         }
     }
 
@@ -235,7 +312,12 @@
         if (currencySelect && prefix) {
             currencySelect.addEventListener('change', function () {
                 prefix.textContent = currencySelect.value;
-                syncMovementForm(movementForm.querySelector('[data-aa-movement-type-input]').value);
+                var type = movementForm.querySelector('[data-aa-movement-type-input]').value;
+                syncMovementForm(type);
+                if (type === 'payment') {
+                    pendingChargesCache = {};
+                    renderPendingChargesSelect(currencySelect.value);
+                }
             });
         }
 
@@ -258,6 +340,101 @@
 
         if (fxRate) fxRate.addEventListener('input', updateFxEquivalent);
         if (amountInput) amountInput.addEventListener('input', updateFxEquivalent);
+
+        initOperationAutocomplete();
+    }
+
+    function initOperationAutocomplete() {
+        if (!movementForm || !agentId) return;
+        var input = movementForm.querySelector('[data-aa-operation-input]');
+        var hiddenId = movementForm.querySelector('[data-aa-operation-id]');
+        var list = movementForm.querySelector('[data-aa-operation-list]');
+        if (!input || !list) return;
+
+        var debounceTimer = null;
+        var activeIndex = -1;
+
+        function clearSelection() {
+            if (hiddenId) hiddenId.value = '';
+        }
+
+        function renderOptions(operations) {
+            list.innerHTML = '';
+            if (!operations.length) {
+                var empty = document.createElement('div');
+                empty.className = 'aa-autocomplete-empty';
+                empty.textContent = 'Sin operaciones';
+                list.appendChild(empty);
+                list.hidden = false;
+                return;
+            }
+            operations.forEach(function (operation, index) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'aa-autocomplete-option';
+                btn.textContent = operation.label;
+                btn.dataset.index = String(index);
+                btn.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    input.value = operation.display_id;
+                    if (hiddenId) hiddenId.value = String(operation.id);
+                    list.hidden = true;
+                });
+                list.appendChild(btn);
+            });
+            list.hidden = false;
+            activeIndex = -1;
+        }
+
+        function searchOperations(query) {
+            fetch('/agent-accounts/' + agentId + '/operations/search?q=' + encodeURIComponent(query || ''), {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function (response) {
+                if (!response.ok) throw new Error('search_failed');
+                return response.json();
+            }).then(function (payload) {
+                renderOptions(payload.operations || []);
+            }).catch(function () {
+                renderOptions([]);
+            });
+        }
+
+        input.addEventListener('input', function () {
+            clearSelection();
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function () {
+                searchOperations(input.value.trim());
+            }, 220);
+        });
+
+        input.addEventListener('focus', function () {
+            searchOperations(input.value.trim());
+        });
+
+        input.addEventListener('keydown', function (event) {
+            var options = list.querySelectorAll('.aa-autocomplete-option');
+            if (!options.length || list.hidden) return;
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                activeIndex = Math.min(activeIndex + 1, options.length - 1);
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                activeIndex = Math.max(activeIndex - 1, 0);
+            } else if (event.key === 'Enter' && activeIndex >= 0) {
+                event.preventDefault();
+                options[activeIndex].click();
+                return;
+            } else if (event.key === 'Escape') {
+                list.hidden = true;
+                return;
+            } else {
+                return;
+            }
+            options.forEach(function (option, index) {
+                option.classList.toggle('is-active', index === activeIndex);
+            });
+        });
     }
 
     if (chargeForm) {
@@ -268,6 +445,7 @@
         var chargeFxEquivalent = chargeForm.querySelector('[data-aa-charge-fx-equivalent]');
         var chargeAmount = chargeForm.querySelector('[data-aa-charge-amount]');
         var chargeCategory = chargeForm.querySelector('[data-aa-charge-category]');
+        var recurringSwitch = chargeForm.querySelector('[data-aa-recurring-switch]');
 
         function updateChargeFx() {
             if (!chargeFx || !chargeCurrency) return;
@@ -280,7 +458,7 @@
             var rate = parseMoney(chargeFxRate.value);
             var amount = parseMoney(chargeAmount.value);
             var breakdown = computeVatBreakdown(amount, selectedVatMode(chargeForm), defaultVatRate);
-            if (!rate || !breakdown) {
+            if (!rate || !breakdown.gross) {
                 chargeFxEquivalent.hidden = true;
                 return;
             }
@@ -299,6 +477,12 @@
         if (chargeCategory) {
             chargeCategory.addEventListener('change', syncChargeForm);
         }
+        if (recurringSwitch) {
+            recurringSwitch.addEventListener('change', function () {
+                recurringSwitch.dataset.userTouched = '1';
+                syncRecurrenceVisibility();
+            });
+        }
         chargeForm.querySelectorAll('[data-aa-vat-mode]').forEach(function (input) {
             input.addEventListener('change', function () {
                 updateChargeVatSummary();
@@ -314,6 +498,37 @@
         updateChargeFx();
         syncChargeForm();
     }
+
+    document.querySelectorAll('[data-aa-detail-open]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!detailDialog) return;
+            var headline = detailDialog.querySelector('[data-aa-detail-headline]');
+            var meta = detailDialog.querySelector('[data-aa-detail-meta]');
+            var list = detailDialog.querySelector('[data-aa-detail-list]');
+            if (headline) headline.textContent = btn.getAttribute('data-movement-title') || '';
+            if (meta) meta.textContent = btn.getAttribute('data-movement-meta') || '';
+            if (list) {
+                list.innerHTML = '';
+                var detailRaw = btn.getAttribute('data-movement-detail') || '[]';
+                try {
+                    var rows = JSON.parse(detailRaw);
+                    rows.forEach(function (row) {
+                        var wrapper = document.createElement('div');
+                        var dt = document.createElement('dt');
+                        var dd = document.createElement('dd');
+                        dt.textContent = row.label || '';
+                        dd.textContent = row.value || '';
+                        wrapper.appendChild(dt);
+                        wrapper.appendChild(dd);
+                        list.appendChild(wrapper);
+                    });
+                } catch (error) {
+                    list.innerHTML = '';
+                }
+            }
+            detailDialog.showModal();
+        });
+    });
 
     document.querySelectorAll('[data-aa-cancel-open]').forEach(function (btn) {
         btn.addEventListener('click', function () {

@@ -354,6 +354,8 @@ body.is-agent-account-page .app-main-inner { max-width: none; }
     background: var(--surface);
     color: var(--text);
 }
+.aa-dialog--compact { width: min(28rem, calc(100vw - 1.5rem)); }
+.aa-dialog--detail { width: min(26rem, calc(100vw - 1.5rem)); }
 .aa-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
 .aa-dialog__header {
     display: flex;
@@ -366,9 +368,145 @@ body.is-agent-account-page .app-main-inner { max-width: none; }
 .aa-dialog__close { border: 0; background: transparent; font-size: 1.35rem; color: var(--text-muted); cursor: pointer; }
 .aa-dialog__footer { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 0 1rem 1rem; }
 .aa-form { display: grid; gap: 0.75rem; padding: 1rem; }
+.aa-form--compact { gap: 0.55rem; padding: 0.85rem 1rem 1rem; }
 .aa-form__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
 .aa-form__hint { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
 .aa-cancel-summary { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
+
+.aa-field--vat-compact .aa-vat-options {
+    display: grid;
+    gap: 0.25rem;
+}
+@media (min-width: 720px) {
+    .aa-field--vat-compact .aa-vat-options {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.35rem;
+    }
+}
+
+.aa-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.45rem;
+    font-size: 0.92rem;
+}
+.aa-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+.aa-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.aa-switch__track {
+    width: 2.5rem;
+    height: 1.4rem;
+    border-radius: 999px;
+    background: var(--border-subtle, #d1d5db);
+    transition: background 0.15s ease;
+    position: relative;
+}
+.aa-switch__track::after {
+    content: "";
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.15s ease;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+}
+.aa-switch input:checked + .aa-switch__track {
+    background: var(--primary, #2563eb);
+}
+.aa-switch input:checked + .aa-switch__track::after {
+    transform: translateX(1.1rem);
+}
+.aa-switch input:focus-visible + .aa-switch__track {
+    outline: 2px solid var(--primary, #2563eb);
+    outline-offset: 2px;
+}
+
+.aa-autocomplete-field { position: relative; }
+.aa-autocomplete-list {
+    position: absolute;
+    z-index: 30;
+    left: 0;
+    right: 0;
+    top: calc(100% + 0.25rem);
+    max-height: 11rem;
+    overflow: auto;
+    border: 1px solid var(--border-subtle, #e5e7eb);
+    border-radius: 0.65rem;
+    background: var(--surface);
+    box-shadow: var(--shadow-md, 0 8px 24px rgba(15, 23, 42, 0.08));
+}
+.aa-autocomplete-option,
+.aa-autocomplete-empty {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.55rem 0.7rem;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+.aa-autocomplete-option:hover,
+.aa-autocomplete-option.is-active {
+    background: var(--content-bg);
+}
+.aa-autocomplete-empty {
+    color: var(--text-muted);
+    cursor: default;
+}
+
+.aa-detail-modal { padding: 0 1rem 0.5rem; }
+.aa-detail-modal__headline {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+.aa-detail-modal__meta {
+    margin: 0 0 0.85rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.aa-detail-modal__list {
+    margin: 0;
+    display: grid;
+    gap: 0.55rem;
+}
+.aa-detail-modal__list div {
+    display: grid;
+    grid-template-columns: minmax(6rem, 38%) 1fr;
+    gap: 0.65rem;
+    font-size: 0.88rem;
+}
+.aa-detail-modal__list dt {
+    margin: 0;
+    color: var(--text-muted);
+}
+.aa-detail-modal__list dd {
+    margin: 0;
+    font-weight: 500;
+}
+
+.aa-move-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.55rem;
+}
 
 .aa-move-cards { display: none; gap: 0.65rem; }
 .aa-move-card {

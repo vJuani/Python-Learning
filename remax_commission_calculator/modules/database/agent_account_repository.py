@@ -436,6 +436,104 @@ def get_agent_balances(organization_id, agent_id):
     }
 
 
+DEBIT_MOVEMENT_TYPES = (
+    MOVEMENT_TYPE_CHARGE,
+    MOVEMENT_TYPE_FEE,
+)
+
+
+def list_pending_charges(
+    organization_id,
+    agent_id,
+    currency,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    if currency not in CURRENCIES:
+        raise ValueError("invalid_currency")
+
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT
+                m.id,
+                m.description,
+                m.currency,
+                COALESCE(m.gross_amount, m.amount) AS pending_amount,
+                m.billing_period,
+                m.period_label,
+                m.charge_category,
+                m.movement_date
+            FROM agent_account_movements AS m
+            WHERE m.organization_id = ?
+                AND m.agent_id = ?
+                AND m.currency = ?
+                AND m.movement_type IN ('charge', 'fee')
+                AND m.status = ?
+                AND COALESCE(m.is_internal_reversal, 0) = 0
+                AND m.reversed_movement_id IS NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM agent_account_movements AS p
+                    WHERE p.organization_id = m.organization_id
+                        AND p.agent_id = m.agent_id
+                        AND p.movement_type = 'payment'
+                        AND p.status = ?
+                        AND COALESCE(p.is_internal_reversal, 0) = 0
+                        AND p.source_id = m.id
+                )
+            ORDER BY m.movement_date DESC, m.id DESC
+            """,
+            (
+                organization_id,
+                agent_id,
+                currency,
+                STATUS_CONFIRMED,
+                STATUS_CONFIRMED,
+            ),
+        )
+        rows = cursor.fetchall()
+        pending = []
+        for row in rows:
+            pending.append(
+                {
+                    "id": row[0],
+                    "description": row[1],
+                    "currency": row[2],
+                    "pending_amount": float(row[3] or 0),
+                    "billing_period": row[4] or row[5],
+                    "charge_category": row[6],
+                    "movement_date": row[7],
+                }
+            )
+        return pending
+    finally:
+        connection.close()
+
+
+def get_pending_charge_for_payment(
+    organization_id,
+    agent_id,
+    movement_id,
+    currency,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    pending = list_pending_charges(
+        organization_id,
+        agent_id,
+        currency,
+    )
+    for charge in pending:
+        if charge["id"] == movement_id:
+            return charge
+    return None
+
+
 def list_agent_account_movements(
     organization_id,
     agent_id,

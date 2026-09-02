@@ -9,6 +9,7 @@ from datetime import date
 
 from flask import (
     abort,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -25,7 +26,10 @@ from modules.agent_account import (
     cancel_movement,
     create_movement,
 )
-from modules.agent_account_presentation import PAYMENT_METHODS
+from modules.agent_account_presentation import (
+    PAYMENT_METHODS,
+    format_pending_charge_option,
+)
 from modules.agent_account_charges import (
     CHARGE_CATEGORIES,
     DEFAULT_VAT_RATE,
@@ -47,6 +51,10 @@ from modules.database.agent_account_repository import (
     CURRENCIES,
     STATUS_CONFIRMED,
     STATUS_REVERSED,
+    list_pending_charges,
+)
+from modules.database.operations_repository import (
+    search_operations_for_agent_account,
 )
 from modules.i18n import translate
 
@@ -222,6 +230,8 @@ def register_agent_account_routes(app, helpers):
                 "billing_period",
                 "recurring",
                 "recurrence_type",
+                "applied_to_movement_id",
+                "operation_id",
             )
         }
         idempotency_key = (
@@ -249,6 +259,80 @@ def register_agent_account_routes(app, helpers):
                 "agent_account_detail",
                 agent_id=agent_id,
             )
+        )
+
+    @app.route(
+        "/agent-accounts/<int:agent_id>/pending-charges",
+        methods=["GET"],
+    )
+    @admin_required
+    def agent_account_pending_charges(agent_id):
+        organization_id = _require_admin_organization()
+        agent = get_agent_record(agent_id, organization_id)
+        if agent is None:
+            abort(404)
+
+        currency = request.args.get(
+            "currency",
+            "",
+        ).strip().upper()
+        if currency not in CURRENCIES:
+            abort(400)
+
+        language = get_current_language()
+        charges = [
+            format_pending_charge_option(
+                charge,
+                language=language,
+            )
+            for charge in list_pending_charges(
+                organization_id,
+                agent_id,
+                currency,
+            )
+        ]
+        return jsonify({"charges": charges})
+
+    @app.route(
+        "/agent-accounts/<int:agent_id>/operations/search",
+        methods=["GET"],
+    )
+    @admin_required
+    def agent_account_search_operations(agent_id):
+        organization_id = _require_admin_organization()
+        agent = get_agent_record(agent_id, organization_id)
+        if agent is None:
+            abort(404)
+
+        query = request.args.get("q", "").strip()
+        operations = search_operations_for_agent_account(
+            organization_id,
+            agent_id,
+            query,
+            limit=15,
+        )
+        return jsonify(
+            {
+                "operations": [
+                    {
+                        "id": operation["db_id"],
+                        "display_id": operation["id"],
+                        "label": (
+                            f"{operation['id']} · "
+                            f"{operation.get('property') or '—'} · "
+                            f"{operation.get('date') or '—'}"
+                        ),
+                        "agent_payment": operation.get(
+                            "agent_payment"
+                        ),
+                        "currency": operation.get(
+                            "currency"
+                        )
+                        or "USD",
+                    }
+                    for operation in operations
+                ]
+            }
         )
 
     @app.route(

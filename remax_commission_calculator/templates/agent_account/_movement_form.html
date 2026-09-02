@@ -1,5 +1,5 @@
-<dialog id="aa-movement-dialog" class="aa-dialog">
-    <form method="post" action="{{ url_for('agent_account_create_movement', agent_id=agent.id) }}" class="aa-form" data-aa-movement-form>
+<dialog id="aa-movement-dialog" class="aa-dialog aa-dialog--compact">
+    <form method="post" action="{{ url_for('agent_account_create_movement', agent_id=agent.id) }}" class="aa-form aa-form--compact" data-aa-movement-form>
         <header class="aa-dialog__header">
             <h2 data-aa-form-title>{{ t('agent_account_register_payment') }}</h2>
             <button type="button" class="aa-dialog__close" data-aa-dialog-close aria-label="{{ t('agent_account_close') }}">×</button>
@@ -8,15 +8,22 @@
         <input type="hidden" name="idempotency_key" value="{{ form_idempotency_key }}">
         <input type="hidden" name="movement_type" value="{{ default_movement_type }}" data-aa-movement-type-input>
 
-        <div class="aa-form__section">
-            <label class="aa-field aa-field--amount">
-                <span>{{ t('agent_account_amount_label') }}</span>
-                <div class="aa-money-input" data-aa-money-input>
-                    <span class="aa-money-input__prefix" data-aa-currency-prefix>USD</span>
-                    <input type="text" name="amount" inputmode="decimal" autocomplete="off" placeholder="0,00" required data-aa-amount-input>
-                </div>
+        <div class="aa-form__section" data-aa-section="payment" hidden>
+            <label class="aa-field">
+                <span>{{ t('agent_account_apply_payment_to') }}</span>
+                <select name="applied_to_movement_id" data-aa-apply-payment>
+                    <option value="general">{{ t('agent_account_payment_general') }}</option>
+                </select>
             </label>
         </div>
+
+        <label class="aa-field aa-field--amount">
+            <span>{{ t('agent_account_amount_label') }}</span>
+            <div class="aa-money-input" data-aa-money-input>
+                <span class="aa-money-input__prefix" data-aa-currency-prefix>USD</span>
+                <input type="text" name="amount" inputmode="decimal" autocomplete="off" placeholder="0,00" required data-aa-amount-input>
+            </div>
+        </label>
 
         <div class="aa-form__grid">
             <label class="aa-field">
@@ -46,9 +53,11 @@
         </div>
 
         <div class="aa-form__section" data-aa-section="commission" hidden>
-            <label class="aa-field">
-                <span>{{ t('agent_account_operation_reference') }}</span>
-                <input type="text" name="operation_reference" placeholder="COM-000005">
+            <label class="aa-field aa-autocomplete-field">
+                <span>{{ t('agent_account_operation_search') }}</span>
+                <input type="hidden" name="operation_id" data-aa-operation-id>
+                <input type="text" name="operation_reference" autocomplete="off" placeholder="COM-000005" data-aa-operation-input>
+                <div class="aa-autocomplete-list" data-aa-operation-list hidden></div>
             </label>
         </div>
 
@@ -63,7 +72,6 @@
         </div>
 
         <div class="aa-form__section aa-form__section--fx" data-aa-fx-block hidden>
-            <h3>{{ t('agent_account_fx_block_title') }}</h3>
             <div class="aa-form__grid">
                 <label class="aa-field">
                     <span>{{ t('agent_account_exchange_rate') }}</span>
@@ -83,15 +91,16 @@
             <textarea name="description" rows="2" placeholder="{{ t('agent_account_concept_placeholder') }}"></textarea>
         </label>
 
-        <label class="aa-field">
-            <span>{{ t('agent_account_reference_optional') }}</span>
-            <input type="text" name="reference_text" placeholder="{{ t('agent_account_reference_placeholder') }}">
-        </label>
-
-        <label class="aa-field">
-            <span>{{ t('agent_account_notes_optional') }}</span>
-            <textarea name="notes" rows="2"></textarea>
-        </label>
+        <div class="aa-form__grid">
+            <label class="aa-field">
+                <span>{{ t('agent_account_reference_optional') }}</span>
+                <input type="text" name="reference_text" placeholder="{{ t('agent_account_reference_placeholder') }}">
+            </label>
+            <label class="aa-field">
+                <span>{{ t('agent_account_notes_optional') }}</span>
+                <input type="text" name="notes" placeholder="{{ t('agent_account_optional') }}">
+            </label>
+        </div>
 
         <footer class="aa-dialog__footer">
             <button type="button" class="aa-btn aa-btn--ghost" data-aa-dialog-close>{{ t('cancel') }}</button>
@@ -120,4 +129,19 @@
             <button type="submit" class="aa-btn aa-btn--danger">{{ t('agent_account_cancel_confirm') }}</button>
         </footer>
     </form>
+</dialog>
+
+<dialog id="aa-detail-dialog" class="aa-dialog aa-dialog--detail">
+    <header class="aa-dialog__header">
+        <h2>{{ t('agent_account_movement_detail_title') }}</h2>
+        <button type="button" class="aa-dialog__close" data-aa-dialog-close aria-label="{{ t('agent_account_close') }}">×</button>
+    </header>
+    <div class="aa-detail-modal">
+        <p class="aa-detail-modal__headline" data-aa-detail-headline></p>
+        <p class="aa-detail-modal__meta" data-aa-detail-meta></p>
+        <dl class="aa-detail-modal__list" data-aa-detail-list></dl>
+    </div>
+    <footer class="aa-dialog__footer">
+        <button type="button" class="aa-btn aa-btn--ghost" data-aa-dialog-close>{{ t('agent_account_close') }}</button>
+    </footer>
 </dialog>

@@ -1,5 +1,8 @@
-<dialog id="aa-charge-dialog" class="aa-dialog aa-dialog--charge">
-    <form method="post" action="{{ url_for('agent_account_create_movement', agent_id=agent.id) }}" class="aa-form" data-aa-charge-form>
+<dialog id="aa-charge-dialog" class="aa-dialog aa-dialog--compact aa-dialog--charge">
+    <form method="post" action="{{ url_for('agent_account_create_movement', agent_id=agent.id) }}" class="aa-form aa-form--compact" data-aa-charge-form
+          data-label-amount="{{ t('agent_account_amount_label') }}"
+          data-label-net="{{ t('agent_account_net_amount') }}"
+          data-label-gross="{{ t('agent_account_gross_amount_label') }}">
         <header class="aa-dialog__header">
             <h2>{{ t('agent_account_register_charge') }}</h2>
             <button type="button" class="aa-dialog__close" data-aa-dialog-close aria-label="{{ t('agent_account_close') }}">×</button>
@@ -26,32 +29,40 @@
             </div>
         </label>
 
-        <label class="aa-field">
-            <span>{{ t('agent_account_currency') }}</span>
-            <select name="currency" required data-aa-charge-currency>
-                {% for currency in currencies %}
-                <option value="{{ currency }}" {% if currency == 'USD' %}selected{% endif %}>{{ currency }}</option>
-                {% endfor %}
-            </select>
-        </label>
+        <div class="aa-form__grid">
+            <label class="aa-field">
+                <span>{{ t('agent_account_currency') }}</span>
+                <select name="currency" required data-aa-charge-currency>
+                    {% for currency in currencies %}
+                    <option value="{{ currency }}" {% if currency == 'USD' %}selected{% endif %}>{{ currency }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="aa-field">
+                <span>{{ t('date') }}</span>
+                <input type="date" name="movement_date" value="{{ today_iso }}" required>
+            </label>
+        </div>
 
-        <fieldset class="aa-field aa-field--vat">
+        <fieldset class="aa-field aa-field--vat aa-field--vat-compact">
             <legend>{{ t('agent_account_vat_treatment') }}</legend>
-            <label class="aa-radio">
-                <input type="radio" name="vat_mode" value="none" data-aa-vat-mode>
-                <span>{{ t('agent_account_vat_none') }}</span>
-            </label>
-            <label class="aa-radio">
-                <input type="radio" name="vat_mode" value="add_vat" checked data-aa-vat-mode>
-                <span>{{ t('agent_account_vat_add', rate=default_vat_rate_percent | int) }}</span>
-            </label>
-            <label class="aa-radio">
-                <input type="radio" name="vat_mode" value="gross_includes_vat" data-aa-vat-mode>
-                <span>{{ t('agent_account_vat_included') }}</span>
-            </label>
+            <div class="aa-vat-options">
+                <label class="aa-radio">
+                    <input type="radio" name="vat_mode" value="none" data-aa-vat-mode>
+                    <span>{{ t('agent_account_vat_none') }}</span>
+                </label>
+                <label class="aa-radio">
+                    <input type="radio" name="vat_mode" value="add_vat" checked data-aa-vat-mode>
+                    <span>{{ t('agent_account_vat_add', rate=default_vat_rate_percent | int) }}</span>
+                </label>
+                <label class="aa-radio">
+                    <input type="radio" name="vat_mode" value="gross_includes_vat" data-aa-vat-mode>
+                    <span>{{ t('agent_account_vat_included_short') }}</span>
+                </label>
+            </div>
         </fieldset>
 
-        <div class="aa-vat-summary" data-aa-vat-summary hidden>
+        <div class="aa-vat-summary" data-aa-vat-summary>
             <div class="aa-vat-summary__row">
                 <span>{{ t('agent_account_vat_net') }}</span>
                 <strong data-aa-vat-net>—</strong>
@@ -71,13 +82,7 @@
             <input type="text" name="billing_period" placeholder="{{ t('agent_account_period_placeholder') }}" data-aa-billing-period>
         </label>
 
-        <label class="aa-field">
-            <span>{{ t('date') }}</span>
-            <input type="date" name="movement_date" value="{{ today_iso }}" required>
-        </label>
-
         <div class="aa-form__section aa-form__section--fx" data-aa-charge-fx hidden>
-            <h3>{{ t('agent_account_fx_block_title') }}</h3>
             <div class="aa-form__grid">
                 <label class="aa-field">
                     <span>{{ t('agent_account_exchange_rate') }}</span>
@@ -97,24 +102,28 @@
             <textarea name="description" rows="2" placeholder="{{ t('agent_account_concept_placeholder') }}" data-aa-charge-description></textarea>
         </label>
 
-        <label class="aa-field">
-            <span>{{ t('agent_account_reference_optional') }}</span>
-            <input type="text" name="reference_text" placeholder="{{ t('agent_account_reference_placeholder') }}">
-        </label>
-
-        <label class="aa-field">
-            <span>{{ t('agent_account_notes_optional') }}</span>
-            <textarea name="notes" rows="2"></textarea>
-        </label>
-
-        <div class="aa-form__section" data-aa-charge-section="jrh" hidden>
-            <label class="aa-field aa-field--checkbox">
-                <input type="checkbox" name="recurring" value="1" data-aa-recurring>
-                <span>{{ t('agent_account_recurring') }}</span>
+        <div class="aa-form__grid">
+            <label class="aa-field">
+                <span>{{ t('agent_account_reference_optional') }}</span>
+                <input type="text" name="reference_text" placeholder="{{ t('agent_account_reference_placeholder') }}">
             </label>
             <label class="aa-field">
+                <span>{{ t('agent_account_notes_optional') }}</span>
+                <input type="text" name="notes" placeholder="{{ t('agent_account_optional') }}">
+            </label>
+        </div>
+
+        <div class="aa-form__section" data-aa-charge-section="jrh" hidden>
+            <div class="aa-switch-row">
+                <span>{{ t('agent_account_recurring') }}</span>
+                <label class="aa-switch">
+                    <input type="checkbox" name="recurring" value="1" data-aa-recurring-switch>
+                    <span class="aa-switch__track" aria-hidden="true"></span>
+                </label>
+            </div>
+            <label class="aa-field" data-aa-recurrence-field hidden>
                 <span>{{ t('agent_account_recurrence_type') }}</span>
-                <select name="recurrence_type">
+                <select name="recurrence_type" data-aa-recurrence-type>
                     {% for recurrence in recurrence_types %}
                     <option value="{{ recurrence }}">{{ t('agent_account_recurrence_' ~ recurrence) }}</option>
                     {% endfor %}

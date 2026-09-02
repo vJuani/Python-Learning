@@ -8,6 +8,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 
 from modules.formatting import format_money
+from modules.i18n import translate
 
 
 POSITIVE_DISPLAY_TYPES = frozenset(
@@ -215,7 +216,194 @@ def movement_status_display(movement):
     }
 
 
-def enrich_movement_for_display(movement, *, language="es"):
+def _detail_row(label_key, value, *, language="es", label_override=None):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return {
+        "label": label_override or translate(
+            label_key,
+            language=language,
+        ),
+        "value": text,
+    }
+
+
+def build_movement_detail_display(
+    movement,
+    *,
+    language="es",
+    movement_lookup=None,
+):
+    movement_lookup = movement_lookup or {}
+    currency = movement.get("currency") or "USD"
+    rows = []
+
+    def add(label_key, value, label_override=None):
+        row = _detail_row(
+            label_key,
+            value,
+            language=language,
+            label_override=label_override,
+        )
+        if row:
+            rows.append(row)
+
+    movement_type = movement.get("movement_type") or ""
+    if movement_type in DEBT_DISPLAY_TYPES:
+        net = movement.get("net_amount")
+        vat = movement.get("vat_amount")
+        gross = movement.get("gross_amount") or movement.get(
+            "amount"
+        )
+        if net is not None:
+            add(
+                "agent_account_vat_net",
+                format_money(
+                    net,
+                    currency=currency,
+                    language=language,
+                ),
+            )
+        if vat is not None and float(vat or 0) > 0:
+            rate_pct = float(movement.get("vat_rate") or 0) * 100
+            label = (
+                f"IVA {rate_pct:.0f}%"
+                if rate_pct
+                else translate(
+                    "agent_account_vat_line",
+                    language=language,
+                    rate=21,
+                )
+            )
+            add(
+                "agent_account_vat_line",
+                format_money(
+                    vat,
+                    currency=currency,
+                    language=language,
+                ),
+                label_override=label,
+            )
+        if gross is not None:
+            add(
+                "agent_account_vat_total",
+                format_money(
+                    gross,
+                    currency=currency,
+                    language=language,
+                ),
+            )
+
+    add("agent_account_currency", currency)
+
+    if movement.get("exchange_rate") is not None:
+        add(
+            "agent_account_exchange_rate",
+            format_money(
+                movement.get("exchange_rate"),
+                currency="ARS",
+                language=language,
+            ),
+        )
+        if movement.get("exchange_rate_date"):
+            add(
+                "agent_account_exchange_rate_date",
+                movement.get("exchange_rate_date"),
+            )
+
+    period = movement.get("billing_period") or movement.get(
+        "period_label"
+    )
+    if period:
+        add("agent_account_period_label", period)
+
+    if movement.get("reference_text"):
+        add(
+            "agent_account_reference_column",
+            movement.get("reference_text"),
+        )
+
+    if movement.get("notes"):
+        add("agent_account_notes_optional", movement.get("notes"))
+
+    if movement.get("recurring"):
+        recurrence = movement.get("recurrence_type") or "one_time"
+        add(
+            "agent_account_recurrence_type",
+            translate(
+                f"agent_account_recurrence_{recurrence}",
+                language=language,
+            ),
+        )
+
+    if movement_type == "payment" and movement.get("source_id"):
+        linked = movement_lookup.get(movement["source_id"])
+        if linked:
+            add(
+                "agent_account_apply_payment_to",
+                linked.get("description"),
+            )
+
+    if movement.get("created_by_username"):
+        add(
+            "agent_account_created_by",
+            movement.get("created_by_username"),
+        )
+
+    if movement.get("created_at"):
+        add(
+            "agent_account_created_at",
+            movement.get("created_at")[:10],
+        )
+
+    status = movement.get("status")
+    if status == "reversed":
+        add(
+            "agent_account_status_column",
+            translate(
+                "agent_account_status_cancelled",
+                language=language,
+            ),
+        )
+    elif status:
+        add(
+            "agent_account_status_column",
+            translate(
+                "agent_account_status_normal",
+                language=language,
+            ),
+        )
+
+    return rows
+
+
+def format_pending_charge_option(charge, *, language="es"):
+    amount_text = format_money(
+        charge["pending_amount"],
+        currency=charge["currency"],
+        language=language,
+    )
+    return {
+        "id": charge["id"],
+        "description": charge["description"],
+        "currency": charge["currency"],
+        "pending_amount": charge["pending_amount"],
+        "label": (
+            f"{charge['description']} — {amount_text} "
+            f"pendiente"
+        ),
+    }
+
+
+def enrich_movement_for_display(
+    movement,
+    *,
+    language="es",
+    movement_lookup=None,
+):
     enriched = dict(movement)
     enriched["display_amount"] = movement_display_amount(
         movement,
@@ -232,6 +420,12 @@ def enrich_movement_for_display(movement, *, language="es"):
     )
     enriched["is_internal_reversal"] = (
         movement_is_internal_reversal(movement)
+    )
+    lookup = movement_lookup or {}
+    enriched["display_detail"] = build_movement_detail_display(
+        movement,
+        language=language,
+        movement_lookup=lookup,
     )
     return enriched
 
