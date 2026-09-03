@@ -51,6 +51,9 @@
             {% if home_panel.kpis.properties_recent %}<small>↑ {{ home_panel.kpis.properties_recent }}</small>{% endif %}
         </article>
     </section>
+    <div class="hide-desktop pending-block-mobile">
+        {% include "dashboard/_pending_block.html" %}
+    </div>
     {% if home_panel.tasks %}
     <section class="home-mobile-section hide-desktop">
         <div class="home-mobile-section__head">
@@ -160,6 +163,10 @@
 
     <div class="home-panel__layout">
         <div class="home-panel__main">
+            <div class="hide-mobile">
+                {% include "dashboard/_pending_block.html" %}
+            </div>
+
             <section class="home-card">
                 <div class="home-card__header">
                     <h2>{{ t('dashboard_active_operations_title') }}</h2>

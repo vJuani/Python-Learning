@@ -32,6 +32,9 @@ from modules.database.recurring_charges_repository import (
     set_recurring_charge_status,
     update_recurring_charge as update_recurring_charge_record,
 )
+from modules.notifications_service import (
+    emit_recurring_charge_generated,
+)
 
 
 RECURRENCE_TYPES = (RECURRENCE_MONTHLY, RECURRENCE_ANNUAL)
@@ -530,6 +533,14 @@ def generate_due_recurring_charges(
                 "amount": movement["gross_amount"],
                 "billing_period": movement["billing_period"],
             }
+        )
+        emit_recurring_charge_generated(
+            organization_id,
+            recurring["agent_id"],
+            movement["id"],
+            currency=movement["currency"],
+            amount=movement["gross_amount"],
+            period_label=item.get("period_label"),
         )
     return {"preview": preview, "generated": generated, "events": events}
 

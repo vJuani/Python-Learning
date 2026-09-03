@@ -1,0 +1,36 @@
+{#
+    Compact pending action card.
+
+    Every CTA points to the module flow that already owns the action,
+    so nothing is resolved from inside the Pending Center.
+#}
+<article class="pending-card pending-card--{{ action.priority }}">
+    <div class="pending-card__body">
+        <div class="pending-card__heading">
+            <span class="pending-card__priority pending-card__priority--{{ action.priority }}">
+                {{ t('pending_priority_' ~ action.priority) }}
+            </span>
+            <h3 class="pending-card__title">{{ action.title }}</h3>
+        </div>
+
+        {% if action.subtitle %}
+        <p class="pending-card__subtitle">{{ action.subtitle }}</p>
+        {% endif %}
+
+        <p class="pending-card__meta">
+            {% if action.amount %}
+            <strong class="pending-card__amount money">
+                {{ action.amount|money(action.currency) }}
+            </strong>
+            {% endif %}
+            {% if action.occurred_at %}
+            <span class="pending-card__date">{{ action.occurred_at|short_date }}</span>
+            {% endif %}
+        </p>
+    </div>
+
+    <a
+        href="{{ url_for(action.endpoint, **action.endpoint_args) }}"
+        class="btn btn-small btn-primary pending-card__cta"
+    >{{ action.action_label }}</a>
+</article>

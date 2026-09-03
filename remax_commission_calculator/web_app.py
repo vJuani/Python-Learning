@@ -2,6 +2,7 @@ from flask import (
     Flask,
     abort,
     flash,
+    g,
     jsonify,
     redirect,
     render_template,
@@ -302,6 +303,14 @@ from modules.notifications_service import (
     notify_agent_for_property_change
 )
 
+from modules.pending_actions import (
+    build_agent_pending_actions,
+    build_staff_pending_actions,
+    summarize_pending_actions
+)
+
+from modules.pending_routes import register_pending_routes
+
 from modules.organization_settings import (
     COMMON_TIMEZONES,
     LOGO_EXTENSIONS,
@@ -499,6 +508,80 @@ def inject_auth_helpers():
             if user is not None and is_agent(user)
             else 0
         )
+    }
+
+
+def _pending_actions_for_current_user():
+    """
+    Build the current user's derived pending actions once per request.
+
+    Guests have no pending center. Staff sees the whole organization,
+    agents only their own data.
+    """
+    if hasattr(g, "pending_actions_cache"):
+        return g.pending_actions_cache
+
+    user = get_current_user()
+    actions = []
+
+    if user is not None and not is_guest_session():
+        organization_id = user.get("organization_id")
+        language = get_current_language()
+
+        if organization_id:
+            try:
+                if is_agent(user):
+                    agent_id = user.get("agent_id")
+                    actions = (
+                        build_agent_pending_actions(
+                            organization_id,
+                            agent_id,
+                            user_id=user["id"],
+                            language=language,
+                        )
+                        if agent_id is not None
+                        else []
+                    )
+                else:
+                    actions = build_staff_pending_actions(
+                        organization_id,
+                        language=language,
+                    )
+            except Exception:
+                app.logger.warning(
+                    "pending_actions_build_failed org=%s",
+                    organization_id,
+                    exc_info=True,
+                )
+                actions = []
+
+    g.pending_actions_cache = actions
+
+    return actions
+
+
+@app.context_processor
+def inject_pending_center():
+    user = get_current_user()
+    enabled = (
+        user is not None
+        and not is_guest_session()
+        and (is_admin(user) or is_agent(user))
+    )
+
+    if not enabled:
+        return {
+            "pending_center_enabled": False,
+            "pending_badge_count": 0,
+            "pending_bell_items": [],
+        }
+
+    actions = _pending_actions_for_current_user()
+
+    return {
+        "pending_center_enabled": True,
+        "pending_badge_count": len(actions),
+        "pending_bell_items": actions[:5],
     }
 
 
@@ -3576,6 +3659,10 @@ def dashboard():
 
     return render_template(
         "dashboard.html",
+        pending_summary=summarize_pending_actions(
+            _pending_actions_for_current_user(),
+            language=get_current_language(),
+        ),
         **context
     )
 
@@ -7492,6 +7579,14 @@ register_agent_account_routes(
     helpers={
         "require_user_organization": require_user_organization,
         "flash_i18n": flash_i18n,
+        "get_current_language": get_current_language,
+    },
+)
+
+register_pending_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
         "get_current_language": get_current_language,
     },
 )

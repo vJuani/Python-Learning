@@ -66,6 +66,7 @@ from modules.invoice_provider import (
     get_invoice_provider_name,
 )
 from modules.notifications_service import (
+    emit_invoice_created,
     notify_operation_invoice_amount_ready,
     notify_operation_side_ready_to_invoice,
 )
@@ -1034,7 +1035,18 @@ def create_draft_for_charge(
         raise InvoicingError(
             "invoice_err_charge_already_invoiced"
         ) from exc
-    return get_invoice(organization_id, created["id"])
+
+    invoice = get_invoice(organization_id, created["id"])
+    emit_invoice_created(
+        organization_id,
+        invoice.get("agent_id"),
+        invoice["id"],
+        invoice_number_internal=invoice.get(
+            "invoice_number_internal"
+        ),
+        actor_user_id=user.get("id"),
+    )
+    return invoice
 
 
 def _resolve_issuer(

@@ -30,6 +30,7 @@ from modules.database.operation_parties_repository import (
 )
 from modules.database.operations_repository import get_operation_record
 from modules.database.tenant import require_organization_id
+from modules.notifications_service import emit_commission_credited
 
 
 STATE_NOT_READY = "not_ready"
@@ -258,7 +259,7 @@ def credit_operation_commission(
         payload["exchange_rate_source"] = "operation_snapshot"
 
     try:
-        return create_movement(
+        movement = create_movement(
             organization_id,
             agent["id"],
             payload,
@@ -266,6 +267,16 @@ def credit_operation_commission(
             idempotency_key=idempotency_key,
             language=language,
         )
+        emit_commission_credited(
+            organization_id,
+            agent["id"],
+            movement["id"],
+            currency=currency,
+            amount=str(amount_decimal),
+            operation_reference=operation["id"],
+            actor_user_id=created_by_user_id,
+        )
+        return movement
     except (AgentAccountError, *IntegrityError):
         # A concurrent request can win the active-credit unique index.
         refreshed = build_operation_commission_state(

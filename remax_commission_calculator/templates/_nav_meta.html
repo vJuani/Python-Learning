@@ -1,27 +1,60 @@
 {% if can_manage_users() or is_agent() %}
-{% if can_manage_users() %}
-{% set bell_href = url_for('approvals_list') %}
-{% set bell_label = t('nav_approvals') %}
-{% set bell_count = pending_access_requests or 0 %}
-{% set bell_active = request.endpoint and request.endpoint.startswith('approvals') %}
-{% elif is_agent() %}
-{% set bell_href = url_for('notifications_list') %}
-{% set bell_label = t('nav_notifications') %}
-{% set bell_count = unread_notifications or 0 %}
-{% set bell_active = request.endpoint == 'notifications_list' %}
-{% endif %}
-
 <div class="main-nav-meta header-nav-meta">
-    <a
-        href="{{ bell_href }}"
-        class="nav-link nav-bell-link{% if bell_active %} active{% endif %}"
-        aria-label="{{ bell_label }}"
-    >
-        🔔
-        {% if bell_count %}
-        <span class="badge badge-pending">{{ bell_count }}</span>
-        {% endif %}
-    </a>
+    {% if pending_center_enabled %}
+    {% set bell_active = request.endpoint == 'pendings_center' %}
+    <details class="nav-dropdown nav-bell-dropdown{% if bell_active %} is-active{% endif %}">
+        <summary
+            class="nav-link nav-bell-link nav-dropdown-toggle{% if bell_active %} active{% endif %}"
+            aria-label="{{ t('pending_center_title') }}"
+        >
+            🔔
+            {% if pending_badge_count %}
+            <span class="badge badge-pending">{{ pending_badge_count }}</span>
+            {% endif %}
+        </summary>
+
+        <div class="nav-dropdown-menu nav-bell-menu" role="menu">
+            <p class="nav-bell-menu__header">
+                {{ t('pending_center_count', count=pending_badge_count) }}
+            </p>
+
+            {% if pending_bell_items %}
+            {% for action in pending_bell_items %}
+            <a
+                href="{{ url_for(action.endpoint, **action.endpoint_args) }}"
+                class="nav-dropdown-item nav-bell-item"
+                role="menuitem"
+            >
+                <span class="nav-bell-item__title">{{ action.title }}</span>
+                {% if action.subtitle %}
+                <span class="nav-bell-item__meta">{{ action.subtitle }}</span>
+                {% endif %}
+            </a>
+            {% endfor %}
+            {% else %}
+            <p class="nav-bell-menu__empty">{{ t('pending_empty_title') }}</p>
+            {% endif %}
+
+            <a
+                href="{{ url_for('pendings_center') }}"
+                class="nav-dropdown-item nav-bell-menu__cta"
+                role="menuitem"
+            >{{ t('pending_center_view_all') }}</a>
+            <a
+                href="{{ url_for('notifications_list') }}"
+                class="nav-dropdown-item"
+                role="menuitem"
+            >{{ t('nav_notifications') }}</a>
+            {% if can_manage_users() %}
+            <a
+                href="{{ url_for('approvals_list') }}"
+                class="nav-dropdown-item"
+                role="menuitem"
+            >{{ t('nav_approvals') }}</a>
+            {% endif %}
+        </div>
+    </details>
+    {% endif %}
 
     {% if can_manage_users() %}
     {% set import_active = (

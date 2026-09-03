@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v14"
+POSTGRES_SCHEMA_VERSION = "postgres_v15"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -261,6 +261,8 @@ SCHEMA_STATEMENTS = (
         is_read {_FLAG} NOT NULL DEFAULT 0,
         actor_user_id BIGINT,
         created_at TEXT NOT NULL,
+        event_key TEXT,
+        read_at TEXT,
 
         FOREIGN KEY (organization_id)
             REFERENCES organizations(id)
@@ -1409,6 +1411,51 @@ def create_postgres_schema():
     try:
         for statement in SCHEMA_STATEMENTS:
             cursor.execute(statement)
+
+        for column_name, column_sql in (
+            ("event_key", "TEXT"),
+            ("read_at", "TEXT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE notifications
+                ADD COLUMN IF NOT EXISTS {column_name} {column_sql}
+                """
+            )
+
+        cursor.execute(
+            """
+            UPDATE notifications
+            SET read_at = created_at
+            WHERE is_read = 1
+                AND (read_at IS NULL OR read_at = '')
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_notifications_event_key
+            ON notifications (
+                organization_id,
+                event_key
+            )
+            WHERE event_key IS NOT NULL
+                AND event_key <> ''
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+            ON notifications (
+                organization_id,
+                user_id,
+                is_read,
+                id
+            )
+            """
+        )
 
         cursor.execute(
             """

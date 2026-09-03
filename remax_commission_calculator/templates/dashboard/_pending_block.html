@@ -1,0 +1,63 @@
+{#
+    Compact dashboard block for derived pending actions.
+
+    Staff sees "requires your attention" for the whole organization,
+    agents see "for you" with their own data only.
+#}
+{% if pending_summary is defined and pending_summary %}
+{% set pending_block_title = (
+    t('dashboard_for_you_title')
+    if is_agent()
+    else t('dashboard_attention_title')
+) %}
+<section class="home-card pending-block">
+    <div class="home-card__header">
+        <h2>{{ pending_block_title }}</h2>
+        <a href="{{ url_for('pendings_center') }}" class="home-card__link">
+            {{ t('pending_center_view_all') }}
+        </a>
+    </div>
+
+    {% if pending_summary.total %}
+    <p class="pending-block__total">
+        {{ t('pending_center_count', count=pending_summary.total) }}
+    </p>
+
+    {% if pending_summary.groups %}
+    <ul class="pending-block__groups">
+        {% for group in pending_summary.groups %}
+        <li class="pending-block__group">
+            <a href="{{ url_for('pendings_center', category=group.category) }}">
+                <span class="pending-block__group-count">{{ group.count }}</span>
+                <span class="pending-block__group-label">{{ group.label }}</span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <ul class="pending-block__list">
+        {% for action in pending_summary.top %}
+        <li class="pending-block__item pending-block__item--{{ action.priority }}">
+            <a href="{{ url_for(action.endpoint, **action.endpoint_args) }}">
+                <span class="pending-block__item-title">{{ action.title }}</span>
+                {% if action.subtitle %}
+                <span class="pending-block__item-meta">{{ action.subtitle }}</span>
+                {% endif %}
+                {% if action.amount %}
+                <span class="pending-block__item-amount money">
+                    {{ action.amount|money(action.currency) }}
+                </span>
+                {% endif %}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="pending-empty pending-empty--compact">
+        <p class="pending-empty__title">{{ t('pending_empty_title') }}</p>
+        <p class="pending-empty__hint">{{ t('pending_empty_hint') }}</p>
+    </div>
+    {% endif %}
+</section>
+{% endif %}

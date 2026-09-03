@@ -1,0 +1,321 @@
+/*
+    Pending Center (Phase 4A).
+
+    Mobile-first: pendings are always cards with a full-width CTA, so
+    there is no horizontal table to scroll on small screens.
+*/
+
+.pending-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.pending-filter {
+    padding: 7px 14px;
+    border: 1px solid var(--border, #d7dced);
+    border-radius: 999px;
+    background: var(--surface, #fff);
+    color: var(--text-muted, #5a6484);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.pending-filter:hover {
+    border-color: var(--accent, #1f3b8f);
+    color: var(--accent, #1f3b8f);
+}
+
+.pending-filter.is-active {
+    background: var(--accent, #1f3b8f);
+    border-color: var(--accent, #1f3b8f);
+    color: #fff;
+}
+
+.pending-panel__count {
+    margin: 0 0 14px;
+    color: var(--text-muted, #5a6484);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.pending-list {
+    display: grid;
+    gap: 12px;
+}
+
+.pending-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--border, #d7dced);
+    border-left: 4px solid var(--text-muted, #98a2c0);
+    border-radius: 12px;
+    background: var(--surface, #fff);
+}
+
+.pending-card--high {
+    border-left-color: #d9534f;
+}
+
+.pending-card--medium {
+    border-left-color: #e0a107;
+}
+
+.pending-card--low {
+    border-left-color: #4a7fd4;
+}
+
+.pending-card__heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.pending-card__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.pending-card__priority {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.pending-card__priority--high {
+    background: rgba(217, 83, 79, 0.12);
+    color: #b03b37;
+}
+
+.pending-card__priority--medium {
+    background: rgba(224, 161, 7, 0.14);
+    color: #8a6100;
+}
+
+.pending-card__priority--low {
+    background: rgba(74, 127, 212, 0.14);
+    color: #2f5aa8;
+}
+
+.pending-card__subtitle {
+    margin: 6px 0 0;
+    color: var(--text, #1d2440);
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+}
+
+.pending-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin: 8px 0 0;
+    color: var(--text-muted, #5a6484);
+    font-size: 0.82rem;
+}
+
+.pending-card__amount {
+    font-size: 0.98rem;
+    color: var(--text, #1d2440);
+}
+
+.pending-card__cta {
+    width: 100%;
+    text-align: center;
+}
+
+.pending-empty {
+    padding: 28px 16px;
+    text-align: center;
+}
+
+.pending-empty--compact {
+    padding: 14px 4px;
+    text-align: left;
+}
+
+.pending-empty__title {
+    margin: 0 0 4px;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.pending-empty__hint {
+    margin: 0;
+    color: var(--text-muted, #5a6484);
+    font-size: 0.88rem;
+}
+
+/* Dashboard block */
+
+.pending-block__total {
+    margin: 0 0 10px;
+    color: var(--text-muted, #5a6484);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.pending-block__groups,
+.pending-block__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.pending-block__groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.pending-block__group a {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 5px 11px;
+    border: 1px solid var(--border, #d7dced);
+    border-radius: 999px;
+    color: var(--text, #1d2440);
+    font-size: 0.8rem;
+    text-decoration: none;
+}
+
+.pending-block__group-count {
+    font-weight: 700;
+}
+
+.pending-block__list {
+    display: grid;
+    gap: 6px;
+}
+
+.pending-block__item a {
+    display: grid;
+    gap: 2px;
+    padding: 9px 12px;
+    border-left: 3px solid var(--text-muted, #98a2c0);
+    border-radius: 8px;
+    background: var(--surface-muted, #f5f7fd);
+    color: var(--text, #1d2440);
+    text-decoration: none;
+}
+
+.pending-block__item--high a {
+    border-left-color: #d9534f;
+}
+
+.pending-block__item--medium a {
+    border-left-color: #e0a107;
+}
+
+.pending-block__item--low a {
+    border-left-color: #4a7fd4;
+}
+
+.pending-block__item-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.pending-block__item-meta,
+.pending-block__item-amount {
+    color: var(--text-muted, #5a6484);
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+}
+
+/* Bell dropdown */
+
+.nav-bell-menu {
+    min-width: 260px;
+    max-width: 320px;
+}
+
+.nav-bell-menu__header {
+    margin: 0;
+    padding: 10px 14px 6px;
+    color: var(--text-muted, #5a6484);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.nav-bell-menu__empty {
+    margin: 0;
+    padding: 4px 14px 10px;
+    color: var(--text-muted, #5a6484);
+    font-size: 0.85rem;
+}
+
+.nav-bell-item {
+    display: grid !important;
+    gap: 2px;
+}
+
+.nav-bell-item__title {
+    font-size: 0.87rem;
+    font-weight: 600;
+}
+
+.nav-bell-item__meta {
+    color: var(--text-muted, #5a6484);
+    font-size: 0.76rem;
+    overflow-wrap: anywhere;
+}
+
+.nav-bell-menu__cta {
+    font-weight: 700;
+}
+
+@media (min-width: 720px) {
+    .pending-card {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+    }
+
+    .pending-card__body {
+        min-width: 0;
+    }
+
+    .pending-card__cta {
+        width: auto;
+        flex-shrink: 0;
+    }
+}
+
+html[data-theme="dark"] .pending-filter,
+html[data-theme="dark"] .pending-card,
+html[data-theme="dark"] .pending-block__group a {
+    background: var(--surface, #131c31);
+    border-color: var(--border, #26314d);
+    color: var(--text, #e7ecfa);
+}
+
+html[data-theme="dark"] .pending-filter.is-active {
+    background: var(--accent, #4d7ce8);
+    border-color: var(--accent, #4d7ce8);
+    color: #0b1220;
+}
+
+html[data-theme="dark"] .pending-block__item a {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text, #e7ecfa);
+}
+
+html[data-theme="dark"] .pending-card__subtitle,
+html[data-theme="dark"] .pending-card__amount {
+    color: var(--text, #e7ecfa);
+}

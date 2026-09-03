@@ -48,6 +48,9 @@ from modules.database.operations_repository import (
 )
 from modules.database import get_agent_record
 from modules.database.tenant import require_organization_id
+from modules.notifications_service import (
+    emit_agent_payment_confirmed,
+)
 
 
 CREDIT_MOVEMENT_TYPES = ("commission", "credit", "payment")
@@ -482,7 +485,7 @@ def create_movement(
         agent = get_agent_record(agent_id, organization_id)
         agent_name = agent.get("name") if agent else None
         try:
-            return register_agent_payment_atomic(
+            payment = register_agent_payment_atomic(
                 organization_id,
                 agent_id,
                 currency=validated["currency"],
@@ -514,6 +517,15 @@ def create_movement(
                 attachment=attachment,
                 receipt_number=receipt_number,
             )
+            emit_agent_payment_confirmed(
+                organization_id,
+                agent_id,
+                payment["id"],
+                currency=payment.get("currency"),
+                amount=payment.get("amount"),
+                actor_user_id=created_by_user_id,
+            )
+            return payment
         except ValueError as error:
             key = str(error)
             if key == "invalid_amount":

@@ -3620,6 +3620,12 @@ def migrate_schema(create_backup=True):
     )
 
     migrate_recurring_charges_sqlite()
+
+    from .notifications_migration import (
+        migrate_notification_events_sqlite,
+    )
+
+    migrate_notification_events_sqlite()
     _migrate_document_storage_folders()
 
     return backup_path

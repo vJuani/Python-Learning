@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('pending_center_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('pending_center_title') }}</h2>
+        <p>
+            {% if scope == 'agent' %}
+            {{ t('pending_center_subtitle_agent') }}
+            {% else %}
+            {{ t('pending_center_subtitle_staff') }}
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ url_for('notifications_list') }}" class="btn btn-secondary">
+            {{ t('notifications_title') }}
+        </a>
+    </div>
+</section>
+
+{% if pending_categories %}
+<nav class="pending-filters" aria-label="{{ t('pending_filter_label') }}">
+    <a
+        href="{{ url_for('pendings_center') }}"
+        class="pending-filter{% if selected_category == 'all' %} is-active{% endif %}"
+    >{{ t('pending_category_all') }}</a>
+    {% for category in pending_categories %}
+    <a
+        href="{{ url_for('pendings_center', category=category) }}"
+        class="pending-filter{% if selected_category == category %} is-active{% endif %}"
+    >{{ t('pending_category_' ~ category) }}</a>
+    {% endfor %}
+</nav>
+{% endif %}
+
+<section class="panel pending-panel">
+    {% if pending_actions %}
+    <p class="pending-panel__count">
+        {{ t('pending_center_count', count=pending_actions|length) }}
+    </p>
+
+    <div class="pending-list">
+        {% for action in pending_actions %}
+        {% include "pendings/_action_card.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="pending-empty">
+        <p class="pending-empty__title">{{ t('pending_empty_title') }}</p>
+        <p class="pending-empty__hint">{{ t('pending_empty_hint') }}</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
