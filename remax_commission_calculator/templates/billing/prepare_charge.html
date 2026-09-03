@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('billing_charge_prepare_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('billing_charge_prepare_title') }}</h2>
+        <p>{{ preview.agent_name }} · {{ preview.description }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('agent_account_detail', agent_id=preview.agent_id) }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<p class="badge billing-review-internal-badge">{{ t('billing_non_fiscal_badge') }}</p>
+
+<section class="panel billing-review-panel">
+    <p class="money billing-review-amount">{{ preview.total_amount | money(preview.currency) }}</p>
+
+    <dl class="billing-prepare-dl billing-review-dl">
+        <div>
+            <dt>{{ t('billing_origin') }}</dt>
+            <dd>{{ t('billing_origin_agent_account') }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_recipient') }}</dt>
+            <dd>{{ preview.recipient_name }}<br><span class="field-help">{{ preview.recipient_tax_id }}</span></dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_concept') }}</dt>
+            <dd>{{ preview.description }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_net_amount') }}</dt>
+            <dd>{{ preview.subtotal | money(preview.currency) }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_vat') }} {{ (preview.vat_rate * 100) | round(2) }}%</dt>
+            <dd>{{ preview.vat_amount | money(preview.currency) }}</dd>
+        </div>
+        <div>
+            <dt>{{ t('billing_total') }}</dt>
+            <dd>{{ preview.total_amount | money(preview.currency) }}</dd>
+        </div>
+    </dl>
+
+    <form method="post" action="{{ url_for('billing_new_for_charge', charge_id=preview.agent_account_movement_id) }}" class="billing-review-actions">
+        <div class="form-group">
+            <label for="issuer_profile_id">{{ t('billing_issuer') }}</label>
+            <select id="issuer_profile_id" name="issuer_profile_id" class="form-input" required>
+                {% for profile in issuer_profiles %}
+                <option value="{{ profile.id }}" {% if profile.id == issuer_profile_id %}selected{% endif %}>{{ profile.legal_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <input type="hidden" name="payment_condition" value="cuenta_corriente">
+        <input type="hidden" name="issue_date" value="{{ preview.issue_date }}">
+        <button type="submit" class="btn btn-primary">{{ t('billing_generate_draft') }}</button>
+    </form>
+</section>
+{% endblock %}

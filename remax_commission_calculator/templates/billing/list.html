@@ -26,6 +26,30 @@
             <a href="{{ url_for('billing_list', view='history', tab='ready') }}" class="{% if tab == 'ready' %}is-active{% endif %}">{{ t('billing_tab_ready') }}</a>
             <a href="{{ url_for('billing_list', view='history', tab='issued') }}" class="{% if tab == 'issued' %}is-active{% endif %}">{{ t('billing_tab_issued') }}</a>
         </nav>
+        {% if tab == 'pending' and is_staff %}
+        <section class="panel">
+            <h3>{{ t('billing_from_agent_charge') }}</h3>
+            <p class="field-help">{{ t('billing_from_agent_charge_help') }}</p>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="billing-charge-agent">{{ t('billing_agent') }}</label>
+                    <select id="billing-charge-agent" class="form-input">
+                        <option value="">{{ t('select_option') }}</option>
+                        {% for agent in agents %}
+                        <option value="{{ agent.id }}">{{ agent.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="billing-charge-select">{{ t('billing_charge') }}</label>
+                    <select id="billing-charge-select" class="form-input" disabled>
+                        <option value="">{{ t('select_option') }}</option>
+                    </select>
+                </div>
+                <a id="billing-charge-continue" class="btn btn-primary" href="#" hidden>{{ t('billing_continue') }}</a>
+            </div>
+        </section>
+        {% endif %}
         {% if tab == 'pending' and pending_items %}
         <div class="billing-ai-history__grid">
             {% for item in pending_items %}
@@ -55,7 +79,13 @@
                     <tr>
                         <td>{{ inv.issue_date }}</td>
                         <td>{{ inv.invoice_number_internal }}</td>
-                        <td>{{ inv.property_address }} · {{ inv.operation_display_id }}</td>
+                        <td>
+                            {% if inv.origin_type == 'agent_account_charge' %}
+                            {{ t('billing_origin_agent_account') }} · #{{ inv.agent_account_movement_id }}
+                            {% else %}
+                            {{ inv.property_address }} · {{ inv.operation_display_id }}
+                            {% endif %}
+                        </td>
                         <td>{{ inv.total_amount | money(inv.currency) }}</td>
                         <td>{{ t('billing_status_' ~ inv.status) }}</td>
                         <td><a href="{{ url_for('billing_detail', invoice_id=inv.id) }}">{{ t('billing_view_invoice') }}</a></td>
@@ -170,6 +200,37 @@
             textarea.focus();
         });
     });
+
+    var agentSelect = document.getElementById("billing-charge-agent");
+    var chargeSelect = document.getElementById("billing-charge-select");
+    var continueLink = document.getElementById("billing-charge-continue");
+    if (agentSelect && chargeSelect && continueLink) {
+        agentSelect.addEventListener("change", function () {
+            chargeSelect.innerHTML = '<option value="">{{ t("select_option") }}</option>';
+            chargeSelect.disabled = true;
+            continueLink.hidden = true;
+            if (!agentSelect.value) return;
+            fetch("{{ url_for('billing_charge_search') }}?agent_id=" + encodeURIComponent(agentSelect.value))
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    (data.charges || []).forEach(function (charge) {
+                        var option = document.createElement("option");
+                        option.value = charge.id;
+                        option.textContent = charge.description + " — " + charge.currency + " " + Number(charge.amount).toFixed(2);
+                        chargeSelect.appendChild(option);
+                    });
+                    chargeSelect.disabled = false;
+                });
+        });
+        chargeSelect.addEventListener("change", function () {
+            if (!chargeSelect.value) {
+                continueLink.hidden = true;
+                return;
+            }
+            continueLink.href = "{{ url_for('billing_prepare_charge', charge_id=0) }}".replace("/0/", "/" + chargeSelect.value + "/");
+            continueLink.hidden = false;
+        });
+    }
 })();
 </script>
 {% endblock %}

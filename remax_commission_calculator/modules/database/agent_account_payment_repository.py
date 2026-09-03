@@ -136,6 +136,87 @@ def derive_charge_payment_status(remaining_amount, gross_amount):
     return "pending"
 
 
+def get_charge_payment_summary(
+    organization_id,
+    charge_movement_id,
+):
+    """Return the canonical allocated/remaining state for one charge."""
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        charge = get_charge_remaining_amount(
+            cursor,
+            organization_id,
+            charge_movement_id,
+        )
+        if charge is None:
+            return None
+        charge["payment_status"] = derive_charge_payment_status(
+            charge["remaining_amount"],
+            charge["gross_amount"],
+        )
+        return charge
+    finally:
+        connection.close()
+
+
+def list_charge_payment_allocations(
+    organization_id,
+    charge_movement_id,
+):
+    """Audit trail from a charge to confirmed payments and Cash."""
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT
+                a.id,
+                a.payment_movement_id,
+                a.amount,
+                a.currency,
+                a.created_at,
+                p.movement_date,
+                p.source_type,
+                p.source_id,
+                c.receipt_number
+            FROM agent_account_payment_allocations a
+            INNER JOIN agent_account_movements p
+                ON p.id = a.payment_movement_id
+                AND p.organization_id = a.organization_id
+            LEFT JOIN cash_movements c
+                ON p.source_type = 'cash'
+                AND c.id = p.source_id
+                AND c.organization_id = p.organization_id
+            WHERE a.organization_id = ?
+                AND a.charge_movement_id = ?
+                AND p.status = 'confirmed'
+            ORDER BY a.id ASC
+            """,
+            (organization_id, charge_movement_id),
+        )
+        return [
+            {
+                "id": row[0],
+                "payment_movement_id": row[1],
+                "amount": float(row[2] or 0),
+                "currency": row[3],
+                "created_at": row[4],
+                "payment_date": row[5],
+                "source_type": row[6],
+                "cash_movement_id": (
+                    row[7] if row[6] == "cash" else None
+                ),
+                "receipt_number": row[8],
+            }
+            for row in cursor.fetchall()
+        ]
+    finally:
+        connection.close()
+
+
 def list_payment_allocations(
     organization_id,
     payment_movement_id,

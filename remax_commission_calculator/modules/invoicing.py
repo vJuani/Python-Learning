@@ -27,14 +27,25 @@ from modules.database.invoices_repository import (
     count_pending_parties_to_invoice,
     create_invoice_atomic,
     get_active_invoice_for_operation,
+    get_active_invoice_for_charge,
     get_active_invoice_for_side_issuer,
     get_invoice,
     list_invoices,
+    list_invoices_for_charge,
     list_invoices_for_operation,
     sum_invoiced_amount,
     update_invoice_fields,
     update_invoice_status,
 )
+from modules.database.agent_account_repository import (
+    get_agent_account_movement,
+    list_agent_account_movements,
+)
+from modules.database.agent_account_payment_repository import (
+    get_charge_payment_summary,
+    list_charge_payment_allocations,
+)
+from modules.database.agents_repository import get_agent_record
 from modules.database.operation_parties_repository import (
     ensure_parties_for_operation,
     get_parties_for_operation,
@@ -77,6 +88,11 @@ STATUS_READY = "ready_to_issue"
 STATUS_ISSUED = "issued"
 STATUS_ERROR = "error"
 STATUS_CANCELLED = "cancelled"
+
+ORIGIN_OPERATION = "operation"
+ORIGIN_AGENT_ACCOUNT_CHARGE = "agent_account_charge"
+CHARGE_INVOICE_PURPOSE = "agent_charge"
+BILLABLE_MOVEMENT_TYPES = ("charge", "fee")
 
 PAYMENT_CONTADO = "contado"
 PAYMENT_CUENTA_CORRIENTE = "cuenta_corriente"
@@ -713,6 +729,311 @@ def _recipient_from_party(party):
     }
 
 
+def _recipient_from_agent_profile(profile):
+    ready, missing = agent_billing_ready(profile)
+    if not ready:
+        raise InvoicingError(
+            "invoice_err_recipient_profile_incomplete",
+            missing=missing,
+        )
+    return {
+        "recipient_name": (profile.get("legal_name") or "").strip(),
+        "recipient_tax_id": normalize_client_tax_id(
+            profile.get("tax_id")
+        ),
+        "recipient_tax_condition": (
+            profile.get("tax_condition") or ""
+        ).strip(),
+        "recipient_address": (
+            profile.get("fiscal_address") or ""
+        ).strip(),
+        "recipient_party_id": None,
+    }
+
+
+def charge_is_billable(movement):
+    return bool(
+        movement
+        and movement.get("movement_type") in BILLABLE_MOVEMENT_TYPES
+        and movement.get("status") == "confirmed"
+        and not movement.get("is_internal_reversal")
+        and float(
+            movement.get("gross_amount")
+            or movement.get("amount")
+            or 0
+        )
+        > 0
+    )
+
+
+def get_charge_invoice_context(
+    organization_id,
+    charge_movement_id,
+    *,
+    user=None,
+):
+    movement = get_agent_account_movement(
+        charge_movement_id,
+        organization_id,
+    )
+    if movement is None:
+        raise InvoicingError("invoice_err_charge_not_found")
+    if user and user.get("role") == ROLE_AGENT:
+        if user.get("agent_id") != movement.get("agent_id"):
+            raise InvoicingError("invoice_err_forbidden")
+
+    history = list_invoices_for_charge(
+        organization_id,
+        charge_movement_id,
+    )
+    active = next(
+        (
+            invoice
+            for invoice in history
+            if invoice.get("status") in ACTIVE_STATUSES
+        ),
+        None,
+    )
+    latest = history[0] if history else None
+    payment = get_charge_payment_summary(
+        organization_id,
+        charge_movement_id,
+    )
+    allocations = list_charge_payment_allocations(
+        organization_id,
+        charge_movement_id,
+    )
+    if payment is None:
+        payment = {
+            "payment_status": "cancelled",
+            "allocated_amount": sum(
+                float(item.get("amount") or 0)
+                for item in allocations
+            ),
+            "remaining_amount": 0.0,
+            "gross_amount": float(
+                movement.get("gross_amount")
+                or movement.get("amount")
+                or 0
+            ),
+        }
+
+    invoice_state = "no_invoice"
+    if active:
+        invoice_state = active.get("status") or STATUS_DRAFT
+    elif latest and latest.get("status") == STATUS_CANCELLED:
+        invoice_state = STATUS_CANCELLED
+
+    return {
+        "movement": movement,
+        "is_billable": charge_is_billable(movement),
+        "active_invoice": active,
+        "latest_invoice": latest,
+        "invoice_history": history,
+        "invoice_state": invoice_state,
+        "payment": payment,
+        "payment_allocations": allocations,
+    }
+
+
+def list_billable_agent_charges(
+    organization_id,
+    *,
+    agent_id,
+    include_invoiced=False,
+):
+    results = []
+    for movement in list_agent_account_movements(
+        organization_id,
+        agent_id,
+        include_internal_reversals=False,
+    ):
+        if not charge_is_billable(movement):
+            continue
+        context = get_charge_invoice_context(
+            organization_id,
+            movement["id"],
+        )
+        if (
+            not include_invoiced
+            and context["active_invoice"] is not None
+        ):
+            continue
+        results.append(
+            {
+                **movement,
+                "invoice_state": context["invoice_state"],
+                "active_invoice": context["active_invoice"],
+                "payment": context["payment"],
+            }
+        )
+    return results
+
+
+def build_draft_preview_for_charge(
+    organization_id,
+    charge_movement_id,
+    user,
+    *,
+    issuer_mode,
+    issuer_profile_id=None,
+    payment_condition=None,
+    issue_date=None,
+):
+    if user is None or user.get("role") != ROLE_ADMIN:
+        raise InvoicingError("invoice_err_forbidden")
+    if issuer_mode != ISSUER_MODE_OFFICE:
+        raise InvoicingError("invoice_err_charge_requires_office_issuer")
+
+    context = get_charge_invoice_context(
+        organization_id,
+        charge_movement_id,
+        user=user,
+    )
+    movement = context["movement"]
+    if not context["is_billable"]:
+        raise InvoicingError("invoice_err_charge_not_billable")
+    if context["active_invoice"] is not None:
+        raise InvoicingError(
+            "invoice_err_charge_already_invoiced",
+            missing=[context["active_invoice"]["id"]],
+        )
+
+    agent = get_agent_record(
+        movement["agent_id"],
+        organization_id,
+    )
+    if agent is None:
+        raise InvoicingError("invoice_err_charge_not_found")
+    recipient_profile = get_agent_billing_profile(
+        organization_id,
+        movement["agent_id"],
+    )
+    recipient = _recipient_from_agent_profile(recipient_profile)
+    issuer = _resolve_issuer(
+        organization_id,
+        {"agent_db_id": movement["agent_id"]},
+        user,
+        issuer_mode=issuer_mode,
+        issuer_profile_id=issuer_profile_id,
+    )
+
+    settings = get_organization_settings(organization_id)
+    pay = payment_condition or settings.get(
+        "default_payment_condition"
+    ) or PAYMENT_CUENTA_CORRIENTE
+    if pay not in PAYMENT_CONDITIONS:
+        raise InvoicingError(
+            "invoice_err_payment_condition_invalid"
+        )
+
+    gross = float(
+        movement.get("gross_amount")
+        or movement.get("amount")
+        or 0
+    )
+    net = float(
+        movement.get("net_amount")
+        if movement.get("net_amount") is not None
+        else gross
+    )
+    vat_amount = float(movement.get("vat_amount") or 0)
+    vat_rate = float(movement.get("vat_rate") or 0)
+    currency = (movement.get("currency") or "").upper()
+    if currency not in ("ARS", "USD"):
+        raise InvoicingError("invoice_err_currency_invalid")
+
+    return {
+        "operation_id": None,
+        "agent_account_movement_id": movement["id"],
+        "origin_type": ORIGIN_AGENT_ACCOUNT_CHARGE,
+        "invoice_purpose": CHARGE_INVOICE_PURPOSE,
+        "agent_id": movement["agent_id"],
+        "agent_name": agent.get("name"),
+        "charge": movement,
+        "side": None,
+        **{k: issuer[k] for k in (
+            "issuer_user_id",
+            "issuer_type",
+            "issuer_name",
+            "issuer_tax_id",
+            "issuer_tax_condition",
+            "issuer_address",
+            "issuer_profile_id",
+            "issuer_key",
+            "source",
+            "point_of_sale",
+        )},
+        **recipient,
+        "invoice_type": DEFAULT_INVOICE_TYPE,
+        "service_type": (
+            settings.get("default_invoice_service_type")
+            or DEFAULT_SERVICE_TYPE
+        ),
+        "description": (
+            movement.get("description")
+            or movement.get("reference_text")
+            or f"Charge #{movement['id']}"
+        ),
+        "quantity": DEFAULT_QUANTITY,
+        "unit_price": net,
+        "subtotal": net,
+        "vat_rate": vat_rate,
+        "vat_amount": vat_amount,
+        "total_amount": gross,
+        "currency": currency,
+        "exchange_rate": movement.get("exchange_rate"),
+        "payment_condition": pay,
+        "issue_date": issue_date or _today_iso(),
+        "status": STATUS_DRAFT,
+        "provider": get_invoice_provider_name(),
+        "non_fiscal_notice": True,
+    }
+
+
+def create_draft_for_charge(
+    organization_id,
+    charge_movement_id,
+    user,
+    *,
+    issuer_mode,
+    issuer_profile_id=None,
+    payment_condition=None,
+    issue_date=None,
+):
+    preview = build_draft_preview_for_charge(
+        organization_id,
+        charge_movement_id,
+        user,
+        issuer_mode=issuer_mode,
+        issuer_profile_id=issuer_profile_id,
+        payment_condition=payment_condition,
+        issue_date=issue_date,
+    )
+    fields = {
+        key: value
+        for key, value in preview.items()
+        if key not in (
+            "agent_name",
+            "charge",
+            "non_fiscal_notice",
+        )
+    }
+    fields["created_by_user_id"] = user.get("id")
+    fields["charge_linked_at"] = _now_iso()
+    fields["charge_linked_by_user_id"] = user.get("id")
+    try:
+        created = create_invoice_atomic(
+            organization_id,
+            fields=fields,
+        )
+    except IntegrityError as exc:
+        raise InvoicingError(
+            "invoice_err_charge_already_invoiced"
+        ) from exc
+    return get_invoice(organization_id, created["id"])
+
+
 def _resolve_issuer(
     organization_id,
     operation,
@@ -1106,6 +1427,7 @@ def confirm_draft(organization_id, invoice_id, user):
         invoice_id,
         user,
     )
+    _require_charge_invoice_staff(invoice, user)
     if invoice["status"] not in (
         STATUS_DRAFT,
         STATUS_ERROR,
@@ -1163,6 +1485,7 @@ def issue_fiscal_invoice(
         invoice_id,
         user,
     )
+    _require_charge_invoice_staff(invoice, user)
     if invoice["status"] != STATUS_READY:
         raise InvoicingError(
             "invoice_err_invalid_transition"
@@ -1314,6 +1637,7 @@ def cancel_invoice(
         user,
         admin_or_owner=True,
     )
+    _require_charge_invoice_staff(invoice, user)
     if invoice["status"] == STATUS_ISSUED:
         raise InvoicingError(
             "invoice_err_cannot_cancel_issued"
@@ -1350,6 +1674,7 @@ def retry_error_invoice(organization_id, invoice_id, user):
         invoice_id,
         user,
     )
+    _require_charge_invoice_staff(invoice, user)
     if invoice["status"] != STATUS_ERROR:
         raise InvoicingError(
             "invoice_err_invalid_transition"
@@ -1377,6 +1702,7 @@ def update_draft_options(
         invoice_id,
         user,
     )
+    _require_charge_invoice_staff(invoice, user)
     if invoice["status"] != STATUS_DRAFT:
         raise InvoicingError(
             "invoice_err_invalid_transition"
@@ -1437,6 +1763,15 @@ def _require_invoice_access(
         return invoice
 
     raise InvoicingError("invoice_err_forbidden")
+
+
+def _require_charge_invoice_staff(invoice, user):
+    if (
+        invoice.get("origin_type")
+        == ORIGIN_AGENT_ACCOUNT_CHARGE
+        and user.get("role") != ROLE_ADMIN
+    ):
+        raise InvoicingError("invoice_err_forbidden")
 
 
 def count_pending_to_invoice(

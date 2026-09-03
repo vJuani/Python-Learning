@@ -1193,21 +1193,26 @@ def reverse_agent_account_movement_atomic(
     *,
     created_by_user_id,
     reversal_reason,
+    cursor=None,
+    connection=None,
 ):
     organization_id = require_organization_id(
         organization_id
     )
 
     backend = get_database_backend()
-    connection = get_connection()
-    cursor = connection.cursor()
+    owns_connection = cursor is None
+    if owns_connection:
+        connection = get_connection()
+        cursor = connection.cursor()
     now = _now_iso()
 
     try:
-        if backend == BACKEND_SQLITE:
-            cursor.execute("BEGIN IMMEDIATE")
-        else:
-            cursor.execute("BEGIN")
+        if owns_connection:
+            if backend == BACKEND_SQLITE:
+                cursor.execute("BEGIN IMMEDIATE")
+            else:
+                cursor.execute("BEGIN")
 
         cursor.execute(
             """
@@ -1229,11 +1234,9 @@ def reverse_agent_account_movement_atomic(
         )
         original = cursor.fetchone()
         if original is None:
-            connection.rollback()
             raise ValueError("movement_not_found")
 
         if original[8] != STATUS_CONFIRMED:
-            connection.rollback()
             raise ValueError("movement_not_reversible")
 
         balance_before = float(original[7] or 0)
@@ -1310,14 +1313,107 @@ def reverse_agent_account_movement_atomic(
                 reversal_reason or "",
             ),
         )
+        if owns_connection:
+            connection.commit()
+    except Exception:
+        if owns_connection:
+            connection.rollback()
+        raise
+    finally:
+        if owns_connection:
+            connection.close()
+
+    if owns_connection:
+        return get_agent_account_movement(
+            reversal_id,
+            organization_id,
+        )
+    cursor.execute(
+        MOVEMENTS_BASE_QUERY
+        + """
+        WHERE m.id = ?
+            AND m.organization_id = ?
+        """,
+        (reversal_id, organization_id),
+    )
+    return _build_movement_dict(cursor.fetchone())
+
+
+def reverse_charge_with_invoice_atomic(
+    organization_id,
+    movement_id,
+    *,
+    created_by_user_id,
+    reversal_reason,
+):
+    """Reverse a charge and cancel its non-issued invoice in one transaction."""
+    organization_id = require_organization_id(organization_id)
+    backend = get_database_backend()
+    connection = get_connection()
+    cursor = connection.cursor()
+    now = _now_iso()
+    try:
+        cursor.execute(
+            "BEGIN IMMEDIATE" if backend == BACKEND_SQLITE else "BEGIN"
+        )
+        cursor.execute(
+            """
+            SELECT id, status
+            FROM invoices
+            WHERE organization_id = ?
+                AND origin_type = 'agent_account_charge'
+                AND agent_account_movement_id = ?
+                AND invoice_purpose = 'agent_charge'
+                AND status IN (
+                    'draft', 'ready_to_issue', 'issued', 'error'
+                )
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (organization_id, movement_id),
+        )
+        invoice = cursor.fetchone()
+        if invoice is not None and invoice[1] == "issued":
+            raise ValueError("charge_has_issued_invoice")
+
+        reversal = reverse_agent_account_movement_atomic(
+            organization_id,
+            movement_id,
+            created_by_user_id=created_by_user_id,
+            reversal_reason=reversal_reason,
+            cursor=cursor,
+            connection=connection,
+        )
+        if invoice is not None:
+            cursor.execute(
+                """
+                UPDATE invoices
+                SET status = 'cancelled',
+                    updated_at = ?,
+                    cancelled_at = ?,
+                    cancelled_by_user_id = ?,
+                    cancellation_reason = ?
+                WHERE id = ?
+                    AND organization_id = ?
+                    AND status IN (
+                        'draft', 'ready_to_issue', 'error'
+                    )
+                """,
+                (
+                    now,
+                    now,
+                    created_by_user_id,
+                    reversal_reason or "",
+                    invoice[0],
+                    organization_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("charge_invoice_cancel_failed")
         connection.commit()
+        return reversal
     except Exception:
         connection.rollback()
         raise
     finally:
         connection.close()
-
-    return get_agent_account_movement(
-        reversal_id,
-        organization_id,
-    )

@@ -9,6 +9,7 @@ import logging
 
 from flask import (
     abort,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -81,17 +82,21 @@ from modules.invoicing import (
     agent_billing_ready,
     billing_kpis,
     build_draft_preview_for_side,
+    build_draft_preview_for_charge,
     cancel_invoice,
     confirm_draft,
     issue_fiscal_invoice,
     create_draft_for_side,
+    create_draft_for_charge,
     default_issuer_mode_for_user,
     generate_draft_pdf_bytes,
     get_invoice,
+    get_charge_invoice_context,
     get_next_missing_client_field,
     get_operation_sides_state,
     list_invoices,
     list_pending_operations,
+    list_billable_agent_charges,
     org_billing_ready,
     set_party_invoice_amount,
     update_draft_options,
@@ -790,6 +795,121 @@ def register_billing_routes(app, *, helpers):
         )
 
     @app.route(
+        "/billing/agent-account-charges/<int:charge_id>/prepare"
+    )
+    @admin_required
+    def billing_prepare_charge(charge_id):
+        user = get_current_user()
+        organization_id = require_user_organization()
+        settings = get_organization_settings(organization_id)
+        issuer_mode = ISSUER_MODE_OFFICE
+        issuer_profiles = list_billing_issuer_profiles(
+            organization_id,
+            active_only=True,
+        )
+        issuer_profile_id = request.args.get("issuer_profile_id")
+        if issuer_profile_id and str(issuer_profile_id).isdigit():
+            issuer_profile_id = int(issuer_profile_id)
+        else:
+            _mode, issuer_profile_id = _issuer_defaults(
+                user,
+                settings,
+                organization_id,
+            )
+        if issuer_profile_id is None and issuer_profiles:
+            issuer_profile_id = issuer_profiles[0]["id"]
+        try:
+            preview = build_draft_preview_for_charge(
+                organization_id,
+                charge_id,
+                user,
+                issuer_mode=issuer_mode,
+                issuer_profile_id=issuer_profile_id,
+            )
+        except InvoicingError as error:
+            _flash_billing_error(error, user=user)
+            if error.message_key in (
+                "invoice_err_recipient_profile_incomplete",
+                "invoice_err_billing_profile_incomplete",
+            ):
+                return redirect(url_for("billing_issuers"))
+            return redirect(url_for("agent_account_index"))
+        return render_template(
+            "billing/prepare_charge.html",
+            preview=preview,
+            settings=settings,
+            issuer_profiles=issuer_profiles,
+            issuer_profile_id=issuer_profile_id,
+        )
+
+    @app.route(
+        "/billing/agent-account-charges/<int:charge_id>/new",
+        methods=["POST"],
+    )
+    @admin_required
+    def billing_new_for_charge(charge_id):
+        user = get_current_user()
+        organization_id = require_user_organization()
+        issuer_profile_id = request.form.get("issuer_profile_id")
+        if issuer_profile_id and str(issuer_profile_id).isdigit():
+            issuer_profile_id = int(issuer_profile_id)
+        else:
+            issuer_profile_id = None
+        try:
+            invoice = create_draft_for_charge(
+                organization_id,
+                charge_id,
+                user,
+                issuer_mode=ISSUER_MODE_OFFICE,
+                issuer_profile_id=issuer_profile_id,
+                payment_condition=request.form.get(
+                    "payment_condition"
+                ),
+                issue_date=request.form.get("issue_date"),
+            )
+        except InvoicingError as error:
+            _flash_billing_error(error, user=user)
+            return redirect(
+                url_for(
+                    "billing_prepare_charge",
+                    charge_id=charge_id,
+                    issuer_profile_id=issuer_profile_id,
+                )
+            )
+        flash_i18n("invoice_draft_created", "success")
+        return redirect(
+            url_for("billing_review", invoice_id=invoice["id"])
+        )
+
+    @app.route("/billing/agent-account-charges/search")
+    @admin_required
+    def billing_charge_search():
+        organization_id = require_user_organization()
+        agent_id = request.args.get("agent_id", type=int)
+        if not agent_id:
+            return jsonify({"charges": []})
+        charges = list_billable_agent_charges(
+            organization_id,
+            agent_id=agent_id,
+        )
+        return jsonify(
+            {
+                "charges": [
+                    {
+                        "id": charge["id"],
+                        "description": charge.get("description"),
+                        "billing_period": charge.get(
+                            "billing_period"
+                        ),
+                        "currency": charge.get("currency"),
+                        "amount": charge.get("gross_amount"),
+                    }
+                    for charge in charges
+                ]
+            }
+        )
+
+    @app.route(
         "/billing/<int:invoice_id>/review",
         methods=["GET", "POST"],
     )
@@ -867,16 +987,24 @@ def register_billing_routes(app, *, helpers):
             )
 
         operation = None
+        charge_context = None
         if invoice.get("operation_id"):
             operation = get_operation_record(
                 invoice["operation_id"],
                 organization_id,
+            )
+        elif invoice.get("agent_account_movement_id"):
+            charge_context = get_charge_invoice_context(
+                organization_id,
+                invoice["agent_account_movement_id"],
+                user=user,
             )
 
         return render_template(
             "billing/review.html",
             invoice=invoice,
             operation=operation,
+            charge_context=charge_context,
             payment_conditions=PAYMENT_CONDITIONS,
             arca_enabled=is_arca_fiscal_enabled(),
             is_staff=is_admin(user),
@@ -894,16 +1022,25 @@ def register_billing_routes(app, *, helpers):
             user,
         )
         operation = None
+        charge_context = None
         if invoice.get("operation_id"):
             operation = get_operation_record(
                 invoice["operation_id"],
                 organization_id,
             )
+        elif invoice.get("agent_account_movement_id"):
+            charge_context = get_charge_invoice_context(
+                organization_id,
+                invoice["agent_account_movement_id"],
+                user=user,
+            )
         return render_template(
             "billing/detail.html",
             invoice=invoice,
             operation=operation,
+            charge_context=charge_context,
             arca_enabled=is_arca_fiscal_enabled(),
+            is_staff=is_admin(user),
         )
 
     @app.route(
@@ -978,6 +1115,11 @@ def register_billing_routes(app, *, helpers):
     def billing_cancel(invoice_id):
         user = require_billing_user()
         organization_id = require_user_organization()
+        invoice = load_billing_invoice(
+            organization_id,
+            invoice_id,
+            user,
+        )
         try:
             cancel_invoice(
                 organization_id,
@@ -989,8 +1131,8 @@ def register_billing_routes(app, *, helpers):
         except InvoicingError as error:
             _flash_billing_error(
                 error,
-                operation_id=operation_id,
-                side=side,
+                operation_id=invoice.get("operation_id"),
+                side=invoice.get("side"),
                 user=user,
             )
         return redirect(
@@ -1002,6 +1144,11 @@ def register_billing_routes(app, *, helpers):
     def billing_pdf(invoice_id):
         user = require_billing_user()
         organization_id = require_user_organization()
+        invoice = load_billing_invoice(
+            organization_id,
+            invoice_id,
+            user,
+        )
         try:
             pdf_bytes = generate_draft_pdf_bytes(
                 organization_id,
@@ -1011,8 +1158,8 @@ def register_billing_routes(app, *, helpers):
         except InvoicingError as error:
             _flash_billing_error(
                 error,
-                operation_id=operation_id,
-                side=side,
+                operation_id=invoice.get("operation_id"),
+                side=invoice.get("side"),
                 user=user,
             )
             return redirect(

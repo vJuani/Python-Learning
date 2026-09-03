@@ -6,7 +6,9 @@
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ t('billing_review') }}</h2>
-        {% if operation %}
+        {% if charge_context %}
+        <p>{{ t('billing_origin_agent_account') }} · {{ invoice.recipient_name }}</p>
+        {% elif operation %}
         <p>{{ operation.property }} · {{ t('billing_side_' ~ invoice.side) }}</p>
         {% else %}
         <p>{{ invoice.invoice_number_internal }}</p>
@@ -66,7 +68,7 @@
         {% endif %}
     </dl>
 
-    {% if invoice.status == 'draft' %}
+    {% if invoice.status == 'draft' and (invoice.origin_type != 'agent_account_charge' or is_staff) %}
     <form method="post" class="billing-review-actions">
         <button type="submit" name="action" value="confirm" class="btn btn-primary">
             {{ t('billing_confirm_draft') }}
@@ -90,7 +92,7 @@
             </div>
         </details>
     </form>
-    {% elif invoice.status == 'ready_to_issue' and arca_enabled %}
+    {% elif invoice.status == 'ready_to_issue' and arca_enabled and (invoice.origin_type != 'agent_account_charge' or is_staff) %}
     <form method="post" action="{{ url_for('billing_issue_arca', invoice_id=invoice.id) }}" class="billing-review-actions">
         <button type="submit" class="btn btn-primary">{{ t('billing_issue_arca_homologation') }}</button>
         <a class="btn btn-secondary" href="{{ url_for('billing_detail', invoice_id=invoice.id) }}">{{ t('billing_view_invoice') }}</a>

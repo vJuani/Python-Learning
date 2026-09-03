@@ -481,7 +481,7 @@ class InvoicingV2Tests(unittest.TestCase):
         )
         self._login("bill_admin_b")
         response = self.client.get(f"/billing/{inv['id']}")
-        self.assertEqual(response.status_code, 302)
+        self.assertIn(response.status_code, (302, 404))
 
     def test_missing_client_blocks(self):
         op_id = add_operation(

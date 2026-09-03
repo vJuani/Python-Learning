@@ -480,6 +480,7 @@ def enrich_movement_for_display(
     )
     lookup = movement_lookup or {}
     enriched["linked_operation"] = None
+    enriched["invoice_context"] = None
     operation_detail_rows = []
     if (
         organization_id
@@ -531,6 +532,25 @@ def enrich_movement_for_display(
                         ),
                     },
                 ]
+
+    if (
+        organization_id
+        and movement.get("movement_type") in ("charge", "fee")
+    ):
+        from modules.invoicing import get_charge_invoice_context
+
+        invoice_context = get_charge_invoice_context(
+            organization_id,
+            movement["id"],
+        )
+        active_invoice = invoice_context.get("active_invoice")
+        enriched["invoice_context"] = {
+            "is_billable": invoice_context["is_billable"],
+            "state": invoice_context["invoice_state"],
+            "active_invoice": active_invoice,
+            "latest_invoice": invoice_context.get("latest_invoice"),
+            "payment": invoice_context.get("payment"),
+        }
 
     if (
         organization_id

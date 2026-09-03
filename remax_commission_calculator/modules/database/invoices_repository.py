@@ -109,21 +109,39 @@ def build_invoice_dict(row):
         "issue_attempt_token": (
             row[55] if len(row) > 55 else None
         ),
+        "origin_type": (
+            row[56] if len(row) > 56 else "operation"
+        ),
+        "agent_account_movement_id": (
+            row[57] if len(row) > 57 else None
+        ),
+        "invoice_purpose": (
+            row[58] if len(row) > 58 else "standard"
+        ),
+        "charge_linked_at": (
+            row[59] if len(row) > 59 else None
+        ),
+        "charge_linked_by_user_id": (
+            row[60] if len(row) > 60 else None
+        ),
+        "vat_rate": (
+            float(row[61] or 0) if len(row) > 61 else 0.0
+        ),
     }
 
     # Optional joined display fields (list_invoices).
-    if len(row) > 56:
-        invoice["agent_name"] = row[56]
-    if len(row) > 57:
-        invoice["property_address"] = row[57]
-    if len(row) > 58:
+    if len(row) > 62:
+        invoice["agent_name"] = row[62]
+    if len(row) > 63:
+        invoice["property_address"] = row[63]
+    if len(row) > 64:
         invoice["operation_display_id"] = (
-            f"COM-{int(row[58]):06d}"
-            if row[58] is not None
+            f"COM-{int(row[64]):06d}"
+            if row[64] is not None
             else None
         )
-    if len(row) > 59:
-        invoice["operation_date"] = row[59]
+    if len(row) > 65:
+        invoice["operation_date"] = row[65]
 
     return invoice
 
@@ -184,7 +202,13 @@ INVOICE_COLUMNS = """
         invoices.issued_by_user_id,
         invoices.provider_error,
         invoices.fiscal_environment,
-        invoices.issue_attempt_token
+        invoices.issue_attempt_token,
+        invoices.origin_type,
+        invoices.agent_account_movement_id,
+        invoices.invoice_purpose,
+        invoices.charge_linked_at,
+        invoices.charge_linked_by_user_id,
+        invoices.vat_rate
 """
 
 INVOICES_BASE_QUERY = f"""
@@ -333,6 +357,65 @@ def list_invoices_for_operation(
             ORDER BY invoices.id DESC
             """,
             params,
+        )
+        return [
+            build_invoice_dict(row)
+            for row in cursor.fetchall()
+        ]
+    finally:
+        connection.close()
+
+
+def get_active_invoice_for_charge(
+    organization_id,
+    charge_movement_id,
+    invoice_purpose="agent_charge",
+):
+    organization_id = require_organization_id(organization_id)
+    placeholders = ", ".join("?" for _ in ACTIVE_STATUSES)
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            INVOICES_BASE_QUERY
+            + f"""
+            WHERE invoices.organization_id = ?
+                AND invoices.origin_type = 'agent_account_charge'
+                AND invoices.agent_account_movement_id = ?
+                AND invoices.invoice_purpose = ?
+                AND invoices.status IN ({placeholders})
+            ORDER BY invoices.id DESC
+            LIMIT 1
+            """,
+            (
+                organization_id,
+                charge_movement_id,
+                invoice_purpose,
+                *ACTIVE_STATUSES,
+            ),
+        )
+        return build_invoice_dict(cursor.fetchone())
+    finally:
+        connection.close()
+
+
+def list_invoices_for_charge(
+    organization_id,
+    charge_movement_id,
+):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            INVOICES_BASE_QUERY
+            + """
+            WHERE invoices.organization_id = ?
+                AND invoices.origin_type = 'agent_account_charge'
+                AND invoices.agent_account_movement_id = ?
+            ORDER BY invoices.id DESC
+            """,
+            (organization_id, charge_movement_id),
         )
         return [
             build_invoice_dict(row)
@@ -547,13 +630,20 @@ def create_invoice_atomic(
                 issuer_profile_id,
                 issuer_key,
                 recipient_party_id
+                , origin_type
+                , agent_account_movement_id
+                , invoice_purpose
+                , charge_linked_at
+                , charge_linked_by_user_id
+                , vat_rate
             )
             VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -606,6 +696,12 @@ def create_invoice_atomic(
                 fields.get("issuer_profile_id"),
                 fields.get("issuer_key"),
                 fields.get("recipient_party_id"),
+                fields.get("origin_type", "operation"),
+                fields.get("agent_account_movement_id"),
+                fields.get("invoice_purpose", "standard"),
+                fields.get("charge_linked_at"),
+                fields.get("charge_linked_by_user_id"),
+                fields.get("vat_rate", 0),
             ),
         )
 

@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v12"
+POSTGRES_SCHEMA_VERSION = "postgres_v13"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -275,7 +275,7 @@ SCHEMA_STATEMENTS = (
     CREATE TABLE IF NOT EXISTS operation_documents (
         id {_ID},
         organization_id BIGINT NOT NULL,
-        operation_id BIGINT NOT NULL,
+        operation_id BIGINT,
         doc_type TEXT NOT NULL,
         stored_name TEXT NOT NULL,
         original_filename TEXT NOT NULL,
@@ -1148,6 +1148,12 @@ SCHEMA_STATEMENTS = (
         issuer_profile_id BIGINT,
         issuer_key TEXT,
         recipient_party_id BIGINT,
+        origin_type TEXT NOT NULL DEFAULT 'operation',
+        agent_account_movement_id BIGINT,
+        invoice_purpose TEXT NOT NULL DEFAULT 'standard',
+        charge_linked_at TEXT,
+        charge_linked_by_user_id BIGINT,
+        vat_rate {_MONEY} NOT NULL DEFAULT 0,
 
         FOREIGN KEY (organization_id)
             REFERENCES organizations(id)
@@ -1170,6 +1176,14 @@ SCHEMA_STATEMENTS = (
         FOREIGN KEY (cancelled_by_user_id)
             REFERENCES users(id)
             ON DELETE SET NULL,
+        CONSTRAINT fk_invoices_agent_account_movement
+        FOREIGN KEY (agent_account_movement_id)
+            REFERENCES agent_account_movements(id)
+            ON DELETE RESTRICT,
+        CONSTRAINT fk_invoices_charge_linked_user
+        FOREIGN KEY (charge_linked_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
 
         CHECK (
             status IN (
@@ -1188,6 +1202,22 @@ SCHEMA_STATEMENTS = (
         ),
         CHECK (
             issuer_type IN ('agent', 'admin')
+        ),
+        CONSTRAINT ck_invoices_origin_relation CHECK (
+            (
+                origin_type = 'operation'
+                AND operation_id IS NOT NULL
+            )
+            OR (
+                origin_type = 'agent_account_charge'
+                AND agent_account_movement_id IS NOT NULL
+            )
+        ),
+        CONSTRAINT ck_invoices_origin_type CHECK (
+            origin_type IN (
+                'operation',
+                'agent_account_charge'
+            )
         ),
         CHECK (quantity > 0),
         CHECK (total_amount > 0),
@@ -1792,6 +1822,21 @@ def create_postgres_schema():
             ("issuer_profile_id", "BIGINT"),
             ("issuer_key", "TEXT"),
             ("recipient_party_id", "BIGINT"),
+            (
+                "origin_type",
+                "TEXT NOT NULL DEFAULT 'operation'",
+            ),
+            ("agent_account_movement_id", "BIGINT"),
+            (
+                "invoice_purpose",
+                "TEXT NOT NULL DEFAULT 'standard'",
+            ),
+            ("charge_linked_at", "TEXT"),
+            ("charge_linked_by_user_id", "BIGINT"),
+            (
+                "vat_rate",
+                f"{_MONEY} NOT NULL DEFAULT 0",
+            ),
         ):
             cursor.execute(
                 f"""
@@ -1801,11 +1846,106 @@ def create_postgres_schema():
                 """
             )
 
+        cursor.execute(
+            """
+            ALTER TABLE invoices
+            ALTER COLUMN operation_id DROP NOT NULL
+            """
+        )
+        cursor.execute(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'fk_invoices_agent_account_movement'
+                ) THEN
+                    ALTER TABLE invoices
+                    ADD CONSTRAINT fk_invoices_agent_account_movement
+                    FOREIGN KEY (agent_account_movement_id)
+                    REFERENCES agent_account_movements(id)
+                    ON DELETE RESTRICT;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'fk_invoices_charge_linked_user'
+                ) THEN
+                    ALTER TABLE invoices
+                    ADD CONSTRAINT fk_invoices_charge_linked_user
+                    FOREIGN KEY (charge_linked_by_user_id)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'ck_invoices_origin_type'
+                ) THEN
+                    ALTER TABLE invoices
+                    ADD CONSTRAINT ck_invoices_origin_type
+                    CHECK (
+                        origin_type IN (
+                            'operation', 'agent_account_charge'
+                        )
+                    );
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'ck_invoices_origin_relation'
+                ) THEN
+                    ALTER TABLE invoices
+                    ADD CONSTRAINT ck_invoices_origin_relation
+                    CHECK (
+                        (
+                            origin_type = 'operation'
+                            AND operation_id IS NOT NULL
+                        )
+                        OR (
+                            origin_type = 'agent_account_charge'
+                            AND agent_account_movement_id IS NOT NULL
+                        )
+                    );
+                END IF;
+            END
+            $$;
+            """
+        )
+
         from .invoice_uniqueness_migration import (
             migrate_invoices_active_uniqueness_postgres,
         )
 
         migrate_invoices_active_uniqueness_postgres(cursor)
+
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_invoices_one_active_per_charge
+            ON invoices (
+                organization_id,
+                agent_account_movement_id,
+                invoice_purpose
+            )
+            WHERE origin_type = 'agent_account_charge'
+                AND status IN (
+                    'draft',
+                    'ready_to_issue',
+                    'issued',
+                    'error'
+                )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_invoices_charge_history
+            ON invoices (
+                organization_id,
+                agent_account_movement_id,
+                id
+            )
+            WHERE origin_type = 'agent_account_charge'
+            """
+        )
 
         for column_name, column_sql in (
             ("fiscal_voucher_type", "TEXT"),

@@ -32,6 +32,7 @@ from modules.database.agent_account_repository import (
     list_agent_account_movements,
     list_agents_account_summary,
     list_pending_charges,
+    reverse_charge_with_invoice_atomic,
     reverse_agent_account_movement_atomic,
     sum_payments_collected_month,
     sum_receivable_balances,
@@ -626,6 +627,17 @@ def cancel_movement(
         )
         if (
             movement is not None
+            and movement.get("movement_type") in ("charge", "fee")
+            and movement.get("status") == STATUS_CONFIRMED
+        ):
+            return reverse_charge_with_invoice_atomic(
+                organization_id,
+                movement_id,
+                created_by_user_id=created_by_user_id,
+                reversal_reason=reason,
+            )
+        if (
+            movement is not None
             and movement.get("movement_type") == "payment"
             and movement.get("source_type") == SOURCE_CASH
         ):
@@ -651,6 +663,10 @@ def cancel_movement(
         if key == "movement_not_reversible":
             raise AgentAccountError(
                 "agent_account_err_movement_not_cancellable"
+            ) from error
+        if key == "charge_has_issued_invoice":
+            raise AgentAccountError(
+                "invoice_err_charge_has_issued_invoice"
             ) from error
         raise AgentAccountError(
             "agent_account_err_cancel_failed"

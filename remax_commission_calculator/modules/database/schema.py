@@ -704,7 +704,7 @@ def _migrate_operation_documents(cursor):
         CREATE TABLE IF NOT EXISTS operation_documents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             organization_id INTEGER NOT NULL,
-            operation_id INTEGER NOT NULL,
+            operation_id INTEGER,
             doc_type TEXT NOT NULL,
             stored_name TEXT NOT NULL,
             original_filename TEXT NOT NULL,
@@ -2367,6 +2367,12 @@ def _migrate_invoicing(cursor):
             cancelled_by_user_id INTEGER,
             cancellation_reason TEXT,
             cash_movement_id INTEGER,
+            origin_type TEXT NOT NULL DEFAULT 'operation',
+            agent_account_movement_id INTEGER,
+            invoice_purpose TEXT NOT NULL DEFAULT 'standard',
+            charge_linked_at TEXT,
+            charge_linked_by_user_id INTEGER,
+            vat_rate REAL NOT NULL DEFAULT 0,
 
             FOREIGN KEY (organization_id)
                 REFERENCES organizations(id)
@@ -2389,6 +2395,12 @@ def _migrate_invoicing(cursor):
             FOREIGN KEY (cancelled_by_user_id)
                 REFERENCES users(id)
                 ON DELETE SET NULL,
+            FOREIGN KEY (agent_account_movement_id)
+                REFERENCES agent_account_movements(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (charge_linked_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
 
             CHECK (
                 status IN (
@@ -2408,8 +2420,24 @@ def _migrate_invoicing(cursor):
             CHECK (
                 issuer_type IN ('agent', 'admin')
             ),
+            CHECK (
+                origin_type IN (
+                    'operation',
+                    'agent_account_charge'
+                )
+            ),
             CHECK (quantity > 0),
             CHECK (total_amount > 0),
+            CHECK (
+                (
+                    origin_type = 'operation'
+                    AND operation_id IS NOT NULL
+                )
+                OR (
+                    origin_type = 'agent_account_charge'
+                    AND agent_account_movement_id IS NOT NULL
+                )
+            ),
             UNIQUE (organization_id, invoice_seq),
             UNIQUE (
                 organization_id,
@@ -3579,6 +3607,12 @@ def migrate_schema(create_backup=True):
         raise MigrationError(message) from error
 
     connection.close()
+
+    from .invoice_charge_link_migration import (
+        migrate_invoice_charge_origin_sqlite,
+    )
+
+    migrate_invoice_charge_origin_sqlite()
     _migrate_document_storage_folders()
 
     return backup_path

@@ -32,6 +32,9 @@
         {% if is_cancelled %}
         <span class="aa-badge aa-badge--cancelled">{{ t('agent_account_status_cancelled') }}</span>
         {% endif %}
+        {% if movement.invoice_context and movement.invoice_context.is_billable %}
+        <span class="aa-badge">{{ t('agent_account_invoice_' ~ movement.invoice_context.state) }}</span>
+        {% endif %}
     </td>
     <td class="aa-actions-cell">
         <div class="aa-row-menu">
@@ -45,6 +48,11 @@
                     data-movement-meta="{{ movement.movement_date | short_date }} · {{ movement.display_amount.formatted }}"
                     data-movement-detail='{{ movement.display_detail | tojson }}'
                 >{{ t('agent_account_view_detail') }}</button>
+                {% if movement.invoice_context and movement.invoice_context.active_invoice %}
+                <a class="aa-row-menu__item" href="{{ url_for('billing_detail', invoice_id=movement.invoice_context.active_invoice.id) }}">{{ t('billing_view_invoice') }} · {{ movement.invoice_context.active_invoice.invoice_number_internal }}</a>
+                {% elif can_manage and movement.invoice_context and movement.invoice_context.is_billable and not is_cancelled %}
+                <a class="aa-row-menu__item" href="{{ url_for('billing_prepare_charge', charge_id=movement.id) }}">{{ t('billing_generate_invoice') }}</a>
+                {% endif %}
                 {% if can_manage and not is_cancelled %}
                 <button
                     type="button"
@@ -77,6 +85,9 @@
         · <a href="{{ url_for('operations_detail', operation_id=movement.linked_operation.id) }}">{{ movement.reference_text or movement.linked_operation.display_id }}</a>
         {% elif movement.reference_text %} · {{ movement.reference_text }}{% endif %}
         {% if movement.payment_method %} · {{ t('agent_account_pay_' ~ movement.payment_method) }}{% endif %}
+        {% if movement.invoice_context and movement.invoice_context.is_billable %}
+        · {{ t('agent_account_invoice_' ~ movement.invoice_context.state) }}
+        {% endif %}
     </p>
     <p class="aa-move-card__balance aa-balance-inline--{{ movement.display_balance_after.tone }}">
         {{ t('agent_account_balance_after') }}: {{ movement.display_balance_after.formatted }}
@@ -93,6 +104,11 @@
             data-movement-meta="{{ movement.movement_date | short_date }} · {{ movement.display_amount.formatted }}"
             data-movement-detail='{{ movement.display_detail | tojson }}'
         >{{ t('agent_account_view_detail') }}</button>
+        {% if movement.invoice_context and movement.invoice_context.active_invoice %}
+        <a class="aa-btn aa-btn--ghost aa-btn--small" href="{{ url_for('billing_detail', invoice_id=movement.invoice_context.active_invoice.id) }}">{{ t('billing_view_invoice') }} · {{ movement.invoice_context.active_invoice.invoice_number_internal }}</a>
+        {% elif can_manage and movement.invoice_context and movement.invoice_context.is_billable %}
+        <a class="aa-btn aa-btn--ghost aa-btn--small" href="{{ url_for('billing_prepare_charge', charge_id=movement.id) }}">{{ t('billing_generate_invoice') }}</a>
+        {% endif %}
         {% if can_manage %}
         <button
             type="button"

@@ -153,18 +153,31 @@ def _drop_postgres_invoice_uniqueness_indexes(cursor) -> None:
         cursor.execute(f"DROP INDEX IF EXISTS {name}")
 
 
+def _origin_filter(cursor, *, postgres: bool = False) -> str:
+    column_exists = (
+        _column_exists_postgres
+        if postgres
+        else _column_exists_sqlite
+    )
+    if column_exists(cursor, "invoices", "origin_type"):
+        return " AND origin_type = 'operation'"
+    return ""
+
+
 def _assign_temporary_issuer_keys(cursor, *, postgres: bool = False) -> None:
     """Give every active row a unique issuer_key before normalization."""
     placeholders = ", ".join(
         "%s" if postgres else "?"
         for _ in ACTIVE_INVOICE_STATUSES
     )
+    origin_filter = _origin_filter(cursor, postgres=postgres)
     if postgres:
         cursor.execute(
             f"""
             UPDATE invoices
             SET issuer_key = '{TEMP_ISSUER_PREFIX}' || id::text
             WHERE status IN ({placeholders})
+                {origin_filter}
             """,
             ACTIVE_INVOICE_STATUSES,
         )
@@ -174,6 +187,7 @@ def _assign_temporary_issuer_keys(cursor, *, postgres: bool = False) -> None:
             UPDATE invoices
             SET issuer_key = '{TEMP_ISSUER_PREFIX}' || id
             WHERE status IN ({placeholders})
+                {origin_filter}
             """,
             ACTIVE_INVOICE_STATUSES,
         )
@@ -188,11 +202,13 @@ def _backfill_invoice_identity_columns(
     if not column_exists(cursor, "invoices", "side"):
         return
 
+    origin_filter = _origin_filter(cursor, postgres=postgres)
     cursor.execute(
-        """
+        f"""
         UPDATE invoices
         SET side = 'buyer'
         WHERE side IS NULL OR side = ''
+            {origin_filter}
         """
     )
 
@@ -202,6 +218,7 @@ def _active_invoice_rows(cursor, *, postgres: bool = False):
         "%s" if postgres else "?"
         for _ in ACTIVE_INVOICE_STATUSES
     )
+    origin_filter = _origin_filter(cursor, postgres=postgres)
     cursor.execute(
         f"""
         SELECT
@@ -213,6 +230,7 @@ def _active_invoice_rows(cursor, *, postgres: bool = False):
             agent_id
         FROM invoices
         WHERE status IN ({placeholders})
+            {origin_filter}
         ORDER BY organization_id, operation_id, id
         """,
         ACTIVE_INVOICE_STATUSES,
@@ -296,6 +314,7 @@ def _validate_active_invoice_uniqueness(cursor, *, postgres: bool = False) -> No
         "%s" if postgres else "?"
         for _ in ACTIVE_INVOICE_STATUSES
     )
+    origin_filter = _origin_filter(cursor, postgres=postgres)
     cursor.execute(
         f"""
         SELECT
@@ -306,6 +325,7 @@ def _validate_active_invoice_uniqueness(cursor, *, postgres: bool = False) -> No
             COUNT(*) AS row_count
         FROM invoices
         WHERE status IN ({placeholders})
+            {origin_filter}
         GROUP BY organization_id, operation_id, side, issuer_key
         HAVING COUNT(*) > 1
         """,
@@ -325,6 +345,15 @@ def _create_new_unique_index(cursor, *, postgres: bool = False) -> None:
     ):
         return
 
+    origin_filter = ""
+    column_exists = (
+        _column_exists_postgres
+        if postgres
+        else _column_exists_sqlite
+    )
+    if column_exists(cursor, "invoices", "origin_type"):
+        origin_filter = " AND origin_type = 'operation'"
+
     index_sql = f"""
         CREATE UNIQUE INDEX {NEW_INDEX_NAME}
         ON invoices (
@@ -334,6 +363,7 @@ def _create_new_unique_index(cursor, *, postgres: bool = False) -> None:
             issuer_key
         )
         WHERE status IN ({ACTIVE_STATUS_SQL})
+            {origin_filter}
     """
     cursor.execute(index_sql)
 

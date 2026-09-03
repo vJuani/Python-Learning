@@ -100,7 +100,10 @@ def validate_fiscal_issue(
     if not (invoice.get("issue_date") or "").strip():
         missing.append("billing_missing_issue_date")
 
-    if not invoice.get("side"):
+    if (
+        invoice.get("origin_type", "operation") == "operation"
+        and not invoice.get("side")
+    ):
         missing.append("invoice_err_side_invalid")
 
     if missing:

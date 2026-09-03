@@ -21,7 +21,7 @@
     </div>
 </section>
 
-{% if arca_enabled and invoice.status == 'ready_to_issue' %}
+{% if arca_enabled and invoice.status == 'ready_to_issue' and (invoice.origin_type != 'agent_account_charge' or is_staff) %}
 <section class="panel billing-arca-banner">
     <p class="billing-arca-test-banner">{{ t('billing_arca_test_environment') }}</p>
     <form method="post" action="{{ url_for('billing_issue_arca', invoice_id=invoice.id) }}">
@@ -30,7 +30,7 @@
 </section>
 {% endif %}
 
-{% if invoice.status == 'error' %}
+{% if invoice.status == 'error' and (invoice.origin_type != 'agent_account_charge' or is_staff) %}
 <section class="panel billing-detail-error">
     <p class="flash-message flash-error">{{ invoice.provider_error or t('invoice_err_arca_wsfe_failed') }}</p>
     <form method="post" action="{{ url_for('billing_retry_invoice', invoice_id=invoice.id) }}">
@@ -61,9 +61,11 @@
         <p class="field-help">{{ invoice.recipient_tax_id }}</p>
     </article>
     <article class="billing-detail-card">
-        <h4>{{ t('billing_operation') }}</h4>
+        <h4>{{ t('billing_origin') }}</h4>
         <p>
-            {% if operation %}
+            {% if charge_context %}
+            <a href="{{ url_for('agent_account_detail', agent_id=invoice.agent_id) }}">{{ t('billing_origin_agent_account') }}</a>
+            {% elif operation %}
             <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}">{{ operation.property }} · {{ operation.id }}</a>
             {% else %}
             #{{ invoice.operation_id }}
@@ -73,6 +75,21 @@
         <p class="field-help">{{ t('billing_side_' ~ invoice.side) }}</p>
         {% endif %}
     </article>
+    {% if charge_context %}
+    <article class="billing-detail-card">
+        <h4>{{ t('billing_agent') }}</h4>
+        <p>{{ invoice.recipient_name }}</p>
+        <p class="field-help">#{{ invoice.agent_id }}</p>
+    </article>
+    <article class="billing-detail-card">
+        <h4>{{ t('billing_payment_status') }}</h4>
+        <p>{{ t('billing_payment_' ~ charge_context.payment.payment_status) }}</p>
+        <p class="field-help">
+            {{ charge_context.payment.allocated_amount | money(invoice.currency) }}
+            · {{ t('billing_balance') }} {{ charge_context.payment.remaining_amount | money(invoice.currency) }}
+        </p>
+    </article>
+    {% endif %}
     <article class="billing-detail-card">
         <h4>{{ t('billing_concept') }}</h4>
         <p>{{ invoice.description }}</p>
@@ -112,9 +129,11 @@
         <dd>{{ invoice.issuer_name }} · {{ invoice.issuer_tax_id }}</dd>
         <dt>{{ t('billing_recipient') }}</dt>
         <dd>{{ invoice.recipient_name }} · {{ invoice.recipient_tax_id }}</dd>
-        <dt>{{ t('billing_operation') }}</dt>
+        <dt>{{ t('billing_origin') }}</dt>
         <dd>
-            {% if operation %}
+            {% if charge_context %}
+            <a href="{{ url_for('agent_account_detail', agent_id=invoice.agent_id) }}">{{ t('billing_origin_agent_account') }} · #{{ invoice.agent_account_movement_id }}</a>
+            {% elif operation %}
             <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}">{{ operation.property }} · {{ operation.id }}</a>
             {% else %}
             #{{ invoice.operation_id }}
@@ -126,6 +145,14 @@
         {% endif %}
         <dt>{{ t('billing_concept') }}</dt>
         <dd>{{ invoice.description }}</dd>
+        {% if charge_context %}
+        <dt>{{ t('billing_payment_status') }}</dt>
+        <dd>
+            {{ t('billing_payment_' ~ charge_context.payment.payment_status) }}
+            · {{ charge_context.payment.allocated_amount | money(invoice.currency) }}
+            / {{ invoice.total_amount | money(invoice.currency) }}
+        </dd>
+        {% endif %}
         {% if invoice.provider %}
         <dt>{{ t('billing_provider_label') }}</dt>
         <dd>{{ invoice.provider }}{% if invoice.fiscal_environment %} · {{ invoice.fiscal_environment }}{% endif %}</dd>
@@ -147,7 +174,7 @@
     </dl>
 </section>
 
-{% if invoice.status in ['draft', 'ready_to_issue', 'error'] %}
+{% if invoice.status in ['draft', 'ready_to_issue', 'error'] and (invoice.origin_type != 'agent_account_charge' or is_staff) %}
 <section class="panel">
     <form method="post" action="{{ url_for('billing_cancel', invoice_id=invoice.id) }}">
         <button type="submit" class="btn btn-danger">{{ t('billing_cancel') }}</button>
