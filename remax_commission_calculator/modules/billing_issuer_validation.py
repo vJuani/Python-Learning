@@ -11,6 +11,9 @@ from modules.database.billing_issuer_profiles_repository import (
 )
 
 _CUIT_RE = re.compile(r"^\d{2}-?\d{8}-?\d$")
+_EMAIL_RE = re.compile(
+    r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+)
 
 TAX_CONDITIONS = (
     "responsable_inscripto",
@@ -94,6 +97,10 @@ def _tax_condition_valid(value):
     return bool(condition) and condition in TAX_CONDITIONS
 
 
+def _email_valid(value):
+    return bool(_EMAIL_RE.match(_strip(value)))
+
+
 def validate_billing_issuer_profile(
     profile,
     *,
@@ -150,7 +157,7 @@ def validate_billing_issuer_profile(
         missing_fields.append("fiscal_address")
 
     email = _strip(profile.get("email"))
-    if require_email and not email:
+    if require_email and not _email_valid(email):
         missing_fields.append("email")
     elif not email:
         warnings.append("billing_warn_issuer_email_missing")
@@ -209,7 +216,7 @@ def validate_agent_billing_profile(
         missing_fields.append("fiscal_address")
 
     email = _strip(profile.get("email"))
-    if require_email and not email:
+    if require_email and not _email_valid(email):
         missing_fields.append("email")
     elif not email:
         warnings.append("billing_warn_agent_email_missing")

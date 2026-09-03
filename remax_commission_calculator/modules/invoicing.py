@@ -196,7 +196,10 @@ def agent_billing_ready(profile):
         validate_agent_billing_profile,
     )
 
-    result = validate_agent_billing_profile(profile)
+    result = validate_agent_billing_profile(
+        profile,
+        require_email=True,
+    )
     return result["is_valid"], result["missing_i18n_keys"]
 
 
@@ -1061,7 +1064,10 @@ def _resolve_issuer(
             validate_agent_billing_profile,
         )
 
-        validation = validate_agent_billing_profile(profile)
+        validation = validate_agent_billing_profile(
+            profile,
+            require_email=True,
+        )
         if not validation["is_valid"]:
             raise InvoicingError(
                 validation["error_key"]
@@ -1097,7 +1103,10 @@ def _resolve_issuer(
             validate_agent_billing_profile,
         )
 
-        validation = validate_agent_billing_profile(profile)
+        validation = validate_agent_billing_profile(
+            profile,
+            require_email=True,
+        )
         if not validation["is_valid"]:
             raise InvoicingError(
                 validation["error_key"]

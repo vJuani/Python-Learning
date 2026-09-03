@@ -15,18 +15,45 @@ def resolve_billing_error_cta(
     user,
     operation_id=None,
     side=None,
+    agent_id=None,
+    next_url=None,
 ):
     key = error.message_key
     is_staff = user and user.get("role") == ROLE_ADMIN
     is_agent = user and user.get("role") == ROLE_AGENT
 
+    agent_profile_error = (
+        key == "invoice_err_recipient_profile_incomplete"
+        or key.startswith("invoice_err_agent_missing_")
+    )
+    if is_staff and agent_id and agent_profile_error:
+        return {
+            "url": url_for(
+                "billing_agent_profile",
+                agent_id=agent_id,
+                next=next_url,
+                _anchor="datos-fiscales",
+            ),
+            "label_key": "billing_cta_complete_profile",
+        }
+
     if key == "invoice_err_billing_profile_incomplete":
         if is_agent and not is_staff:
             return {
                 "url": url_for("billing_agent_profile_self"),
-                "label_key": "billing_cta_complete_profile",
+                "label_key": "billing_cta_view_profile",
             }
         if is_staff:
+            if agent_id:
+                return {
+                    "url": url_for(
+                        "billing_agent_profile",
+                        agent_id=agent_id,
+                        next=next_url,
+                        _anchor="datos-fiscales",
+                    ),
+                    "label_key": "billing_cta_complete_profile",
+                }
             return {
                 "url": url_for("billing_issuers"),
                 "label_key": "billing_cta_manage_issuers",
@@ -48,7 +75,7 @@ def resolve_billing_error_cta(
     ):
         return {
             "url": url_for("billing_agent_profile_self"),
-            "label_key": "billing_cta_complete_profile",
+            "label_key": "billing_cta_view_profile",
         }
 
     if is_staff and key.startswith("invoice_err_issuer_missing_"):

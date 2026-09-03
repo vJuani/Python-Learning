@@ -209,6 +209,7 @@ from modules.invoicing import (
     STATUS_DRAFT,
     STATUS_READY,
     TAX_CONDITIONS,
+    agent_billing_ready,
     billing_kpis,
     cancel_invoice,
     confirm_draft,
@@ -461,6 +462,10 @@ def inject_billing_flash_cta():
             "billing_flash_cta",
             None,
         ),
+        "billing_flash_missing": session.pop(
+            "billing_flash_missing",
+            None,
+        ),
     }
 
 
@@ -685,16 +690,19 @@ def set_language(language):
 
 
 def get_safe_redirect_target(target):
+    from urllib.parse import unquote
+
     if not target:
         return None
 
-    if not target.startswith("/"):
+    decoded = unquote(str(target))
+    if not decoded.startswith("/"):
         return None
 
-    if target.startswith("//"):
+    if decoded.startswith("//") or "\\" in decoded:
         return None
 
-    return target
+    return str(target)
 
 
 def get_user_organization_id():
@@ -4031,6 +4039,19 @@ def agents_detail(agent_id):
         view["is_team_leader"]
         and (is_admin_user or is_self)
     )
+    billing_profile = None
+    billing_profile_ready = False
+    billing_profile_missing = []
+    can_view_fiscal = is_admin_user or is_self
+    if can_view_fiscal:
+        billing_profile = get_agent_billing_profile(
+            organization_id,
+            agent_id,
+        )
+        (
+            billing_profile_ready,
+            billing_profile_missing,
+        ) = agent_billing_ready(billing_profile)
 
     return render_template(
         "agents/detail.html",
@@ -4049,6 +4070,10 @@ def agents_detail(agent_id):
         can_open_juniors=is_admin_user or is_self,
         can_view_team_report=can_view_team_report,
         can_edit=is_admin_user,
+        can_view_fiscal=can_view_fiscal,
+        billing_profile=billing_profile,
+        billing_profile_ready=billing_profile_ready,
+        billing_profile_missing=billing_profile_missing,
     )
 
 
@@ -5309,18 +5334,46 @@ def _flash_invoicing_error(
     operation_id=None,
     side=None,
     user=None,
+    agent_id=None,
+    next_url=None,
 ):
     from modules.billing_errors import (
         resolve_billing_error_cta,
         store_billing_error_cta,
     )
 
-    flash_i18n(error.message_key, "error")
-    for missing_key in error.missing or []:
+    missing = [
+        missing_key
+        for missing_key in (error.missing or [])
         if (
             isinstance(missing_key, str)
             and missing_key.startswith("billing_missing_")
-        ):
+        )
+    ]
+    is_agent_profile_missing = bool(missing) and all(
+        key.startswith("billing_missing_agent_")
+        for key in missing
+    )
+    if is_agent_profile_missing:
+        compact_labels = {
+            "billing_missing_agent_legal_name": "billing_legal_name",
+            "billing_missing_agent_tax_id": "billing_tax_id",
+            "billing_missing_agent_tax_condition": (
+                "billing_tax_condition"
+            ),
+            "billing_missing_agent_fiscal_address": (
+                "billing_fiscal_address"
+            ),
+            "billing_missing_agent_email": "billing_email",
+        }
+        session["billing_flash_missing"] = [
+            compact_labels.get(key, key)
+            for key in missing
+        ]
+    else:
+        session.pop("billing_flash_missing", None)
+        flash_i18n(error.message_key, "error")
+        for missing_key in missing:
             flash_i18n(missing_key, "error")
     store_billing_error_cta(
         resolve_billing_error_cta(
@@ -5328,6 +5381,8 @@ def _flash_invoicing_error(
             user=user,
             operation_id=operation_id,
             side=side,
+            agent_id=agent_id,
+            next_url=next_url,
         )
     )
 
@@ -7424,6 +7479,7 @@ register_billing_routes(
         "flash_i18n": flash_i18n,
         "get_current_language": get_current_language,
         "ensure_operation_scope": ensure_operation_scope,
+        "get_safe_redirect_target": get_safe_redirect_target,
         "_flash_invoicing_error": _flash_invoicing_error,
         "_load_billing_invoice": _load_billing_invoice,
     },

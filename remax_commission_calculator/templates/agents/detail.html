@@ -41,6 +41,48 @@
     </div>
 </section>
 
+{% if can_view_fiscal %}
+<section class="panel" id="datos-fiscales">
+    <div class="panel-header">
+        <div>
+            <h3>{{ t('agent_fiscal_data_title') }}</h3>
+            <p class="field-help">
+                {{ t('status') }}:
+                {% if billing_profile_ready %}
+                <span class="badge">{{ t('agent_fiscal_status_complete') }}</span>
+                {% else %}
+                <span class="badge">{{ t('agent_fiscal_status_incomplete') }}</span>
+                {% endif %}
+            </p>
+        </div>
+        {% if can_edit %}
+        <a href="{{ url_for('billing_agent_profile', agent_id=agent.id, next=url_for('agents_detail', agent_id=agent.id, _anchor='datos-fiscales'), _anchor='datos-fiscales') }}" class="btn btn-secondary">
+            {{ t('agent_fiscal_edit') if billing_profile_ready else t('agent_fiscal_complete_now') }}
+        </a>
+        {% endif %}
+    </div>
+    {% if not billing_profile_ready %}
+    <p class="field-help">{{ t('agent_fiscal_incomplete_help') }}</p>
+    {% endif %}
+    <dl class="detail-list">
+        <dt>{{ t('billing_legal_name') }}</dt>
+        <dd>{{ billing_profile.legal_name if billing_profile and billing_profile.legal_name else '—' }}</dd>
+        <dt>{{ t('billing_tax_id') }}</dt>
+        <dd>{{ billing_profile.tax_id if billing_profile and billing_profile.tax_id else '—' }}</dd>
+        <dt>{{ t('billing_tax_condition') }}</dt>
+        <dd>
+            {% if billing_profile and billing_profile.tax_condition %}
+            {{ t('billing_tax_' ~ billing_profile.tax_condition) }}
+            {% else %}—{% endif %}
+        </dd>
+        <dt>{{ t('billing_fiscal_address') }}</dt>
+        <dd>{{ billing_profile.fiscal_address if billing_profile and billing_profile.fiscal_address else '—' }}</dd>
+        <dt>{{ t('billing_email') }}</dt>
+        <dd>{{ billing_profile.email if billing_profile and billing_profile.email else '—' }}</dd>
+    </dl>
+</section>
+{% endif %}
+
 {% if is_team_leader and junior_rows %}
 <section class="panel">
     <div class="panel-header">

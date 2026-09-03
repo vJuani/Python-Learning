@@ -6,9 +6,10 @@
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ t('billing_profile_title') }}</h2>
+        {% if agent %}<p>{{ agent.name }}</p>{% endif %}
     </div>
     <div class="page-actions">
-        <a href="{{ url_for('billing_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        <a href="{{ back_url }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
 </section>
 
@@ -35,19 +36,22 @@
 </section>
 {% endif %}
 
-<section class="panel">
+<section class="panel" id="datos-fiscales">
     <form method="post" class="agent-form">
+        {% if next_url %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+        {% endif %}
         <div class="form-group">
             <label for="legal_name">{{ t('billing_legal_name') }}</label>
-            <input id="legal_name" name="legal_name" class="form-input" value="{{ form_values.legal_name }}" required>
+            <input id="legal_name" name="legal_name" class="form-input" value="{{ form_values.legal_name }}" required {% if not can_edit %}disabled{% endif %}>
         </div>
         <div class="form-group">
             <label for="tax_id">{{ t('billing_tax_id') }}</label>
-            <input id="tax_id" name="tax_id" class="form-input" value="{{ form_values.tax_id }}" required>
+            <input id="tax_id" name="tax_id" class="form-input" value="{{ form_values.tax_id }}" required {% if not can_edit %}disabled{% endif %}>
         </div>
         <div class="form-group">
             <label for="tax_condition">{{ t('billing_tax_condition') }}</label>
-            <select id="tax_condition" name="tax_condition" class="form-input" required>
+            <select id="tax_condition" name="tax_condition" class="form-input" required {% if not can_edit %}disabled{% endif %}>
                 {% for tc in tax_conditions %}
                 <option value="{{ tc }}" {% if form_values.tax_condition == tc %}selected{% endif %}>{{ t('billing_tax_' ~ tc) }}</option>
                 {% endfor %}
@@ -55,17 +59,21 @@
         </div>
         <div class="form-group">
             <label for="fiscal_address">{{ t('billing_fiscal_address') }}</label>
-            <input id="fiscal_address" name="fiscal_address" class="form-input" value="{{ form_values.fiscal_address }}" required>
+            <input id="fiscal_address" name="fiscal_address" class="form-input" value="{{ form_values.fiscal_address }}" required {% if not can_edit %}disabled{% endif %}>
         </div>
         <div class="form-group">
             <label for="email">{{ t('billing_email') }}</label>
-            <input id="email" name="email" type="email" class="form-input" value="{{ form_values.email }}">
+            <input id="email" name="email" type="email" class="form-input" value="{{ form_values.email }}" required {% if not can_edit %}disabled{% endif %}>
         </div>
+        {% if can_edit %}
         <button type="submit" class="btn btn-primary">{{ t('billing_save_profile') }}</button>
+        {% endif %}
     </form>
 </section>
 
+{% if can_edit %}
 {% with arca_display=arca_display, arca_form=arca_form %}
 {% include "billing/_arca_config_panel.html" %}
 {% endwith %}
+{% endif %}
 {% endblock %}

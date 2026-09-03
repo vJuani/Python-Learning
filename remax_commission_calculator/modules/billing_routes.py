@@ -29,6 +29,7 @@ from modules.auth import (
 from modules.database import (
     ensure_parties_for_operation,
     get_agent_billing_profile,
+    get_agent_record,
     get_agents,
     get_operation_party,
     get_operation_record,
@@ -43,6 +44,7 @@ from modules.database import (
     deactivate_billing_issuer_profile,
     set_default_billing_issuer_profile,
     get_billing_issuer_profile,
+    get_user_by_agent_id,
 )
 from modules.database.organization_settings_repository import (
     get_organization_settings,
@@ -54,6 +56,7 @@ from modules.arca.issuer_config import (
     test_arca_connection,
 )
 from modules.billing_issuer_validation import (
+    validate_agent_billing_profile,
     validate_billing_issuer_profile,
 )
 from modules.billing_ai_workspace import (
@@ -113,6 +116,9 @@ def register_billing_routes(app, *, helpers):
     require_billing_user = helpers["require_billing_user"]
     flash_i18n = helpers["flash_i18n"]
     get_current_language = helpers["get_current_language"]
+    get_safe_redirect_target = helpers[
+        "get_safe_redirect_target"
+    ]
     ensure_operation_scope = helpers[
         "ensure_operation_scope"
     ]
@@ -129,12 +135,16 @@ def register_billing_routes(app, *, helpers):
         operation_id=None,
         side=None,
         user=None,
+        agent_id=None,
+        next_url=None,
     ):
         flash_invoicing_error(
             error,
             operation_id=operation_id,
             side=side,
             user=user or get_current_user(),
+            agent_id=agent_id,
+            next_url=next_url,
         )
 
     def _valid_side(side):
@@ -827,12 +837,36 @@ def register_billing_routes(app, *, helpers):
                 issuer_profile_id=issuer_profile_id,
             )
         except InvoicingError as error:
-            _flash_billing_error(error, user=user)
-            if error.message_key in (
-                "invoice_err_recipient_profile_incomplete",
-                "invoice_err_billing_profile_incomplete",
+            agent_id = None
+            try:
+                agent_id = get_charge_invoice_context(
+                    organization_id,
+                    charge_id,
+                    user=user,
+                )["movement"]["agent_id"]
+            except InvoicingError:
+                pass
+            _flash_billing_error(
+                error,
+                user=user,
+                agent_id=agent_id,
+                next_url=url_for(
+                    "billing_prepare_charge",
+                    charge_id=charge_id,
+                ),
+            )
+            if (
+                error.message_key
+                == "invoice_err_recipient_profile_incomplete"
+                and agent_id
             ):
-                return redirect(url_for("billing_issuers"))
+                return redirect(
+                    url_for(
+                        "agents_detail",
+                        agent_id=agent_id,
+                        _anchor="datos-fiscales",
+                    )
+                )
             return redirect(url_for("agent_account_index"))
         return render_template(
             "billing/prepare_charge.html",
@@ -868,7 +902,24 @@ def register_billing_routes(app, *, helpers):
                 issue_date=request.form.get("issue_date"),
             )
         except InvoicingError as error:
-            _flash_billing_error(error, user=user)
+            agent_id = None
+            try:
+                agent_id = get_charge_invoice_context(
+                    organization_id,
+                    charge_id,
+                    user=user,
+                )["movement"]["agent_id"]
+            except InvoicingError:
+                pass
+            _flash_billing_error(
+                error,
+                user=user,
+                agent_id=agent_id,
+                next_url=url_for(
+                    "billing_prepare_charge",
+                    charge_id=charge_id,
+                ),
+            )
             return redirect(
                 url_for(
                     "billing_prepare_charge",
@@ -1414,10 +1465,16 @@ def register_billing_routes(app, *, helpers):
             organization_id,
             agent_id,
         ) or {}
+        agent = get_agent_record(agent_id, organization_id) or {}
+        linked_user = get_user_by_agent_id(
+            agent_id,
+            organization_id,
+        ) or {}
         return {
             "legal_name": request.form.get(
                 "legal_name",
-                profile.get("legal_name", ""),
+                profile.get("legal_name")
+                or agent.get("name", ""),
             ).strip(),
             "tax_id": request.form.get(
                 "tax_id",
@@ -1433,7 +1490,8 @@ def register_billing_routes(app, *, helpers):
             ).strip(),
             "email": request.form.get(
                 "email",
-                profile.get("email", ""),
+                profile.get("email")
+                or linked_user.get("email", ""),
             ).strip(),
         }
 
@@ -1442,7 +1500,7 @@ def register_billing_routes(app, *, helpers):
         return {
             "point_of_sale": request.form.get(
                 "arca_point_of_sale",
-                profile.get("arca_point_of_sale", ""),
+                profile.get("arca_point_of_sale") or "",
             ).strip(),
             "certificate_ref": request.form.get(
                 "arca_certificate_ref",
@@ -1636,6 +1694,15 @@ def register_billing_routes(app, *, helpers):
 
     def _agent_profile_view(agent_id, user):
         organization_id = require_user_organization()
+        agent = get_agent_record(agent_id, organization_id)
+        if agent is None:
+            abort(404)
+        can_edit = is_admin(user)
+        if request.method == "POST" and not can_edit:
+            abort(403)
+        next_url = get_safe_redirect_target(
+            request.values.get("next")
+        )
         form_values = _profile_form(
             agent_id,
             organization_id,
@@ -1662,22 +1729,11 @@ def register_billing_routes(app, *, helpers):
                     )
                 )
 
-            if not form_values["legal_name"]:
-                errors.append(
-                    "billing_missing_agent_legal_name"
-                )
-            if not validate_cuit(form_values["tax_id"]):
-                errors.append(
-                    "billing_missing_agent_tax_id"
-                )
-            if form_values["tax_condition"] not in TAX_CONDITIONS:
-                errors.append(
-                    "billing_missing_agent_tax_condition"
-                )
-            if not form_values["fiscal_address"]:
-                errors.append(
-                    "billing_missing_agent_fiscal_address"
-                )
+            validation = validate_agent_billing_profile(
+                form_values,
+                require_email=True,
+            )
+            errors.extend(validation["missing_i18n_keys"])
 
             if not errors:
                 upsert_agent_billing_profile(
@@ -1698,9 +1754,11 @@ def register_billing_routes(app, *, helpers):
                     "success",
                 )
                 return redirect(
-                    url_for(
+                    next_url
+                    or url_for(
                         "billing_agent_profile",
                         agent_id=agent_id,
+                        _anchor="datos-fiscales",
                     )
                 )
 
@@ -1730,4 +1788,15 @@ def register_billing_routes(app, *, helpers):
             org_missing=org_missing,
             arca_display=build_arca_display(profile),
             arca_form=arca_form,
+            agent=agent,
+            can_edit=can_edit,
+            next_url=next_url,
+            back_url=(
+                next_url
+                or url_for(
+                    "agents_detail",
+                    agent_id=agent_id,
+                    _anchor="datos-fiscales",
+                )
+            ),
         )
