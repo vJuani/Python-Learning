@@ -51,6 +51,8 @@
         {{ balance_card('USD', detail.display_balances.USD) }}
     </section>
 
+    {% include "agent_account/_recurring_charges.html" %}
+
     <div class="aa-detail__layout">
         <aside class="aa-filters aa-filters--desktop" aria-label="{{ t('sidebar_filters') }}">
             {% include "agent_account/_filters.html" %}

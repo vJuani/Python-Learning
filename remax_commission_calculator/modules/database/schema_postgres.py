@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v13"
+POSTGRES_SCHEMA_VERSION = "postgres_v14"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -735,7 +735,8 @@ SCHEMA_STATEMENTS = (
                 'operation',
                 'fee',
                 'commission',
-                'system'
+                'system',
+                'recurring_charge'
             )
         )
     )
@@ -769,6 +770,81 @@ SCHEMA_STATEMENTS = (
     )
     WHERE idempotency_key IS NOT NULL
         AND idempotency_key <> ''
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS agent_recurring_charges (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        agent_id BIGINT NOT NULL,
+        charge_category TEXT NOT NULL,
+        description TEXT,
+        currency TEXT NOT NULL,
+        input_amount {_MONEY} NOT NULL,
+        vat_mode TEXT NOT NULL,
+        net_amount {_MONEY} NOT NULL,
+        vat_rate {_MONEY} NOT NULL,
+        vat_amount {_MONEY} NOT NULL,
+        gross_amount {_MONEY} NOT NULL,
+        recurrence_type TEXT NOT NULL,
+        billing_day INTEGER,
+        start_date TEXT NOT NULL,
+        end_date TEXT,
+        next_run_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_by_user_id BIGINT,
+        created_at TEXT NOT NULL,
+        updated_by_user_id BIGINT,
+        updated_at TEXT NOT NULL,
+        last_generated_at TEXT,
+        paused_at TEXT,
+        paused_by_user_id BIGINT,
+        ended_at TEXT,
+        ended_by_user_id BIGINT,
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id) ON DELETE RESTRICT,
+        FOREIGN KEY (agent_id)
+            REFERENCES agents(id) ON DELETE RESTRICT,
+        FOREIGN KEY (created_by_user_id)
+            REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (updated_by_user_id)
+            REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (paused_by_user_id)
+            REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (ended_by_user_id)
+            REFERENCES users(id) ON DELETE SET NULL,
+        CHECK (currency IN ('USD', 'ARS')),
+        CHECK (vat_mode IN ('none', 'add_vat', 'gross_includes_vat')),
+        CHECK (recurrence_type IN ('monthly', 'annual')),
+        CHECK (status IN ('active', 'paused', 'ended')),
+        CHECK (input_amount > 0),
+        CHECK (gross_amount > 0),
+        CHECK (
+            (recurrence_type = 'monthly' AND billing_day BETWEEN 1 AND 28)
+            OR recurrence_type = 'annual'
+        )
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_recurring_org_agent
+    ON agent_recurring_charges (
+        organization_id, agent_id, status, next_run_date, id
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_recurring_due
+    ON agent_recurring_charges (
+        organization_id, status, next_run_date, id
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_aa_recurring_charge_period
+    ON agent_account_movements (
+        organization_id, source_id, billing_period
+    )
+    WHERE movement_type = 'charge'
+        AND source_type = 'recurring_charge'
+        AND source_id IS NOT NULL
+        AND billing_period IS NOT NULL
     """,
     f"""
     CREATE TABLE IF NOT EXISTS cash_accounts (
@@ -1333,6 +1409,51 @@ def create_postgres_schema():
     try:
         for statement in SCHEMA_STATEMENTS:
             cursor.execute(statement)
+
+        cursor.execute(
+            """
+            DO $$
+            DECLARE constraint_row RECORD;
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conrelid = 'agent_account_movements'::regclass
+                        AND contype = 'c'
+                        AND pg_get_constraintdef(oid)
+                            ILIKE '%source_type%'
+                        AND pg_get_constraintdef(oid)
+                            ILIKE '%recurring_charge%'
+                ) THEN
+                    FOR constraint_row IN
+                        SELECT conname
+                        FROM pg_constraint
+                        WHERE conrelid
+                            = 'agent_account_movements'::regclass
+                            AND contype = 'c'
+                            AND pg_get_constraintdef(oid)
+                                ILIKE '%source_type%'
+                    LOOP
+                        EXECUTE format(
+                            'ALTER TABLE agent_account_movements '
+                            'DROP CONSTRAINT %I',
+                            constraint_row.conname
+                        );
+                    END LOOP;
+                    ALTER TABLE agent_account_movements
+                    ADD CONSTRAINT ck_agent_account_source_type
+                    CHECK (
+                        source_type IN (
+                            'manual', 'invoice', 'cash', 'operation',
+                            'fee', 'commission', 'system',
+                            'recurring_charge'
+                        )
+                    );
+                END IF;
+            END
+            $$;
+            """
+        )
 
         cursor.execute(
             """

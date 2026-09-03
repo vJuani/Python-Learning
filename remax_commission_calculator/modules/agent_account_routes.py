@@ -71,6 +71,20 @@ from modules.database.operations_repository import (
     search_operations_for_agent_account,
 )
 from modules.i18n import translate
+from modules.recurring_agent_charges import (
+    RecurringChargeError,
+    build_due_preview,
+    create_recurring_charge,
+    end_recurring_charge,
+    generate_due_recurring_charges,
+    list_recurring_charges,
+    pause_recurring_charge,
+    resume_recurring_charge,
+    update_recurring_charge,
+)
+from modules.database.recurring_charges_repository import (
+    get_recurring_charge,
+)
 
 
 def register_agent_account_routes(app, helpers):
@@ -212,6 +226,276 @@ def register_agent_account_routes(app, helpers):
             default_vat_rate_percent=float(
                 DEFAULT_VAT_RATE * 100
             ),
+            recurring_charges=list_recurring_charges(
+                organization_id,
+                agent_id=agent_id,
+            ),
+        )
+
+    def _recurring_form_values(recurring=None):
+        recurring = recurring or {}
+        vat_rate = float(
+            recurring.get("vat_rate") or DEFAULT_VAT_RATE
+        ) * 100
+        return {
+            "charge_category": request.form.get(
+                "charge_category",
+                recurring.get("charge_category", "fee"),
+            ),
+            "currency": request.form.get(
+                "currency",
+                recurring.get("currency", "USD"),
+            ),
+            "amount": request.form.get(
+                "amount",
+                recurring.get("input_amount", ""),
+            ),
+            "vat_mode": request.form.get(
+                "vat_mode",
+                recurring.get("vat_mode", "add_vat"),
+            ),
+            "vat_rate": request.form.get("vat_rate", vat_rate),
+            "description": request.form.get(
+                "description",
+                recurring.get("description", ""),
+            ),
+            "recurrence_type": request.form.get(
+                "recurrence_type",
+                recurring.get("recurrence_type", "monthly"),
+            ),
+            "billing_day": request.form.get(
+                "billing_day",
+                recurring.get("billing_day", 1),
+            ),
+            "start_date": request.form.get(
+                "start_date",
+                recurring.get("start_date", date.today().isoformat()),
+            ),
+            "end_date": request.form.get(
+                "end_date",
+                recurring.get("end_date", ""),
+            ),
+        }
+
+    def _render_recurring_form(
+        agent,
+        form_values,
+        *,
+        recurring=None,
+        errors=None,
+    ):
+        return render_template(
+            "agent_account/recurring_charge_form.html",
+            agent=agent,
+            recurring=recurring,
+            form_values=form_values,
+            errors=errors or [],
+            charge_categories=[
+                {
+                    "id": category,
+                    "label_key": charge_category_label_key(category),
+                }
+                for category in CHARGE_CATEGORIES
+            ],
+            currencies=CURRENCIES,
+            vat_modes=VAT_MODES,
+            recurrence_types=(
+                recurrence
+                for recurrence in RECURRENCE_TYPES
+                if recurrence in ("monthly", "annual")
+            ),
+            default_vat_rate_percent=float(
+                DEFAULT_VAT_RATE * 100
+            ),
+        )
+
+    @app.route(
+        "/agent-accounts/<int:agent_id>/recurring-charges/new",
+        methods=["GET", "POST"],
+    )
+    @admin_required
+    def agent_recurring_charge_new(agent_id):
+        organization_id = _require_admin_organization()
+        agent = get_agent_record(agent_id, organization_id)
+        if agent is None:
+            abort(404)
+        form_values = _recurring_form_values()
+        if request.method == "POST":
+            try:
+                create_recurring_charge(
+                    organization_id,
+                    agent_id,
+                    form_values,
+                    actor_user_id=get_current_user()["id"],
+                    language=get_current_language(),
+                )
+                flash_i18n("agent_recurring_created", "success")
+                return redirect(
+                    url_for(
+                        "agent_account_detail",
+                        agent_id=agent_id,
+                        _anchor="recurring-charges",
+                    )
+                )
+            except RecurringChargeError as error:
+                return _render_recurring_form(
+                    agent,
+                    form_values,
+                    errors=[error.message_key],
+                )
+        return _render_recurring_form(agent, form_values)
+
+    @app.route(
+        "/agent-accounts/recurring-charges/<int:recurring_id>/edit",
+        methods=["GET", "POST"],
+    )
+    @admin_required
+    def agent_recurring_charge_edit(recurring_id):
+        organization_id = _require_admin_organization()
+        recurring = get_recurring_charge(
+            organization_id,
+            recurring_id,
+        )
+        if recurring is None:
+            abort(404)
+        agent = get_agent_record(
+            recurring["agent_id"],
+            organization_id,
+        )
+        if agent is None:
+            abort(404)
+        form_values = _recurring_form_values(recurring)
+        if request.method == "POST":
+            try:
+                update_recurring_charge(
+                    organization_id,
+                    recurring_id,
+                    form_values,
+                    actor_user_id=get_current_user()["id"],
+                    language=get_current_language(),
+                )
+                flash_i18n("agent_recurring_updated", "success")
+                return redirect(
+                    url_for(
+                        "agent_account_detail",
+                        agent_id=recurring["agent_id"],
+                        _anchor="recurring-charges",
+                    )
+                )
+            except RecurringChargeError as error:
+                return _render_recurring_form(
+                    agent,
+                    form_values,
+                    recurring=recurring,
+                    errors=[error.message_key],
+                )
+        return _render_recurring_form(
+            agent,
+            form_values,
+            recurring=recurring,
+        )
+
+    def _recurring_status_action(recurring_id, action):
+        organization_id = _require_admin_organization()
+        recurring = get_recurring_charge(
+            organization_id,
+            recurring_id,
+        )
+        if recurring is None:
+            abort(404)
+        actor_user_id = get_current_user()["id"]
+        if action == "pause":
+            pause_recurring_charge(
+                organization_id,
+                recurring_id,
+                actor_user_id=actor_user_id,
+            )
+            key = "agent_recurring_paused"
+        elif action == "resume":
+            resume_recurring_charge(
+                organization_id,
+                recurring_id,
+                actor_user_id=actor_user_id,
+            )
+            key = "agent_recurring_resumed"
+        else:
+            end_recurring_charge(
+                organization_id,
+                recurring_id,
+                actor_user_id=actor_user_id,
+            )
+            key = "agent_recurring_ended"
+        flash_i18n(key, "success")
+        return redirect(
+            url_for(
+                "agent_account_detail",
+                agent_id=recurring["agent_id"],
+                _anchor="recurring-charges",
+            )
+        )
+
+    @app.route(
+        "/agent-accounts/recurring-charges/<int:recurring_id>/pause",
+        methods=["POST"],
+    )
+    @admin_required
+    def agent_recurring_charge_pause(recurring_id):
+        return _recurring_status_action(recurring_id, "pause")
+
+    @app.route(
+        "/agent-accounts/recurring-charges/<int:recurring_id>/resume",
+        methods=["POST"],
+    )
+    @admin_required
+    def agent_recurring_charge_resume(recurring_id):
+        return _recurring_status_action(recurring_id, "resume")
+
+    @app.route(
+        "/agent-accounts/recurring-charges/<int:recurring_id>/end",
+        methods=["POST"],
+    )
+    @admin_required
+    def agent_recurring_charge_end(recurring_id):
+        return _recurring_status_action(recurring_id, "end")
+
+    @app.route(
+        "/agent-accounts/recurring-charges/generate",
+        methods=["GET", "POST"],
+    )
+    @admin_required
+    def agent_recurring_generate():
+        organization_id = _require_admin_organization()
+        as_of = request.values.get(
+            "as_of",
+            date.today().isoformat(),
+        )
+        try:
+            preview = build_due_preview(
+                organization_id,
+                as_of=as_of,
+                language=get_current_language(),
+            )
+            if request.method == "POST":
+                result = generate_due_recurring_charges(
+                    organization_id,
+                    as_of=as_of,
+                    actor_user_id=get_current_user()["id"],
+                    language=get_current_language(),
+                )
+                flash_i18n(
+                    "agent_recurring_generated_count",
+                    "success",
+                )
+                return redirect(
+                    url_for("agent_recurring_generate", as_of=as_of)
+                )
+        except RecurringChargeError as error:
+            flash_i18n(error.message_key, "error")
+            preview = []
+        return render_template(
+            "agent_account/recurring_generate.html",
+            preview=preview,
+            as_of=as_of,
         )
 
     def _create_movement_from_form(agent_id):
@@ -768,4 +1052,9 @@ def register_agent_account_routes(app, helpers):
             filters_active=filters_active,
             movement_types=MOVEMENT_TYPES,
             currencies=CURRENCIES,
+            recurring_charges=list_recurring_charges(
+                organization_id,
+                agent_id=agent_id,
+                include_ended=False,
+            ),
         )

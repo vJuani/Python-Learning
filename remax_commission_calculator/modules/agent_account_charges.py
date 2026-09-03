@@ -156,6 +156,9 @@ def validate_charge_payload(payload, *, language="es"):
         or payload.get("period_label")
         or ""
     ).strip()
+    period_label = (
+        payload.get("period_label") or billing_period
+    ).strip()
     description = (payload.get("description") or "").strip()
     notes = (payload.get("notes") or "").strip()
     reference_text = (payload.get("reference_text") or "").strip()
@@ -236,14 +239,14 @@ def validate_charge_payload(payload, *, language="es"):
     if not description:
         description = build_charge_description(
             charge_category,
-            billing_period=billing_period or None,
+            billing_period=period_label or None,
             custom_description=description or None,
         )
 
     if not reference_text:
         reference_text = build_charge_reference_text(
             charge_category,
-            billing_period=billing_period or None,
+            billing_period=period_label or None,
             movement_date=movement_date,
         )
 
@@ -281,6 +284,7 @@ def validate_charge_payload(payload, *, language="es"):
 
     return {
         "movement_type": "charge",
+        "input_amount": float(input_amount),
         "charge_category": charge_category,
         "currency": currency,
         "amount": gross,
@@ -292,7 +296,7 @@ def validate_charge_payload(payload, *, language="es"):
         "description": description,
         "movement_date": movement_date,
         "billing_period": billing_period or None,
-        "period_label": billing_period or None,
+        "period_label": period_label or None,
         "notes": notes or None,
         "reference_text": reference_text,
         "recurring": 1 if recurring else 0,
@@ -303,4 +307,6 @@ def validate_charge_payload(payload, *, language="es"):
         "equivalent_amount_ars": equivalent_amount_ars,
         "vat_mode": vat_mode,
         "payment_method": None,
+        "source_type": payload.get("_source_type") or "manual",
+        "source_id": payload.get("_source_id"),
     }

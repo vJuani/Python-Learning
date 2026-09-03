@@ -23,6 +23,9 @@
         {{ balance_card('USD', detail.display_balances.USD, compact=true) }}
     </section>
 
+    {% set can_manage = false %}
+    {% include "agent_account/_recurring_charges.html" %}
+
     <section class="aa-panel aa-history">
         <h2>{{ t('agent_account_recent_movements') }}</h2>
         {% if detail.movements %}

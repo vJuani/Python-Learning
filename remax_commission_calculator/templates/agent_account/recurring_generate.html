@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block body_class %}is-agent-account-page {% endblock %}
+{% block title %}{{ t('agent_recurring_generate_pending') }} | {{ t('app_title') }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agent-account-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="aa-page">
+    <header class="aa-detail__header">
+        <div>
+            <a class="aa-back" href="{{ url_for('agent_account_index') }}">{{ t('agent_account_back') }}</a>
+            <h1>{{ t('agent_recurring_generate_pending') }}</h1>
+            <p>{{ t('agent_recurring_generate_help') }}</p>
+        </div>
+    </header>
+
+    <section class="aa-panel">
+        <form method="get" class="aa-form__grid">
+            <label class="aa-field">
+                <span>{{ t('agent_recurring_run_until') }}</span>
+                <input type="date" name="as_of" value="{{ as_of }}" required>
+            </label>
+            <button class="aa-btn aa-btn--ghost" type="submit">{{ t('agent_recurring_preview') }}</button>
+        </form>
+    </section>
+
+    <section class="aa-panel">
+        {% if preview %}
+        <div class="aa-table-wrap">
+            <table class="aa-table">
+                <thead>
+                    <tr>
+                        <th>{{ t('agent') }}</th>
+                        <th>{{ t('agent_account_concept') }}</th>
+                        <th>{{ t('agent_account_period_label') }}</th>
+                        <th>{{ t('agent_account_amount_label') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in preview %}
+                    <tr>
+                        <td>{{ item.recurring_charge.agent_name }}</td>
+                        <td>{{ item.description }}</td>
+                        <td>{{ item.billing_period }}</td>
+                        <td>{{ item.gross_amount | money(item.currency) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="aa-detail__meta">{{ t('agent_recurring_backlog_policy') }}</p>
+        <form method="post">
+            <input type="hidden" name="as_of" value="{{ as_of }}">
+            <button class="aa-btn aa-btn--primary" type="submit">{{ t('agent_recurring_confirm_generate') }}</button>
+        </form>
+        {% else %}
+        <div class="aa-empty-state"><p>{{ t('agent_recurring_nothing_due') }}</p></div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

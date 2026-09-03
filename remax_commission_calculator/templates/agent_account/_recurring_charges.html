@@ -1,0 +1,67 @@
+<section class="aa-panel aa-recurring" id="recurring-charges">
+    <div class="aa-history__toolbar">
+        <div>
+            <h2>{{ t('agent_recurring_title') }}</h2>
+            <p class="aa-detail__meta">{{ t('agent_recurring_help') }}</p>
+        </div>
+        {% if can_manage %}
+        <div class="aa-detail__actions">
+            <a class="aa-btn aa-btn--ghost aa-btn--small"
+               href="{{ url_for('agent_recurring_generate') }}">{{ t('agent_recurring_generate_pending') }}</a>
+            <a class="aa-btn aa-btn--primary aa-btn--small"
+               href="{{ url_for('agent_recurring_charge_new', agent_id=agent.id) }}">+ {{ t('agent_recurring_add') }}</a>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if recurring_charges %}
+    <div class="aa-recurring__grid">
+        {% for recurring in recurring_charges %}
+        <article class="aa-recurring__card">
+            <div>
+                <strong>{{ t('agent_account_charge_cat_' ~ recurring.charge_category) }}</strong>
+                {% if recurring.description %}
+                <small>{{ recurring.description }}</small>
+                {% endif %}
+            </div>
+            <strong class="aa-recurring__amount">{{ recurring.gross_amount | money(recurring.currency) }}</strong>
+            <div class="aa-recurring__meta">
+                {{ t('agent_account_recurrence_' ~ recurring.recurrence_type) }}
+                {% if recurring.recurrence_type == 'monthly' %}
+                · {{ t('agent_recurring_day', day=recurring.billing_day) }}
+                {% endif %}
+                · {{ t('agent_recurring_next') }} {{ recurring.next_run_date | short_date }}
+            </div>
+            <div class="aa-recurring__footer">
+                <span class="aa-badge aa-badge--{{ recurring.status }}">
+                    {{ t('agent_recurring_status_' ~ recurring.status) }}
+                </span>
+                {% if can_manage and recurring.status != 'ended' %}
+                <div class="aa-detail__actions">
+                    <a class="aa-btn aa-btn--ghost aa-btn--small"
+                       href="{{ url_for('agent_recurring_charge_edit', recurring_id=recurring.id) }}">{{ t('edit') }}</a>
+                    {% if recurring.status == 'active' %}
+                    <form method="post" action="{{ url_for('agent_recurring_charge_pause', recurring_id=recurring.id) }}">
+                        <button class="aa-btn aa-btn--ghost aa-btn--small" type="submit">{{ t('agent_recurring_pause') }}</button>
+                    </form>
+                    {% else %}
+                    <form method="post" action="{{ url_for('agent_recurring_charge_resume', recurring_id=recurring.id) }}">
+                        <button class="aa-btn aa-btn--ghost aa-btn--small" type="submit">{{ t('agent_recurring_resume') }}</button>
+                    </form>
+                    {% endif %}
+                    <form method="post" action="{{ url_for('agent_recurring_charge_end', recurring_id=recurring.id) }}"
+                          onsubmit="return confirm('{{ t('agent_recurring_end_confirm') }}')">
+                        <button class="aa-btn aa-btn--ghost aa-btn--small" type="submit">{{ t('agent_recurring_end') }}</button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="aa-empty-state">
+        <p>{{ t('agent_recurring_empty') }}</p>
+    </div>
+    {% endif %}
+</section>

@@ -1,3 +1,27 @@
+## Recurring agent charges
+
+Recurring charges run as a one-shot, idempotent process. Do not run this
+logic inside Gunicorn or a request handler.
+
+Preview with the production environment and volume:
+
+```bash
+railway run python generate_recurring_agent_charges.py --dry-run
+```
+
+Execute due charges:
+
+```bash
+railway run python generate_recurring_agent_charges.py
+```
+
+For automatic execution, configure a separate Railway Cron service with
+`python generate_recurring_agent_charges.py` as its command. Each run
+processes at most one overdue period per recurring configuration. Repeated
+or concurrent executions are safe because every generated movement is
+uniquely identified by organization, recurring configuration, and billing
+period.
+
 # Deploy staging on Railway (SQLite)
 
 This app is Flask + Gunicorn + SQLite. First staging keeps SQLite with

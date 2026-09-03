@@ -3045,7 +3045,8 @@ def _migrate_agent_account(cursor):
                     'operation',
                     'fee',
                     'commission',
-                    'system'
+                    'system',
+                    'recurring_charge'
                 )
             )
         )
@@ -3613,6 +3614,12 @@ def migrate_schema(create_backup=True):
     )
 
     migrate_invoice_charge_origin_sqlite()
+
+    from .recurring_charges_migration import (
+        migrate_recurring_charges_sqlite,
+    )
+
+    migrate_recurring_charges_sqlite()
     _migrate_document_storage_folders()
 
     return backup_path

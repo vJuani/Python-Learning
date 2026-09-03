@@ -340,6 +340,15 @@ def build_movement_detail_display(
             ),
         )
 
+    if movement.get("source_type") == "recurring_charge":
+        add(
+            "agent_recurring_origin",
+            translate(
+                "agent_recurring_origin",
+                language=language,
+            ),
+        )
+
     if movement_type == "payment" and movement.get("source_id"):
         if movement.get("source_type") == "cash":
             add(

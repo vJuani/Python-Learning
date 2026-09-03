@@ -1,3 +1,45 @@
+.aa-recurring {
+    margin: 1rem 0;
+}
+
+.aa-recurring__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.aa-recurring__card {
+    display: grid;
+    gap: 0.45rem;
+    padding: 0.85rem;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 0.8rem;
+    background: var(--surface, #fff);
+}
+
+.aa-recurring__card small,
+.aa-recurring__meta {
+    display: block;
+    color: var(--text-muted, #64748b);
+    font-size: 0.82rem;
+}
+
+.aa-recurring__amount {
+    font-size: 1.05rem;
+}
+
+.aa-recurring__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.aa-recurring__footer form {
+    margin: 0;
+}
 /**
  * JRH One — Agent current account (premium SaaS layout)
  */
