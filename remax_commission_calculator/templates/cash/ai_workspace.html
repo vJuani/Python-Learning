@@ -22,6 +22,7 @@
         </div>
         <div class="cash-ai-page__actions">
             <span class="cash-ai-page__date">{{ cash_ai_panel.date_label }}</span>
+            <a href="{{ url_for('agent_payment_ai_new') }}" class="cash-ai-btn cash-ai-btn--outline">{{ t('agent_payment_ai_cta') }}</a>
             <a href="{{ url_for('cash_list') }}" class="cash-ai-btn cash-ai-btn--outline">{{ t('cash_ai_page_view_treasury') }}</a>
             <a href="{{ url_for('cash_list') }}" class="cash-ai-btn cash-ai-btn--outline cash-ai-btn--icon">{{ t('cash_ai_page_export') }}</a>
         </div>

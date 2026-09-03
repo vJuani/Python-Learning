@@ -37,6 +37,7 @@
             <div class="aa-actions-more">
                 <button type="button" class="aa-btn aa-btn--ghost aa-actions-more__toggle" data-aa-more-toggle aria-expanded="false">{{ t('agent_account_more') }} ▾</button>
                 <div class="aa-actions-more__panel" hidden>
+                    <a class="aa-actions-more__item" href="{{ url_for('agent_payment_ai_new', agent_id=agent.id) }}">{{ t('agent_payment_ai_cta') }}</a>
                     <button type="button" class="aa-actions-more__item" data-aa-open-movement="commission">{{ t('agent_account_credit_commission') }}</button>
                     <button type="button" class="aa-actions-more__item" data-aa-open-movement="adjustment">{{ t('agent_account_manual_adjustment') }}</button>
                 </div>

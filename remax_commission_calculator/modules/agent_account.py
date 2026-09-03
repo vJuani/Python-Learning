@@ -373,7 +373,15 @@ def create_movement(
     created_by_user_id,
     idempotency_key=None,
     language="es",
+    attachment=None,
+    receipt_number=None,
 ):
+    """
+    Single entry point for every agent account movement.
+
+    ``attachment`` / ``receipt_number`` are only used by payments
+    loaded from a receipt image; the manual form leaves them out.
+    """
     organization_id = require_organization_id(
         organization_id
     )
@@ -425,6 +433,8 @@ def create_movement(
                     "treasury_account_id"
                 ),
                 agent_name=agent_name,
+                attachment=attachment,
+                receipt_number=receipt_number,
             )
         except ValueError as error:
             key = str(error)
@@ -444,6 +454,15 @@ def create_movement(
                     "agent_account_err_invalid_applied_charge"
                     if key == "invalid_applied_charge"
                     else "agent_account_err_payment_method_required"
+                ) from error
+            if key in (
+                "invalid_treasury_account",
+                "inactive_treasury_account",
+                "treasury_account_missing",
+                "treasury_currency_mismatch",
+            ):
+                raise AgentAccountError(
+                    "agent_account_err_invalid_treasury_account"
                 ) from error
             raise AgentAccountError(
                 "agent_account_err_create_failed"

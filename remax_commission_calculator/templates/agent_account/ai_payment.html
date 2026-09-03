@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-agent-account-page {% endblock %}
+{% block title %}{{ t('agent_payment_ai_title') }} | {{ t('app_title') }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agent-account-page.css') }}">
+{% endblock %}
+
+{% macro review_flag(field, flagged) %}
+{% if field in flagged %}<span class="aa-chip aa-chip--warning">{{ t('agent_payment_ai_review_flag') }}</span>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('agent_payment_ai_title') }}</h2>
+        <p>{{ t('agent_payment_ai_subtitle') }}</p>
+    </div>
+    <div class="page-actions">
+        {% if preselected_agent_id %}
+        <a href="{{ url_for('agent_account_detail', agent_id=preselected_agent_id) }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+        {% else %}
+        <a href="{{ url_for('agent_account_index') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+        {% endif %}
+    </div>
+</section>
+
+{% if draft is none or draft.status == 'discarded' %}
+<section class="panel">
+    <form class="agent-form" method="post" action="{{ url_for('agent_payment_ai_new', agent_id=preselected_agent_id or '') }}" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="receipt">{{ t('agent_payment_ai_receipt_label') }}</label>
+            <input type="file" id="receipt" name="receipt" class="form-input"
+                   accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                   capture="environment" required>
+            <p class="form-hint">{{ t('agent_payment_ai_receipt_help') }}</p>
+        </div>
+
+        <div class="form-group">
+            <label for="user_context_text">{{ t('agent_payment_ai_context_label') }}</label>
+            <textarea id="user_context_text" name="user_context_text" class="form-input" rows="3"
+                      placeholder="{{ t('agent_payment_ai_context_placeholder') }}">{{ form_values.user_context_text }}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{{ t('agent_payment_ai_analyze') }}</button>
+        </div>
+    </form>
+</section>
+{% elif draft.status == 'failed' %}
+<section class="panel">
+    <h3>{{ t('agent_payment_ai_failed_title') }}</h3>
+    <p>{{ t(draft.error_message_key or 'cash_ai_err_provider_failed') }}</p>
+    <div class="form-actions">
+        <form method="post" action="{{ url_for('agent_payment_ai_retry', draft_id=draft.id) }}">
+            <button type="submit" class="btn btn-primary">{{ t('cash_ai_retry') }}</button>
+        </form>
+        <a href="{{ url_for('agent_payment_ai_new') }}" class="btn btn-secondary">{{ t('agent_payment_ai_upload_another') }}</a>
+    </div>
+</section>
+{% elif draft.status == 'confirmed' %}
+<section class="panel">
+    <h3>{{ t('agent_payment_ai_confirmed') }}</h3>
+    <div class="form-actions">
+        <a href="{{ url_for('agent_account_detail', agent_id=draft.agent_id) }}" class="btn btn-primary">{{ t('agent_payment_ai_open_account') }}</a>
+    </div>
+</section>
+{% else %}
+<section class="panel">
+    <div class="aa-history__toolbar">
+        <h3>{{ t('agent_payment_ai_review_title') }}</h3>
+        <span class="aa-chip">{{ t('agent_payment_ai_confidence_' ~ (draft.confidence or 'medium')) }}</span>
+    </div>
+    <p>{{ t('agent_payment_ai_review_help') }}</p>
+
+    {% if resolution.agent and resolution.agent.source == 'ambiguous' %}
+    <p class="flash-message flash-error">{{ t('agent_payment_ai_agent_ambiguous') }}</p>
+    {% elif resolution.agent and resolution.agent.needs_selection %}
+    <p class="flash-message flash-error">{{ t('agent_payment_ai_agent_required') }}</p>
+    {% endif %}
+
+    {% if resolution.agent and resolution.agent.name_mismatch %}
+    <p class="flash-message flash-error">{{ t('agent_payment_ai_agent_mismatch', name=payload.sender_name or '—') }}</p>
+    {% endif %}
+
+    <form class="agent-form" method="post" action="{{ url_for('agent_payment_ai_review', draft_id=draft.id) }}">
+        <input type="hidden" name="confirm_token" value="{{ draft.confirm_token }}">
+        <input type="hidden" name="action" value="confirm" data-ai-action>
+
+        <div class="form-group">
+            <label for="agent_id">{{ t('agent_payment_ai_agent') }} {{ review_flag('sender_name', review_fields) }}</label>
+            <select id="agent_id" name="agent_id" class="form-input" required>
+                <option value="">{{ t('agent_payment_ai_select_agent') }}</option>
+                {% for candidate in agent_candidates %}
+                <option value="{{ candidate.id }}" {% if draft.agent_id == candidate.id %}selected{% endif %}>{{ candidate.name }} · {{ t('agent_payment_ai_agent_suggested') }}</option>
+                {% endfor %}
+                {% for row in agents %}
+                {% if row.agent_id not in agent_candidates | map(attribute='id') | list %}
+                <option value="{{ row.agent_id }}" {% if draft.agent_id == row.agent_id %}selected{% endif %}>{{ row.agent_name }}</option>
+                {% endif %}
+                {% endfor %}
+            </select>
+            {% if payload.sender_name %}
+            <p class="form-hint">{{ t('agent_payment_ai_receipt_payer', name=payload.sender_name) }}</p>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="currency">{{ t('agent_account_currency') }} {{ review_flag('currency', review_fields) }}</label>
+            <select id="currency" name="currency" class="form-input" required>
+                <option value="">{{ t('select_type') }}</option>
+                {% for currency in currencies %}
+                <option value="{{ currency }}" {% if payload.currency == currency %}selected{% endif %}>{{ currency }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="amount">{{ t('agent_account_amount_label') }} {{ review_flag('amount', review_fields) }}</label>
+            <input type="text" id="amount" name="amount" class="form-input" value="{{ payload.amount if payload.amount is not none else '' }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="payment_date">{{ t('date') }} {{ review_flag('payment_date', review_fields) }}</label>
+            <input type="date" id="payment_date" name="payment_date" class="form-input" value="{{ payload.payment_date or '' }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="payment_method">{{ t('agent_account_payment_method') }} {{ review_flag('payment_method', review_fields) }}</label>
+            <select id="payment_method" name="payment_method" class="form-input" required>
+                <option value="">{{ t('select_type') }}</option>
+                {% for method in payment_methods %}
+                <option value="{{ method }}" {% if payload.payment_method == method %}selected{% endif %}>{{ t('agent_account_pay_' ~ method) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="charge_movement_id">{{ t('agent_account_apply_payment_to') }}</label>
+            <select id="charge_movement_id" name="charge_movement_id" class="form-input">
+                <option value="general" {% if apply_mode == 'on_account' or not draft.charge_movement_id %}selected{% endif %}>{{ t('agent_account_payment_general') }}</option>
+                {% for option in charge_options %}
+                <option value="{{ option.id }}" {% if draft.charge_movement_id == option.id %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+            </select>
+            {% if not charge_candidates %}
+            <p class="form-hint">{{ t('agent_payment_ai_no_pending_charges') }}</p>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="treasury_account_id">{{ t('treasury_account') }}</label>
+            <select id="treasury_account_id" name="treasury_account_id" class="form-input">
+                <option value="">{{ t('treasury_account_auto') }}</option>
+                {% for account in treasury_candidates %}
+                <option value="{{ account.id }}" {% if draft.treasury_account_id == account.id %}selected{% endif %}>{{ account.name }} ({{ account.currency }})</option>
+                {% endfor %}
+            </select>
+            {% if payload.bank_name %}
+            <p class="form-hint">{{ t('agent_payment_ai_receipt_bank', name=payload.bank_name) }}</p>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="reference_number">{{ t('agent_payment_ai_reference') }}</label>
+            <input type="text" id="reference_number" name="reference_number" class="form-input" value="{{ payload.reference_number or '' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="description">{{ t('agent_account_concept') }}</label>
+            <input type="text" id="description" name="description" class="form-input" value="{{ payload.description or '' }}">
+        </div>
+
+        {% if payload.currency == 'USD' %}
+        <div class="form-group">
+            <label for="exchange_rate">{{ t('agent_account_exchange_rate') }}</label>
+            <input type="text" id="exchange_rate" name="exchange_rate" class="form-input" value="{{ payload.exchange_rate if payload.exchange_rate is not none else '' }}">
+        </div>
+        {% endif %}
+
+        <div class="form-group">
+            <label for="bank_name">{{ t('agent_payment_ai_bank') }}</label>
+            <input type="text" id="bank_name" name="bank_name" class="form-input" value="{{ payload.bank_name or '' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="sender_name">{{ t('agent_payment_ai_sender') }}</label>
+            <input type="text" id="sender_name" name="sender_name" class="form-input" value="{{ payload.sender_name or '' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="notes">{{ t('agent_account_notes_optional') }}</label>
+            <textarea id="notes" name="notes" class="form-input" rows="2">{{ payload.notes or '' }}</textarea>
+        </div>
+
+        {% if draft.attachment_path %}
+        <p>
+            <a href="{{ url_for('agent_payment_ai_receipt', draft_id=draft.id) }}" target="_blank" rel="noopener">{{ t('agent_payment_ai_view_receipt') }}</a>
+        </p>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-secondary" data-ai-set-action="save">{{ t('agent_payment_ai_save_draft') }}</button>
+            <button type="submit" class="btn btn-primary" data-ai-set-action="confirm">{{ t('agent_payment_ai_confirm') }}</button>
+        </div>
+    </form>
+
+    <form method="post" action="{{ url_for('agent_payment_ai_review', draft_id=draft.id) }}" class="form-actions">
+        <input type="hidden" name="action" value="discard">
+        <button type="submit" class="btn btn-secondary">{{ t('agent_payment_ai_discard') }}</button>
+    </form>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    document.querySelectorAll("[data-ai-set-action]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            var form = button.closest("form");
+            var input = form && form.querySelector("[data-ai-action]");
+            if (input) {
+                input.value = button.getAttribute("data-ai-set-action");
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

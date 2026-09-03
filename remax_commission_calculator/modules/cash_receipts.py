@@ -43,13 +43,26 @@ class CashReceiptError(Exception):
         self.message_key = message_key
 
 
-def _receipts_directory(organization_id, draft_id=None):
+SCOPE_CASH = "cash"
+SCOPE_AGENT_PAYMENTS = "agent_payments"
+
+ALLOWED_SCOPES = (SCOPE_CASH, SCOPE_AGENT_PAYMENTS)
+
+
+def _receipts_directory(
+    organization_id,
+    draft_id=None,
+    scope=SCOPE_CASH,
+):
+    if scope not in ALLOWED_SCOPES:
+        raise ValueError("invalid_receipt_scope")
+
     root = get_private_upload_root()
     path = (
         root
         / "organizations"
         / str(organization_id)
-        / "cash"
+        / scope
         / "receipts"
     )
 
@@ -134,7 +147,17 @@ def inspect_image_bytes(raw_bytes):
     return info
 
 
-def validate_receipt_upload(file_storage):
+def validate_receipt_upload(
+    file_storage,
+    *,
+    require_magic_bytes=False,
+):
+    """
+    ``require_magic_bytes`` refuses files whose content type could
+    only be guessed from the filename extension. Cash AI keeps the
+    lenient default; flows that must not accept a renamed
+    non-image opt in.
+    """
     if file_storage is None or not getattr(
         file_storage,
         "filename",
@@ -169,6 +192,15 @@ def validate_receipt_upload(file_storage):
         raise CashReceiptError("cash_ai_err_file_too_large")
 
     detected = detect_image_content_type(raw[:32])
+
+    if detected is None and require_magic_bytes:
+        logger.warning(
+            "cash_ai stage=receipt_validated_failed "
+            "reason=no_magic_bytes size=%s ext=%r",
+            len(raw),
+            extension,
+        )
+        raise CashReceiptError("cash_ai_err_file_type")
 
     if detected is None and extension in ALLOWED_EXTENSIONS:
         # Fallback only when magic bytes are unknown.
@@ -240,10 +272,12 @@ def save_receipt_bytes(
     *,
     payload,
     draft_id=None,
+    scope=SCOPE_CASH,
 ):
     directory = _receipts_directory(
         organization_id,
         draft_id=draft_id,
+        scope=scope,
     )
     directory.mkdir(parents=True, exist_ok=True)
 

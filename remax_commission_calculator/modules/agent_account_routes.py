@@ -13,6 +13,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     url_for,
 )
 
@@ -37,6 +38,16 @@ from modules.agent_account_charges import (
     VAT_MODES,
     charge_category_label_key,
 )
+from modules.agent_payment_ai_service import (
+    AgentPaymentAiError,
+    build_review_context,
+    confirm_agent_payment_draft,
+    discard_draft,
+    retry_agent_payment_analysis,
+    start_agent_payment_analysis,
+    update_draft_from_form,
+)
+from modules.cash_receipts import absolute_receipt_path
 from modules.auth import (
     admin_required,
     get_current_user,
@@ -52,6 +63,9 @@ from modules.database.agent_account_repository import (
     STATUS_CONFIRMED,
     STATUS_REVERSED,
     list_pending_charges,
+)
+from modules.database.agent_payment_ai_drafts_repository import (
+    get_agent_payment_ai_draft,
 )
 from modules.database.operations_repository import (
     search_operations_for_agent_account,
@@ -385,6 +399,285 @@ def register_agent_account_routes(app, helpers):
     @admin_required
     def agent_account_create_movement(agent_id):
         return _create_movement_from_form(agent_id)
+
+    def _render_payment_ai(
+        organization_id,
+        draft=None,
+        *,
+        preselected_agent_id=None,
+        errors=None,
+        form_values=None,
+    ):
+        context = {
+            "draft": draft,
+            "errors": errors or [],
+            "form_values": form_values
+            or {"user_context_text": ""},
+            "preselected_agent_id": preselected_agent_id,
+            "agents": build_staff_index_view(
+                organization_id,
+                language=get_current_language(),
+            )["agents"],
+        }
+
+        if draft is not None:
+            context.update(
+                build_review_context(organization_id, draft)
+            )
+
+        return render_template(
+            "agent_account/ai_payment.html",
+            **context,
+        )
+
+    def _load_ai_draft_or_404(organization_id, draft_id):
+        draft = get_agent_payment_ai_draft(
+            draft_id,
+            organization_id,
+        )
+        if draft is None:
+            abort(404)
+        return draft
+
+    @app.route(
+        "/agent-accounts/ai/payments",
+        methods=["GET", "POST"],
+    )
+    @admin_required
+    def agent_payment_ai_new():
+        organization_id = _require_admin_organization()
+        current_user = get_current_user()
+        preselected_agent_id = None
+        raw_agent_id = (
+            request.values.get("agent_id") or ""
+        ).strip()
+
+        if raw_agent_id:
+            try:
+                preselected_agent_id = int(raw_agent_id)
+            except ValueError:
+                preselected_agent_id = None
+
+        if (
+            preselected_agent_id is not None
+            and get_agent_record(
+                preselected_agent_id,
+                organization_id,
+            )
+            is None
+        ):
+            abort(404)
+
+        if request.method == "GET":
+            return _render_payment_ai(
+                organization_id,
+                preselected_agent_id=preselected_agent_id,
+            )
+
+        context_text = request.form.get(
+            "user_context_text",
+            "",
+        ).strip()
+
+        try:
+            draft = start_agent_payment_analysis(
+                organization_id,
+                user_id=current_user["id"],
+                file_storage=request.files.get("receipt"),
+                user_context_text=context_text,
+                agent_id=preselected_agent_id,
+                language=get_current_language(),
+            )
+        except AgentPaymentAiError as error:
+            flash_i18n(error.message_key, "error")
+            return _render_payment_ai(
+                organization_id,
+                preselected_agent_id=preselected_agent_id,
+                errors=[error.message_key],
+                form_values={
+                    "user_context_text": context_text,
+                },
+            )
+
+        return redirect(
+            url_for(
+                "agent_payment_ai_review",
+                draft_id=draft["id"],
+            )
+        )
+
+    def _payment_ai_form_values():
+        return {
+            key: (request.form.get(key) or "").strip()
+            for key in (
+                "amount",
+                "currency",
+                "payment_date",
+                "payment_method",
+                "bank_name",
+                "reference_number",
+                "sender_name",
+                "description",
+                "notes",
+                "exchange_rate",
+                "agent_id",
+                "treasury_account_id",
+                "charge_movement_id",
+                "apply_mode",
+            )
+        }
+
+    @app.route(
+        "/agent-accounts/ai/payments/<int:draft_id>",
+        methods=["GET", "POST"],
+    )
+    @admin_required
+    def agent_payment_ai_review(draft_id):
+        organization_id = _require_admin_organization()
+        draft = _load_ai_draft_or_404(
+            organization_id,
+            draft_id,
+        )
+
+        if request.method == "GET":
+            return _render_payment_ai(organization_id, draft)
+
+        action = request.form.get("action", "save")
+        form_values = _payment_ai_form_values()
+
+        if action == "discard":
+            try:
+                discard_draft(organization_id, draft_id)
+                flash_i18n(
+                    "agent_payment_ai_discarded",
+                    "success",
+                )
+            except AgentPaymentAiError as error:
+                flash_i18n(error.message_key, "error")
+            return redirect(
+                url_for("agent_payment_ai_new")
+            )
+
+        if action == "save":
+            try:
+                draft = update_draft_from_form(
+                    organization_id,
+                    draft_id,
+                    form_values,
+                )
+                flash_i18n(
+                    "agent_payment_ai_draft_updated",
+                    "success",
+                )
+            except AgentPaymentAiError as error:
+                flash_i18n(error.message_key, "error")
+            return _render_payment_ai(organization_id, draft)
+
+        if action != "confirm":
+            flash_i18n(
+                "agent_payment_ai_err_confirm_action",
+                "error",
+            )
+            return _render_payment_ai(organization_id, draft)
+
+        try:
+            movement = confirm_agent_payment_draft(
+                organization_id,
+                draft_id,
+                user_id=get_current_user()["id"],
+                confirm_token=request.form.get(
+                    "confirm_token",
+                    "",
+                ),
+                form_values=form_values,
+                language=get_current_language(),
+            )
+        except (
+            AgentPaymentAiError,
+            AgentAccountError,
+        ) as error:
+            flash_i18n(error.message_key, "error")
+            draft = _load_ai_draft_or_404(
+                organization_id,
+                draft_id,
+            )
+            return _render_payment_ai(
+                organization_id,
+                draft,
+                errors=[error.message_key],
+            )
+
+        flash_i18n("agent_payment_ai_confirmed", "success")
+
+        return redirect(
+            url_for(
+                "agent_account_detail",
+                agent_id=movement["agent_id"],
+            )
+        )
+
+    @app.route(
+        "/agent-accounts/ai/payments/<int:draft_id>/retry",
+        methods=["POST"],
+    )
+    @admin_required
+    def agent_payment_ai_retry(draft_id):
+        organization_id = _require_admin_organization()
+        _load_ai_draft_or_404(organization_id, draft_id)
+
+        try:
+            retry_agent_payment_analysis(
+                organization_id,
+                draft_id,
+                language=get_current_language(),
+            )
+        except AgentPaymentAiError as error:
+            flash_i18n(error.message_key, "error")
+
+        return redirect(
+            url_for(
+                "agent_payment_ai_review",
+                draft_id=draft_id,
+            )
+        )
+
+    @app.route(
+        "/agent-accounts/ai/payments/<int:draft_id>/receipt",
+        methods=["GET"],
+    )
+    @admin_required
+    def agent_payment_ai_receipt(draft_id):
+        organization_id = _require_admin_organization()
+        draft = _load_ai_draft_or_404(
+            organization_id,
+            draft_id,
+        )
+
+        if not draft.get("attachment_path"):
+            abort(404)
+
+        path = absolute_receipt_path(
+            draft["attachment_path"],
+            organization_id,
+        )
+
+        if not path.is_file():
+            abort(404)
+
+        return send_file(
+            path,
+            mimetype=(
+                draft.get("attachment_content_type")
+                or "application/octet-stream"
+            ),
+            download_name=(
+                draft.get("attachment_original_name")
+                or path.name
+            ),
+            as_attachment=(
+                request.args.get("download") == "1"
+            ),
+        )
 
     def _cancel_movement_from_form(movement_id):
         organization_id = _require_admin_organization()

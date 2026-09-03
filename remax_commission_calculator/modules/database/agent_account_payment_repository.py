@@ -202,7 +202,14 @@ def register_agent_payment_atomic(
     agent_name=None,
     cash_description=None,
     treasury_account_id=None,
+    attachment=None,
+    receipt_number=None,
 ):
+    """
+    ``attachment`` optionally carries a stored private receipt
+    (keys: path, hash, content_type, original_name) so the cash
+    income keeps a link to the image inside the same transaction.
+    """
     organization_id = require_organization_id(
         organization_id
     )
@@ -366,6 +373,7 @@ def register_agent_payment_atomic(
         elif agent_name:
             cash_label = f"{agent_name} — {cash_label}"
 
+        attachment = attachment or {}
         cash_movement_id = create_cash_movement_atomic(
             organization_id,
             movement_type="income",
@@ -381,6 +389,15 @@ def register_agent_payment_atomic(
             source_reference=str(payment_id),
             treasury_account_id=treasury_account_id,
             payment_method_for_default=payment_method,
+            attachment_path=attachment.get("path"),
+            attachment_hash=attachment.get("hash"),
+            attachment_content_type=attachment.get(
+                "content_type"
+            ),
+            attachment_original_name=attachment.get(
+                "original_name"
+            ),
+            receipt_number=receipt_number,
             connection=connection,
             manage_transaction=False,
         )

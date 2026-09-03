@@ -1251,6 +1251,7 @@ POSTGRES_TABLES = (
     "cash_accounts",
     "cash_movements",
     "cash_ai_drafts",
+    "agent_payment_ai_drafts",
     "agent_billing_profiles",
     "billing_issuer_profiles",
     "operation_parties",
@@ -1526,6 +1527,93 @@ def create_postgres_schema():
             ON cash_movements (
                 organization_id,
                 attachment_hash
+            )
+            """
+        )
+
+        cursor.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS agent_payment_ai_drafts (
+                id {_ID},
+                organization_id BIGINT NOT NULL,
+                created_by_user_id BIGINT,
+                status TEXT NOT NULL DEFAULT 'processing',
+                user_context_text TEXT,
+                attachment_path TEXT,
+                attachment_hash TEXT,
+                attachment_content_type TEXT,
+                attachment_original_name TEXT,
+                confirm_token TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                agent_id BIGINT,
+                treasury_account_id BIGINT,
+                charge_movement_id BIGINT,
+                confirmed_movement_id BIGINT,
+                confirmed_cash_movement_id BIGINT,
+                error_message_key TEXT,
+                confidence TEXT,
+                provider TEXT,
+                draft_json TEXT,
+                resolution_json TEXT,
+                fields_needing_review_json TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+
+                FOREIGN KEY (organization_id)
+                    REFERENCES organizations(id)
+                    ON DELETE RESTRICT,
+                FOREIGN KEY (created_by_user_id)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY (agent_id)
+                    REFERENCES agents(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY (treasury_account_id)
+                    REFERENCES treasury_accounts(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY (charge_movement_id)
+                    REFERENCES agent_account_movements(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY (confirmed_movement_id)
+                    REFERENCES agent_account_movements(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY (confirmed_cash_movement_id)
+                    REFERENCES cash_movements(id)
+                    ON DELETE SET NULL,
+
+                CHECK (
+                    status IN (
+                        'processing',
+                        'review',
+                        'confirmed',
+                        'failed',
+                        'discarded'
+                    )
+                ),
+                UNIQUE (organization_id, confirm_token)
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_agent_payment_ai_org_status
+            ON agent_payment_ai_drafts (
+                organization_id,
+                status,
+                id
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_agent_payment_ai_idempotency
+            ON agent_payment_ai_drafts (
+                organization_id,
+                idempotency_key
             )
             """
         )

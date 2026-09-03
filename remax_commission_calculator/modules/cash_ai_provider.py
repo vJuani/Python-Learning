@@ -219,15 +219,20 @@ def _sanitize_openai_error_body(raw_text):
     return text.replace("sk-", "sk-***")
 
 
-def _openai_extract(
+def request_structured_json(
     *,
-    user_context_text,
-    image_bytes,
-    image_content_type,
-    allowed_categories,
-    allowed_payment_methods,
-    language,
+    instructions,
+    user_content,
+    model=None,
+    image_bytes_len=0,
+    image_content_type=None,
+    log_prefix="cash_ai",
 ):
+    """
+    Single OpenAI chat/completions JSON call shared by every
+    receipt extractor. Callers own the prompt and the schema;
+    this owns auth, transport, logging and JSON parsing.
+    """
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
 
     if not api_key:
@@ -237,6 +242,149 @@ def _openai_extract(
             details={"openai_api_key_present": False},
         )
 
+    has_image_part = any(
+        part.get("type") == "image_url"
+        for part in user_content
+    )
+    image_url_prefix = None
+
+    if has_image_part:
+        for part in user_content:
+            if part.get("type") == "image_url":
+                image_url_prefix = part["image_url"]["url"][:48]
+                break
+
+    model = model or get_cash_ai_model()
+    payload = {
+        "model": model,
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": user_content},
+        ],
+    }
+    request_bytes = json.dumps(payload).encode("utf-8")
+
+    logger.info(
+        "%s stage=provider_request_started "
+        "provider=openai model=%s has_image=%s "
+        "image_bytes=%s image_mime=%s "
+        "payload_bytes=%s data_url_prefix=%s",
+        log_prefix,
+        model,
+        has_image_part,
+        image_bytes_len,
+        image_content_type,
+        len(request_bytes),
+        image_url_prefix,
+    )
+
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=request_bytes,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            raw_body = response.read().decode("utf-8")
+            request_id = response.headers.get(
+                "x-request-id"
+            ) or response.headers.get("X-Request-Id")
+    except urllib.error.HTTPError as error:
+        detail = _sanitize_openai_error_body(
+            error.read().decode("utf-8", errors="ignore")
+        )
+        request_id = error.headers.get("x-request-id") if error.headers else None
+        logger.error(
+            "%s stage=provider_request_failed "
+            "http_status=%s request_id=%s detail=%s",
+            log_prefix,
+            error.code,
+            request_id,
+            detail,
+        )
+        raise CashAiProviderError(
+            f"openai_http_{error.code}",
+            stage="provider_request_failed",
+            details={
+                "http_status": error.code,
+                "request_id": request_id,
+                "detail": detail,
+            },
+        ) from error
+    except Exception as error:
+        logger.error(
+            "%s stage=provider_request_failed "
+            "error_type=%s error=%s",
+            log_prefix,
+            type(error).__name__,
+            str(error)[:200],
+        )
+        raise CashAiProviderError(
+            "openai_request_failed",
+            stage="provider_request_failed",
+            details={
+                "error_type": type(error).__name__,
+                "error": str(error)[:200],
+            },
+        ) from error
+
+    logger.info(
+        "%s stage=provider_response_received "
+        "request_id=%s body_bytes=%s",
+        log_prefix,
+        request_id,
+        len(raw_body),
+    )
+
+    try:
+        body = json.loads(raw_body)
+        content = body["choices"][0]["message"]["content"]
+        parsed = json.loads(content)
+    except (KeyError, IndexError, TypeError, ValueError) as error:
+        logger.error(
+            "%s stage=provider_response_parsed_failed "
+            "error_type=%s request_id=%s body_prefix=%s",
+            log_prefix,
+            type(error).__name__,
+            request_id,
+            raw_body[:200],
+        )
+        raise CashAiProviderError(
+            "openai_invalid_response",
+            stage="provider_response_parsed",
+            details={
+                "error_type": type(error).__name__,
+                "request_id": request_id,
+            },
+        ) from error
+
+    logger.info(
+        "%s stage=provider_response_parsed "
+        "request_id=%s keys=%s",
+        log_prefix,
+        request_id,
+        sorted(parsed.keys()) if isinstance(parsed, dict) else None,
+    )
+
+    return parsed
+
+
+def _openai_extract(
+    *,
+    user_context_text,
+    image_bytes,
+    image_content_type,
+    allowed_categories,
+    allowed_payment_methods,
+    language,
+):
     schema_hint = {
         "movement_type": "income|expense|null",
         "currency": "ARS|USD|null",
@@ -281,127 +429,10 @@ def _openai_extract(
         image_content_type=image_content_type,
     )
 
-    has_image_part = any(
-        part.get("type") == "image_url"
-        for part in user_content
+    return request_structured_json(
+        instructions=instructions,
+        user_content=user_content,
+        image_bytes_len=len(image_bytes) if image_bytes else 0,
+        image_content_type=image_content_type,
+        log_prefix="cash_ai",
     )
-    image_url_prefix = None
-
-    if has_image_part:
-        url = user_content[1]["image_url"]["url"]
-        image_url_prefix = url[:48]
-
-    model = get_cash_ai_model()
-    payload = {
-        "model": model,
-        "temperature": 0,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": instructions},
-            {"role": "user", "content": user_content},
-        ],
-    }
-    request_bytes = json.dumps(payload).encode("utf-8")
-
-    logger.info(
-        "cash_ai stage=provider_request_started "
-        "provider=openai model=%s has_image=%s "
-        "image_bytes=%s image_mime=%s "
-        "payload_bytes=%s data_url_prefix=%s",
-        model,
-        has_image_part,
-        len(image_bytes) if image_bytes else 0,
-        image_content_type,
-        len(request_bytes),
-        image_url_prefix,
-    )
-
-    request = urllib.request.Request(
-        "https://api.openai.com/v1/chat/completions",
-        data=request_bytes,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            raw_body = response.read().decode("utf-8")
-            request_id = response.headers.get(
-                "x-request-id"
-            ) or response.headers.get("X-Request-Id")
-    except urllib.error.HTTPError as error:
-        detail = _sanitize_openai_error_body(
-            error.read().decode("utf-8", errors="ignore")
-        )
-        request_id = error.headers.get("x-request-id") if error.headers else None
-        logger.error(
-            "cash_ai stage=provider_request_failed "
-            "http_status=%s request_id=%s detail=%s",
-            error.code,
-            request_id,
-            detail,
-        )
-        raise CashAiProviderError(
-            f"openai_http_{error.code}",
-            stage="provider_request_failed",
-            details={
-                "http_status": error.code,
-                "request_id": request_id,
-                "detail": detail,
-            },
-        ) from error
-    except Exception as error:
-        logger.error(
-            "cash_ai stage=provider_request_failed "
-            "error_type=%s error=%s",
-            type(error).__name__,
-            str(error)[:200],
-        )
-        raise CashAiProviderError(
-            "openai_request_failed",
-            stage="provider_request_failed",
-            details={
-                "error_type": type(error).__name__,
-                "error": str(error)[:200],
-            },
-        ) from error
-
-    logger.info(
-        "cash_ai stage=provider_response_received "
-        "request_id=%s body_bytes=%s",
-        request_id,
-        len(raw_body),
-    )
-
-    try:
-        body = json.loads(raw_body)
-        content = body["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
-    except (KeyError, IndexError, TypeError, ValueError) as error:
-        logger.error(
-            "cash_ai stage=provider_response_parsed_failed "
-            "error_type=%s request_id=%s body_prefix=%s",
-            type(error).__name__,
-            request_id,
-            raw_body[:200],
-        )
-        raise CashAiProviderError(
-            "openai_invalid_response",
-            stage="provider_response_parsed",
-            details={
-                "error_type": type(error).__name__,
-                "request_id": request_id,
-            },
-        ) from error
-
-    logger.info(
-        "cash_ai stage=provider_response_parsed "
-        "request_id=%s keys=%s",
-        request_id,
-        sorted(parsed.keys()) if isinstance(parsed, dict) else None,
-    )
-
-    return parsed
