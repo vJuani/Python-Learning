@@ -106,6 +106,7 @@ def build_operation_dict(rows):
             "office_payment": row[16],
             "office_total": row[17],
             "currency": row[18] or "USD",
+            "currency_raw": row[18],
             "original_amount": original_amount,
             "exchange_rate": row[20] if row[20] is not None else 1,
             "agent_db_id": row[21],

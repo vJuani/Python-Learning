@@ -199,6 +199,10 @@ def _extend_movement_from_row(base, row):
                 "billing_period": None,
                 "recurring": 0,
                 "recurrence_type": "one_time",
+                "commission_side": None,
+                "commission_purpose": None,
+                "commission_source_amount": None,
+                "commission_source_currency": None,
             }
         )
         return base
@@ -241,6 +245,16 @@ def _extend_movement_from_row(base, row):
             "recurring": int(row[39] or 0) if len(row) > 39 else 0,
             "recurrence_type": (
                 row[40] if len(row) > 40 and row[40] else "one_time"
+            ),
+            "commission_side": row[41] if len(row) > 41 else None,
+            "commission_purpose": row[42] if len(row) > 42 else None,
+            "commission_source_amount": (
+                float(row[43])
+                if len(row) > 43 and row[43] is not None
+                else None
+            ),
+            "commission_source_currency": (
+                row[44] if len(row) > 44 else None
             ),
         }
     )
@@ -289,7 +303,11 @@ MOVEMENTS_BASE_QUERY = """
         m.gross_amount,
         m.billing_period,
         m.recurring,
-        m.recurrence_type
+        m.recurrence_type,
+        m.commission_side,
+        m.commission_purpose,
+        m.commission_source_amount,
+        m.commission_source_currency
     FROM agent_account_movements AS m
     LEFT JOIN users AS creator
         ON m.created_by_user_id = creator.id
@@ -397,6 +415,58 @@ def get_agent_account_movement(
             (movement_id, organization_id),
         )
         return _build_movement_dict(cursor.fetchone())
+    finally:
+        connection.close()
+
+
+def list_operation_commission_movements(
+    organization_id,
+    operation_id,
+    agent_id,
+    commission_side=None,
+    commission_purpose=None,
+):
+    """Return the complete audit history for one logical credit."""
+    organization_id = require_organization_id(
+        organization_id
+    )
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        side_clause = ""
+        params = [
+            organization_id,
+            SOURCE_OPERATION,
+            operation_id,
+            agent_id,
+            MOVEMENT_TYPE_COMMISSION,
+        ]
+        purpose_clause = ""
+        if commission_purpose is not None:
+            purpose_clause = " AND m.commission_purpose = ?"
+            params.append(commission_purpose)
+        if commission_side is not None:
+            side_clause = " AND m.commission_side = ?"
+            params.append(commission_side)
+
+        cursor.execute(
+            MOVEMENTS_BASE_QUERY
+            + f"""
+            WHERE m.organization_id = ?
+                AND m.source_type = ?
+                AND m.source_id = ?
+                AND m.agent_id = ?
+                AND m.movement_type = ?
+                {purpose_clause}
+                {side_clause}
+            ORDER BY m.id DESC
+            """,
+            params,
+        )
+        return [
+            _build_movement_dict(row)
+            for row in cursor.fetchall()
+        ]
     finally:
         connection.close()
 
@@ -944,6 +1014,10 @@ def create_agent_account_movement_atomic(
     billing_period=None,
     recurring=0,
     recurrence_type="one_time",
+    commission_side=None,
+    commission_purpose=None,
+    commission_source_amount=None,
+    commission_source_currency=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -1037,11 +1111,15 @@ def create_agent_account_movement_atomic(
                 gross_amount,
                 billing_period,
                 recurring,
-                recurrence_type
+                recurrence_type,
+                commission_side,
+                commission_purpose,
+                commission_source_amount,
+                commission_source_currency
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, 0,
-                ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -1086,6 +1164,14 @@ def create_agent_account_movement_atomic(
                 billing_period,
                 int(recurring or 0),
                 recurrence_type or "one_time",
+                commission_side,
+                commission_purpose,
+                (
+                    float(commission_source_amount)
+                    if commission_source_amount is not None
+                    else None
+                ),
+                commission_source_currency,
             ),
         )
         connection.commit()

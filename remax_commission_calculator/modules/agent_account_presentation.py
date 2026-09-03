@@ -479,6 +479,59 @@ def enrich_movement_for_display(
         movement_is_internal_reversal(movement)
     )
     lookup = movement_lookup or {}
+    enriched["linked_operation"] = None
+    operation_detail_rows = []
+    if (
+        organization_id
+        and movement.get("movement_type") == "commission"
+        and movement.get("source_type") == "operation"
+        and movement.get("source_id")
+    ):
+        from modules.database.operations_repository import (
+            get_operation_record,
+        )
+
+        operation = get_operation_record(
+            movement["source_id"],
+            organization_id,
+        )
+        if operation is not None:
+            enriched["linked_operation"] = {
+                "id": operation["db_id"],
+                "display_id": operation["id"],
+                "property": operation.get("property"),
+            }
+            operation_detail_rows = [
+                    {
+                        "label": translate(
+                            "operation",
+                            language=language,
+                        ),
+                        "value": operation["id"],
+                    },
+                    {
+                        "label": translate(
+                            "property",
+                            language=language,
+                        ),
+                        "value": operation.get("property") or "—",
+                    },
+                    {
+                        "label": translate(
+                            "operation_commission_side",
+                            language=language,
+                        ),
+                        "value": translate(
+                            "operation_commission_side_"
+                            + (
+                                movement.get("commission_side")
+                                or "general"
+                            ),
+                            language=language,
+                        ),
+                    },
+                ]
+
     if (
         organization_id
         and movement.get("movement_type") == "payment"
@@ -502,6 +555,7 @@ def enrich_movement_for_display(
         movement_lookup=lookup,
         payment_allocations=enriched["payment_allocations"],
     )
+    enriched["display_detail"].extend(operation_detail_rows)
     return enriched
 
 

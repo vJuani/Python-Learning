@@ -274,6 +274,13 @@ from modules.operation_readiness import (
     submit_operation_for_approval,
     validate_operation_readiness,
 )
+from modules.operation_commission_credit import (
+    OperationCommissionError,
+    build_operation_commission_state,
+    credit_operation_commission,
+    reverse_operation_commission,
+)
+from modules.agent_account import AgentAccountError
 from modules.property_types import LISTING_PURPOSES, PROPERTY_TYPES
 
 from modules.workflow import (
@@ -5165,6 +5172,10 @@ def operations_detail(operation_id):
         if show_readiness
         else None
     )
+    operation_commission = build_operation_commission_state(
+        organization_id,
+        operation_id,
+    )
 
     return render_template(
         "operations/detail.html",
@@ -5197,7 +5208,71 @@ def operations_detail(operation_id):
         total_commission=total_commission,
         can_set_invoice_amount=can_set_invoice_amount,
         can_create_invoice=can_create_invoice,
+        operation_commission=operation_commission,
+        can_manage_operation_commission=(
+            get_guest_access() is None and is_admin()
+        ),
         tax_conditions=TAX_CONDITIONS,
+    )
+
+
+@app.route(
+    "/operations/<int:operation_id>/commission/credit",
+    methods=["POST"],
+)
+@admin_required
+def operations_credit_commission(operation_id):
+    organization_id = require_user_organization()
+    operation = get_operation_record(operation_id, organization_id)
+    if operation is None:
+        abort(404)
+    ensure_operation_scope(operation, organization_id)
+
+    try:
+        credit_operation_commission(
+            organization_id,
+            operation_id,
+            amount=request.form.get("amount", ""),
+            currency=request.form.get("currency", ""),
+            created_by_user_id=get_current_user()["id"],
+            language=get_current_language(),
+        )
+        flash_i18n("operation_commission_flash_credited", "success")
+    except OperationCommissionError as error:
+        flash_i18n(error.message_key, "error")
+    except AgentAccountError as error:
+        flash_i18n(error.message_key, "error")
+
+    return redirect(
+        url_for("operations_detail", operation_id=operation_id)
+    )
+
+
+@app.route(
+    "/operations/<int:operation_id>/commission/reverse",
+    methods=["POST"],
+)
+@admin_required
+def operations_reverse_commission(operation_id):
+    organization_id = require_user_organization()
+    operation = get_operation_record(operation_id, organization_id)
+    if operation is None:
+        abort(404)
+    ensure_operation_scope(operation, organization_id)
+
+    try:
+        reverse_operation_commission(
+            organization_id,
+            operation_id,
+            created_by_user_id=get_current_user()["id"],
+            reason=request.form.get("reason", ""),
+        )
+        flash_i18n("operation_commission_flash_reversed", "success")
+    except OperationCommissionError as error:
+        flash_i18n(error.message_key, "error")
+
+    return redirect(
+        url_for("operations_detail", operation_id=operation_id)
     )
 
 

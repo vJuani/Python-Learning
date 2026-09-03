@@ -143,6 +143,8 @@
     </div>
 </section>
 
+{% include "operations/_commission_credit.html" %}
+
 <section class="panel billing-operation-panel">
     <div class="panel-header">
         <h3>{{ t('billing_vat_section') }}</h3>
@@ -226,4 +228,34 @@
 </section>
 
 {% include "operations/_documents.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    function wire(openSelector, dialogSelector, closeSelector) {
+        var dialog = document.querySelector(dialogSelector);
+        if (!dialog) return;
+        var open = document.querySelector(openSelector);
+        if (open) open.addEventListener("click", function () {
+            dialog.showModal();
+        });
+        dialog.querySelectorAll(closeSelector).forEach(function (button) {
+            button.addEventListener("click", function () {
+                dialog.close();
+            });
+        });
+    }
+    wire(
+        "[data-operation-commission-open]",
+        "[data-operation-commission-dialog]",
+        "[data-operation-commission-close]"
+    );
+    wire(
+        "[data-operation-commission-reverse-open]",
+        "[data-operation-commission-reverse-dialog]",
+        "[data-operation-commission-reverse-close]"
+    );
+})();
+</script>
 {% endblock %}

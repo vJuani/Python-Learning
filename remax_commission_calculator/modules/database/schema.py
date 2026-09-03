@@ -3066,6 +3066,72 @@ def _migrate_agent_account(cursor):
     _migrate_agent_account_v2(cursor)
     _migrate_agent_account_v3(cursor)
     _migrate_agent_account_v4(cursor)
+    _migrate_agent_account_v5(cursor)
+
+
+def _migrate_agent_account_v5(cursor):
+    """
+    Operation commission credit snapshots.
+
+    The ledger movement remains the accounting source of truth. These
+    columns add the business dimensions needed for audit and prevent a
+    second active credit for the same operation/agent/side/purpose.
+    """
+    if not _table_exists(cursor, "agent_account_movements"):
+        return
+
+    for column_name, column_sql in (
+        ("commission_side", "TEXT"),
+        ("commission_purpose", "TEXT"),
+        ("commission_source_amount", "REAL"),
+        ("commission_source_currency", "TEXT"),
+    ):
+        if not _column_exists(
+            cursor,
+            "agent_account_movements",
+            column_name,
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE agent_account_movements
+                ADD COLUMN {column_name} {column_sql}
+                """
+            )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_aa_active_operation_commission
+        ON agent_account_movements (
+            organization_id,
+            source_id,
+            agent_id,
+            commission_side,
+            commission_purpose
+        )
+        WHERE movement_type = 'commission'
+            AND source_type = 'operation'
+            AND status = 'confirmed'
+            AND commission_side IS NOT NULL
+            AND commission_purpose IS NOT NULL
+        """
+    )
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_aa_active_operation_commission_consolidated
+        ON agent_account_movements (
+            organization_id,
+            source_id,
+            agent_id,
+            commission_purpose
+        )
+        WHERE movement_type = 'commission'
+            AND source_type = 'operation'
+            AND status = 'confirmed'
+            AND commission_purpose = 'own_commission'
+        """
+    )
 
 
 def _migrate_agent_account_v4(cursor):

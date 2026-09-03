@@ -5450,3 +5450,38 @@ a.dashboard-quick-card:hover {
     border-bottom: none;
 }
 
+.operation-commission-panel .operation-side-metrics {
+    margin-bottom: 1rem;
+}
+
+.operation-commission-dialog {
+    width: min(34rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    padding: 1.25rem;
+    border: 0;
+    border-radius: 1rem;
+    color: var(--text-color);
+    background: var(--surface-color);
+    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+}
+
+.operation-commission-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.62);
+}
+
+.operation-commission-dialog .aa-dialog__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.operation-commission-dialog .aa-dialog__close {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1.5rem;
+}
+

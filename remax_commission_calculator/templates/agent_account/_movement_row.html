@@ -21,7 +21,13 @@
         <span class="aa-balance-inline__hint">{{ t('agent_account_balance_in_favor_short') }}</span>
         {% endif %}
     </td>
-    <td class="aa-reference">{{ movement.reference_text or '—' }}</td>
+    <td class="aa-reference">
+        {% if movement.linked_operation %}
+        <a href="{{ url_for('operations_detail', operation_id=movement.linked_operation.id) }}">{{ movement.reference_text or movement.linked_operation.display_id }}</a>
+        {% else %}
+        {{ movement.reference_text or '—' }}
+        {% endif %}
+    </td>
     <td>
         {% if is_cancelled %}
         <span class="aa-badge aa-badge--cancelled">{{ t('agent_account_status_cancelled') }}</span>
@@ -67,7 +73,9 @@
     </header>
     <p class="aa-move-card__meta">
         <time datetime="{{ movement.movement_date }}">{{ movement.movement_date | short_date }}</time>
-        {% if movement.reference_text %} · {{ movement.reference_text }}{% endif %}
+        {% if movement.linked_operation %}
+        · <a href="{{ url_for('operations_detail', operation_id=movement.linked_operation.id) }}">{{ movement.reference_text or movement.linked_operation.display_id }}</a>
+        {% elif movement.reference_text %} · {{ movement.reference_text }}{% endif %}
         {% if movement.payment_method %} · {{ t('agent_account_pay_' ~ movement.payment_method) }}{% endif %}
     </p>
     <p class="aa-move-card__balance aa-balance-inline--{{ movement.display_balance_after.tone }}">

@@ -52,6 +52,7 @@ from modules.database.tenant import require_organization_id
 CREDIT_MOVEMENT_TYPES = ("commission", "credit", "payment")
 DEBIT_MOVEMENT_TYPES = ("charge", "fee")
 ADJUSTMENT_DIRECTIONS = ("credit", "debit")
+COMMISSION_SIDES = ("seller", "buyer", "both", "general")
 
 
 class AgentAccountError(Exception):
@@ -203,6 +204,35 @@ def validate_movement_payload(
             payload["operation_reference"] = operation.get(
                 "id"
             ) or f"COM-{operation_db_id:06d}"
+            if not payload.get("commission_side"):
+                from modules.database.operation_parties_repository import (
+                    get_parties_for_operation,
+                )
+
+                participating = {
+                    party["party_role"]
+                    for party in get_parties_for_operation(
+                        organization_id,
+                        operation_db_id,
+                    )
+                    if party.get("is_participating")
+                }
+                if participating == {"seller", "buyer"}:
+                    payload["commission_side"] = "both"
+                elif "seller" in participating:
+                    payload["commission_side"] = "seller"
+                elif "buyer" in participating:
+                    payload["commission_side"] = "buyer"
+                else:
+                    payload["commission_side"] = "general"
+            if not payload.get("commission_purpose"):
+                payload["commission_purpose"] = "own_commission"
+            if not payload.get("commission_source_amount"):
+                payload["commission_source_amount"] = operation.get(
+                    "agent_payment"
+                )
+            if not payload.get("commission_source_currency"):
+                payload["commission_source_currency"] = "USD"
 
     if movement_type != "adjustment" and not description:
         if movement_type == "fee" and period_label:
@@ -357,7 +387,54 @@ def validate_movement_payload(
         "source_id": source_id,
         "charge_movement_id": charge_movement_id,
         "treasury_account_id": treasury_account_id,
+        "commission_side": None,
+        "commission_purpose": None,
+        "commission_source_amount": None,
+        "commission_source_currency": None,
     }
+
+    if movement_type == "commission":
+        commission_side = (
+            payload.get("commission_side") or ""
+        ).strip().lower()
+        if commission_side:
+            if commission_side not in COMMISSION_SIDES:
+                raise AgentAccountError(
+                    "agent_account_err_invalid_commission_side"
+                )
+            validated["commission_side"] = commission_side
+
+        commission_purpose = (
+            payload.get("commission_purpose") or ""
+        ).strip().lower()
+        validated["commission_purpose"] = (
+            commission_purpose or None
+        )
+
+        source_amount = payload.get("commission_source_amount")
+        if source_amount is not None and str(source_amount).strip():
+            try:
+                validated["commission_source_amount"] = float(
+                    parse_money_decimal(
+                        source_amount,
+                        language=language,
+                    )
+                )
+            except ValueError:
+                raise AgentAccountError(
+                    "agent_account_err_invalid_amount"
+                ) from None
+
+        source_currency = (
+            payload.get("commission_source_currency") or ""
+        ).strip().upper()
+        if source_currency:
+            if source_currency not in CURRENCIES:
+                raise AgentAccountError(
+                    "agent_account_err_invalid_currency"
+                )
+            validated["commission_source_currency"] = source_currency
+
     validated["reference_text"] = _build_reference_text(
         payload,
         validated,
@@ -503,6 +580,16 @@ def create_movement(
             recurrence_type=validated.get(
                 "recurrence_type",
                 "one_time",
+            ),
+            commission_side=validated.get("commission_side"),
+            commission_purpose=validated.get(
+                "commission_purpose"
+            ),
+            commission_source_amount=validated.get(
+                "commission_source_amount"
+            ),
+            commission_source_currency=validated.get(
+                "commission_source_currency"
             ),
         )
     except ValueError as error:

@@ -1425,6 +1425,55 @@ def create_postgres_schema():
                 """
             )
 
+        for column_name, column_sql in (
+            ("commission_side", "TEXT"),
+            ("commission_purpose", "TEXT"),
+            ("commission_source_amount", f"{_MONEY}"),
+            ("commission_source_currency", "TEXT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE agent_account_movements
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_aa_active_operation_commission
+            ON agent_account_movements (
+                organization_id,
+                source_id,
+                agent_id,
+                commission_side,
+                commission_purpose
+            )
+            WHERE movement_type = 'commission'
+                AND source_type = 'operation'
+                AND status = 'confirmed'
+                AND commission_side IS NOT NULL
+                AND commission_purpose IS NOT NULL
+            """
+        )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_aa_active_operation_commission_consolidated
+            ON agent_account_movements (
+                organization_id,
+                source_id,
+                agent_id,
+                commission_purpose
+            )
+            WHERE movement_type = 'commission'
+                AND source_type = 'operation'
+                AND status = 'confirmed'
+                AND commission_purpose = 'own_commission'
+            """
+        )
+
         cursor.execute(
             """
             UPDATE agent_account_movements
