@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from modules.agent_tasks import list_overdue_tasks
 from modules.database.agent_payment_ai_drafts_repository import (
     OPEN_STATUSES as AGENT_DRAFT_OPEN_STATUSES,
     STATUS_REVIEW as AGENT_DRAFT_REVIEW,
@@ -359,6 +360,33 @@ def build_agent_pending_actions(
     organization_id = require_organization_id(organization_id)
     as_of_iso = _as_of_iso(as_of)
     actions = []
+
+    # Overdue follow-ups are derived from status + due_at, so they
+    # disappear on their own once the task is completed or rescheduled.
+    for task in list_overdue_tasks(
+        organization_id,
+        agent_id=agent_id,
+        language=language,
+        limit=_DETAIL_LIMIT,
+    ):
+        subtitle = task["title"]
+
+        if task["relation_label"]:
+            subtitle = f"{subtitle} · {task['relation_label']}"
+
+        actions.append(
+            _action(
+                kind="own_task_overdue",
+                category=CATEGORY_OPERATIONS,
+                priority=PRIORITY_HIGH,
+                title=_t("pending_own_task_overdue_title", language),
+                subtitle=f"{subtitle} · {task['overdue_label']}",
+                action_label=_t("pending_action_open_agenda", language),
+                endpoint="agenda_index",
+                endpoint_args={"filter": "overdue"},
+                occurred_at=task["due_date_value"],
+            )
+        )
 
     for charge in list_agent_unpaid_charges(
         organization_id,

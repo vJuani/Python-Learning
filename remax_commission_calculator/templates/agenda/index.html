@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('agenda_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+{% set show_agent_name = not can_manage %}
+
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('agenda_title') }}</h2>
+        <p>
+            {% if can_manage %}
+            {{ t('agenda_subtitle_agent') }}
+            {% else %}
+            {{ t('agenda_subtitle_staff') }}
+            {% endif %}
+        </p>
+    </div>
+
+    {% if can_manage %}
+    <div class="page-actions">
+        <a href="{{ url_for('agenda_new') }}" class="btn btn-primary">
+            + {{ t('agenda_new_task') }}
+        </a>
+    </div>
+    {% endif %}
+</section>
+
+<section class="panel agenda-toolbar">
+    <nav class="agenda-filters" aria-label="{{ t('agenda_title') }}">
+        {% for option in agenda_filters %}
+        <a
+            href="{{ url_for('agenda_index', filter=option, agent_id=selected_agent_id) }}"
+            class="agenda-filter{% if agenda.filter == option %} is-active{% endif %}"
+        >{{ t('agenda_filter_' ~ option) }}</a>
+        {% endfor %}
+    </nav>
+
+    <form method="get" action="{{ url_for('agenda_index') }}" class="agenda-search">
+        <input type="hidden" name="filter" value="{{ agenda.filter }}">
+
+        <label class="agenda-search__field">
+            <span class="sr-only">{{ t('agenda_search_action') }}</span>
+            <input
+                type="search"
+                name="q"
+                value="{{ agenda.search }}"
+                placeholder="{{ t('agenda_search_placeholder') }}"
+            >
+        </label>
+
+        <label class="agenda-search__field">
+            <span class="sr-only">{{ t('agent_task_field_type') }}</span>
+            <select name="type">
+                <option value="">{{ t('agenda_filter_all_types') }}</option>
+                {% for option in task_types %}
+                <option value="{{ option }}" {% if agenda.task_type == option %}selected{% endif %}>
+                    {{ t('agent_task_type_' ~ option) }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label class="agenda-search__field">
+            <span class="sr-only">{{ t('agenda_day_picker') }}</span>
+            <input type="date" name="date" value="{{ agenda.due_date }}">
+        </label>
+
+        {% if agents %}
+        <label class="agenda-search__field">
+            <span class="sr-only">{{ t('agenda_filter_all_agents') }}</span>
+            <select name="agent_id">
+                <option value="">{{ t('agenda_filter_all_agents') }}</option>
+                {% for agent in agents %}
+                <option
+                    value="{{ agent.id }}"
+                    {% if selected_agent_id == agent.id %}selected{% endif %}
+                >{{ agent.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        {% endif %}
+
+        <button type="submit" class="btn btn-small btn-secondary">
+            {{ t('agenda_search_action') }}
+        </button>
+    </form>
+
+    <p class="agenda-toolbar__meta">
+        {% if agenda.total == 1 %}
+        {{ t('agenda_task_count_one') }}
+        {% else %}
+        {{ t('agenda_task_count', count=agenda.total) }}
+        {% endif %}
+        <span class="agenda-toolbar__tz">
+            {{ t('agenda_timezone_note', timezone=agenda.timezone_name) }}
+        </span>
+    </p>
+</section>
+
+{% if agenda.sections %}
+{% for section in agenda.sections %}
+<section class="panel agenda-section">
+    <div class="panel-header">
+        <h3>{{ section.label }}</h3>
+        <span class="agenda-section__count">{{ section.tasks|length }}</span>
+    </div>
+
+    <div class="agenda-list">
+        {% for task in section.tasks %}
+        {% include "agenda/_task_card.html" with context %}
+        {% endfor %}
+    </div>
+</section>
+{% endfor %}
+{% else %}
+<section class="panel agenda-empty">
+    <p class="agenda-empty__title">{{ t('agenda_empty_title') }}</p>
+    <p class="agenda-empty__hint">
+        {% if can_manage %}
+        {{ t('agenda_empty_hint') }}
+        {% else %}
+        {{ t('agenda_empty_hint_staff') }}
+        {% endif %}
+    </p>
+
+    {% if can_manage %}
+    <a href="{{ url_for('agenda_new') }}" class="btn btn-primary">
+        + {{ t('agenda_new_task') }}
+    </a>
+    {% endif %}
+</section>
+{% endif %}
+
+{% if can_manage %}
+<a
+    href="{{ url_for('agenda_new') }}"
+    class="mobile-fab hide-desktop"
+    aria-label="{{ t('agenda_new_task') }}"
+>+</a>
+{% endif %}
+{% endblock %}

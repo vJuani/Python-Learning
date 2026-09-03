@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if task %}{{ t('agenda_edit_task') }}{% else %}{{ t('agenda_new_task') }}{% endif %}
+| {{ t('app_title') }}
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>
+            {% if task %}
+            {{ t('agenda_edit_task') }}
+            {% else %}
+            {{ t('agenda_new_task') }}
+            {% endif %}
+        </h2>
+        <p>{{ t('agent_task_related_hint') }}</p>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ agenda_next or url_for('agenda_index') }}" class="btn btn-secondary">
+            {{ t('agenda_title') }}
+        </a>
+    </div>
+</section>
+
+<section class="panel agenda-form-panel">
+    {% if errors %}
+    <div class="flash-error" role="alert">
+        {% for error in errors %}
+        <p>{{ t(error) }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" class="agent-form agenda-form">
+        {% if agenda_next %}
+        <input type="hidden" name="next" value="{{ agenda_next }}">
+        {% endif %}
+
+        <label class="agenda-form__field">
+            <span>{{ t('agent_task_field_title') }}</span>
+            <input
+                type="text"
+                name="title"
+                value="{{ form_values.title }}"
+                maxlength="160"
+                required
+                autofocus
+            >
+        </label>
+
+        <div class="agenda-form__row">
+            <label class="agenda-form__field">
+                <span>{{ t('agent_task_field_type') }}</span>
+                <select name="task_type">
+                    {% for option in task_types %}
+                    <option
+                        value="{{ option }}"
+                        {% if form_values.task_type == option %}selected{% endif %}
+                    >{{ t('agent_task_type_' ~ option) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="agenda-form__field">
+                <span>{{ t('agent_task_field_priority') }}</span>
+                <select name="priority">
+                    {% for option in priorities %}
+                    <option
+                        value="{{ option }}"
+                        {% if form_values.priority == option %}selected{% endif %}
+                    >{{ t('agent_task_priority_' ~ option) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <div class="agenda-form__row">
+            <label class="agenda-form__field">
+                <span>{{ t('agent_task_field_date') }}</span>
+                <input
+                    type="date"
+                    name="due_date"
+                    value="{{ form_values.due_date }}"
+                    required
+                >
+            </label>
+
+            <label class="agenda-form__field">
+                <span>{{ t('agent_task_field_time') }}</span>
+                <input
+                    type="time"
+                    name="due_time"
+                    value="{{ form_values.due_time }}"
+                    required
+                >
+            </label>
+        </div>
+
+        <div class="agenda-form__row">
+            <label class="agenda-form__field">
+                <span>{{ t('agent_task_field_property') }}</span>
+                <select name="property_id">
+                    <option value="">{{ t('agent_task_field_none') }}</option>
+                    {% for item in linkable_properties %}
+                    <option
+                        value="{{ item.id }}"
+                        {% if form_values.property_id|string == item.id|string %}selected{% endif %}
+                    >{{ item.address }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="agenda-form__field">
+                <span>{{ t('agent_task_field_operation') }}</span>
+                <select name="operation_id">
+                    <option value="">{{ t('agent_task_field_none') }}</option>
+                    {% for item in linkable_operations %}
+                    <option
+                        value="{{ item.db_id }}"
+                        {% if form_values.operation_id|string == item.db_id|string %}selected{% endif %}
+                    >{{ item.id }} · {{ item.property }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <label class="agenda-form__field">
+            <span>{{ t('agent_task_field_description') }}</span>
+            <textarea name="description" rows="3" maxlength="2000">{{ form_values.description }}</textarea>
+        </label>
+
+        <div class="form-actions">
+            <a href="{{ agenda_next or url_for('agenda_index') }}" class="btn btn-secondary">
+                {{ t('agent_task_action_cancel') }}
+            </a>
+            <button type="submit" class="btn btn-primary">
+                {{ t('agent_task_field_save') }}
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}

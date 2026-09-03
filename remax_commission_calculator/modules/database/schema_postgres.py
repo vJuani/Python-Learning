@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v15"
+POSTGRES_SCHEMA_VERSION = "postgres_v16"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -824,6 +824,80 @@ SCHEMA_STATEMENTS = (
             (recurrence_type = 'monthly' AND billing_day BETWEEN 1 AND 28)
             OR recurrence_type = 'annual'
         )
+    )
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS agent_tasks (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        agent_id BIGINT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        task_type TEXT NOT NULL,
+        due_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        priority TEXT NOT NULL DEFAULT 'normal',
+        property_id BIGINT,
+        operation_id BIGINT,
+        related_entity_type TEXT,
+        related_entity_id BIGINT,
+        created_by_user_id BIGINT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        completed_at TEXT,
+        completed_by_user_id BIGINT,
+        cancelled_at TEXT,
+        cancelled_by_user_id BIGINT,
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id) ON DELETE RESTRICT,
+        FOREIGN KEY (agent_id)
+            REFERENCES agents(id) ON DELETE RESTRICT,
+        FOREIGN KEY (property_id)
+            REFERENCES properties(id) ON DELETE SET NULL,
+        FOREIGN KEY (operation_id)
+            REFERENCES operations(id) ON DELETE SET NULL,
+        FOREIGN KEY (created_by_user_id)
+            REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (completed_by_user_id)
+            REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (cancelled_by_user_id)
+            REFERENCES users(id) ON DELETE SET NULL,
+        CHECK (status IN ('pending', 'completed', 'cancelled')),
+        CHECK (priority IN ('normal', 'high')),
+        CHECK (task_type IN (
+            'call',
+            'visit',
+            'meeting',
+            'follow_up',
+            'documentation',
+            'valuation',
+            'reminder',
+            'other'
+        ))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_tasks_agent_due
+    ON agent_tasks (organization_id, agent_id, status, due_at)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_tasks_org_due
+    ON agent_tasks (organization_id, status, due_at)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_tasks_property
+    ON agent_tasks (organization_id, property_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_tasks_operation
+    ON agent_tasks (organization_id, operation_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_tasks_related
+    ON agent_tasks (
+        organization_id,
+        related_entity_type,
+        related_entity_id
     )
     """,
     """

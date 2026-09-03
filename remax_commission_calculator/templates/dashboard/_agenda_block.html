@@ -1,0 +1,56 @@
+{#
+    "Your agenda" dashboard block for agents.
+
+    Reads the compact summary (today count plus the next few tasks),
+    never the whole agenda.
+#}
+{% if agenda_summary is defined and agenda_summary %}
+<section class="home-card agenda-block">
+    <div class="home-card__header">
+        <h2>{{ t('agenda_dashboard_title') }}</h2>
+        <a href="{{ url_for('agenda_index') }}" class="home-card__link">
+            {{ t('agenda_view_all') }}
+        </a>
+    </div>
+
+    {% if agenda_summary.tasks %}
+    <p class="agenda-block__total">
+        <span class="agenda-block__today">{{ t('agenda_dashboard_today') }}</span>
+        {% if agenda_summary.today_count == 1 %}
+        {{ t('agenda_task_count_one') }}
+        {% else %}
+        {{ t('agenda_task_count', count=agenda_summary.today_count) }}
+        {% endif %}
+
+        {% if agenda_summary.overdue_count %}
+        <a
+            href="{{ url_for('agenda_index', filter='overdue') }}"
+            class="agenda-badge agenda-badge--overdue"
+        >{{ t('agenda_dashboard_overdue', count=agenda_summary.overdue_count) }}</a>
+        {% endif %}
+    </p>
+
+    <ul class="agenda-block__list">
+        {% for task in agenda_summary.tasks %}
+        <li class="agenda-block__item{% if task.is_overdue %} agenda-block__item--overdue{% endif %}">
+            <span class="agenda-block__hour">{{ task.due_time_label }}</span>
+            <span class="agenda-block__title">{{ task.title }}</span>
+            {% if task.relation_label %}
+            <span class="agenda-block__relation">{{ task.relation_label }}</span>
+            {% endif %}
+            {% if task.starts_soon %}
+            <span class="agenda-badge agenda-badge--soon">{{ task.soon_label }}</span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="agenda-block__empty">
+        <p class="agenda-block__empty-title">{{ t('agenda_dashboard_empty') }}</p>
+        <a href="{{ url_for('agenda_new') }}" class="btn btn-small btn-primary">
+            + {{ t('agenda_new_task') }}
+        </a>
+    </div>
+    {% endif %}
+</section>
+{% endif %}

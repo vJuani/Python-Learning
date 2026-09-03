@@ -3626,6 +3626,12 @@ def migrate_schema(create_backup=True):
     )
 
     migrate_notification_events_sqlite()
+
+    from .agent_tasks_migration import (
+        migrate_agent_tasks_sqlite,
+    )
+
+    migrate_agent_tasks_sqlite()
     _migrate_document_storage_folders()
 
     return backup_path

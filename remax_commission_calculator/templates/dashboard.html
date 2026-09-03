@@ -53,6 +53,7 @@
     </section>
     <div class="hide-desktop pending-block-mobile">
         {% include "dashboard/_pending_block.html" %}
+        {% include "dashboard/_agenda_block.html" %}
     </div>
     {% if home_panel.tasks %}
     <section class="home-mobile-section hide-desktop">
@@ -89,7 +90,7 @@
         <a href="{{ url_for('properties_new') if can_write() else url_for('properties_list') }}"><span class="home-mobile-quick__icon">⌂</span>{{ t('dashboard_mobile_action_property') }}</a>
         <a href="{{ url_for('billing_list') }}"><span class="home-mobile-quick__icon">📄</span>{{ t('dashboard_mobile_action_billing') }}</a>
         <a href="{{ url_for('agents_list') if is_admin() else url_for('dashboard') }}"><span class="home-mobile-quick__icon">👤</span>{{ t('dashboard_mobile_action_clients') }}</a>
-        <a href="{{ url_for('operations_list') }}"><span class="home-mobile-quick__icon">📅</span>{{ t('dashboard_mobile_action_agenda') }}</a>
+        <a href="{{ url_for('agenda_index') }}"><span class="home-mobile-quick__icon">📅</span>{{ t('dashboard_mobile_action_agenda') }}</a>
     </nav>
     {% if can_write() and can_create_operations %}
     <a href="{{ url_for('operations_new') }}" class="mobile-fab mobile-fab--center hide-desktop" aria-label="{{ t('new_operation') }}">+</a>
@@ -165,6 +166,7 @@
         <div class="home-panel__main">
             <div class="hide-mobile">
                 {% include "dashboard/_pending_block.html" %}
+                {% include "dashboard/_agenda_block.html" %}
             </div>
 
             <section class="home-card">

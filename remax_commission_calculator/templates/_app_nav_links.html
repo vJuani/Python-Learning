@@ -55,6 +55,18 @@
     </svg>
     <span class="app-nav-link__label">{{ t('nav_my_operations') }}</span>
 </a>
+{% if not is_guest_session() %}
+<a
+    href="{{ url_for('agenda_index') }}"
+    class="nav-link app-nav-link app-nav-link--agenda{% if request.endpoint and request.endpoint.startswith('agenda_') %} active{% endif %}"
+>
+    <svg class="app-nav-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75"/>
+        <path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+    </svg>
+    <span class="app-nav-link__label">{{ t('agenda_title') }}</span>
+</a>
+{% endif %}
 {% if is_admin() %}
 <a
     href="{{ url_for('agent_account_index') }}"

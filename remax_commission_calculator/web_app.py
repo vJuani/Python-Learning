@@ -311,6 +311,14 @@ from modules.pending_actions import (
 
 from modules.pending_routes import register_pending_routes
 
+from modules.agent_tasks import (
+    build_agenda_summary,
+    list_tasks_for_operation,
+    list_tasks_for_property
+)
+
+from modules.agenda_routes import register_agenda_routes
+
 from modules.organization_settings import (
     COMMON_TIMEZONES,
     LOGO_EXTENSIONS,
@@ -558,6 +566,81 @@ def _pending_actions_for_current_user():
     g.pending_actions_cache = actions
 
     return actions
+
+
+def _agenda_summary_for_current_user():
+    """
+    Compact "your agenda" summary for the dashboard.
+
+    Only agents own an agenda in V1, so staff gets nothing here and
+    reads agent agendas from the agenda screen instead.
+    """
+    user = get_current_user()
+
+    if user is None or is_guest_session() or not is_agent(user):
+        return None
+
+    organization_id = user.get("organization_id")
+    agent_id = user.get("agent_id")
+
+    if not organization_id or agent_id is None:
+        return None
+
+    try:
+        return build_agenda_summary(
+            organization_id,
+            agent_id,
+            language=get_current_language(),
+        )
+    except Exception:
+        app.logger.warning(
+            "agenda_summary_build_failed org=%s agent=%s",
+            organization_id,
+            agent_id,
+            exc_info=True,
+        )
+
+        return None
+
+
+def _entity_tasks_for_property(property_data, *, agent_id, language):
+    """Follow-ups shown on the property detail page."""
+    try:
+        return list_tasks_for_property(
+            property_data["organization_id"],
+            property_data["id"],
+            agent_id=agent_id,
+            language=language,
+        )
+    except Exception:
+        app.logger.warning(
+            "agenda_property_tasks_failed property=%s",
+            property_data.get("id"),
+            exc_info=True,
+        )
+
+        return []
+
+
+def _entity_tasks_for_operation(operation_id, organization_id):
+    """Follow-ups shown on the operation detail page."""
+    agent_id, _scope_blocked = get_agent_scope()
+
+    try:
+        return list_tasks_for_operation(
+            organization_id,
+            operation_id,
+            agent_id=agent_id,
+            language=get_current_language(),
+        )
+    except Exception:
+        app.logger.warning(
+            "agenda_operation_tasks_failed operation=%s",
+            operation_id,
+            exc_info=True,
+        )
+
+        return []
 
 
 @app.context_processor
@@ -3663,6 +3746,7 @@ def dashboard():
             _pending_actions_for_current_user(),
             language=get_current_language(),
         ),
+        agenda_summary=_agenda_summary_for_current_user(),
         **context
     )
 
@@ -4620,6 +4704,13 @@ def properties_detail(property_id):
         related_operations=related_operations,
         pending_change=pending_change,
         can_manage_listings=can_manage_listings,
+        entity_tasks=_entity_tasks_for_property(
+            property_data,
+            agent_id=agent_id,
+            language=language,
+        ),
+        entity_property_id=property_data["id"],
+        entity_operation_id=None,
         can_edit_property=(
             get_guest_access() is None
             and can_write(get_current_user())
@@ -5325,6 +5416,12 @@ def operations_detail(operation_id):
             get_guest_access() is None and is_admin()
         ),
         tax_conditions=TAX_CONDITIONS,
+        entity_tasks=_entity_tasks_for_operation(
+            operation_id,
+            organization_id,
+        ),
+        entity_property_id=None,
+        entity_operation_id=operation_id,
     )
 
 
@@ -7588,6 +7685,16 @@ register_pending_routes(
     helpers={
         "require_user_organization": require_user_organization,
         "get_current_language": get_current_language,
+    },
+)
+
+register_agenda_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+        "get_safe_redirect_target": get_safe_redirect_target,
     },
 )
 

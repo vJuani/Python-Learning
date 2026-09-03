@@ -1,0 +1,125 @@
+{#
+    Agenda task card (mobile-first).
+
+    Expects `task` (decorated by modules.agent_tasks.decorate_task) and
+    `can_manage` to decide whether actions are rendered. `agenda_next`
+    keeps the user on the page the action was triggered from.
+#}
+{% set back_to = agenda_next or (request.full_path if request.query_string else request.path) %}
+<article
+    class="agenda-card
+        agenda-card--{{ task.status }}
+        {%- if task.is_overdue %} agenda-card--overdue{% endif %}
+        {%- if task.is_high_priority %} agenda-card--high{% endif %}"
+>
+    <div class="agenda-card__time">
+        <span class="agenda-card__hour">{{ task.due_time_label }}</span>
+        <span class="agenda-card__type">{{ task.type_label }}</span>
+    </div>
+
+    <div class="agenda-card__body">
+        <h3 class="agenda-card__title">{{ task.title }}</h3>
+
+        {% if task.relation_label %}
+        <p class="agenda-card__relation">
+            {% if task.property_id %}
+            <a href="{{ url_for('properties_detail', property_id=task.property_id) }}">
+                {{ task.property_address }}
+            </a>
+            {% elif task.operation_id %}
+            <a href="{{ url_for('operations_detail', operation_id=task.operation_id) }}">
+                {{ task.operation_reference }}
+            </a>
+            {% else %}
+            {{ task.relation_label }}
+            {% endif %}
+        </p>
+        {% endif %}
+
+        {% if task.description %}
+        <p class="agenda-card__note">{{ task.description }}</p>
+        {% endif %}
+
+        <p class="agenda-card__badges">
+            {% if task.is_overdue %}
+            <span class="agenda-badge agenda-badge--overdue">
+                {{ task.overdue_label or t('agent_task_overdue_badge') }}
+            </span>
+            {% elif task.starts_soon %}
+            <span class="agenda-badge agenda-badge--soon">{{ task.soon_label }}</span>
+            {% endif %}
+
+            {% if task.is_high_priority and task.status == 'pending' %}
+            <span class="agenda-badge agenda-badge--high">
+                {{ t('agent_task_priority_high') }}
+            </span>
+            {% endif %}
+
+            {% if task.status != 'pending' %}
+            <span class="agenda-badge agenda-badge--done">{{ task.status_label }}</span>
+            <span class="agenda-card__date">{{ task.due_datetime_label }}</span>
+            {% endif %}
+
+            {% if show_agent_name and task.agent_name %}
+            <span class="agenda-badge agenda-badge--agent">{{ task.agent_name }}</span>
+            {% endif %}
+        </p>
+    </div>
+
+    {% if can_manage and task.status == 'pending' %}
+    <div class="agenda-card__actions">
+        <form
+            method="post"
+            action="{{ url_for('agenda_complete', task_id=task.id) }}"
+            class="agenda-card__action-form"
+        >
+            <input type="hidden" name="next" value="{{ back_to }}">
+            <button type="submit" class="btn btn-small btn-primary">
+                {{ t('agent_task_action_complete') }}
+            </button>
+        </form>
+
+        <details class="agenda-card__more">
+            <summary class="btn btn-small btn-secondary">
+                {{ t('agent_task_action_reschedule') }}
+            </summary>
+
+            <form
+                method="post"
+                action="{{ url_for('agenda_reschedule', task_id=task.id) }}"
+                class="agenda-reschedule"
+            >
+                <input type="hidden" name="next" value="{{ back_to }}">
+                <label class="agenda-reschedule__field">
+                    <span>{{ t('agent_task_field_date') }}</span>
+                    <input type="date" name="due_date" value="{{ task.due_date_value }}" required>
+                </label>
+                <label class="agenda-reschedule__field">
+                    <span>{{ t('agent_task_field_time') }}</span>
+                    <input type="time" name="due_time" value="{{ task.due_time_value }}" required>
+                </label>
+                <button type="submit" class="btn btn-small btn-primary">
+                    {{ t('agent_task_reschedule_save') }}
+                </button>
+            </form>
+        </details>
+
+        <a
+            href="{{ url_for('agenda_edit', task_id=task.id, next=back_to) }}"
+            class="btn btn-small btn-secondary"
+        >{{ t('agent_task_action_edit') }}</a>
+
+        <form
+            method="post"
+            action="{{ url_for('agenda_cancel', task_id=task.id) }}"
+            class="agenda-card__action-form"
+            onsubmit="return confirm('{{ t('agent_task_cancel_confirm') }}');"
+        >
+            <input type="hidden" name="next" value="{{ back_to }}">
+            <button type="submit" class="btn btn-small btn-danger">
+                {{ t('agent_task_action_cancel') }}
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</article>

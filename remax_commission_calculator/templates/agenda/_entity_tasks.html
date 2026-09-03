@@ -1,0 +1,50 @@
+{#
+    "Follow-ups" section shared by property and operation detail.
+
+    Expects `entity_tasks` plus either `entity_property_id` or
+    `entity_operation_id` so the CTA prefills the relation. The list is
+    already scoped by the route; nothing is filtered here.
+#}
+{% if entity_tasks is defined %}
+<section class="panel agenda-entity-panel">
+    <div class="panel-header">
+        <h3>{{ t('agenda_entity_section_title') }}</h3>
+
+        {% if is_agent() %}
+        <a
+            href="{{ url_for(
+                'agenda_new',
+                property_id=entity_property_id,
+                operation_id=entity_operation_id,
+                next=request.path,
+            ) }}"
+            class="btn btn-small btn-primary"
+        >+ {{ t('agenda_entity_create') }}</a>
+        {% endif %}
+    </div>
+
+    {% if entity_tasks %}
+    <ul class="agenda-entity-list">
+        {% for task in entity_tasks %}
+        <li class="agenda-entity-item{% if task.is_overdue %} agenda-entity-item--overdue{% endif %}">
+            <span class="agenda-entity-item__when">{{ task.due_datetime_label }}</span>
+            <span class="agenda-entity-item__type">{{ task.type_label }}</span>
+            <span class="agenda-entity-item__title">{{ task.title }}</span>
+
+            {% if task.is_overdue %}
+            <span class="agenda-badge agenda-badge--overdue">
+                {{ t('agent_task_overdue_badge') }}
+            </span>
+            {% endif %}
+
+            {% if not is_agent() and task.agent_name %}
+            <span class="agenda-entity-item__agent">{{ task.agent_name }}</span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-state">{{ t('agenda_entity_empty') }}</p>
+    {% endif %}
+</section>
+{% endif %}
