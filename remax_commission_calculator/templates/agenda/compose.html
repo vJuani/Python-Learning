@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('agenda_ai_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('agenda_ai_title') }}</h2>
+        <p>{{ t('agenda_ai_example') }}</p>
+    </div>
+</section>
+
+{% if errors %}
+<div class="flash-error" role="alert">
+    {% for error in errors %}<p>{{ t(error) }}</p>{% endfor %}
+</div>
+{% endif %}
+
+<section class="agenda-chat">
+    {% if prompt %}
+    <p class="agenda-chat__user">{{ prompt }}</p>
+    {% endif %}
+
+    {% if draft %}
+    <article class="agenda-preview">
+        <p class="agenda-preview__kicker">{{ t('agenda_ai_preview') }}</p>
+        <p class="agenda-preview__type">{{ t('agent_task_type_' ~ draft.task_type) }}</p>
+        <h3>{{ draft.title }}</h3>
+        <p>{{ draft.due_date }} · {{ draft.due_time }}</p>
+        {% if draft.contact_name %}<p>{{ draft.contact_name }}</p>{% endif %}
+        {% if draft.property_address %}<p>{{ draft.property_address }}</p>{% endif %}
+
+        <form method="post" class="agenda-preview__actions">
+            <input type="hidden" name="confirm" value="1">
+            <input type="hidden" name="title" value="{{ draft.title }}">
+            <input type="hidden" name="task_type" value="{{ draft.task_type }}">
+            <input type="hidden" name="due_date" value="{{ draft.due_date }}">
+            <input type="hidden" name="due_time" value="{{ draft.due_time }}">
+            <input type="hidden" name="contact_name" value="{{ draft.contact_name }}">
+            <input type="hidden" name="property_id" value="{{ draft.property_id }}">
+            <input type="hidden" name="description" value="{{ draft.description }}">
+            <input type="hidden" name="duration_minutes" value="{{ draft.duration_minutes }}">
+            <input type="hidden" name="reminder_minutes" value="{{ draft.reminder_minutes or '' }}">
+            <input type="hidden" name="attendance_status" value="{{ draft.attendance_status or '' }}">
+            <button type="submit" class="btn btn-primary">{{ t('agenda_ai_confirm') }}</button>
+            <a
+                class="btn btn-secondary"
+                href="{{ url_for(
+                    'agenda_new',
+                    type=draft.task_type,
+                    title=draft.title,
+                    contact_name=draft.contact_name,
+                    property_id=draft.property_id,
+                    due_date=draft.due_date,
+                    due_time=draft.due_time,
+                    description=draft.description,
+                    duration_minutes=draft.duration_minutes,
+                    reminder_minutes=draft.reminder_minutes,
+                    ai_suggestion=draft.title,
+                ) }}"
+            >{{ t('agenda_ai_edit') }}</a>
+        </form>
+    </article>
+    {% endif %}
+
+    <form method="post" class="agenda-ia agenda-ia--chat" id="agenda-ia-form">
+        <span class="agenda-ia__label">{{ t('agenda_ia_label') }}</span>
+        <div class="agenda-ia__row">
+            <input
+                type="text"
+                name="prompt"
+                value="{{ prompt }}"
+                placeholder="{{ t('agenda_ia_placeholder') }}"
+                {% if voice_mode %}data-agenda-autofocus-voice{% endif %}
+                required
+            >
+            <button type="button" class="agenda-ia__mic" data-agenda-voice aria-label="{{ t('agenda_ia_voice') }}">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.75"/>
+                    <path d="M6 11a6 6 0 0 0 12 0M12 17v4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <button type="submit" class="btn btn-primary">{{ t('agenda_ia_submit') }}</button>
+        </div>
+        <p class="agenda-ia__hint" data-agenda-voice-status>{{ t('agenda_ai_voice_hint') }}</p>
+    </form>
+</section>
+{% endblock %}

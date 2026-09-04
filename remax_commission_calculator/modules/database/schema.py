@@ -3632,6 +3632,12 @@ def migrate_schema(create_backup=True):
     )
 
     migrate_agent_tasks_sqlite()
+
+    from .google_calendar_migration import (
+        migrate_google_calendar_sqlite,
+    )
+
+    migrate_google_calendar_sqlite()
     _migrate_document_storage_folders()
 
     return backup_path

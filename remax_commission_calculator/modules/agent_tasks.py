@@ -17,6 +17,7 @@ Design notes:
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, timedelta
 
@@ -32,7 +33,9 @@ from modules.database.agent_tasks_repository import (
     create_agent_task,
     get_agent_task,
     list_agent_tasks,
+    save_task_outcome,
     set_agent_task_status,
+    set_attendance_status,
     update_agent_task_fields,
 )
 from modules.database.agents_repository import get_agent_record
@@ -87,6 +90,11 @@ SOON_THRESHOLD_MINUTES = 60
 
 MAX_TITLE_LENGTH = 160
 MAX_DESCRIPTION_LENGTH = 2000
+MAX_CONTACT_LENGTH = 120
+DURATION_CHOICES = (5, 15, 30, 45, 60, 90, 120)
+REMINDER_CHOICES = (15, 30, 60)
+ATTENDANCE_PENDING = "pending_confirmation"
+ATTENDANCE_CONFIRMED = "confirmed"
 
 
 class AgentTaskError(Exception):
@@ -113,6 +121,21 @@ def emit_task_event(event_type, task, *, actor_user_id=None, **extra):
         actor_user_id,
     )
 
+    try:
+        from modules.google_calendar import sync_task_event
+
+        sync_task_event(
+            event_type,
+            task,
+            actor_user_id=actor_user_id,
+        )
+    except Exception:
+        logger.exception(
+            "google_calendar_hook_failed type=%s task=%s",
+            event_type,
+            task.get("id") if task else None,
+        )
+
     return {
         "event_type": event_type,
         "task_id": task.get("id") if task else None,
@@ -129,6 +152,21 @@ def _clean_text(value, *, max_length):
     text = (value or "").strip()
 
     return text[:max_length]
+
+
+def _optional_int(value, *, allowed, error_key):
+    if value in (None, "", "none"):
+        return None
+
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise AgentTaskError(error_key) from None
+
+    if number not in allowed:
+        raise AgentTaskError(error_key)
+
+    return number
 
 
 def _resolve_agent(organization_id, agent_id):
@@ -206,6 +244,21 @@ def validate_task_payload(organization_id, agent_id, payload):
     if not title:
         raise AgentTaskError("agent_task_err_title_required")
 
+    contact_name = _clean_text(
+        payload.get("contact_name"),
+        max_length=MAX_CONTACT_LENGTH,
+    )
+    duration_minutes = _optional_int(
+        payload.get("duration_minutes"),
+        allowed=DURATION_CHOICES,
+        error_key="agent_task_err_invalid_duration",
+    )
+    reminder_minutes = _optional_int(
+        payload.get("reminder_minutes"),
+        allowed=REMINDER_CHOICES,
+        error_key="agent_task_err_invalid_reminder",
+    )
+
     task_type = (payload.get("task_type") or "").strip()
 
     if task_type not in TASK_TYPES:
@@ -252,6 +305,12 @@ def validate_task_payload(organization_id, agent_id, payload):
             payload.get("related_entity_type") or None
         ),
         "related_entity_id": payload.get("related_entity_id") or None,
+        "contact_name": contact_name or None,
+        "duration_minutes": duration_minutes,
+        "reminder_minutes": reminder_minutes,
+        "attendance_status": (
+            payload.get("attendance_status") or None
+        ),
     }
 
 
@@ -279,6 +338,10 @@ def create_task(
         operation_id=validated["operation_id"],
         related_entity_type=validated["related_entity_type"],
         related_entity_id=validated["related_entity_id"],
+        contact_name=validated["contact_name"],
+        duration_minutes=validated["duration_minutes"],
+        reminder_minutes=validated["reminder_minutes"],
+        attendance_status=validated["attendance_status"],
         created_by_user_id=created_by_user_id,
     )
     emit_task_event(
@@ -336,18 +399,21 @@ def update_task(
         priority=validated["priority"],
         property_id=validated["property_id"],
         operation_id=validated["operation_id"],
+        contact_name=validated["contact_name"] or "",
+        duration_minutes=validated["duration_minutes"],
+        reminder_minutes=validated["reminder_minutes"],
+        attendance_status=validated["attendance_status"],
     )
 
     if updated is None:
         raise AgentTaskError("agent_task_err_not_pending")
 
-    if updated["due_at"] != task["due_at"]:
-        emit_task_event(
-            "task_rescheduled",
-            updated,
-            actor_user_id=actor_user_id,
-            previous_due_at=task["due_at"],
-        )
+    emit_task_event(
+        "task_updated",
+        updated,
+        actor_user_id=actor_user_id,
+        previous_due_at=task["due_at"],
+    )
 
     return updated
 
@@ -496,6 +562,110 @@ def _relative_overdue_label(local_due, now_local, language):
     )
 
 
+def _url_quote(value):
+    from urllib.parse import quote
+
+    return quote(value or "", safe="")
+
+
+def _whatsapp_text(task, language):
+    contact = (task.get("contact_name") or "").strip()
+    address = (task.get("property_address") or "").strip()
+
+    if not contact and not address:
+        return ""
+
+    if language == "en":
+        if contact and address:
+            return f"Hi {contact}, writing about {address}."
+        if contact:
+            return f"Hi {contact}."
+        return f"Hi, writing about {address}."
+
+    if contact and address:
+        return f"Hola {contact}, te escribo por {address}."
+    if contact:
+        return f"Hola {contact}."
+    return f"Hola, te escribo por {address}."
+
+
+def _parse_outcome(raw):
+    if not raw:
+        return None
+
+    if isinstance(raw, dict):
+        return raw
+
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+
+    return parsed if isinstance(parsed, dict) else None
+
+
+def greeting_for_user(user, *, now_local, language="es"):
+    hour = now_local.hour
+
+    if hour < 12:
+        hello_key = "agenda_hello_morning"
+    elif hour < 19:
+        hello_key = "agenda_hello_afternoon"
+    else:
+        hello_key = "agenda_hello_evening"
+
+    name = (
+        (user or {}).get("first_name")
+        or ((user or {}).get("agent_name") or "").split(" ")[0]
+        or (user or {}).get("username")
+        or ""
+    )
+
+    return translate(hello_key, language, name=name)
+
+
+def save_visit_outcome(
+    organization_id,
+    task_id,
+    outcome,
+    *,
+    agent_id=None,
+):
+    task = load_editable_task(
+        organization_id,
+        task_id,
+        agent_id=agent_id,
+    )
+    payload = json.dumps(outcome, ensure_ascii=False)
+    updated = save_task_outcome(task_id, organization_id, payload)
+
+    if updated is None:
+        raise AgentTaskError("agent_task_err_not_found")
+
+    emit_task_event("task_outcome_saved", updated)
+
+    return updated
+
+
+def confirm_attendance(
+    organization_id,
+    task_id,
+    *,
+    agent_id=None,
+):
+    load_editable_task(organization_id, task_id, agent_id=agent_id)
+    updated = set_attendance_status(
+        task_id,
+        organization_id,
+        ATTENDANCE_CONFIRMED,
+    )
+
+    if updated is None:
+        raise AgentTaskError("agent_task_err_not_pending")
+
+    return updated
+
+
 def decorate_task(task, *, tz, now, language="es"):
     """Add rendering data (local time, overdue flag, labels) to a task."""
     local_due = to_local(task["due_at"], tz)
@@ -522,6 +692,14 @@ def decorate_task(task, *, tz, now, language="es"):
         or task.get("operation_reference")
         or ""
     )
+    maps_url = (
+        "https://www.google.com/maps/search/?api=1&query="
+        + _url_quote(task.get("property_address") or "")
+        if task.get("property_address")
+        else None
+    )
+    whatsapp_text = _whatsapp_text(task, language)
+    outcome = _parse_outcome(task.get("outcome_json"))
 
     return {
         **task,
@@ -538,6 +716,19 @@ def decorate_task(task, *, tz, now, language="es"):
             language,
         ),
         "relation_label": relation_label,
+        "contact_name": task.get("contact_name") or "",
+        "needs_attendance": (
+            is_pending
+            and task.get("attendance_status") == ATTENDANCE_PENDING
+        ),
+        "maps_url": maps_url,
+        "whatsapp_url": (
+            "https://wa.me/?text=" + _url_quote(whatsapp_text)
+            if whatsapp_text
+            else None
+        ),
+        "outcome": outcome,
+        "has_outcome": bool(outcome),
         "is_overdue": is_overdue,
         "is_high_priority": task["priority"] == PRIORITY_HIGH,
         "starts_soon": starts_soon,
@@ -557,6 +748,9 @@ def decorate_task(task, *, tz, now, language="es"):
             else None
         ),
         "section": _section_for(local_due, today, now_local),
+        "section_date_label": (
+            local_due.strftime("%A %d") if local_due else ""
+        ),
     }
 
 
@@ -666,9 +860,123 @@ def build_agenda_view(
         "due_date": due_date or "",
         "sections": sections,
         "total": len(tasks),
+        "today_count": sum(
+            1 for task in tasks if task["section"] == SECTION_TODAY
+        ),
+        "overdue_count": sum(
+            1 for task in tasks if task["is_overdue"]
+        ),
         "today_value": today.isoformat(),
+        "today_heading": translate(
+            "agenda_today_heading",
+            language,
+            weekday=_weekday_label(today, language),
+            day=today.day,
+            month=_month_label(today, language),
+        ),
         "timezone_name": str(tz),
+        "now_local": now_local,
     }
+
+
+def merge_external_tasks(
+    agenda,
+    extra_tasks,
+    *,
+    tz,
+    now=None,
+    language="es",
+    due_date=None,
+):
+    """
+    Fold read-only overlay tasks (Google events) into an agenda view.
+
+    Sections and counters are rebuilt so a day that only has Google
+    events still appears on the timeline.
+    """
+    if not extra_tasks:
+        return agenda
+
+    now = now or now_utc()
+    extras = [
+        decorate_task(task, tz=tz, now=now, language=language)
+        for task in extra_tasks
+    ]
+
+    if due_date:
+        extras = [
+            task
+            for task in extras
+            if task.get("due_date_value") == str(due_date)
+        ]
+
+    agenda_filter = agenda.get("filter")
+
+    if agenda_filter == FILTER_TODAY:
+        extras = [
+            task
+            for task in extras
+            if task.get("section") == SECTION_TODAY
+        ]
+    elif agenda_filter == FILTER_OVERDUE:
+        extras = [
+            task for task in extras if task.get("is_overdue")
+        ]
+
+    existing = [
+        task
+        for section in agenda.get("sections") or []
+        for task in section.get("tasks") or []
+    ]
+    tasks = existing + extras
+    reverse = agenda_filter == FILTER_COMPLETED
+    tasks.sort(
+        key=lambda task: task.get("due_at") or "",
+        reverse=reverse,
+    )
+
+    sections = []
+
+    if agenda_filter == FILTER_COMPLETED:
+        sections.append(
+            {
+                "key": "completed",
+                "label": translate(
+                    "agent_task_section_completed",
+                    language,
+                ),
+                "tasks": tasks,
+            }
+        )
+    else:
+        grouped = {key: [] for key in AGENDA_SECTIONS}
+
+        for task in tasks:
+            grouped[task["section"]].append(task)
+
+        for key in AGENDA_SECTIONS:
+            if grouped[key]:
+                sections.append(
+                    {
+                        "key": key,
+                        "label": translate(
+                            f"agent_task_section_{key}",
+                            language,
+                        ),
+                        "tasks": grouped[key],
+                    }
+                )
+
+    agenda["sections"] = sections
+    agenda["total"] = len(tasks)
+    agenda["today_count"] = sum(
+        1 for task in tasks if task["section"] == SECTION_TODAY
+    )
+    agenda["overdue_count"] = sum(
+        1 for task in tasks if task["is_overdue"]
+    )
+
+    return agenda
 
 
 def build_agenda_summary(
@@ -840,7 +1148,11 @@ def default_form_values(organization_id, *, now=None, **overrides):
         "due_time": suggested.strftime("%H:%M"),
         "property_id": "",
         "operation_id": "",
+        "contact_name": "",
+        "duration_minutes": 60,
+        "reminder_minutes": 15,
         "description": "",
+        "ai_suggestion": "",
     }
     values.update(
         {
@@ -853,13 +1165,47 @@ def default_form_values(organization_id, *, now=None, **overrides):
     return values
 
 
+def _weekday_label(value, language):
+    names = {
+        "es": (
+            "lunes", "martes", "miércoles", "jueves",
+            "viernes", "sábado", "domingo",
+        ),
+        "en": (
+            "Monday", "Tuesday", "Wednesday", "Thursday",
+            "Friday", "Saturday", "Sunday",
+        ),
+    }
+
+    return names.get(language, names["es"])[value.weekday()]
+
+
+def _month_label(value, language):
+    names = {
+        "es": (
+            "enero", "febrero", "marzo", "abril", "mayo", "junio",
+            "julio", "agosto", "septiembre", "octubre", "noviembre",
+            "diciembre",
+        ),
+        "en": (
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November",
+            "December",
+        ),
+    }
+
+    return names.get(language, names["es"])[value.month - 1]
+
+
 __all__ = [
     "AGENDA_FILTERS",
     "AGENDA_SECTIONS",
     "AgentTaskError",
+    "DURATION_CHOICES",
     "PRIORITIES",
     "PRIORITY_HIGH",
     "PRIORITY_NORMAL",
+    "REMINDER_CHOICES",
     "STATUS_CANCELLED",
     "STATUS_COMPLETED",
     "STATUS_PENDING",
@@ -868,15 +1214,19 @@ __all__ = [
     "build_agenda_view",
     "cancel_task",
     "complete_task",
+    "confirm_attendance",
     "count_overdue_tasks",
     "create_task",
     "decorate_task",
     "default_form_values",
     "emit_task_event",
+    "greeting_for_user",
     "list_overdue_tasks",
     "list_tasks_for_operation",
     "list_tasks_for_property",
     "load_editable_task",
+    "merge_external_tasks",
     "reschedule_task",
+    "save_visit_outcome",
     "update_task",
 ]

@@ -57,6 +57,11 @@ _TASK_SELECT = """
         task.operation_id,
         task.related_entity_type,
         task.related_entity_id,
+        task.contact_name,
+        task.duration_minutes,
+        task.reminder_minutes,
+        task.attendance_status,
+        task.outcome_json,
         task.created_by_user_id,
         task.created_at,
         task.updated_at,
@@ -64,7 +69,8 @@ _TASK_SELECT = """
         task.cancelled_at,
         agent.name,
         property.address,
-        operation.id
+        operation.id,
+        task.google_event_id
     FROM agent_tasks AS task
     LEFT JOIN agents AS agent
         ON agent.id = task.agent_id
@@ -86,7 +92,7 @@ def _build_task(row):
     if row is None:
         return None
 
-    operation_id = row[20]
+    operation_id = row[25]
 
     return {
         "id": row[0],
@@ -102,18 +108,25 @@ def _build_task(row):
         "operation_id": row[10],
         "related_entity_type": row[11],
         "related_entity_id": row[12],
-        "created_by_user_id": row[13],
-        "created_at": row[14],
-        "updated_at": row[15],
-        "completed_at": row[16],
-        "cancelled_at": row[17],
-        "agent_name": row[18],
-        "property_address": row[19],
+        "contact_name": row[13] or "",
+        "duration_minutes": row[14],
+        "reminder_minutes": row[15],
+        "attendance_status": row[16],
+        "outcome_json": row[17],
+        "created_by_user_id": row[18],
+        "created_at": row[19],
+        "updated_at": row[20],
+        "completed_at": row[21],
+        "cancelled_at": row[22],
+        "agent_name": row[23],
+        "property_address": row[24],
         "operation_reference": (
             f"COM-{operation_id:06d}"
             if operation_id is not None
             else None
         ),
+        "google_event_id": row[26],
+        "source": "jrh",
     }
 
 
@@ -130,6 +143,10 @@ def create_agent_task(
     operation_id=None,
     related_entity_type=None,
     related_entity_id=None,
+    contact_name=None,
+    duration_minutes=None,
+    reminder_minutes=None,
+    attendance_status=None,
     created_by_user_id=None,
 ):
     organization_id = require_organization_id(organization_id)
@@ -154,11 +171,15 @@ def create_agent_task(
                 operation_id,
                 related_entity_type,
                 related_entity_id,
+                contact_name,
+                duration_minutes,
+                reminder_minutes,
+                attendance_status,
                 created_by_user_id,
                 created_at,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 organization_id,
@@ -173,6 +194,10 @@ def create_agent_task(
                 operation_id,
                 related_entity_type,
                 related_entity_id,
+                contact_name,
+                duration_minutes,
+                reminder_minutes,
+                attendance_status,
                 created_by_user_id,
                 now,
                 now,
@@ -277,11 +302,12 @@ def list_agent_tasks(
             (
                 LOWER(task.title) LIKE ?
                 OR LOWER(COALESCE(task.description, '')) LIKE ?
+                OR LOWER(COALESCE(task.contact_name, '')) LIKE ?
                 OR LOWER(COALESCE(property.address, '')) LIKE ?
             )
             """
         )
-        params.extend([needle, needle, needle])
+        params.extend([needle, needle, needle, needle])
 
     direction = "DESC" if order == "desc" else "ASC"
     connection = get_connection()
@@ -360,6 +386,10 @@ def update_agent_task_fields(
     priority=None,
     property_id=_UNSET,
     operation_id=_UNSET,
+    contact_name=None,
+    duration_minutes=None,
+    reminder_minutes=None,
+    attendance_status=None,
 ):
     """
     Partial update of an editable task.
@@ -377,6 +407,10 @@ def update_agent_task_fields(
         ("task_type", task_type),
         ("due_at", due_at),
         ("priority", priority),
+        ("contact_name", contact_name),
+        ("duration_minutes", duration_minutes),
+        ("reminder_minutes", reminder_minutes),
+        ("attendance_status", attendance_status),
     ):
         if value is not None:
             assignments.append(f"{column} = ?")
@@ -475,6 +509,111 @@ def set_agent_task_status(
                 task_id,
                 organization_id,
                 STATUS_PENDING,
+            ),
+        )
+        updated = cursor.rowcount
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+    if not updated:
+        return None
+
+    return get_agent_task(task_id, organization_id)
+
+
+def save_task_outcome(task_id, organization_id, outcome_json):
+    """Persist a post-visit summary without touching status."""
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            """
+            UPDATE agent_tasks
+            SET outcome_json = ?, updated_at = ?
+            WHERE id = ?
+                AND organization_id = ?
+            """,
+            (outcome_json, _now_iso(), task_id, organization_id),
+        )
+        updated = cursor.rowcount
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+    if not updated:
+        return None
+
+    return get_agent_task(task_id, organization_id)
+
+
+def set_attendance_status(
+    task_id,
+    organization_id,
+    attendance_status,
+):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            """
+            UPDATE agent_tasks
+            SET attendance_status = ?, updated_at = ?
+            WHERE id = ?
+                AND organization_id = ?
+                AND status = ?
+            """,
+            (
+                attendance_status,
+                _now_iso(),
+                task_id,
+                organization_id,
+                STATUS_PENDING,
+            ),
+        )
+        updated = cursor.rowcount
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+    if not updated:
+        return None
+
+    return get_agent_task(task_id, organization_id)
+
+
+def set_google_event_id(task_id, organization_id, google_event_id):
+    """Remember the Google event id after a successful push."""
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(
+            """
+            UPDATE agent_tasks
+            SET google_event_id = ?, updated_at = ?
+            WHERE id = ?
+                AND organization_id = ?
+            """,
+            (
+                google_event_id,
+                _now_iso(),
+                task_id,
+                organization_id,
             ),
         )
         updated = cursor.rowcount

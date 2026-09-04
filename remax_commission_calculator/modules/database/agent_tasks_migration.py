@@ -28,6 +28,12 @@ CREATE TABLE IF NOT EXISTS agent_tasks (
     operation_id INTEGER,
     related_entity_type TEXT,
     related_entity_id INTEGER,
+    contact_name TEXT,
+    duration_minutes INTEGER,
+    reminder_minutes INTEGER,
+    attendance_status TEXT,
+    outcome_json TEXT,
+    google_event_id TEXT,
     created_by_user_id INTEGER,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -93,6 +99,22 @@ AGENT_TASKS_INDEXES = (
     """,
 )
 
+AGENT_TASKS_EXTRA_COLUMNS = (
+    ("contact_name", "TEXT"),
+    ("duration_minutes", "INTEGER"),
+    ("reminder_minutes", "INTEGER"),
+    ("attendance_status", "TEXT"),
+    ("outcome_json", "TEXT"),
+    ("google_event_id", "TEXT"),
+)
+
+
+def _column_exists(cursor, table_name, column_name):
+    rows = cursor.execute(
+        f"PRAGMA table_info({table_name})"
+    ).fetchall()
+    return any(row[1] == column_name for row in rows)
+
 
 def migrate_agent_tasks_sqlite():
     connection = get_connection()
@@ -100,6 +122,15 @@ def migrate_agent_tasks_sqlite():
 
     try:
         cursor.execute(AGENT_TASKS_CREATE_SQL)
+
+        for column_name, column_sql in AGENT_TASKS_EXTRA_COLUMNS:
+            if not _column_exists(cursor, "agent_tasks", column_name):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE agent_tasks
+                    ADD COLUMN {column_name} {column_sql}
+                    """
+                )
 
         for statement in AGENT_TASKS_INDEXES:
             cursor.execute(statement)

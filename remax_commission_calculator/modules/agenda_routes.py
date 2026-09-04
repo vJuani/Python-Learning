@@ -1,33 +1,40 @@
 """
-Agenda routes (Phase 4B).
+Agenda routes (Phase 4B + intelligent shell).
 
-Permissions in V1:
-
-* Agent: full control over their own tasks (create, edit, complete,
-  reschedule, cancel) and no visibility of anybody else's agenda.
-* Staff/Admin: read-only view of the agenda of the agents in their own
-  organization, with an agent filter. The service already accepts an
-  ``agent_id`` so letting staff create tasks later is a route change,
-  not a redesign.
-* Guest: no access.
+Permissions stay the same: agents own their tasks, staff is read-only.
+The compose / voice / screenshot flows only create a draft; saving
+still goes through ``create_task``.
 """
 
 from __future__ import annotations
 
-from flask import abort, redirect, render_template, request, url_for
+import logging
 
+from flask import abort, redirect, render_template, request, session, url_for
+
+from modules.agenda_ai import (
+    AgendaAiError,
+    compose_from_image,
+    compose_from_prompt,
+    summarize_visit_outcome,
+)
 from modules.agent_tasks import (
     AGENDA_FILTERS,
+    DURATION_CHOICES,
     PRIORITIES,
+    REMINDER_CHOICES,
     TASK_TYPES,
     AgentTaskError,
     build_agenda_view,
     cancel_task,
     complete_task,
+    confirm_attendance,
     create_task,
     default_form_values,
+    greeting_for_user,
     load_editable_task,
     reschedule_task,
+    save_visit_outcome,
     update_task,
 )
 from modules.auth import (
@@ -39,11 +46,24 @@ from modules.auth import (
 from modules.database.agents_repository import get_agents
 from modules.database.operations_repository import filter_operations
 from modules.database.properties_repository import get_properties
+from modules.google_calendar import (
+    GoogleCalendarError,
+    attach_google_overlay,
+    begin_oauth,
+    calendar_chip_for,
+    disconnect_calendar,
+    finish_oauth,
+    sync_now,
+)
 from modules.organization_time import (
     format_local_date_iso,
     format_local_time,
+    now_utc,
     organization_timezone,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def register_agenda_routes(app, helpers):
@@ -64,7 +84,6 @@ def register_agenda_routes(app, helpers):
         return user
 
     def _require_agent_user():
-        """Only an agent owns an agenda in V1."""
         user = _require_user()
 
         if not is_agent(user):
@@ -102,6 +121,8 @@ def register_agenda_routes(app, helpers):
             task=task,
             task_types=TASK_TYPES,
             priorities=PRIORITIES,
+            duration_choices=DURATION_CHOICES,
+            reminder_choices=REMINDER_CHOICES,
             agenda_next=get_safe_redirect_target(
                 request.form.get("next") or request.args.get("next")
             ),
@@ -154,6 +175,25 @@ def register_agenda_routes(app, helpers):
             language=language,
         )
 
+        if agent_id:
+            try:
+                agenda = attach_google_overlay(
+                    agenda,
+                    organization_id,
+                    agent_id=agent_id,
+                    language=language,
+                )
+            except Exception:
+                logger.exception("agenda_google_overlay_failed")
+
+        tz = organization_timezone(organization_id)
+        calendar = calendar_chip_for(
+            organization_id,
+            user,
+            agent_id=agent_id,
+            can_manage=viewer_is_agent,
+        )
+
         return render_template(
             "agenda/index.html",
             agenda=agenda,
@@ -162,6 +202,12 @@ def register_agenda_routes(app, helpers):
             can_manage=viewer_is_agent,
             agents=agents,
             selected_agent_id=agent_id,
+            calendar=calendar,
+            agenda_greeting=greeting_for_user(
+                user,
+                now_local=now_utc().astimezone(tz),
+                language=language,
+            ),
         )
 
     @app.route("/agenda/new", methods=["GET", "POST"])
@@ -201,12 +247,97 @@ def register_agenda_routes(app, helpers):
             ).strip()
             or None,
             task_type=(request.args.get("type") or "").strip() or None,
+            contact_name=(request.args.get("contact_name") or "").strip()
+            or None,
+            title=(request.args.get("title") or "").strip() or None,
+            due_date=(request.args.get("due_date") or "").strip() or None,
+            due_time=(request.args.get("due_time") or "").strip() or None,
+            description=(request.args.get("description") or "").strip()
+            or None,
+            duration_minutes=request.args.get("duration_minutes") or None,
+            reminder_minutes=request.args.get("reminder_minutes") or None,
+            ai_suggestion=(request.args.get("ai_suggestion") or "").strip()
+            or None,
         )
 
         return _render_form(
             form_values=form_values,
             organization_id=organization_id,
             agent_id=agent_id,
+        )
+
+    @app.route("/agenda/compose", methods=["GET", "POST"])
+    @login_required
+    def agenda_compose():
+        user, agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+        draft = None
+        errors = []
+        prompt = (
+            request.form.get("prompt")
+            or request.args.get("prompt")
+            or ""
+        ).strip()
+
+        if request.method == "POST" and request.form.get("confirm"):
+            form_values = _form_values_from_request()
+
+            try:
+                create_task(
+                    organization_id,
+                    agent_id,
+                    form_values,
+                    created_by_user_id=user["id"],
+                )
+            except AgentTaskError as error:
+                errors = [error.message_key]
+                draft = form_values
+            else:
+                flash_i18n("agent_task_flash_created", "success")
+
+                return redirect(url_for("agenda_index"))
+
+        elif request.method == "POST":
+            try:
+                draft = compose_from_prompt(
+                    prompt,
+                    organization_id,
+                    agent_id,
+                )
+            except AgendaAiError as error:
+                errors = [error.message_key]
+
+        return render_template(
+            "agenda/compose.html",
+            prompt=prompt,
+            draft=draft,
+            errors=errors,
+            voice_mode=request.args.get("mode") == "voice",
+        )
+
+    @app.route("/agenda/capture", methods=["GET", "POST"])
+    @login_required
+    def agenda_capture():
+        user, agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+        draft = None
+        errors = []
+
+        if request.method == "POST":
+            try:
+                draft = compose_from_image(
+                    request.files.get("screenshot"),
+                    organization_id,
+                    agent_id,
+                    extra_prompt=request.form.get("prompt"),
+                )
+            except AgendaAiError as error:
+                errors = [error.message_key]
+
+        return render_template(
+            "agenda/capture.html",
+            draft=draft,
+            errors=errors,
         )
 
     @app.route(
@@ -260,7 +391,11 @@ def register_agenda_routes(app, helpers):
                 "due_time": _local_time(organization_id, task),
                 "property_id": task["property_id"] or "",
                 "operation_id": task["operation_id"] or "",
+                "contact_name": task.get("contact_name") or "",
+                "duration_minutes": task.get("duration_minutes") or 60,
+                "reminder_minutes": task.get("reminder_minutes") or "",
                 "description": task["description"],
+                "ai_suggestion": "",
             },
             task=task,
             organization_id=organization_id,
@@ -274,7 +409,7 @@ def register_agenda_routes(app, helpers):
         organization_id = require_user_organization()
 
         try:
-            complete_task(
+            task = complete_task(
                 organization_id,
                 task_id,
                 agent_id=agent_id,
@@ -282,10 +417,77 @@ def register_agenda_routes(app, helpers):
             )
         except AgentTaskError as error:
             flash_i18n(error.message_key, "error")
-        else:
-            flash_i18n("agent_task_flash_completed", "success")
+
+            return _redirect_back()
+
+        if task["task_type"] == "visit":
+            return redirect(
+                url_for("agenda_follow_up", task_id=task["id"])
+            )
+
+        flash_i18n("agent_task_flash_completed", "success")
 
         return _redirect_back()
+
+    @app.route(
+        "/agenda/<int:task_id>/follow-up",
+        methods=["GET", "POST"],
+    )
+    @login_required
+    def agenda_follow_up(task_id):
+        user, agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+
+        try:
+            task = load_editable_task(
+                organization_id,
+                task_id,
+                agent_id=agent_id,
+            )
+        except AgentTaskError:
+            abort(404)
+
+        outcome = None
+        errors = []
+        note = (request.form.get("note") or "").strip()
+
+        if request.method == "POST" and request.form.get("save"):
+            outcome = {
+                "note": note,
+                "interest": request.form.get("interest") or "neutral",
+                "objection": request.form.get("objection") or "",
+                "area": request.form.get("area") or "",
+                "budget": request.form.get("budget") or "",
+                "next_action": request.form.get("next_action") or "",
+            }
+
+            try:
+                save_visit_outcome(
+                    organization_id,
+                    task_id,
+                    outcome,
+                    agent_id=agent_id,
+                )
+            except AgentTaskError as error:
+                errors = [error.message_key]
+            else:
+                flash_i18n("agenda_followup_saved", "success")
+
+                return redirect(url_for("agenda_index"))
+
+        elif request.method == "POST":
+            try:
+                outcome = summarize_visit_outcome(note)
+            except AgendaAiError as error:
+                errors = [error.message_key]
+
+        return render_template(
+            "agenda/follow_up.html",
+            task=task,
+            outcome=outcome,
+            note=note,
+            errors=errors,
+        )
 
     @app.route("/agenda/<int:task_id>/reschedule", methods=["POST"])
     @login_required
@@ -309,6 +511,25 @@ def register_agenda_routes(app, helpers):
 
         return _redirect_back()
 
+    @app.route("/agenda/<int:task_id>/confirm-attendance", methods=["POST"])
+    @login_required
+    def agenda_confirm_attendance(task_id):
+        _user, agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+
+        try:
+            confirm_attendance(
+                organization_id,
+                task_id,
+                agent_id=agent_id,
+            )
+        except AgentTaskError as error:
+            flash_i18n(error.message_key, "error")
+        else:
+            flash_i18n("agenda_attendance_confirmed", "success")
+
+        return _redirect_back()
+
     @app.route("/agenda/<int:task_id>/cancel", methods=["POST"])
     @login_required
     def agenda_cancel(task_id):
@@ -329,12 +550,77 @@ def register_agenda_routes(app, helpers):
 
         return _redirect_back()
 
+    @app.route("/agenda/calendar/connect")
+    @login_required
+    def agenda_calendar_connect():
+        _require_agent_user()
+
+        try:
+            url = begin_oauth(session)
+        except GoogleCalendarError as error:
+            flash_i18n(error.message_key, "error")
+            return redirect(url_for("agenda_index"))
+
+        return redirect(url)
+
+    @app.route("/agenda/calendar/callback")
+    @login_required
+    def agenda_calendar_callback():
+        user, _agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+
+        try:
+            finish_oauth(
+                session,
+                organization_id=organization_id,
+                user_id=user["id"],
+                code=(request.args.get("code") or "").strip(),
+                state=(request.args.get("state") or "").strip(),
+                error=(request.args.get("error") or "").strip() or None,
+            )
+        except GoogleCalendarError as error:
+            flash_i18n(error.message_key, "error")
+            return redirect(url_for("agenda_index"))
+        except Exception:
+            flash_i18n("agenda_calendar_flash_oauth_error", "error")
+            return redirect(url_for("agenda_index"))
+
+        flash_i18n("agenda_calendar_flash_connected", "success")
+
+        return redirect(url_for("agenda_index"))
+
+    @app.route("/agenda/calendar/disconnect", methods=["POST"])
+    @login_required
+    def agenda_calendar_disconnect():
+        user, _agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+
+        disconnect_calendar(organization_id, user["id"])
+        flash_i18n("agenda_calendar_flash_disconnected", "success")
+
+        return _redirect_back()
+
+    @app.route("/agenda/calendar/sync", methods=["POST"])
+    @login_required
+    def agenda_calendar_sync():
+        _user, agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+
+        try:
+            sync_now(organization_id, agent_id=agent_id)
+        except GoogleCalendarError as error:
+            flash_i18n(error.message_key, "error")
+        else:
+            flash_i18n("agenda_calendar_flash_synced", "success")
+
+        return _redirect_back()
+
 
 def _form_values_from_request():
     return {
         "title": request.form.get("title"),
         "task_type": request.form.get("task_type"),
-        "priority": request.form.get("priority"),
+        "priority": request.form.get("priority") or "normal",
         "due_date": request.form.get("due_date"),
         "due_time": request.form.get("due_time"),
         "property_id": (
@@ -345,7 +631,12 @@ def _form_values_from_request():
             request.form.get("operation_id") or ""
         ).strip()
         or None,
+        "contact_name": request.form.get("contact_name"),
+        "duration_minutes": request.form.get("duration_minutes"),
+        "reminder_minutes": request.form.get("reminder_minutes"),
+        "attendance_status": request.form.get("attendance_status"),
         "description": request.form.get("description"),
+        "ai_suggestion": request.form.get("ai_suggestion"),
     }
 
 

@@ -102,6 +102,21 @@ upload a `.env` file.
 
 Receipt images are stored under `PRIVATE_UPLOAD_ROOT/organizations/<org>/cash/receipts/` on the volume.
 
+### Google Calendar (Agenda, optional)
+
+| Variable | Staging value |
+|----------|----------------|
+| `GOOGLE_CALENDAR_CLIENT_ID` | OAuth client ID (Web application) |
+| `GOOGLE_CALENDAR_CLIENT_SECRET` | OAuth client secret (Railway secret) |
+
+In Google Cloud Console, add this **Authorized redirect URI**:
+
+`{APP_BASE_URL}/agenda/calendar/callback`
+
+Example: `https://app.jrhone.com/agenda/calendar/callback`
+
+Each agent connects their own Google account from the agenda chip. Refresh tokens are stored encrypted with `SECRET_KEY`. Without these variables the chip shows “No configurado” and tasks stay in JRH only.
+
 Leave `UPLOAD_DIR` unset for this first staging so logos stay under
 `static/uploads` (servable by Flask). Those logo files are **not** on the
 volume unless you later persist that path; private docs and SQLite are.

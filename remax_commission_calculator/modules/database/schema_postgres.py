@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v16"
+POSTGRES_SCHEMA_VERSION = "postgres_v18"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -841,6 +841,12 @@ SCHEMA_STATEMENTS = (
         operation_id BIGINT,
         related_entity_type TEXT,
         related_entity_id BIGINT,
+        contact_name TEXT,
+        duration_minutes INTEGER,
+        reminder_minutes INTEGER,
+        attendance_status TEXT,
+        outcome_json TEXT,
+        google_event_id TEXT,
         created_by_user_id BIGINT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -899,6 +905,38 @@ SCHEMA_STATEMENTS = (
         related_entity_type,
         related_entity_id
     )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_tasks_google_event
+    ON agent_tasks (organization_id, google_event_id)
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS google_calendar_connections (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        user_id BIGINT NOT NULL,
+        google_email TEXT,
+        calendar_id TEXT NOT NULL DEFAULT 'primary',
+        refresh_token_encrypted TEXT NOT NULL,
+        access_token_encrypted TEXT,
+        access_expires_at TEXT,
+        sync_token TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        last_synced_at TEXT,
+        last_error TEXT,
+        events_cache_json TEXT,
+        connected_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id) ON DELETE RESTRICT,
+        FOREIGN KEY (user_id)
+            REFERENCES users(id) ON DELETE CASCADE,
+        CHECK (status IN ('active', 'error', 'revoked'))
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_google_calendar_user
+    ON google_calendar_connections (organization_id, user_id)
     """,
     """
     CREATE INDEX IF NOT EXISTS idx_agent_recurring_org_agent
@@ -2283,6 +2321,35 @@ def create_postgres_schema():
             cursor.execute(
                 f"""
                 ALTER TABLE operations
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        for column_name, column_sql in (
+            ("contact_name", "TEXT"),
+            ("duration_minutes", "INTEGER"),
+            ("reminder_minutes", "INTEGER"),
+            ("attendance_status", "TEXT"),
+            ("outcome_json", "TEXT"),
+            ("google_event_id", "TEXT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE agent_tasks
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        for column_name, column_sql in (
+            ("events_cache_json", "TEXT"),
+            ("sync_token", "TEXT"),
+            ("last_error", "TEXT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE google_calendar_connections
                 ADD COLUMN IF NOT EXISTS
                 {column_name} {column_sql}
                 """

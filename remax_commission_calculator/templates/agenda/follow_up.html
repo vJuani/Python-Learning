@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('agenda_followup_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<section class="agenda-followup">
+    <h2>{{ t('agenda_followup_title') }}</h2>
+    <p>{{ task.title }}{% if task.property_address %} · {{ task.property_address }}{% endif %}</p>
+
+    {% if errors %}
+    <div class="flash-error" role="alert">
+        {% for error in errors %}<p>{{ t(error) }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" class="agenda-ia" id="agenda-ia-form">
+        <button type="button" class="agenda-followup__mic" data-agenda-voice>
+            {{ t('agenda_followup_tell') }}
+        </button>
+        <label class="agenda-form__field">
+            <textarea
+                name="note"
+                rows="4"
+                placeholder="{{ t('agenda_followup_placeholder') }}"
+                required
+            >{{ note }}</textarea>
+        </label>
+        <button type="submit" class="btn btn-secondary">{{ t('agenda_followup_summarize') }}</button>
+    </form>
+
+    {% if outcome %}
+    <section class="agenda-summary">
+        <h3>{{ t('agenda_followup_summary') }}</h3>
+        <form method="post" class="agenda-form">
+            <input type="hidden" name="save" value="1">
+            <input type="hidden" name="note" value="{{ outcome.note }}">
+
+            <label class="agenda-form__field">
+                <span>{{ t('agenda_followup_interest') }}</span>
+                <select name="interest">
+                    {% for key in ('positive', 'neutral', 'negative') %}
+                    <option value="{{ key }}" {% if outcome.interest == key %}selected{% endif %}>
+                        {{ t('agenda_interest_' ~ key) }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="agenda-form__field">
+                <span>{{ t('agenda_followup_objection') }}</span>
+                <input type="text" name="objection" value="{{ outcome.objection }}">
+            </label>
+            <label class="agenda-form__field">
+                <span>{{ t('agenda_followup_area') }}</span>
+                <input type="text" name="area" value="{{ outcome.area }}">
+            </label>
+            <label class="agenda-form__field">
+                <span>{{ t('agenda_followup_budget') }}</span>
+                <input type="text" name="budget" value="{{ outcome.budget }}">
+            </label>
+            <label class="agenda-form__field">
+                <span>{{ t('agenda_followup_next') }}</span>
+                <input type="text" name="next_action" value="{{ outcome.next_action }}">
+            </label>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">{{ t('agenda_followup_save') }}</button>
+                <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">
+                    {{ t('agenda_followup_search') }}
+                </a>
+            </div>
+        </form>
+    </section>
+    {% endif %}
+</section>
+{% endblock %}
