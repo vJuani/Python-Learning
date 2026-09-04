@@ -837,7 +837,7 @@ class AgentAgendaTests(unittest.TestCase):
 
         connect = self.client.get("/agenda/calendar/connect")
         self.assertEqual(connect.status_code, 302)
-        self.assertIn("/agenda", connect.headers.get("Location", ""))
+        self.assertIn("/settings/integrations", connect.headers.get("Location", ""))
 
     def test_28_calendar_connect_redirects_to_google(self):
         self._google_env(configured=True)
@@ -883,9 +883,11 @@ class AgentAgendaTests(unittest.TestCase):
             page = self.client.get("/agenda")
 
         self.assertEqual(callback.status_code, 302)
+        self.assertIn("/settings/integrations", callback.headers.get("Location", ""))
         body = page.get_data(as_text=True)
         self.assertIn("Sincronizado", body)
-        self.assertIn("lucia@example.com", body)
+        integrations = self.client.get("/settings/integrations")
+        self.assertIn("lucia@example.com", integrations.get_data(as_text=True))
 
     def test_30_create_task_pushes_google_event(self):
         self._seed_google_connection()
@@ -1132,7 +1134,6 @@ class AgentAgendaTests(unittest.TestCase):
         )
         body = preview.get_data(as_text=True)
         self.assertEqual(preview.status_code, 200)
-        self.assertIn("needs_property_choice", body)
         self.assertIn("property_choice", body)
         self.assertIn("Encontré 2 propiedades", body)
 
@@ -1253,7 +1254,119 @@ class AgentAgendaTests(unittest.TestCase):
         self.assertEqual(draft["due_date"], "")
         self.assertEqual(draft["due_time"], "")
 
+    def test_42_multi_prompt_two_real_actions(self):
+        from datetime import datetime, timezone
+
+        from modules.agenda_ai import interpret_agenda_input
+        from modules.agenda_nlp import split_agenda_segments
+
+        when = datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc)
+        segments = split_agenda_segments(
+            "Mañana visita con Lucía a las 10 y llamada con Pablo a las 14"
+        )
+        self.assertEqual(len(segments), 2)
+
+        bundle = interpret_agenda_input(
+            "Mañana visita con Lucía a las 10 y llamada con Pablo a las 14",
+            self.org_a,
+            self.agent_a,
+            now=when,
+        )
+        self.assertEqual(len(bundle["items"]), 2)
+        self.assertEqual(bundle["items"][0]["task_type"], "visit")
+        self.assertEqual(bundle["items"][1]["task_type"], "call")
+
+    def test_43_multi_prompt_keeps_two_people_as_one_visit(self):
+        from datetime import datetime, timezone
+
+        from modules.agenda_ai import interpret_agenda_input
+
+        bundle = interpret_agenda_input(
+            "Mañana visita con Lucía y Pablo a las 10",
+            self.org_a,
+            self.agent_a,
+            now=datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc),
+        )
+        self.assertEqual(len(bundle["items"]), 1)
+        self.assertEqual(bundle["items"][0]["task_type"], "visit")
+        self.assertIn("Lucía", bundle["items"][0]["contact_name"])
+        self.assertIn("Pablo", bundle["items"][0]["contact_name"])
+
+    def test_44_multi_prompt_three_actions(self):
+        from datetime import datetime, timezone
+
+        from modules.agenda_ai import interpret_agenda_input
+
+        bundle = interpret_agenda_input(
+            "Mañana a las 10 visita Libertador 3200, a las 12 llamada a Pedro "
+            "y el jueves seguimiento con Martín",
+            self.org_a,
+            self.agent_a,
+            now=datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc),
+        )
+        self.assertEqual(len(bundle["items"]), 3)
+        self.assertEqual(bundle["items"][0]["task_type"], "visit")
+        self.assertEqual(bundle["items"][1]["task_type"], "call")
+        self.assertEqual(bundle["items"][2]["task_type"], "follow_up")
+        self.assertEqual(bundle["items"][2]["item_status"], "ready")
+
+    def test_45_despues_without_time_needs_attention(self):
+        from datetime import datetime, timezone
+
+        from modules.agenda_ai import interpret_agenda_input
+
+        bundle = interpret_agenda_input(
+            "El lunes tengo visita en Cabildo y después llamo al propietario",
+            self.org_a,
+            self.agent_a,
+            now=datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc),
+        )
+        self.assertEqual(len(bundle["items"]), 2)
+        self.assertEqual(bundle["items"][0]["task_type"], "visit")
+        self.assertEqual(bundle["items"][1]["task_type"], "call")
+        self.assertTrue(bundle["items"][1]["date_found"])
+        self.assertFalse(bundle["items"][1]["time_found"])
+        self.assertEqual(bundle["items"][1]["item_status"], "needs_attention")
+        self.assertEqual(bundle["items"][0]["item_status"], "needs_attention")
+
+    def test_46_four_spoken_actions_one_preview(self):
+        from datetime import datetime, timezone
+
+        from modules.agenda_ai import interpret_agenda_input
+
+        bundle = interpret_agenda_input(
+            "Mañana visita 10hs, llamada 12hs, reunión 15hs "
+            "y el viernes seguimiento con Carolina",
+            self.org_a,
+            self.agent_a,
+            now=datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc),
+        )
+        self.assertEqual(len(bundle["items"]), 4)
+        self._login("agenda_agent_user")
+        page = self.client.post(
+            "/agenda/compose",
+            data={
+                "prompt": (
+                    "Mañana visita 10hs, llamada 12hs, reunión 15hs "
+                    "y el viernes seguimiento con Carolina"
+                )
+            },
+        )
+        body = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Entendí 4 acciones", body)
+        self.assertIn("confirm_ready", body)
+
+    def test_47_integrations_page_renders_for_agent(self):
+        self._google_env(configured=False)
+        self._login("agenda_agent_user")
+        page = self.client.get("/settings/integrations")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Google Calendar", page.get_data(as_text=True))
+        self.assertIn("Integraciones", page.get_data(as_text=True))
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

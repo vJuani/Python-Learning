@@ -276,6 +276,8 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
             "can_sync": False,
             "can_disconnect": False,
             "google_email": "",
+            "last_synced_at": "",
+            "last_synced_label": "",
         }
 
     if not is_configured():
@@ -286,6 +288,8 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
             "can_sync": False,
             "can_disconnect": False,
             "google_email": "",
+            "last_synced_at": "",
+            "last_synced_label": "",
         }
 
     target_user_id = None
@@ -316,7 +320,11 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
             "can_sync": False,
             "can_disconnect": False,
             "google_email": "",
+            "last_synced_at": "",
+            "last_synced_label": "",
         }
+
+    label = _last_synced_label(record, organization_id)
 
     if record["status"] == "error":
         return {
@@ -326,6 +334,8 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
             "can_sync": bool(can_manage),
             "can_disconnect": bool(can_manage),
             "google_email": record.get("google_email") or "",
+            "last_synced_at": record.get("last_synced_at") or "",
+            "last_synced_label": label,
         }
 
     return {
@@ -335,7 +345,31 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
         "can_sync": bool(can_manage),
         "can_disconnect": bool(can_manage),
         "google_email": record.get("google_email") or "",
+        "last_synced_at": record.get("last_synced_at") or "",
+        "last_synced_label": label,
     }
+
+
+def _last_synced_label(record, organization_id):
+    raw = record.get("last_synced_at") if record else None
+    parsed = parse_utc_iso(raw) if raw else None
+
+    if parsed is None:
+        return ""
+
+    tz = organization_timezone(organization_id)
+    local = parsed.astimezone(tz)
+    today = datetime.now(tz).date()
+    clock = local.strftime("%H:%M")
+
+    if local.date() == today:
+        return f"Hoy {clock}"
+
+    return f"{local.strftime('%d/%m')} {clock}"
+
+
+def retry_task_sync(task, *, actor_user_id=None):
+    return sync_task_event("task_updated", task, actor_user_id=actor_user_id)
 
 
 def _expiry_iso(expires_in):

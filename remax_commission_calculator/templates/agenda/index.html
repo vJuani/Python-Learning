@@ -53,7 +53,10 @@
 
     {% set calendar = calendar or {"state": "unconfigured"} %}
     {% if calendar.state != 'hidden' %}
-    <div class="agenda-calendar-chip agenda-calendar-chip--{{ calendar.state }}">
+    <a
+        class="agenda-calendar-chip agenda-calendar-chip--{{ calendar.state }}"
+        href="{{ url_for('settings_integrations') }}"
+    >
         <span class="agenda-calendar-chip__dot" aria-hidden="true"></span>
         <span>
             {{ t('agenda_calendar_google') }}
@@ -65,38 +68,27 @@
                 {% elif calendar.state == 'unconfigured' %}
                 {{ t('agenda_calendar_unconfigured') }}
                 {% else %}
-                {{ t('agenda_calendar_disconnected') }}
+                {{ t('agenda_calendar_connect') }}
                 {% endif %}
             </strong>
-            {% if calendar.google_email %}
-            <span class="agenda-calendar-chip__email">{{ calendar.google_email }}</span>
-            {% endif %}
         </span>
-        {% if calendar.can_connect %}
-        <a href="{{ url_for('agenda_calendar_connect') }}" class="agenda-calendar-chip__action">
-            {{ t('agenda_calendar_connect') }}
-        </a>
-        {% endif %}
-        {% if calendar.can_sync %}
-        <form method="post" action="{{ url_for('agenda_calendar_sync') }}" class="agenda-calendar-chip__form">
-            <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
-            <button type="submit" class="agenda-calendar-chip__action">{{ t('agenda_calendar_sync_now') }}</button>
+    </a>
+    {% endif %}
+
+    {% if create_result %}
+    <aside class="agenda-recommend">
+        <p>{{ t('agenda_create_result', count=create_result.created) }}</p>
+        {% if create_result.pending_ids %}
+        <p>{{ t('agenda_create_result_sync', synced=create_result.synced, pending=create_result.pending_ids|length) }}</p>
+        <form method="post" action="{{ url_for('agenda_calendar_retry') }}">
+            {% for task_id in create_result.pending_ids %}
+            <input type="hidden" name="task_id" value="{{ task_id }}">
+            {% endfor %}
+            <input type="hidden" name="next" value="{{ url_for('agenda_index') }}">
+            <button type="submit" class="btn btn-small btn-secondary">{{ t('agenda_calendar_retry') }}</button>
         </form>
         {% endif %}
-        {% if calendar.can_disconnect %}
-        <form
-            method="post"
-            action="{{ url_for('agenda_calendar_disconnect') }}"
-            class="agenda-calendar-chip__form"
-            onsubmit="return confirm('{{ t('agenda_calendar_confirm_disconnect') }}');"
-        >
-            <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
-            <button type="submit" class="agenda-calendar-chip__action agenda-calendar-chip__action--muted">
-                {{ t('agenda_calendar_disconnect') }}
-            </button>
-        </form>
-        {% endif %}
-    </div>
+    </aside>
     {% endif %}
 
     {% if can_manage %}

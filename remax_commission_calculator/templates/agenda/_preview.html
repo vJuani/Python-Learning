@@ -1,110 +1,110 @@
-{% set status = draft.ui_status if draft.ui_status is defined else 'ready' %}
-{% set candidates = draft.property_candidates or [] %}
-{% set is_ambiguous = draft.property_match == 'ambiguous' %}
+{% set items = items or ([draft] if draft else []) %}
+{% set ready_count = items | selectattr('item_status', 'equalto', 'ready') | list | length %}
+{% set total_count = items | length %}
 
-<p class="agenda-status" data-status="{{ status }}" data-agenda-status>
-    {% if status == 'properties_ambiguous' %}
-    {{ t('agenda_ai_status_ambiguous', count=candidates|length) }}
-    {% elif status == 'date_unclear' %}
-    {{ t('agenda_ai_status_date_unclear') }}
-    {% elif status == 'property_not_found' %}
-    {{ t('agenda_ai_status_property_not_found') }}
-    {% elif status == 'error' %}
-    {{ t('agenda_ai_status_error') }}
-    {% elif status == 'processing' %}
-    {{ t('agenda_ai_status_processing') }}
-    {% else %}
-    {{ t('agenda_ai_status_ready') }}
-    {% endif %}
+{% if items %}
+<p class="agenda-status" data-status="ready" data-agenda-status>
+    {{ t('agenda_ai_understood_count', count=total_count) }}
 </p>
 
-<article class="agenda-preview">
-    <p class="agenda-preview__kicker">{{ t('agenda_ai_preview') }}</p>
-    <p class="agenda-preview__type">{{ t('agent_task_type_' ~ draft.task_type) }}</p>
-    <h3>{{ draft.title }}</h3>
+<form method="post" action="{{ url_for('agenda_compose') }}" class="agenda-preview-list">
+    <input type="hidden" name="prompt" value="{{ prompt or '' }}">
+    <input type="hidden" name="item_count" value="{{ total_count }}">
 
-    {% if draft.warnings %}
-    <ul class="agenda-preview__warnings">
-        {% for warning in draft.warnings %}
-        <li>
-            {% if warning == 'agenda_ai_warn_properties_ambiguous' %}
-            {{ t(warning, count=candidates|length) }}
+    {% for draft in items %}
+    {% set index = loop.index0 %}
+    {% set status = draft.item_status or 'ready' %}
+    {% set candidates = draft.property_candidates or [] %}
+    {% set is_ambiguous = draft.property_match == 'ambiguous' and not draft.property_id %}
+    {% set prefix = 'items-' ~ index ~ '-' %}
+
+    <article class="agenda-preview agenda-card" data-item-status="{{ status }}">
+        <header class="agenda-preview__head">
+            <span class="agenda-preview__index">{{ '%02d' | format(loop.index) }}</span>
+            <p class="agenda-preview__type">{{ t('agent_task_type_' ~ (draft.task_type or 'other')) }}</p>
+            {% if status == 'ready' %}
+            <span class="agenda-preview__flag agenda-preview__flag--ok">{{ t('agenda_ai_item_ready') }}</span>
+            {% elif status == 'invalid' %}
+            <span class="agenda-preview__flag agenda-preview__flag--bad">{{ t('agenda_ai_item_invalid') }}</span>
             {% else %}
-            {{ t(warning) }}
+            <span class="agenda-preview__flag agenda-preview__flag--warn">{{ t('agenda_ai_item_attention') }}</span>
             {% endif %}
-        </li>
-        {% endfor %}
-    </ul>
-    {% endif %}
+        </header>
 
-    <form method="post" action="{{ url_for('agenda_compose') }}" class="agenda-preview__form">
-        <input type="hidden" name="confirm" value="1">
-        <input type="hidden" name="prompt" value="{{ prompt or draft.source_prompt or '' }}">
-        <input type="hidden" name="title" value="{{ draft.title }}">
-        <input type="hidden" name="task_type" value="{{ draft.task_type }}">
-        <input type="hidden" name="contact_name" value="{{ draft.contact_name }}">
-        <input type="hidden" name="description" value="{{ draft.description }}">
-        <input type="hidden" name="duration_minutes" value="{{ draft.duration_minutes }}">
-        <input type="hidden" name="reminder_minutes" value="{{ draft.reminder_minutes or '' }}">
-        <input type="hidden" name="attendance_status" value="{{ draft.attendance_status or '' }}">
+        <h3>{{ draft.title }}</h3>
+        {% if draft.due_date %}
+        <p>{{ draft.due_date }}{% if draft.due_time %} · {{ draft.due_time }}{% endif %}</p>
+        {% endif %}
+        {% if draft.contact_name %}<p>{{ draft.contact_name }}</p>{% endif %}
+        {% if draft.property_address and not is_ambiguous %}<p>{{ draft.property_address }}</p>{% endif %}
+
+        {% if draft.warnings and status != 'ready' %}
+        <ul class="agenda-preview__warnings">
+            {% for warning in draft.warnings %}
+            <li>
+                {% if warning == 'agenda_ai_warn_properties_ambiguous' %}
+                {{ t(warning, count=candidates|length) }}
+                {% else %}
+                {{ t(warning) }}
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% for key in ['title', 'task_type', 'contact_name', 'property_id', 'property_address', 'property_query', 'property_match', 'description', 'duration_minutes', 'reminder_minutes', 'attendance_status', 'source_prompt', 'ui_status', 'item_status'] %}
+        <input type="hidden" name="{{ prefix }}{{ key }}" value="{{ draft[key] or '' }}">
+        {% endfor %}
+        <input type="hidden" name="{{ prefix }}date_found" value="{{ '1' if draft.date_found else '0' }}">
+        <input type="hidden" name="{{ prefix }}time_found" value="{{ '1' if draft.time_found else '0' }}">
+        <input type="hidden" name="{{ prefix }}candidates" value="{{ candidates | tojson | forceescape }}">
 
         <div class="agenda-preview__when">
-            {% if draft.date_found and draft.due_date %}
-            <p>{{ draft.due_date }}{% if draft.due_time %} · {{ draft.due_time }}{% endif %}</p>
-            <input type="hidden" name="due_date" value="{{ draft.due_date }}">
-            {% else %}
+            {% if not draft.due_date %}
             <label class="agenda-preview__field">
                 <span>{{ t('agenda_ai_warn_date') }}</span>
-                <input type="date" name="due_date" value="{{ draft.due_date or '' }}" required>
+                <input type="date" name="{{ prefix }}due_date" value="">
             </label>
-            {% endif %}
-
-            {% if draft.time_found and draft.due_time %}
-            <input type="hidden" name="due_time" value="{{ draft.due_time }}">
             {% else %}
+            <input type="hidden" name="{{ prefix }}due_date" value="{{ draft.due_date }}">
+            {% endif %}
+            {% if draft.task_type in ['visit', 'call', 'meeting'] and not draft.due_time %}
             <label class="agenda-preview__field">
                 <span>{{ t('agenda_ai_warn_time') }}</span>
-                <input type="time" name="due_time" value="{{ draft.due_time or '' }}" required>
+                <input type="time" name="{{ prefix }}due_time" value="">
             </label>
+            {% else %}
+            <input type="hidden" name="{{ prefix }}due_time" value="{{ draft.due_time or '' }}">
             {% endif %}
         </div>
 
-        {% if draft.contact_name %}
-        <p>{{ draft.contact_name }}</p>
-        {% endif %}
-        {% if draft.property_address and not is_ambiguous %}
-        <p>{{ draft.property_address }}</p>
-        {% endif %}
-
         {% if is_ambiguous %}
-        <input type="hidden" name="needs_property_choice" value="1">
-        <input type="hidden" name="property_id" value="">
         <fieldset class="agenda-preview__candidates">
             <legend>{{ t('agenda_ai_choose_property') }}</legend>
             {% for candidate in candidates %}
             <label class="agenda-preview__candidate">
-                <input
-                    type="radio"
-                    name="property_choice"
-                    value="{{ candidate.id }}"
-                    {% if loop.first %}required{% endif %}
-                >
+                <input type="radio" name="{{ prefix }}property_choice" value="{{ candidate.id }}">
                 <span>{{ candidate.address }}</span>
             </label>
             {% endfor %}
             <label class="agenda-preview__candidate">
-                <input type="radio" name="property_choice" value="none">
+                <input type="radio" name="{{ prefix }}property_choice" value="none">
                 <span>{{ t('agenda_ai_create_without_property') }}</span>
             </label>
         </fieldset>
-        {% else %}
-        <input type="hidden" name="property_id" value="{{ draft.property_id or '' }}">
         {% endif %}
 
         <div class="agenda-preview__actions">
-            <button type="submit" class="btn btn-primary">{{ t('agenda_ai_confirm') }}</button>
+            {% if status == 'ready' %}
+            <button type="submit" class="btn btn-small btn-secondary" name="confirm_one" value="{{ index }}">
+                {{ t('agenda_ai_confirm_one') }}
+            </button>
+            {% endif %}
+            <button type="submit" class="btn btn-small btn-danger" name="remove_item" value="{{ index }}">
+                {{ t('agenda_ai_remove_item') }}
+            </button>
             <a
-                class="btn btn-secondary"
+                class="btn btn-small btn-secondary"
                 href="{{ url_for(
                     'agenda_new',
                     type=draft.task_type,
@@ -120,5 +120,22 @@
                 ) }}"
             >{{ t('agenda_ai_edit') }}</a>
         </div>
-    </form>
-</article>
+    </article>
+    {% endfor %}
+
+    {% if ready_count %}
+    <div class="agenda-preview__batch">
+        <button type="submit" class="btn btn-primary" name="confirm_ready" value="1">
+            {% if ready_count == total_count %}
+            {{ t('agenda_ai_confirm_all', count=ready_count) }}
+            {% else %}
+            {{ t('agenda_ai_confirm_ready', count=ready_count) }}
+            {% endif %}
+        </button>
+        {% if ready_count != total_count %}
+        <p class="agenda-preview__batch-note">{{ t('agenda_ai_confirm_ready_note', skipped=total_count - ready_count) }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</form>
+{% endif %}

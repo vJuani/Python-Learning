@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 
 TASK_TYPE_HINTS = (
     ("visit", ("visita", "visitar", "mostrame", "mostrar", "ir a ver", "vamos a ver")),
-    ("call", ("llamar", "llamada", "llamen", "llamo")),
+    ("call", ("llamar", "llamada", "llamen", "llamo", "llama")),
     ("meeting", ("reunion", "reunión", "meeting")),
     ("follow_up", ("seguimiento", "seguir")),
     ("documentation", ("documentacion", "documentación", "papeles")),
@@ -65,7 +65,23 @@ TYPE_TITLES = {
 }
 _PERSON_RE = re.compile(
     r"\b(?:con|a)\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü]+"
-    r"(?:\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü]+)?)",
+    r"(?:\s+y\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü]+)+"
+    r"|(?:[A-Za-zÁÉÍÓÚÑÜáéíóúñü]+"
+    r"(?:\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü]+)?))",
+)
+_WEEKDAY_ALT = "|".join(sorted(set(WEEKDAYS)))
+_ACTION_ALT = (
+    r"visita|visitar|llamad\w*|llamo|llamen|seguimiento|seguir|"
+    r"recordame|recordar|recordatorio|reunión|reunion|meeting"
+)
+_SPLIT_RE = re.compile(
+    rf"(?:,\s+|\s+y\s+|\s+despu[eé]s\s+|\s+luego\s+)"
+    rf"(?=(?:despu[eé]s\s+|luego\s+)?"
+    rf"(?:el\s+(?:{_WEEKDAY_ALT})\s+)?"
+    rf"(?:a\s+las?\s+\d{{1,2}}(?:[:h.]\d{{2}})?(?:\s*(?:hs|hrs))?\s+)?"
+    rf"(?:recordame\s+(?:hacer\s+)?)?"
+    rf"(?:{_ACTION_ALT}))",
+    re.IGNORECASE,
 )
 _PROPERTY_RE = re.compile(
     r"(?:para|por|en|de)\s+"
@@ -187,6 +203,34 @@ def build_task_title(task_type, contact_name, property_query, prompt=None):
         parts.append(place)
 
     return " · ".join(parts)
+
+
+def split_agenda_segments(prompt):
+    """
+    Split a prompt into real actions.
+
+    Does not split on a bare ``y`` or comma: only when the next clause
+    starts another visit, call, meeting, follow-up or reminder.
+    """
+    text = re.sub(r"\s+", " ", (prompt or "").strip())
+
+    if not text:
+        return []
+
+    parts = []
+    start = 0
+
+    for match in _SPLIT_RE.finditer(text):
+        chunk = text[start:match.start()].strip(" ,.")
+        if chunk:
+            parts.append(chunk)
+        start = match.end()
+
+    tail = text[start:].strip(" ,.")
+    if tail:
+        parts.append(tail)
+
+    return parts or [text]
 
 
 def parse_agenda_prompt(prompt, *, today=None, now_local=None):

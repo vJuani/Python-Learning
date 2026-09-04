@@ -160,6 +160,16 @@
     <span class="app-nav-link__label">{{ t('nav_my_agent_account') }}</span>
 </a>
 <a
+    href="{{ url_for('settings_integrations') }}"
+    class="nav-link app-nav-link{% if request.endpoint == 'settings_integrations' %} active{% endif %}"
+>
+    <svg class="app-nav-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.75"/>
+        <path d="M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+    </svg>
+    <span class="app-nav-link__label">{{ t('settings_integrations_title') }}</span>
+</a>
+<a
     href="{{ url_for('my_wallet') }}"
     class="nav-link app-nav-link app-nav-link--profile{% if request.endpoint in ('my_wallet', 'agents_detail') %} active{% endif %}"
 >

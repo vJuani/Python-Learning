@@ -175,6 +175,7 @@
 
 .agenda-calendar-chip {
     display: inline-flex;
+    text-decoration: none;
     align-items: center;
     flex-wrap: wrap;
     gap: 8px;
@@ -745,6 +746,53 @@
     resize: vertical;
     font: inherit;
     color: var(--text, #0a1633);
+}
+
+.agenda-preview-list {
+    display: grid;
+    gap: 12px;
+}
+
+.agenda-preview__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.agenda-preview__index {
+    font-weight: 800;
+    color: var(--text-muted, #33415c);
+}
+
+.agenda-preview__flag {
+    margin-left: auto;
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+.agenda-preview__flag--ok {
+    color: #15803d;
+}
+
+.agenda-preview__flag--warn {
+    color: #c2410c;
+}
+
+.agenda-preview__flag--bad {
+    color: #b91c1c;
+}
+
+.agenda-preview__batch {
+    display: grid;
+    gap: 8px;
+}
+
+.agenda-preview__batch-note {
+    margin: 0;
+    font-size: 0.86rem;
+    font-weight: 650;
+    color: #c2410c;
 }
 
 .agenda-preview__kicker,

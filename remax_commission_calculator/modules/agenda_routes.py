@@ -8,14 +8,18 @@ still goes through ``create_task``.
 
 from __future__ import annotations
 
+import json
 import logging
 
 from flask import abort, redirect, render_template, request, session, url_for
 
 from modules.agenda_ai import (
+    TIME_REQUIRED_TYPES,
     AgendaAiError,
     compose_from_image,
     compose_from_prompt,
+    interpret_agenda_input,
+    refresh_item,
     summarize_visit_outcome,
 )
 from modules.agent_tasks import (
@@ -53,6 +57,7 @@ from modules.google_calendar import (
     calendar_chip_for,
     disconnect_calendar,
     finish_oauth,
+    retry_task_sync,
     sync_now,
 )
 from modules.organization_time import (
@@ -64,6 +69,91 @@ from modules.organization_time import (
 
 
 logger = logging.getLogger(__name__)
+
+_ITEM_KEYS = (
+    "title",
+    "task_type",
+    "due_date",
+    "due_time",
+    "contact_name",
+    "property_id",
+    "property_address",
+    "property_query",
+    "property_match",
+    "description",
+    "duration_minutes",
+    "reminder_minutes",
+    "attendance_status",
+    "source_prompt",
+    "ui_status",
+    "item_status",
+)
+
+
+def _items_from_form(form):
+    try:
+        count = int(form.get("item_count") or 0)
+    except (TypeError, ValueError):
+        count = 0
+
+    remove_at = form.get("remove_item")
+    items = []
+
+    for index in range(count):
+        if remove_at != "" and str(index) == str(remove_at):
+            continue
+
+        prefix = f"items-{index}-"
+        item = {key: (form.get(f"{prefix}{key}") or "") for key in _ITEM_KEYS}
+        item["date_found"] = form.get(f"{prefix}date_found") == "1" or bool(
+            item.get("due_date")
+        )
+        item["time_found"] = form.get(f"{prefix}time_found") == "1" or bool(
+            item.get("due_time")
+        )
+        raw_candidates = form.get(f"{prefix}candidates") or "[]"
+        try:
+            item["property_candidates"] = json.loads(raw_candidates)
+        except (TypeError, ValueError):
+            item["property_candidates"] = []
+
+        choice = (form.get(f"{prefix}property_choice") or "").strip()
+        if choice == "none":
+            item["property_id"] = ""
+            item["property_match"] = "none"
+        elif choice:
+            item["property_id"] = choice
+            item["property_match"] = "single"
+            for candidate in item["property_candidates"]:
+                if str(candidate.get("id")) == str(choice):
+                    item["property_address"] = candidate.get("address") or ""
+                    break
+
+        items.append(refresh_item(item))
+
+    return items
+
+
+def _item_to_payload(item):
+    due_time = item.get("due_time")
+    if not due_time and item.get("task_type") not in TIME_REQUIRED_TYPES:
+        due_time = "09:00"
+
+    return {
+        "title": item.get("title"),
+        "task_type": item.get("task_type"),
+        "priority": item.get("priority") or "normal",
+        "due_date": item.get("due_date"),
+        "due_time": due_time,
+        "property_id": (item.get("property_id") or "") or None,
+        "operation_id": None,
+        "contact_name": item.get("contact_name"),
+        "duration_minutes": item.get("duration_minutes"),
+        "reminder_minutes": item.get("reminder_minutes"),
+        "attendance_status": item.get("attendance_status"),
+        "description": item.get("description"),
+        "ai_suggestion": item.get("title"),
+    }
 
 
 def register_agenda_routes(app, helpers):
@@ -208,6 +298,7 @@ def register_agenda_routes(app, helpers):
                 now_local=now_utc().astimezone(tz),
                 language=language,
             ),
+            create_result=session.pop("agenda_create_result", None),
         )
 
     @app.route("/agenda/new", methods=["GET", "POST"])
@@ -280,7 +371,86 @@ def register_agenda_routes(app, helpers):
             or ""
         ).strip()
 
-        if request.method == "POST" and request.form.get("confirm"):
+        items = []
+
+        if request.method == "POST" and (
+            request.form.get("confirm_ready")
+            or request.form.get("confirm_one")
+            or request.form.get("remove_item") not in (None, "")
+            or request.form.get("item_count")
+        ):
+            items = _items_from_form(request.form)
+            confirm_one = (request.form.get("confirm_one") or "").strip()
+            confirm_ready = bool(request.form.get("confirm_ready"))
+
+            if confirm_one != "" or confirm_ready:
+                selected = []
+                if confirm_one != "":
+                    try:
+                        index = int(confirm_one)
+                    except (TypeError, ValueError):
+                        index = -1
+                    if 0 <= index < len(items) and items[index].get("item_status") == "ready":
+                        selected = [items[index]]
+                else:
+                    selected = [
+                        item for item in items if item.get("item_status") == "ready"
+                    ]
+
+                if not selected:
+                    errors = ["agenda_ai_err_none_ready"]
+                else:
+                    created = []
+                    remaining = []
+                    create_failed = False
+                    for item in items:
+                        if item not in selected:
+                            remaining.append(item)
+                            continue
+                        try:
+                            created.append(
+                                create_task(
+                                    organization_id,
+                                    agent_id,
+                                    _item_to_payload(item),
+                                    created_by_user_id=user["id"],
+                                )
+                            )
+                        except AgentTaskError as error:
+                            errors = [error.message_key]
+                            item["ui_status"] = "error"
+                            item["item_status"] = "needs_attention"
+                            remaining.append(item)
+                            create_failed = True
+
+                    if created and not create_failed:
+                        calendar = calendar_chip_for(
+                            organization_id,
+                            user,
+                            agent_id=agent_id,
+                            can_manage=True,
+                        )
+                        pending = []
+                        if calendar.get("state") in ("synced", "error"):
+                            pending = [
+                                task["id"]
+                                for task in created
+                                if not task.get("google_event_id")
+                            ]
+                        session["agenda_create_result"] = {
+                            "created": len(created),
+                            "synced": len(created) - len(pending),
+                            "pending_ids": pending,
+                        }
+                        if remaining:
+                            items = remaining
+                        else:
+                            flash_i18n("agent_task_flash_created", "success")
+                            return redirect(url_for("agenda_index"))
+
+            draft = items[0] if len(items) == 1 else None
+
+        elif request.method == "POST" and request.form.get("confirm"):
             choice = (request.form.get("property_choice") or "").strip()
             needs_choice = request.form.get("needs_property_choice") == "1"
 
@@ -292,15 +462,9 @@ def register_agenda_routes(app, helpers):
                         organization_id,
                         agent_id,
                     )
+                    items = [draft]
                 except AgendaAiError as error:
                     errors.append(error.message_key)
-                else:
-                    if request.form.get("due_date"):
-                        draft["due_date"] = request.form.get("due_date")
-                        draft["date_found"] = True
-                    if request.form.get("due_time"):
-                        draft["due_time"] = request.form.get("due_time")
-                        draft["time_found"] = True
             else:
                 form_values = _form_values_from_request()
 
@@ -310,7 +474,7 @@ def register_agenda_routes(app, helpers):
                     form_values["property_id"] = choice
 
                 try:
-                    create_task(
+                    created = create_task(
                         organization_id,
                         agent_id,
                         form_values,
@@ -320,18 +484,37 @@ def register_agenda_routes(app, helpers):
                     errors = [error.message_key]
                     draft = form_values
                     draft["ui_status"] = "error"
+                    items = [draft]
                 else:
+                    calendar = calendar_chip_for(
+                        organization_id,
+                        user,
+                        agent_id=agent_id,
+                        can_manage=True,
+                    )
+                    pending = []
+                    if calendar.get("state") in ("synced", "error") and not created.get(
+                        "google_event_id"
+                    ):
+                        pending = [created["id"]]
+                    session["agenda_create_result"] = {
+                        "created": 1,
+                        "synced": 0 if pending else 1,
+                        "pending_ids": pending,
+                    }
                     flash_i18n("agent_task_flash_created", "success")
 
                     return redirect(url_for("agenda_index"))
 
         elif request.method == "POST":
             try:
-                draft = compose_from_prompt(
+                bundle = interpret_agenda_input(
                     prompt,
                     organization_id,
                     agent_id,
                 )
+                items = bundle["items"]
+                draft = items[0] if len(items) == 1 else None
             except AgendaAiError as error:
                 errors = [error.message_key]
 
@@ -339,6 +522,7 @@ def register_agenda_routes(app, helpers):
             "agenda/compose.html",
             prompt=prompt,
             draft=draft,
+            items=items,
             errors=errors,
             voice_mode=request.args.get("mode") == "voice",
         )
@@ -350,6 +534,7 @@ def register_agenda_routes(app, helpers):
         organization_id = require_user_organization()
         draft = None
         errors = []
+        items = []
 
         whatsapp_text = (
             request.form.get("whatsapp_text")
@@ -368,12 +553,15 @@ def register_agenda_routes(app, helpers):
                         agent_id,
                         extra_prompt=whatsapp_text,
                     )
+                    items = [draft]
                 elif whatsapp_text:
-                    draft = compose_from_prompt(
+                    bundle = interpret_agenda_input(
                         whatsapp_text,
                         organization_id,
                         agent_id,
                     )
+                    items = bundle["items"]
+                    draft = items[0] if len(items) == 1 else None
                 else:
                     raise AgendaAiError("agenda_ai_err_empty_prompt")
             except AgendaAiError as error:
@@ -382,6 +570,7 @@ def register_agenda_routes(app, helpers):
         return render_template(
             "agenda/capture.html",
             draft=draft,
+            items=items,
             prompt=whatsapp_text,
             errors=errors,
         )
@@ -605,7 +794,7 @@ def register_agenda_routes(app, helpers):
             url = begin_oauth(session)
         except GoogleCalendarError as error:
             flash_i18n(error.message_key, "error")
-            return redirect(url_for("agenda_index"))
+            return redirect(url_for("settings_integrations"))
 
         return redirect(url)
 
@@ -626,14 +815,14 @@ def register_agenda_routes(app, helpers):
             )
         except GoogleCalendarError as error:
             flash_i18n(error.message_key, "error")
-            return redirect(url_for("agenda_index"))
+            return redirect(url_for("settings_integrations"))
         except Exception:
             flash_i18n("agenda_calendar_flash_oauth_error", "error")
-            return redirect(url_for("agenda_index"))
+            return redirect(url_for("settings_integrations"))
 
         flash_i18n("agenda_calendar_flash_connected", "success")
 
-        return redirect(url_for("agenda_index"))
+        return redirect(url_for("settings_integrations"))
 
     @app.route("/agenda/calendar/disconnect", methods=["POST"])
     @login_required
@@ -656,6 +845,65 @@ def register_agenda_routes(app, helpers):
             sync_now(organization_id, agent_id=agent_id)
         except GoogleCalendarError as error:
             flash_i18n(error.message_key, "error")
+        else:
+            flash_i18n("agenda_calendar_flash_synced", "success")
+
+        return _redirect_back()
+
+    @app.route("/settings/integrations")
+    @login_required
+    def settings_integrations():
+        user, agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+        calendar = calendar_chip_for(
+            organization_id,
+            user,
+            agent_id=agent_id,
+            can_manage=True,
+        )
+
+        return render_template(
+            "settings/integrations.html",
+            calendar=calendar,
+        )
+
+    @app.route("/agenda/calendar/retry", methods=["POST"])
+    @login_required
+    def agenda_calendar_retry():
+        user, agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+        raw_ids = request.form.getlist("task_id")
+        synced = 0
+        pending = []
+
+        for raw in raw_ids:
+            try:
+                task_id = int(raw)
+            except (TypeError, ValueError):
+                continue
+
+            try:
+                task = load_editable_task(
+                    organization_id,
+                    task_id,
+                    agent_id=agent_id,
+                )
+            except AgentTaskError:
+                continue
+
+            pushed = retry_task_sync(task, actor_user_id=user["id"])
+            if pushed or task.get("google_event_id"):
+                synced += 1
+            else:
+                pending.append(task_id)
+
+        if pending:
+            flash_i18n("agenda_calendar_flash_retry_partial", "error")
+            session["agenda_create_result"] = {
+                "created": len(raw_ids),
+                "synced": synced,
+                "pending_ids": pending,
+            }
         else:
             flash_i18n("agenda_calendar_flash_synced", "success")
 

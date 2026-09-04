@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page {% endblock %}
+
+{% block title %}{{ t('settings_integrations_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="agenda-hero__kicker">{{ t('settings_title') }}</p>
+        <h2>{{ t('settings_integrations_title') }}</h2>
+        <p>{{ t('settings_integrations_subtitle') }}</p>
+    </div>
+</section>
+
+{% set calendar = calendar or {"state": "unconfigured"} %}
+<article class="integration-card">
+    <header class="integration-card__head">
+        <h3>{{ t('agenda_calendar_google') }}</h3>
+        {% if calendar.state == 'synced' %}
+        <span class="integration-card__badge">{{ t('settings_integrations_connected') }}</span>
+        {% elif calendar.state == 'error' %}
+        <span class="integration-card__badge integration-card__badge--warn">{{ t('agenda_calendar_error') }}</span>
+        {% endif %}
+    </header>
+
+    {% if calendar.state == 'synced' or calendar.state == 'error' %}
+    <p class="integration-card__email">{{ calendar.google_email }}</p>
+    {% if calendar.last_synced_label %}
+    <p class="integration-card__meta">
+        {{ t('settings_integrations_last_sync') }}
+        <strong>{{ calendar.last_synced_label }}</strong>
+    </p>
+    {% endif %}
+    <div class="integration-card__actions">
+        {% if calendar.can_sync %}
+        <form method="post" action="{{ url_for('agenda_calendar_sync') }}">
+            <input type="hidden" name="next" value="{{ url_for('settings_integrations') }}">
+            <button type="submit" class="btn btn-primary">{{ t('agenda_calendar_sync_now') }}</button>
+        </form>
+        {% endif %}
+        {% if calendar.can_disconnect %}
+        <form
+            method="post"
+            action="{{ url_for('agenda_calendar_disconnect') }}"
+            onsubmit="return confirm('{{ t('agenda_calendar_confirm_disconnect') }}');"
+        >
+            <input type="hidden" name="next" value="{{ url_for('settings_integrations') }}">
+            <button type="submit" class="btn btn-secondary">{{ t('agenda_calendar_disconnect') }}</button>
+        </form>
+        {% endif %}
+    </div>
+    {% else %}
+    <p>{{ t('settings_integrations_calendar_help') }}</p>
+    {% if calendar.can_connect %}
+    <a class="btn btn-primary" href="{{ url_for('agenda_calendar_connect') }}">
+        {{ t('agenda_calendar_connect') }}
+    </a>
+    {% elif calendar.state == 'unconfigured' %}
+    <p class="integration-card__meta">{{ t('agenda_calendar_flash_not_configured') }}</p>
+    {% endif %}
+    {% endif %}
+</article>
+{% endblock %}

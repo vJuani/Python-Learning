@@ -29,7 +29,7 @@
         {{ t('agenda_ai_status_processing') }}
     </p>
 
-    {% if draft and draft.title %}
+    {% if items %}
     {% include "agenda/_preview.html" with context %}
     {% endif %}
 

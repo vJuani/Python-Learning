@@ -44,7 +44,7 @@
         <button type="submit" class="btn btn-secondary">{{ t('agenda_capture_submit') }}</button>
     </form>
 
-    {% if draft and draft.title %}
+    {% if items %}
     {% include "agenda/_preview.html" with context %}
     {% endif %}
 </section>

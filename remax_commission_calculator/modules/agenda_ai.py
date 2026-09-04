@@ -16,6 +16,7 @@ from modules.agenda_nlp import (
     build_task_title,
     parse_agenda_prompt,
     parse_visit_outcome,
+    split_agenda_segments,
 )
 from modules.cash_ai_provider import (
     CashAiProviderError,
@@ -149,10 +150,29 @@ def _public_candidates(candidates):
     ]
 
 
+TIME_REQUIRED_TYPES = {"visit", "call", "meeting"}
+
+
+def item_status(draft):
+    if not draft.get("task_type"):
+        return "invalid"
+    if draft.get("property_match") == "ambiguous" and not draft.get("property_id"):
+        return "needs_attention"
+    if not draft.get("date_found") or not draft.get("due_date"):
+        return "needs_attention"
+    if draft.get("task_type") in TIME_REQUIRED_TYPES and (
+        not draft.get("time_found") or not draft.get("due_time")
+    ):
+        return "needs_attention"
+    return "ready"
+
+
 def _draft_ui_status(draft, match):
     if match["status"] == "ambiguous":
         return "properties_ambiguous"
-    if not draft.get("date_found") or not draft.get("time_found"):
+    if not draft.get("date_found") or (
+        draft.get("task_type") in TIME_REQUIRED_TYPES and not draft.get("time_found")
+    ):
         return "date_unclear"
     if match["status"] == "none":
         return "property_not_found"
@@ -200,8 +220,96 @@ def _enrich_draft(draft, organization_id, agent_id):
     draft["property_candidates"] = _public_candidates(match["candidates"])
     draft["warnings"] = _draft_warnings(draft, match)
     draft["ui_status"] = _draft_ui_status(draft, match)
+    _apply_structured_title(draft)
+    draft["item_status"] = item_status(draft)
 
-    return _apply_structured_title(draft)
+    return draft
+
+
+def _merge_model_item(local, parsed):
+    draft = {**local, **{key: value for key, value in parsed.items() if value}}
+    if parsed.get("due_date"):
+        draft["date_found"] = True
+    if parsed.get("due_time"):
+        draft["time_found"] = True
+    return draft
+
+
+def interpret_agenda_input(
+    prompt,
+    organization_id,
+    agent_id,
+    *,
+    now=None,
+):
+    """
+    Interpret typed, spoken or pasted text into one or more drafts.
+
+    Always returns ``{"items": [...]}``. A single action is length 1.
+    """
+    prompt = (prompt or "").strip()
+
+    if not prompt:
+        raise AgendaAiError("agenda_ai_err_empty_prompt")
+
+    tz = organization_timezone(organization_id)
+    now_local = (now or now_utc()).astimezone(tz)
+    today = now_local.date()
+    segments = split_agenda_segments(prompt)
+    locals_ = [
+        parse_agenda_prompt(segment, today=today, now_local=now_local)
+        for segment in segments
+    ]
+
+    previous_date = None
+    for draft in locals_:
+        if not draft.get("date_found") and previous_date:
+            draft["due_date"] = previous_date
+            draft["date_found"] = True
+        if draft.get("date_found") and draft.get("due_date"):
+            previous_date = draft["due_date"]
+
+    model_items = []
+    if os.environ.get("OPENAI_API_KEY", "").strip():
+        try:
+            model_items = _openai_compose_items(prompt, now_local)
+        except CashAiProviderError:
+            logger.info("agenda_ai_openai_fallback prompt_len=%s", len(prompt))
+
+    if model_items and len(model_items) >= len(locals_):
+        drafts = []
+        for index, parsed in enumerate(model_items):
+            base = locals_[index] if index < len(locals_) else locals_[-1]
+            drafts.append(_merge_model_item(base, parsed))
+    else:
+        drafts = locals_
+
+    items = [
+        _enrich_draft(draft, organization_id, agent_id)
+        for draft in drafts
+    ]
+
+    return {
+        "items": items,
+        "source_prompt": prompt,
+    }
+
+
+def refresh_item(draft):
+    draft["date_found"] = bool(draft.get("due_date"))
+    draft["time_found"] = bool(draft.get("due_time"))
+    if draft.get("property_id"):
+        draft["property_match"] = "single"
+    draft["item_status"] = item_status(draft)
+    if draft["item_status"] == "ready":
+        draft["ui_status"] = "ready"
+    elif draft.get("property_match") == "ambiguous":
+        draft["ui_status"] = "properties_ambiguous"
+    elif not draft.get("date_found") or (
+        draft.get("task_type") in TIME_REQUIRED_TYPES and not draft.get("time_found")
+    ):
+        draft["ui_status"] = "date_unclear"
+    return draft
 
 
 def compose_from_prompt(
@@ -211,31 +319,13 @@ def compose_from_prompt(
     *,
     now=None,
 ):
-    prompt = (prompt or "").strip()
-
-    if not prompt:
-        raise AgendaAiError("agenda_ai_err_empty_prompt")
-
-    tz = organization_timezone(organization_id)
-    now_local = (now or now_utc()).astimezone(tz)
-    draft = parse_agenda_prompt(
+    bundle = interpret_agenda_input(
         prompt,
-        today=now_local.date(),
-        now_local=now_local,
+        organization_id,
+        agent_id,
+        now=now,
     )
-
-    if os.environ.get("OPENAI_API_KEY", "").strip():
-        try:
-            parsed = _openai_compose(prompt, now_local)
-            draft = {**draft, **{key: value for key, value in parsed.items() if value}}
-            if parsed.get("due_date"):
-                draft["date_found"] = True
-            if parsed.get("due_time"):
-                draft["time_found"] = True
-        except CashAiProviderError:
-            logger.info("agenda_ai_openai_fallback prompt_len=%s", len(prompt))
-
-    return _enrich_draft(draft, organization_id, agent_id)
+    return bundle["items"][0]
 
 
 compose_from_whatsapp_text = compose_from_prompt
@@ -309,16 +399,66 @@ def summarize_visit_outcome(text):
     return parsed
 
 
-def _openai_compose(prompt, now_local, *, image_bytes=None, image_content_type=None):
-    schema = {
-        "title": "string",
+def _openai_item_schema():
+    return {
         "task_type": "visit|call|meeting|follow_up|documentation|valuation|reminder|other",
-        "due_date": "YYYY-MM-DD",
-        "due_time": "HH:MM",
+        "due_date": "YYYY-MM-DD|null",
+        "due_time": "HH:MM|null",
         "contact_name": "string|null",
         "property_query": "string|null",
         "description": "string|null",
         "duration_minutes": "number|null",
+    }
+
+
+def _normalized_model_item(parsed, prompt):
+    return {
+        "task_type": parsed.get("task_type") or "other",
+        "due_date": parsed.get("due_date"),
+        "due_time": parsed.get("due_time"),
+        "contact_name": parsed.get("contact_name") or "",
+        "property_query": parsed.get("property_query") or "",
+        "description": parsed.get("description") or prompt,
+        "duration_minutes": parsed.get("duration_minutes"),
+        "source_prompt": parsed.get("source_prompt") or prompt,
+        "title": parsed.get("title") or "",
+    }
+
+
+def _openai_compose_items(prompt, now_local):
+    schema = {"items": [_openai_item_schema()]}
+    instructions = (
+        "Extract every distinct real-estate agenda action from the user text. "
+        "A visit with two people is ONE item. A visit and a later call are TWO. "
+        "Never invent a date, time or property id. "
+        "If a later action says 'después' without a time, omit due_time. "
+        "Return ONLY JSON matching this shape: "
+        f"{json.dumps(schema)}. "
+        f"Today is {now_local.date().isoformat()} "
+        f"and the local time is {now_local.strftime('%H:%M')}. "
+        "Prefer Argentine Spanish."
+    )
+    parsed = request_structured_json(
+        instructions=instructions,
+        user_content=[{"type": "text", "text": prompt}],
+        log_prefix="agenda_ai_items",
+    )
+    raw_items = parsed.get("items") if isinstance(parsed, dict) else None
+
+    if not raw_items:
+        return []
+
+    return [
+        _normalized_model_item(item, prompt)
+        for item in raw_items
+        if isinstance(item, dict)
+    ]
+
+
+def _openai_compose(prompt, now_local, *, image_bytes=None, image_content_type=None):
+    schema = {
+        "title": "string",
+        **_openai_item_schema(),
         "source_prompt": "string",
     }
     instructions = (
