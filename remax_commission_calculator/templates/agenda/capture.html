@@ -2,6 +2,10 @@
 
 {% block title %}{{ t('agenda_capture_title') }} | {{ t('app_title') }}{% endblock %}
 
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
+{% endblock %}
+
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
@@ -16,44 +20,32 @@
 </div>
 {% endif %}
 
-<section class="panel">
-    <form method="post" enctype="multipart/form-data" class="agenda-form">
-        <label class="agenda-form__field">
-            <span>WhatsApp</span>
-            <input type="file" name="screenshot" accept="image/jpeg,image/png,image/webp" required>
-        </label>
-        <label class="agenda-form__field">
-            <span>{{ t('agent_task_field_description') }}</span>
-            <input type="text" name="prompt" placeholder="{{ t('agenda_ia_placeholder') }}">
-        </label>
-        <button type="submit" class="btn btn-primary">{{ t('agenda_capture_submit') }}</button>
-    </form>
-</section>
+<section class="agenda-chat">
+    <p class="agenda-status" data-status="processing" data-agenda-processing hidden>
+        {{ t('agenda_ai_status_processing') }}
+    </p>
 
-{% if draft %}
-<article class="agenda-preview">
-    <p class="agenda-preview__kicker">{{ t('agenda_capture_detected') }}</p>
-    <p class="agenda-preview__type">{{ t('agent_task_type_' ~ draft.task_type) }}</p>
-    <h3>{{ draft.title }}</h3>
-    <p>{{ draft.due_date }} · {{ draft.due_time }}</p>
-    {% if draft.contact_name %}<p>{{ draft.contact_name }}</p>{% endif %}
-    {% if draft.property_address %}<p>{{ draft.property_address }}</p>{% endif %}
-    <form method="post" action="{{ url_for('agenda_compose') }}">
-        <input type="hidden" name="confirm" value="1">
-        <input type="hidden" name="title" value="{{ draft.title }}">
-        <input type="hidden" name="task_type" value="{{ draft.task_type }}">
-        <input type="hidden" name="due_date" value="{{ draft.due_date }}">
-        <input type="hidden" name="due_time" value="{{ draft.due_time }}">
-        <input type="hidden" name="contact_name" value="{{ draft.contact_name }}">
-        <input type="hidden" name="property_id" value="{{ draft.property_id }}">
-        <input type="hidden" name="description" value="{{ draft.description }}">
-        <input type="hidden" name="duration_minutes" value="{{ draft.duration_minutes }}">
-        <input type="hidden" name="reminder_minutes" value="{{ draft.reminder_minutes or '' }}">
-        <button type="submit" class="btn btn-primary">{{ t('agenda_ai_confirm') }}</button>
-        <a class="btn btn-secondary" href="{{ url_for('agenda_new', type=draft.task_type, title=draft.title, contact_name=draft.contact_name, property_id=draft.property_id, due_date=draft.due_date, due_time=draft.due_time, description=draft.description) }}">
-            {{ t('agenda_ai_edit') }}
-        </a>
+    <form method="post" class="agenda-ia agenda-ia--chat" data-agenda-interpret>
+        <span class="agenda-ia__label">{{ t('agenda_capture_paste_label') }}</span>
+        <textarea
+            name="whatsapp_text"
+            rows="5"
+            placeholder="{{ t('agenda_capture_paste_placeholder') }}"
+        >{{ prompt or '' }}</textarea>
+        <p class="agenda-ia__hint">{{ t('agenda_capture_paste_hint') }}</p>
+        <button type="submit" class="btn btn-primary">{{ t('agenda_capture_paste_submit') }}</button>
     </form>
-</article>
-{% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="agenda-form" data-agenda-interpret>
+        <label class="agenda-form__field">
+            <span>{{ t('agenda_capture_screenshot_label') }}</span>
+            <input type="file" name="screenshot" accept="image/jpeg,image/png,image/webp">
+        </label>
+        <button type="submit" class="btn btn-secondary">{{ t('agenda_capture_submit') }}</button>
+    </form>
+
+    {% if draft and draft.title %}
+    {% include "agenda/_preview.html" with context %}
+    {% endif %}
+</section>
 {% endblock %}

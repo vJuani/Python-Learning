@@ -524,9 +524,15 @@ class AgentAgendaTests(unittest.TestCase):
         body = response.get_data(as_text=True)
 
         self.assertEqual(response.status_code, 200)
+        self.assertIn("agenda-home", body)
+        self.assertIn("Tu día, organizado por JRH One.", body)
         self.assertIn("agenda-card", body)
         self.assertIn("agenda-fab", body)
         self.assertIn("agenda-ia", body)
+        self.assertIn("agenda-tools", body)
+        self.assertRegex(body, r'name="prompt"\s+value=""')
+        self.assertIn("mobile-bottom-nav-label", body)
+        self.assertIn("Agenda", body)
         self.assertNotIn("<table", body)
 
         form = self.client.get("/agenda/new")
@@ -1015,6 +1021,239 @@ class AgentAgendaTests(unittest.TestCase):
         connection.close()
         self.assertIn("google_event_id", columns)
 
+    # ---------------- Honest composer (phase 2) ----------------
+
+    def test_36_property_match_zero_hits_leaves_id_empty(self):
+        from modules.agenda_ai import compose_from_prompt, match_property
+
+        matched = match_property(
+            self.org_a,
+            self.agent_a,
+            "Zeballos Falso 91",
+        )
+        self.assertEqual(matched["status"], "none")
+        self.assertEqual(matched["candidates"], [])
+        self.assertIsNone(matched["property"])
+
+        draft = compose_from_prompt(
+            "Agendame una visita mañana a las 16 con Lucía para Zeballos Falso 91",
+            self.org_a,
+            self.agent_a,
+        )
+        self.assertEqual(draft["property_id"], "")
+        self.assertEqual(draft["property_match"], "none")
+        self.assertIn("agenda_ai_warn_property_not_found", draft["warnings"])
+        self.assertIn("agenda_ai_warn_visit_without_property", draft["warnings"])
+
+    def test_37_property_match_single_hit_assigns_id(self):
+        from modules.agenda_ai import compose_from_prompt, match_property
+
+        property_id = add_property(
+            "Uriarte Unica 450",
+            "CABA",
+            self.org_a,
+            agent_id=self.agent_a,
+            status="approved",
+        )
+        matched = match_property(
+            self.org_a,
+            self.agent_a,
+            "Uriarte Unica 450",
+        )
+        self.assertEqual(matched["status"], "single")
+        self.assertEqual(matched["property"]["id"], property_id)
+
+        draft = compose_from_prompt(
+            "Visita mañana a las 16 con Lucía para Uriarte Unica 450",
+            self.org_a,
+            self.agent_a,
+        )
+        self.assertEqual(draft["property_id"], property_id)
+        self.assertEqual(draft["property_match"], "single")
+        self.assertEqual(draft["ui_status"], "ready")
+
+    def test_38_property_match_multiple_hits_does_not_guess(self):
+        from modules.agenda_ai import compose_from_prompt, match_property
+
+        first = add_property(
+            "Libertador Norte 100",
+            "CABA",
+            self.org_a,
+            agent_id=self.agent_a,
+            status="approved",
+        )
+        second = add_property(
+            "Libertador Sur 200",
+            "CABA",
+            self.org_a,
+            agent_id=self.agent_a,
+            status="approved",
+        )
+        matched = match_property(self.org_a, self.agent_a, "Libertador")
+        self.assertEqual(matched["status"], "ambiguous")
+        self.assertIsNone(matched["property"])
+        self.assertEqual(
+            {record["id"] for record in matched["candidates"]},
+            {first, second},
+        )
+
+        draft = compose_from_prompt(
+            "Visita mañana a las 16 con Lucía para Libertador",
+            self.org_a,
+            self.agent_a,
+        )
+        self.assertEqual(draft["property_id"], "")
+        self.assertEqual(draft["property_match"], "ambiguous")
+        self.assertEqual(len(draft["property_candidates"]), 2)
+        self.assertEqual(draft["ui_status"], "properties_ambiguous")
+
+    def test_39_ambiguous_confirm_requires_choice(self):
+        from modules.database.agent_tasks_repository import list_agent_tasks
+
+        first = add_property(
+            "Cabildo Norte 10",
+            "CABA",
+            self.org_a,
+            agent_id=self.agent_a,
+            status="approved",
+        )
+        add_property(
+            "Cabildo Sur 20",
+            "CABA",
+            self.org_a,
+            agent_id=self.agent_a,
+            status="approved",
+        )
+        before = len(list_agent_tasks(self.org_a, agent_id=self.agent_a))
+        self._login("agenda_agent_user")
+        preview = self.client.post(
+            "/agenda/compose",
+            data={"prompt": "Visita mañana a las 17 con Pablo para Cabildo"},
+        )
+        body = preview.get_data(as_text=True)
+        self.assertEqual(preview.status_code, 200)
+        self.assertIn("needs_property_choice", body)
+        self.assertIn("property_choice", body)
+        self.assertIn("Encontré 2 propiedades", body)
+
+        blocked = self.client.post(
+            "/agenda/compose",
+            data={
+                "confirm": "1",
+                "needs_property_choice": "1",
+                "prompt": "Visita mañana a las 17 con Pablo para Cabildo",
+                "title": "Visita con Pablo · Cabildo",
+                "task_type": "visit",
+                "due_date": "2026-09-10",
+                "due_time": "17:00",
+                "contact_name": "Pablo",
+                "description": "visita",
+                "duration_minutes": "60",
+            },
+        )
+        self.assertEqual(blocked.status_code, 200)
+        self.assertIn("Elegí una de las propiedades posibles", blocked.get_data(as_text=True))
+        self.assertEqual(
+            len(list_agent_tasks(self.org_a, agent_id=self.agent_a)),
+            before,
+        )
+
+        created = self.client.post(
+            "/agenda/compose",
+            data={
+                "confirm": "1",
+                "needs_property_choice": "1",
+                "property_choice": str(first),
+                "title": "Visita con Pablo · Cabildo",
+                "task_type": "visit",
+                "due_date": "2026-09-10",
+                "due_time": "17:00",
+                "contact_name": "Pablo",
+                "description": "visita",
+                "duration_minutes": "60",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(created.status_code, 200)
+        stored = [
+            task
+            for task in list_agent_tasks(self.org_a, agent_id=self.agent_a)
+            if task.get("property_id") == first
+        ]
+        self.assertEqual(len(stored), 1)
+        self.assertEqual(stored[0]["contact_name"], "Pablo")
+        self.assertIn("Pablo", created.get_data(as_text=True))
+
+    def test_40_whatsapp_paste_uses_same_compose_pipeline(self):
+        from modules.agenda_ai import compose_from_prompt, compose_from_whatsapp_text
+
+        self.assertIs(compose_from_whatsapp_text, compose_from_prompt)
+        self._login("agenda_agent_user")
+        pasted = (
+            "Dale, mañana a las 18 podemos ir a ver el departamento "
+            "de Libertador Unico 777"
+        )
+        response = self.client.post(
+            "/agenda/capture",
+            data={"whatsapp_text": pasted},
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("agenda-preview", body)
+        self.assertIn("Libertador Unico 777", body)
+        self.assertIn("18:00", body)
+
+        confirmed = self.client.post(
+            "/agenda/compose",
+            data={
+                "confirm": "1",
+                "whatsapp_text": pasted,
+                "title": "Visita · Libertador Unico 777",
+                "task_type": "visit",
+                "due_date": "2026-09-11",
+                "due_time": "18:00",
+                "contact_name": "",
+                "description": pasted,
+                "duration_minutes": "60",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertIn("Libertador Unico 777", confirmed.get_data(as_text=True))
+
+    def test_41_automatic_titles_do_not_invent(self):
+        from modules.agenda_nlp import build_task_title, parse_agenda_prompt
+
+        self.assertEqual(
+            build_task_title("visit", "Lucía", "Libertador 3200"),
+            "Visita con Lucía · Libertador 3200",
+        )
+        self.assertEqual(
+            build_task_title("call", "Pablo", "Cabildo"),
+            "Llamada con Pablo · Cabildo",
+        )
+        self.assertEqual(
+            build_task_title("follow_up", "Martín", ""),
+            "Seguimiento con Martín",
+        )
+        self.assertEqual(
+            build_task_title("meeting", "Carolina", ""),
+            "Reunión con Carolina",
+        )
+        self.assertEqual(
+            build_task_title("visit", "", "Libertador 3200"),
+            "Visita · Libertador 3200",
+        )
+        self.assertEqual(build_task_title("call", "", ""), "Llamada")
+
+        draft = parse_agenda_prompt("Llamar a Pablo")
+        self.assertEqual(draft["title"], "Llamada con Pablo")
+        self.assertFalse(draft["date_found"])
+        self.assertFalse(draft["time_found"])
+        self.assertEqual(draft["due_date"], "")
+        self.assertEqual(draft["due_time"], "")
+
 
 if __name__ == "__main__":
     unittest.main()
+

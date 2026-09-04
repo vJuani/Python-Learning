@@ -1,13 +1,18 @@
 {% set back_to = agenda_next or (request.full_path if request.query_string else request.path) %}
+{% set is_google = task.source == 'google' %}
 <article
     class="agenda-card agenda-card--{{ task.task_type }} agenda-card--{{ task.status }}
-        {%- if task.source == 'google' %} agenda-card--google{% endif %}
-        {%- if task.is_overdue %} agenda-card--overdue{% endif %}"
+        {%- if is_google %} agenda-card--google{% endif %}
+        {%- if task.is_overdue %} agenda-card--overdue
+        {%- elif task.needs_attendance %} agenda-card--unconfirmed
+        {%- elif task.starts_soon %} agenda-card--soon
+        {%- elif task.attendance_status == 'confirmed' %} agenda-card--confirmed
+        {%- endif %}"
 >
     <div class="agenda-card__time">
         <span class="agenda-card__hour">{{ task.due_time_label }}</span>
         <span class="agenda-card__type">
-            {% if task.source == 'google' %}
+            {% if is_google %}
             {{ t('agenda_calendar_source') }}
             {% else %}
             {{ task.type_label }}
@@ -24,10 +29,16 @@
             {% endif %}
         </h3>
 
+        {% if task.description and (task.task_type != 'call' or task.contact_name) %}
+        <p class="agenda-card__place">{{ task.description }}</p>
+        {% endif %}
+
         {% if task.contact_name %}
         <p class="agenda-card__person">{{ task.contact_name }}</p>
         {% elif task.title and task.relation_label %}
         <p class="agenda-card__person">{{ task.title }}</p>
+        {% elif task.description and task.task_type == 'call' %}
+        <p class="agenda-card__person">{{ task.description }}</p>
         {% endif %}
 
         {% if task.needs_attendance %}
@@ -36,13 +47,15 @@
         <p class="agenda-card__warn">{{ task.overdue_label }}</p>
         {% elif task.starts_soon %}
         <p class="agenda-badge agenda-badge--soon">{{ task.soon_label }}</p>
+        {% elif task.attendance_status == 'confirmed' %}
+        <p class="agenda-badge agenda-badge--ok">{{ t('agenda_signal_confirmed') }}</p>
         {% endif %}
 
         {% if show_agent_name and task.agent_name %}
         <p class="agenda-card__person">{{ task.agent_name }}</p>
         {% endif %}
 
-        {% if task.source == 'google' %}
+        {% if is_google %}
         <div class="agenda-card__quick">
             {% if task.google_html_link %}
             <a class="agenda-chip" href="{{ task.google_html_link }}" target="_blank" rel="noopener">
@@ -52,9 +65,17 @@
         </div>
         {% elif can_manage and task.status == 'pending' %}
         <div class="agenda-card__quick">
-            {% if task.whatsapp_url %}
+            {% if task.task_type == 'call' and task.whatsapp_url %}
             <a class="agenda-chip" href="{{ task.whatsapp_url }}" target="_blank" rel="noopener">
+                {{ t('agenda_action_call') }}
+            </a>
+            {% elif task.whatsapp_url %}
+            <a class="agenda-chip" href="{{ task.whatsapp_url }}" target="_blank" rel="noopener">
+                {% if task.needs_attendance %}
+                {{ t('agenda_attendance_confirm_whatsapp') }}
+                {% else %}
                 {{ t('agenda_action_whatsapp') }}
+                {% endif %}
             </a>
             {% endif %}
             {% if task.maps_url %}
@@ -67,37 +88,40 @@
                 {{ t('agenda_action_view_property') }}
             </a>
             {% endif %}
-        </div>
-
-        <div class="agenda-card__actions">
-            <form method="post" action="{{ url_for('agenda_complete', task_id=task.id) }}">
-                <input type="hidden" name="next" value="{{ back_to }}">
-                <button type="submit" class="btn btn-small btn-primary">
-                    {{ t('agent_task_action_complete') }}
-                </button>
-            </form>
             {% if task.needs_attendance %}
-            <form method="post" action="{{ url_for('agenda_confirm_attendance', task_id=task.id) }}">
+            <form method="post" action="{{ url_for('agenda_confirm_attendance', task_id=task.id) }}" class="agenda-chip-form">
                 <input type="hidden" name="next" value="{{ back_to }}">
-                <button type="submit" class="btn btn-small btn-secondary">
+                <button type="submit" class="agenda-chip agenda-chip--button">
                     {{ t('agenda_attendance_confirm') }}
                 </button>
             </form>
             {% endif %}
-            <a href="{{ url_for('agenda_edit', task_id=task.id, next=back_to) }}" class="btn btn-small btn-secondary">
-                {{ t('agent_task_action_edit') }}
-            </a>
-            <form
-                method="post"
-                action="{{ url_for('agenda_cancel', task_id=task.id) }}"
-                onsubmit="return confirm('{{ t('agent_task_cancel_confirm') }}');"
-            >
-                <input type="hidden" name="next" value="{{ back_to }}">
-                <button type="submit" class="btn btn-small btn-danger">
-                    {{ t('agent_task_action_cancel') }}
-                </button>
-            </form>
         </div>
+
+        <details class="agenda-card__more">
+            <summary>{{ t('agenda_card_more') }}</summary>
+            <div class="agenda-card__actions">
+                <form method="post" action="{{ url_for('agenda_complete', task_id=task.id) }}">
+                    <input type="hidden" name="next" value="{{ back_to }}">
+                    <button type="submit" class="btn btn-small btn-primary">
+                        {{ t('agent_task_action_complete') }}
+                    </button>
+                </form>
+                <a href="{{ url_for('agenda_edit', task_id=task.id, next=back_to) }}" class="btn btn-small btn-secondary">
+                    {{ t('agent_task_action_edit') }}
+                </a>
+                <form
+                    method="post"
+                    action="{{ url_for('agenda_cancel', task_id=task.id) }}"
+                    onsubmit="return confirm('{{ t('agent_task_cancel_confirm') }}');"
+                >
+                    <input type="hidden" name="next" value="{{ back_to }}">
+                    <button type="submit" class="btn btn-small btn-danger">
+                        {{ t('agent_task_action_cancel') }}
+                    </button>
+                </form>
+            </div>
+        </details>
         {% endif %}
     </div>
 </article>

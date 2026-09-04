@@ -12,7 +12,11 @@ import logging
 import os
 import unicodedata
 
-from modules.agenda_nlp import parse_agenda_prompt, parse_visit_outcome
+from modules.agenda_nlp import (
+    build_task_title,
+    parse_agenda_prompt,
+    parse_visit_outcome,
+)
 from modules.cash_ai_provider import (
     CashAiProviderError,
     build_multimodal_user_content,
@@ -29,6 +33,28 @@ from modules.organization_time import now_utc, organization_timezone
 
 logger = logging.getLogger(__name__)
 
+PROPERTY_STOPWORDS = {
+    "casa",
+    "de",
+    "departamento",
+    "depto",
+    "dpto",
+    "el",
+    "en",
+    "la",
+    "las",
+    "local",
+    "los",
+    "monoambiente",
+    "oficina",
+    "para",
+    "ph",
+    "por",
+    "propiedad",
+    "terreno",
+    "ver",
+}
+
 
 class AgendaAiError(Exception):
     def __init__(self, message_key, **kwargs):
@@ -44,50 +70,138 @@ def _fold(text):
     ).lower()
 
 
+def _query_tokens(needle):
+    return [
+        token
+        for token in needle.split()
+        if len(token) > 3 and token not in PROPERTY_STOPWORDS
+    ]
+
+
 def match_property(organization_id, agent_id, query):
+    """
+    Return every real property hit. Never pick a winner when
+    more than one address matches.
+    """
     query = (query or "").strip()
 
     if not query:
-        return None
+        return {
+            "status": "empty",
+            "property": None,
+            "candidates": [],
+        }
 
     needle = _fold(query)
-    best = None
-    best_score = 0
+    tokens = _query_tokens(needle)
+    meaningful = " ".join(tokens) if tokens else ""
+    candidates = []
+    seen_ids = set()
 
     for record in get_properties(organization_id, agent_id=agent_id):
         address = _fold(record.get("address") or "")
+        record_id = record.get("id")
 
-        if not address:
+        if not address or record_id in seen_ids:
             continue
 
-        if needle in address or address in needle:
-            return record
-
-        overlap = sum(
-            1
-            for token in needle.split()
-            if len(token) > 3 and token in address
+        strong = bool(
+            (meaningful and (meaningful in address or address in meaningful))
+            or needle in address
+            or address in needle
         )
+        token_hit = any(token in address for token in tokens)
 
-        if overlap > best_score:
-            best = record
-            best_score = overlap
+        if not strong and not token_hit:
+            continue
 
-    return best if best_score else None
+        seen_ids.add(record_id)
+        candidates.append(record)
+
+    if not candidates:
+        return {
+            "status": "none",
+            "property": None,
+            "candidates": [],
+        }
+
+    if len(candidates) == 1:
+        return {
+            "status": "single",
+            "property": candidates[0],
+            "candidates": candidates,
+        }
+
+    return {
+        "status": "ambiguous",
+        "property": None,
+        "candidates": candidates,
+    }
+
+
+def _public_candidates(candidates):
+    return [
+        {
+            "id": record.get("id"),
+            "address": record.get("address") or "",
+        }
+        for record in candidates
+    ]
+
+
+def _draft_ui_status(draft, match):
+    if match["status"] == "ambiguous":
+        return "properties_ambiguous"
+    if not draft.get("date_found") or not draft.get("time_found"):
+        return "date_unclear"
+    if match["status"] == "none":
+        return "property_not_found"
+    return "ready"
+
+
+def _draft_warnings(draft, match):
+    warnings = []
+
+    if not draft.get("date_found"):
+        warnings.append("agenda_ai_warn_date")
+    if not draft.get("time_found"):
+        warnings.append("agenda_ai_warn_time")
+    if match["status"] == "ambiguous":
+        warnings.append("agenda_ai_warn_properties_ambiguous")
+    elif match["status"] == "none":
+        warnings.append("agenda_ai_warn_property_not_found")
+        if draft.get("task_type") == "visit":
+            warnings.append("agenda_ai_warn_visit_without_property")
+
+    return warnings
+
+
+def _apply_structured_title(draft):
+    draft["title"] = build_task_title(
+        draft.get("task_type"),
+        draft.get("contact_name"),
+        draft.get("property_query") or draft.get("property_address"),
+    )
+    return draft
 
 
 def _enrich_draft(draft, organization_id, agent_id):
-    matched = match_property(
+    match = match_property(
         organization_id,
         agent_id,
         draft.get("property_query") or draft.get("property_address"),
     )
-    draft["property_id"] = matched["id"] if matched else ""
-    draft["property_address"] = (
-        matched["address"] if matched else draft.get("property_query") or ""
-    )
+    chosen = match["property"]
+    query_text = draft.get("property_query") or draft.get("property_address") or ""
 
-    return draft
+    draft["property_id"] = chosen["id"] if chosen else ""
+    draft["property_address"] = chosen["address"] if chosen else query_text
+    draft["property_match"] = match["status"]
+    draft["property_candidates"] = _public_candidates(match["candidates"])
+    draft["warnings"] = _draft_warnings(draft, match)
+    draft["ui_status"] = _draft_ui_status(draft, match)
+
+    return _apply_structured_title(draft)
 
 
 def compose_from_prompt(
@@ -112,11 +226,19 @@ def compose_from_prompt(
 
     if os.environ.get("OPENAI_API_KEY", "").strip():
         try:
-            draft = {**draft, **_openai_compose(prompt, now_local)}
+            parsed = _openai_compose(prompt, now_local)
+            draft = {**draft, **{key: value for key, value in parsed.items() if value}}
+            if parsed.get("due_date"):
+                draft["date_found"] = True
+            if parsed.get("due_time"):
+                draft["time_found"] = True
         except CashAiProviderError:
             logger.info("agenda_ai_openai_fallback prompt_len=%s", len(prompt))
 
     return _enrich_draft(draft, organization_id, agent_id)
+
+
+compose_from_whatsapp_text = compose_from_prompt
 
 
 def compose_from_image(
@@ -159,7 +281,11 @@ def compose_from_image(
         today=now_local.date(),
         now_local=now_local,
     )
-    draft = {**local, **{k: v for k, v in parsed.items() if v}}
+    draft = {**local, **{key: value for key, value in parsed.items() if value}}
+    if parsed.get("due_date"):
+        draft["date_found"] = True
+    if parsed.get("due_time"):
+        draft["time_found"] = True
 
     return _enrich_draft(draft, organization_id, agent_id)
 

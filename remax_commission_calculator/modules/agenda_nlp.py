@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 
 TASK_TYPE_HINTS = (
-    ("visit", ("visita", "visitar", "mostrame", "mostrar")),
+    ("visit", ("visita", "visitar", "mostrame", "mostrar", "ir a ver", "vamos a ver")),
     ("call", ("llamar", "llamada", "llamen", "llamo")),
     ("meeting", ("reunion", "reunión", "meeting")),
     ("follow_up", ("seguimiento", "seguir")),
@@ -47,9 +47,22 @@ DEFAULT_DURATION = {
 }
 
 _TIME_RE = re.compile(
-    r"(?:a\s+las?\s+)?(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:hs|hrs?)?",
+    r"(?:a\s+las?\s+|las\s+)(\d{1,2})(?:[:h\.](\d{2}))?"
+    r"|(\d{1,2})[:h](\d{2})"
+    r"|(\d{1,2})\s*(?:hs|hrs)\b",
     re.IGNORECASE,
 )
+
+TYPE_TITLES = {
+    "visit": "Visita",
+    "call": "Llamada",
+    "meeting": "Reunión",
+    "follow_up": "Seguimiento",
+    "documentation": "Documentación",
+    "valuation": "Tasación",
+    "reminder": "Recordatorio",
+    "other": "Seguimiento",
+}
 _PERSON_RE = re.compile(
     r"\b(?:con|a)\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü]+"
     r"(?:\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü]+)?)",
@@ -100,7 +113,7 @@ def parse_relative_date(text, *, today):
         if name in folded:
             return _next_weekday(today, weekday)
 
-    return today
+    return None
 
 
 def parse_time(text):
@@ -112,10 +125,14 @@ def parse_time(text):
     match = _TIME_RE.search(text or "")
 
     if match is None:
-        return "09:00"
+        return None
 
-    hour = int(match.group(1))
-    minute = int(match.group(2) or 0)
+    hour = int(next(group for group in match.groups()[0:6:2] if group))
+    minute_raw = next(
+        (group for group in match.groups()[1:6:2] if group),
+        "0",
+    )
+    minute = int(minute_raw)
 
     if afternoon and hour <= 12:
         hour += 12 if hour < 12 else 0
@@ -130,7 +147,7 @@ def parse_person(text):
     skipped = {
         "las", "la", "el", "los", "una", "un", "visita", "llamada",
         "propiedad", "casa", "depto", "mi", "me", "para", "por",
-        "en", "de", "que", "tengo",
+        "en", "de", "que", "tengo", "ver",
         *WEEKDAYS.keys(),
     }
 
@@ -158,19 +175,18 @@ def parse_property_query(text):
     return re.sub(r"\s+", " ", match.group(1)).strip(" .,")
 
 
-def build_task_title(task_type, contact_name, property_query, prompt):
-    if task_type == "visit" and contact_name:
-        return f"Visita con {contact_name}"
-    if task_type == "call" and contact_name:
-        return f"Llamar a {contact_name}"
-    if task_type == "visit" and property_query:
-        return f"Visita {property_query}"
-    if contact_name:
-        return contact_name
+def build_task_title(task_type, contact_name, property_query, prompt=None):
+    label = TYPE_TITLES.get(task_type) or TYPE_TITLES["other"]
+    name = (contact_name or "").strip()
+    place = re.sub(r"\s+", " ", (property_query or "").strip()).strip(" .,")
+    parts = [label]
 
-    cleaned = re.sub(r"\s+", " ", (prompt or "").strip())
+    if name:
+        parts[0] = f"{label} con {name}"
+    if place:
+        parts.append(place)
 
-    return cleaned[:80] or "Seguimiento"
+    return " · ".join(parts)
 
 
 def parse_agenda_prompt(prompt, *, today=None, now_local=None):
@@ -198,8 +214,10 @@ def parse_agenda_prompt(prompt, *, today=None, now_local=None):
         ),
         "task_type": task_type,
         "priority": "normal",
-        "due_date": due_date.isoformat(),
-        "due_time": due_time,
+        "due_date": due_date.isoformat() if due_date else "",
+        "due_time": due_time or "",
+        "date_found": due_date is not None,
+        "time_found": due_time is not None,
         "contact_name": contact_name,
         "property_query": property_query,
         "description": prompt,

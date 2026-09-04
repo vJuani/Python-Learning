@@ -38,7 +38,20 @@
         </span>
         <span class="mobile-bottom-nav-label">{{ t('nav_operations') }}</span>
     </a>
-    {% if is_admin() %}
+    {% if is_agent() %}
+    <a
+        href="{{ url_for('agenda_index') }}"
+        class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('agenda_') %} active{% endif %}"
+    >
+        <span class="mobile-bottom-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+                <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75"/>
+                <path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+            </svg>
+        </span>
+        <span class="mobile-bottom-nav-label">{{ t('agenda_title') }}</span>
+    </a>
+    {% elif is_admin() %}
     <a
         href="{{ url_for('reports_index') }}"
         class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('reports') %} active{% endif %}"

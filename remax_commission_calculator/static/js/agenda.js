@@ -19,9 +19,14 @@
                     status.textContent = status.getAttribute("data-listening") || status.textContent;
                 }
                 recognition.start();
+                button.classList.add("is-listening");
             } catch (error) {
                 return;
             }
+        });
+
+        recognition.addEventListener("end", function () {
+            button.classList.remove("is-listening");
         });
 
         recognition.addEventListener("result", function (event) {
@@ -41,4 +46,15 @@
             auto.click();
         }
     }
+
+    function showProcessing() {
+        var banner = document.querySelector("[data-agenda-processing]");
+        if (banner) {
+            banner.hidden = false;
+        }
+    }
+
+    document.querySelectorAll("[data-agenda-interpret]").forEach(function (form) {
+        form.addEventListener("submit", showProcessing);
+    });
 })();

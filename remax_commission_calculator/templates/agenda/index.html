@@ -2,6 +2,8 @@
 
 {% block title %}{{ t('agenda_title') }} | {{ t('app_title') }}{% endblock %}
 
+{% block body_class %}is-agenda-page {% endblock %}
+
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
 {% endblock %}
@@ -9,172 +11,232 @@
 {% block content %}
 {% set show_agent_name = not can_manage %}
 {% set today_count = agenda.today_count or 0 %}
-
-<section class="agenda-hero">
-    <div>
-        <p class="agenda-hero__hello">{{ agenda_greeting }}</p>
-        <p class="agenda-hero__status">
-            {% if today_count %}
-            {{ t('agenda_today_status', count=today_count) }}
-            {% else %}
-            {{ t('agenda_today_status_zero') }}
-            {% endif %}
-        </p>
-    </div>
-    {% if can_manage %}
-    <a href="{{ url_for('agenda_new') }}" class="btn btn-primary hide-mobile">
-        + {{ t('agenda_new_task') }}
-    </a>
+{% set is_day_home = agenda.filter == 'upcoming' and not agenda.search and not agenda.due_date %}
+{% set ns = namespace(today=none, overdue=none, upcoming=[], rest=[]) %}
+{% for section in agenda.sections %}
+    {% if section.key == 'today' %}
+        {% set ns.today = section %}
+    {% elif section.key == 'overdue' %}
+        {% set ns.overdue = section %}
+    {% elif section.key in ('tomorrow', 'this_week', 'later') %}
+        {% set ns.upcoming = ns.upcoming + [section] %}
+    {% else %}
+        {% set ns.rest = ns.rest + [section] %}
     {% endif %}
-</section>
+{% endfor %}
 
-{% if can_manage %}
-<form method="post" action="{{ url_for('agenda_compose') }}" class="agenda-ia" id="agenda-ia-form">
-    <span class="agenda-ia__label">{{ t('agenda_ia_label') }}</span>
-    <div class="agenda-ia__row">
-        <input
-            type="text"
-            name="prompt"
-            value="{{ agenda.search }}"
-            placeholder="{{ t('agenda_ia_placeholder') }}"
-            autocomplete="off"
-        >
-        <button type="button" class="agenda-ia__mic" data-agenda-voice aria-label="{{ t('agenda_ia_voice') }}">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.75"/>
-                <path d="M6 11a6 6 0 0 0 12 0M12 17v4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
-            </svg>
-        </button>
-        <button type="submit" class="btn btn-primary agenda-ia__go">{{ t('agenda_ia_submit') }}</button>
-    </div>
-</form>
-{% endif %}
-
-{% set calendar = calendar or {"state": "unconfigured"} %}
-{% if calendar.state != 'hidden' %}
-<div class="agenda-calendar-chip agenda-calendar-chip--{{ calendar.state }}">
-    <span class="agenda-calendar-chip__dot" aria-hidden="true"></span>
-    <span>
-        {{ t('agenda_calendar_google') }}
-        <strong>
-            {% if calendar.state == 'synced' %}
-            {{ t('agenda_calendar_synced') }}
-            {% elif calendar.state == 'error' %}
-            {{ t('agenda_calendar_error') }}
-            {% elif calendar.state == 'unconfigured' %}
-            {{ t('agenda_calendar_unconfigured') }}
-            {% else %}
-            {{ t('agenda_calendar_disconnected') }}
-            {% endif %}
-        </strong>
-        {% if calendar.google_email %}
-        <span class="agenda-calendar-chip__email">{{ calendar.google_email }}</span>
+<div class="agenda-home">
+    <section class="agenda-hero">
+        <div class="agenda-hero__copy">
+            <p class="agenda-hero__kicker">{{ t('agenda_title') }}</p>
+            <p class="agenda-hero__hello">{{ agenda_greeting }}</p>
+            <p class="agenda-hero__tagline">{{ t('agenda_home_tagline') }}</p>
+            <p class="agenda-hero__status">
+                {% if today_count == 1 %}
+                {{ t('agenda_today_status_one') }}
+                {% elif today_count %}
+                {{ t('agenda_today_status', count=today_count) }}
+                {% else %}
+                {{ t('agenda_today_status_zero') }}
+                {% endif %}
+            </p>
+        </div>
+        {% if can_manage %}
+        <details class="agenda-new-menu hide-mobile">
+            <summary class="btn btn-primary">+ {{ t('agenda_new_action') }}</summary>
+            <div class="agenda-new-menu__panel">
+                {% include "agenda/_create_menu.html" %}
+            </div>
+        </details>
         {% endif %}
-    </span>
-    {% if calendar.can_connect %}
-    <a href="{{ url_for('agenda_calendar_connect') }}" class="agenda-calendar-chip__action">
-        {{ t('agenda_calendar_connect') }}
-    </a>
+    </section>
+
+    {% set calendar = calendar or {"state": "unconfigured"} %}
+    {% if calendar.state != 'hidden' %}
+    <div class="agenda-calendar-chip agenda-calendar-chip--{{ calendar.state }}">
+        <span class="agenda-calendar-chip__dot" aria-hidden="true"></span>
+        <span>
+            {{ t('agenda_calendar_google') }}
+            <strong>
+                {% if calendar.state == 'synced' %}
+                {{ t('agenda_calendar_synced') }}
+                {% elif calendar.state == 'error' %}
+                {{ t('agenda_calendar_error') }}
+                {% elif calendar.state == 'unconfigured' %}
+                {{ t('agenda_calendar_unconfigured') }}
+                {% else %}
+                {{ t('agenda_calendar_disconnected') }}
+                {% endif %}
+            </strong>
+            {% if calendar.google_email %}
+            <span class="agenda-calendar-chip__email">{{ calendar.google_email }}</span>
+            {% endif %}
+        </span>
+        {% if calendar.can_connect %}
+        <a href="{{ url_for('agenda_calendar_connect') }}" class="agenda-calendar-chip__action">
+            {{ t('agenda_calendar_connect') }}
+        </a>
+        {% endif %}
+        {% if calendar.can_sync %}
+        <form method="post" action="{{ url_for('agenda_calendar_sync') }}" class="agenda-calendar-chip__form">
+            <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+            <button type="submit" class="agenda-calendar-chip__action">{{ t('agenda_calendar_sync_now') }}</button>
+        </form>
+        {% endif %}
+        {% if calendar.can_disconnect %}
+        <form
+            method="post"
+            action="{{ url_for('agenda_calendar_disconnect') }}"
+            class="agenda-calendar-chip__form"
+            onsubmit="return confirm('{{ t('agenda_calendar_confirm_disconnect') }}');"
+        >
+            <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+            <button type="submit" class="agenda-calendar-chip__action agenda-calendar-chip__action--muted">
+                {{ t('agenda_calendar_disconnect') }}
+            </button>
+        </form>
+        {% endif %}
+    </div>
     {% endif %}
-    {% if calendar.can_sync %}
-    <form method="post" action="{{ url_for('agenda_calendar_sync') }}" class="agenda-calendar-chip__form">
-        <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
-        <button type="submit" class="agenda-calendar-chip__action">{{ t('agenda_calendar_sync_now') }}</button>
+
+    {% if can_manage %}
+    <form method="post" action="{{ url_for('agenda_compose') }}" class="agenda-ia" id="agenda-ia-form" data-agenda-interpret>
+        <span class="agenda-ia__label">{{ t('agenda_ia_label') }}</span>
+        <div class="agenda-ia__row">
+            <input
+                type="text"
+                name="prompt"
+                value=""
+                placeholder="{{ t('agenda_ia_placeholder') }}"
+                autocomplete="off"
+                aria-label="{{ t('agenda_ia_placeholder') }}"
+            >
+            <button type="button" class="agenda-ia__mic" data-agenda-voice aria-label="{{ t('agenda_ia_voice') }}">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.75"/>
+                    <path d="M6 11a6 6 0 0 0 12 0M12 17v4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <button type="submit" class="sr-only">{{ t('agenda_ia_submit') }}</button>
+        </div>
+        <p class="agenda-ia__hint">{{ t('agenda_ia_example') }}</p>
+        <p class="agenda-ia__status" data-agenda-voice-status data-listening="{{ t('agenda_ia_listening') }}"></p>
     </form>
     {% endif %}
-    {% if calendar.can_disconnect %}
-    <form
-        method="post"
-        action="{{ url_for('agenda_calendar_disconnect') }}"
-        class="agenda-calendar-chip__form"
-        onsubmit="return confirm('{{ t('agenda_calendar_confirm_disconnect') }}');"
-    >
-        <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
-        <button type="submit" class="agenda-calendar-chip__action agenda-calendar-chip__action--muted">
-            {{ t('agenda_calendar_disconnect') }}
-        </button>
-    </form>
+
+    <details class="agenda-tools"{% if agenda.search or agenda.due_date or agenda.filter != 'upcoming' %} open{% endif %}>
+        <summary class="agenda-tools__toggle">{{ t('agenda_filters_toggle') }}</summary>
+        <nav class="agenda-filters" aria-label="{{ t('agenda_title') }}">
+            {% for option in agenda_filters %}
+            <a
+                href="{{ url_for('agenda_index', filter=option, agent_id=selected_agent_id) }}"
+                class="agenda-filter{% if agenda.filter == option %} is-active{% endif %}"
+            >{{ t('agenda_filter_' ~ option) }}</a>
+            {% endfor %}
+        </nav>
+        <form method="get" action="{{ url_for('agenda_index') }}" class="agenda-search">
+            <input type="hidden" name="filter" value="{{ agenda.filter }}">
+            <input type="search" name="q" value="{{ agenda.search }}" placeholder="{{ t('agenda_search_placeholder') }}">
+            <input type="date" name="date" value="{{ agenda.due_date }}">
+            {% if agents %}
+            <select name="agent_id">
+                <option value="">{{ t('agenda_filter_all_agents') }}</option>
+                {% for agent in agents %}
+                <option value="{{ agent.id }}" {% if selected_agent_id == agent.id %}selected{% endif %}>{{ agent.name }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+            <button type="submit" class="btn btn-small btn-secondary">{{ t('agenda_search_action') }}</button>
+        </form>
+    </details>
+
+    {% if can_manage and agenda.overdue_count and is_day_home %}
+    <aside class="agenda-recommend">
+        <p class="agenda-recommend__kicker">{{ t('agenda_recommend_title') }}</p>
+        <a href="{{ url_for('agenda_index', filter='overdue') }}">
+            {{ t('agenda_recommend_overdue', count=agenda.overdue_count) }}
+        </a>
+    </aside>
+    {% endif %}
+
+    {% if is_day_home %}
+        {% if ns.today %}
+        <section class="agenda-section agenda-section--today">
+            <header class="agenda-section__head">
+                <h3>{{ agenda.today_heading }}</h3>
+            </header>
+            <div class="agenda-list">
+                {% for task in ns.today.tasks %}
+                {% include "agenda/_task_card.html" with context %}
+                {% endfor %}
+            </div>
+        </section>
+        {% else %}
+        <section class="agenda-section agenda-section--today">
+            <header class="agenda-section__head">
+                <h3>{{ agenda.today_heading }}</h3>
+            </header>
+            <p class="agenda-empty-today">{{ t('agenda_empty_today') }}</p>
+        </section>
+        {% endif %}
+
+        {% if ns.upcoming %}
+        <section class="agenda-upcoming">
+            <header class="agenda-section__head">
+                <h3>{{ t('agenda_upcoming_title') }}</h3>
+            </header>
+            <div class="agenda-upcoming__rows">
+                {% for section in ns.upcoming %}
+                <details class="agenda-upcoming__row">
+                    <summary>
+                        <span>{{ section.label }}</span>
+                        <strong>{{ section.tasks|length }}</strong>
+                    </summary>
+                    <div class="agenda-list">
+                        {% for task in section.tasks %}
+                        {% include "agenda/_task_card.html" with context %}
+                        {% endfor %}
+                    </div>
+                </details>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+    {% elif agenda.sections %}
+        {% for section in agenda.sections %}
+        <section class="agenda-section">
+            <header class="agenda-section__head">
+                <h3>
+                    {% if section.key == 'today' %}
+                    {{ agenda.today_heading }}
+                    {% else %}
+                    {{ section.label }}
+                    {% endif %}
+                </h3>
+            </header>
+            <div class="agenda-list">
+                {% for task in section.tasks %}
+                {% include "agenda/_task_card.html" with context %}
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+    {% else %}
+        <section class="agenda-empty">
+            <p class="agenda-empty__title">{{ t('agenda_empty_title') }}</p>
+            <p class="agenda-empty__hint">
+                {% if can_manage %}{{ t('agenda_empty_hint') }}{% else %}{{ t('agenda_empty_hint_staff') }}{% endif %}
+            </p>
+        </section>
+    {% endif %}
+
+    {% if can_manage %}
+    <details class="agenda-fab hide-desktop">
+        <summary class="agenda-fab__button" aria-label="{{ t('agenda_new_action') }}">+</summary>
+        <div class="agenda-fab__menu">
+            {% include "agenda/_create_menu.html" %}
+        </div>
+    </details>
     {% endif %}
 </div>
-{% endif %}
-
-<nav class="agenda-filters" aria-label="{{ t('agenda_title') }}">
-    {% for option in agenda_filters %}
-    <a
-        href="{{ url_for('agenda_index', filter=option, agent_id=selected_agent_id) }}"
-        class="agenda-filter{% if agenda.filter == option %} is-active{% endif %}"
-    >{{ t('agenda_filter_' ~ option) }}</a>
-    {% endfor %}
-</nav>
-
-{% if agents or agenda.search or agenda.due_date %}
-<form method="get" action="{{ url_for('agenda_index') }}" class="agenda-search">
-    <input type="hidden" name="filter" value="{{ agenda.filter }}">
-    <input type="search" name="q" value="{{ agenda.search }}" placeholder="{{ t('agenda_search_placeholder') }}">
-    <input type="date" name="date" value="{{ agenda.due_date }}">
-    {% if agents %}
-    <select name="agent_id">
-        <option value="">{{ t('agenda_filter_all_agents') }}</option>
-        {% for agent in agents %}
-        <option value="{{ agent.id }}" {% if selected_agent_id == agent.id %}selected{% endif %}>{{ agent.name }}</option>
-        {% endfor %}
-    </select>
-    {% endif %}
-    <button type="submit" class="btn btn-small btn-secondary">{{ t('agenda_search_action') }}</button>
-</form>
-{% endif %}
-
-{% if agenda.sections %}
-{% for section in agenda.sections %}
-<section class="agenda-section{% if section.key != 'today' and section.key != 'overdue' %} agenda-section--compact{% endif %}">
-    <header class="agenda-section__head">
-        <h3>
-            {% if section.key == 'today' %}
-            {{ agenda.today_heading }}
-            {% elif section.key in ('tomorrow', 'this_week', 'later') %}
-            {{ t('agenda_upcoming_title') }} · {{ section.label }}
-            {% else %}
-            {{ section.label }}
-            {% endif %}
-        </h3>
-    </header>
-
-    <div class="agenda-list">
-        {% for task in section.tasks %}
-        {% include "agenda/_task_card.html" with context %}
-        {% endfor %}
-    </div>
-</section>
-{% endfor %}
-{% else %}
-<section class="agenda-empty">
-    <p class="agenda-empty__title">{{ t('agenda_empty_title') }}</p>
-    <p class="agenda-empty__hint">
-        {% if can_manage %}{{ t('agenda_empty_hint') }}{% else %}{{ t('agenda_empty_hint_staff') }}{% endif %}
-    </p>
-</section>
-{% endif %}
-
-{% if can_manage and agenda.overdue_count %}
-<aside class="agenda-recommend">
-    <p class="agenda-recommend__kicker">{{ t('agenda_recommend_title') }}</p>
-    <a href="{{ url_for('agenda_index', filter='overdue') }}">
-        {{ t('agenda_recommend_overdue', count=agenda.overdue_count) }}
-    </a>
-</aside>
-{% endif %}
-
-{% if can_manage %}
-<details class="agenda-fab hide-desktop">
-    <summary class="agenda-fab__button" aria-label="{{ t('agenda_new_task') }}">+</summary>
-    <div class="agenda-fab__menu">
-        <a href="{{ url_for('agenda_compose', mode='voice') }}">{{ t('agenda_fab_talk') }}</a>
-        <a href="{{ url_for('agenda_compose') }}">{{ t('agenda_fab_write') }}</a>
-        <a href="{{ url_for('agenda_new', type='visit') }}">{{ t('agenda_fab_visit') }}</a>
-        <a href="{{ url_for('agenda_new', type='call') }}">{{ t('agenda_fab_call') }}</a>
-        <a href="{{ url_for('agenda_capture') }}">{{ t('agenda_fab_whatsapp') }}</a>
-        <a href="{{ url_for('agenda_new') }}">{{ t('agenda_fab_manual') }}</a>
-    </div>
-</details>
-{% endif %}
 {% endblock %}

@@ -275,27 +275,55 @@ def register_agenda_routes(app, helpers):
         errors = []
         prompt = (
             request.form.get("prompt")
+            or request.form.get("whatsapp_text")
             or request.args.get("prompt")
             or ""
         ).strip()
 
         if request.method == "POST" and request.form.get("confirm"):
-            form_values = _form_values_from_request()
+            choice = (request.form.get("property_choice") or "").strip()
+            needs_choice = request.form.get("needs_property_choice") == "1"
 
-            try:
-                create_task(
-                    organization_id,
-                    agent_id,
-                    form_values,
-                    created_by_user_id=user["id"],
-                )
-            except AgentTaskError as error:
-                errors = [error.message_key]
-                draft = form_values
+            if needs_choice and not choice:
+                errors = ["agenda_ai_err_choose_property"]
+                try:
+                    draft = compose_from_prompt(
+                        prompt or request.form.get("description") or "",
+                        organization_id,
+                        agent_id,
+                    )
+                except AgendaAiError as error:
+                    errors.append(error.message_key)
+                else:
+                    if request.form.get("due_date"):
+                        draft["due_date"] = request.form.get("due_date")
+                        draft["date_found"] = True
+                    if request.form.get("due_time"):
+                        draft["due_time"] = request.form.get("due_time")
+                        draft["time_found"] = True
             else:
-                flash_i18n("agent_task_flash_created", "success")
+                form_values = _form_values_from_request()
 
-                return redirect(url_for("agenda_index"))
+                if choice == "none":
+                    form_values["property_id"] = None
+                elif choice:
+                    form_values["property_id"] = choice
+
+                try:
+                    create_task(
+                        organization_id,
+                        agent_id,
+                        form_values,
+                        created_by_user_id=user["id"],
+                    )
+                except AgentTaskError as error:
+                    errors = [error.message_key]
+                    draft = form_values
+                    draft["ui_status"] = "error"
+                else:
+                    flash_i18n("agent_task_flash_created", "success")
+
+                    return redirect(url_for("agenda_index"))
 
         elif request.method == "POST":
             try:
@@ -323,20 +351,38 @@ def register_agenda_routes(app, helpers):
         draft = None
         errors = []
 
+        whatsapp_text = (
+            request.form.get("whatsapp_text")
+            or request.form.get("prompt")
+            or ""
+        ).strip()
+        screenshot = request.files.get("screenshot")
+        has_image = bool(screenshot and getattr(screenshot, "filename", ""))
+
         if request.method == "POST":
             try:
-                draft = compose_from_image(
-                    request.files.get("screenshot"),
-                    organization_id,
-                    agent_id,
-                    extra_prompt=request.form.get("prompt"),
-                )
+                if has_image:
+                    draft = compose_from_image(
+                        screenshot,
+                        organization_id,
+                        agent_id,
+                        extra_prompt=whatsapp_text,
+                    )
+                elif whatsapp_text:
+                    draft = compose_from_prompt(
+                        whatsapp_text,
+                        organization_id,
+                        agent_id,
+                    )
+                else:
+                    raise AgendaAiError("agenda_ai_err_empty_prompt")
             except AgendaAiError as error:
                 errors = [error.message_key]
 
         return render_template(
             "agenda/capture.html",
             draft=draft,
+            prompt=whatsapp_text,
             errors=errors,
         )
 

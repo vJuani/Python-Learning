@@ -13,6 +13,7 @@
     background: var(--bg);
 }
 
+[data-theme="dark"] body.is-agenda-page .app-main-inner,
 [data-theme="dark"] body.has-app-rail .app-main-inner,
 [data-theme="dark"] body.is-cash-ai-page .app-main-inner,
 [data-theme="dark"] body.is-reports-page .app-main-inner,

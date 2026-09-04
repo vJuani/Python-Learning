@@ -25,49 +25,15 @@
     <p class="agenda-chat__user">{{ prompt }}</p>
     {% endif %}
 
-    {% if draft %}
-    <article class="agenda-preview">
-        <p class="agenda-preview__kicker">{{ t('agenda_ai_preview') }}</p>
-        <p class="agenda-preview__type">{{ t('agent_task_type_' ~ draft.task_type) }}</p>
-        <h3>{{ draft.title }}</h3>
-        <p>{{ draft.due_date }} · {{ draft.due_time }}</p>
-        {% if draft.contact_name %}<p>{{ draft.contact_name }}</p>{% endif %}
-        {% if draft.property_address %}<p>{{ draft.property_address }}</p>{% endif %}
+    <p class="agenda-status" data-status="processing" data-agenda-processing hidden>
+        {{ t('agenda_ai_status_processing') }}
+    </p>
 
-        <form method="post" class="agenda-preview__actions">
-            <input type="hidden" name="confirm" value="1">
-            <input type="hidden" name="title" value="{{ draft.title }}">
-            <input type="hidden" name="task_type" value="{{ draft.task_type }}">
-            <input type="hidden" name="due_date" value="{{ draft.due_date }}">
-            <input type="hidden" name="due_time" value="{{ draft.due_time }}">
-            <input type="hidden" name="contact_name" value="{{ draft.contact_name }}">
-            <input type="hidden" name="property_id" value="{{ draft.property_id }}">
-            <input type="hidden" name="description" value="{{ draft.description }}">
-            <input type="hidden" name="duration_minutes" value="{{ draft.duration_minutes }}">
-            <input type="hidden" name="reminder_minutes" value="{{ draft.reminder_minutes or '' }}">
-            <input type="hidden" name="attendance_status" value="{{ draft.attendance_status or '' }}">
-            <button type="submit" class="btn btn-primary">{{ t('agenda_ai_confirm') }}</button>
-            <a
-                class="btn btn-secondary"
-                href="{{ url_for(
-                    'agenda_new',
-                    type=draft.task_type,
-                    title=draft.title,
-                    contact_name=draft.contact_name,
-                    property_id=draft.property_id,
-                    due_date=draft.due_date,
-                    due_time=draft.due_time,
-                    description=draft.description,
-                    duration_minutes=draft.duration_minutes,
-                    reminder_minutes=draft.reminder_minutes,
-                    ai_suggestion=draft.title,
-                ) }}"
-            >{{ t('agenda_ai_edit') }}</a>
-        </form>
-    </article>
+    {% if draft and draft.title %}
+    {% include "agenda/_preview.html" with context %}
     {% endif %}
 
-    <form method="post" class="agenda-ia agenda-ia--chat" id="agenda-ia-form">
+    <form method="post" class="agenda-ia agenda-ia--chat" id="agenda-ia-form" data-agenda-interpret>
         <span class="agenda-ia__label">{{ t('agenda_ia_label') }}</span>
         <div class="agenda-ia__row">
             <input
