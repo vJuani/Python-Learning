@@ -51,6 +51,11 @@
     color: #c2410c;
 }
 
+.integration-card__badge--muted {
+    background: rgba(100, 116, 139, 0.14);
+    color: #475569;
+}
+
 .integration-card__email,
 .integration-card__meta {
     margin: 8px 0 0;

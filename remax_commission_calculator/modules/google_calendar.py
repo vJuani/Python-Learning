@@ -27,6 +27,7 @@ from modules.database.google_calendar_repository import (
     delete_calendar_connection,
     get_calendar_connection,
     mark_calendar_error,
+    touch_calendar_synced,
     update_calendar_cache,
     update_calendar_tokens,
     upsert_calendar_connection,
@@ -245,6 +246,7 @@ def finish_oauth(
         access_token_encrypted=encrypt_token(access_token),
         access_expires_at=expires_at,
     )
+    touch_calendar_synced(organization_id, user_id)
 
     return {"google_email": email}
 
@@ -272,6 +274,7 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
         return {
             "state": STATE_HIDDEN,
             "configured": is_configured(),
+            "connected": False,
             "can_connect": False,
             "can_sync": False,
             "can_disconnect": False,
@@ -284,6 +287,7 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
         return {
             "state": STATE_UNCONFIGURED,
             "configured": False,
+            "connected": False,
             "can_connect": False,
             "can_sync": False,
             "can_disconnect": False,
@@ -304,6 +308,7 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
         return {
             "state": STATE_DISCONNECTED if can_manage else STATE_HIDDEN,
             "configured": True,
+            "connected": False,
             "can_connect": bool(can_manage),
             "can_sync": False,
             "can_disconnect": False,
@@ -316,6 +321,7 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
         return {
             "state": STATE_DISCONNECTED,
             "configured": True,
+            "connected": False,
             "can_connect": bool(can_manage),
             "can_sync": False,
             "can_disconnect": False,
@@ -330,6 +336,7 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
         return {
             "state": STATE_ERROR,
             "configured": True,
+            "connected": True,
             "can_connect": bool(can_manage),
             "can_sync": bool(can_manage),
             "can_disconnect": bool(can_manage),
@@ -341,6 +348,7 @@ def calendar_chip_for(organization_id, user, *, agent_id=None, can_manage=False)
     return {
         "state": STATE_SYNCED,
         "configured": True,
+        "connected": True,
         "can_connect": False,
         "can_sync": bool(can_manage),
         "can_disconnect": bool(can_manage),
@@ -636,6 +644,7 @@ def sync_task_event(event_type, task, *, actor_user_id=None):
                 if exc.status_code not in (404, 410):
                     raise
 
+            touch_calendar_synced(organization_id, user_id)
             return None
 
         body = _event_body(task)
@@ -649,7 +658,7 @@ def sync_task_event(event_type, task, *, actor_user_id=None):
 
         if event_id:
             try:
-                return _calendar_request(
+                patched = _calendar_request(
                     "PATCH",
                     _events_url(calendar_id, event_id),
                     organization_id,
@@ -657,6 +666,8 @@ def sync_task_event(event_type, task, *, actor_user_id=None):
                     record,
                     json_body=body,
                 )
+                touch_calendar_synced(organization_id, user_id)
+                return patched
             except GoogleCalendarHttpError as exc:
                 if exc.status_code not in (404, 410):
                     raise
@@ -676,6 +687,7 @@ def sync_task_event(event_type, task, *, actor_user_id=None):
             set_google_event_id(task["id"], organization_id, new_id)
             task["google_event_id"] = new_id
 
+        touch_calendar_synced(organization_id, user_id)
         return created
     except Exception:
         logger.exception(
@@ -683,12 +695,6 @@ def sync_task_event(event_type, task, *, actor_user_id=None):
             event_type,
             task.get("id"),
         )
-        mark_calendar_error(
-            organization_id,
-            user_id,
-            "push_failed",
-        )
-
         return None
 
 
@@ -888,8 +894,6 @@ def pull_google_events(
             organization_id,
             agent_id,
         )
-        mark_calendar_error(organization_id, user_id, "pull_failed")
-
         return _load_cached_events(
             record,
             organization_id=organization_id,

@@ -24,6 +24,7 @@ from modules.agent_tasks import (
     list_tasks_for_operation,
     list_tasks_for_property,
     reschedule_task,
+    update_task,
 )
 from modules.auth import ROLE_ADMIN, ROLE_AGENT, hash_password
 from modules.config import apply_config
@@ -926,6 +927,13 @@ class AgentAgendaTests(unittest.TestCase):
         self.assertEqual(task["title"], "Sigue en JRH")
         self.assertFalse(task.get("google_event_id"))
 
+        from modules.database.google_calendar_repository import (
+            get_calendar_connection,
+        )
+
+        record = get_calendar_connection(self.org_a, self.agent_user)
+        self.assertEqual(record["status"], "active")
+
     def test_32_google_events_overlay_as_readonly_cards(self):
         self._seed_google_connection()
         start = now_utc() + timedelta(hours=2)
@@ -1364,6 +1372,238 @@ class AgentAgendaTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn("Google Calendar", page.get_data(as_text=True))
         self.assertIn("Integraciones", page.get_data(as_text=True))
+
+    def _batch_item_fields(self, index, title):
+        due_date, due_time = self._local_parts(
+            self.org_a,
+            timedelta(hours=2 + index),
+        )
+        prefix = f"items-{index}-"
+        return {
+            f"{prefix}title": title,
+            f"{prefix}task_type": "visit",
+            f"{prefix}due_date": due_date,
+            f"{prefix}due_time": due_time,
+            f"{prefix}contact_name": "",
+            f"{prefix}property_id": "",
+            f"{prefix}property_address": "",
+            f"{prefix}property_query": "",
+            f"{prefix}property_match": "none",
+            f"{prefix}description": "",
+            f"{prefix}duration_minutes": "",
+            f"{prefix}reminder_minutes": "",
+            f"{prefix}attendance_status": "",
+            f"{prefix}source_prompt": "",
+            f"{prefix}ui_status": "ready",
+            f"{prefix}item_status": "ready",
+            f"{prefix}date_found": "1",
+            f"{prefix}time_found": "1",
+            f"{prefix}candidates": "[]",
+        }
+
+    def test_48_update_patches_existing_google_event(self):
+        self._seed_google_connection()
+        calls = []
+
+        def fake_http(method, url, **kwargs):
+            calls.append((method, url))
+            if method == "POST" and url.endswith("/events"):
+                return {"id": "evt-keep"}
+            if method == "PATCH" and "evt-keep" in url:
+                return {"id": "evt-keep"}
+            raise AssertionError(f"unexpected {method} {url}")
+
+        with patch(
+            "modules.google_calendar._http_json",
+            side_effect=fake_http,
+        ):
+            task = self._create(title="Visita original")
+            update_task(
+                self.org_a,
+                task["id"],
+                self._payload(title="Visita editada"),
+                agent_id=self.agent_a,
+                actor_user_id=self.agent_user,
+            )
+            update_task(
+                self.org_a,
+                task["id"],
+                self._payload(title="Visita otra vez"),
+                agent_id=self.agent_a,
+                actor_user_id=self.agent_user,
+            )
+
+        posts = [item for item in calls if item[0] == "POST"]
+        patches = [item for item in calls if item[0] == "PATCH"]
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(len(patches), 2)
+        self.assertEqual(
+            get_agent_task(task["id"], self.org_a)["google_event_id"],
+            "evt-keep",
+        )
+
+    def test_49_cancel_deletes_google_event(self):
+        self._seed_google_connection()
+        calls = []
+
+        def fake_http(method, url, **kwargs):
+            calls.append((method, url))
+            if method == "POST" and url.endswith("/events"):
+                return {"id": "evt-cancel"}
+            if method == "DELETE" and "evt-cancel" in url:
+                return {}
+            raise AssertionError(f"unexpected {method} {url}")
+
+        with patch(
+            "modules.google_calendar._http_json",
+            side_effect=fake_http,
+        ):
+            task = self._create(title="Visita a cancelar")
+            cancel_task(
+                self.org_a,
+                task["id"],
+                agent_id=self.agent_a,
+                actor_user_id=self.agent_user,
+            )
+
+        deletes = [item for item in calls if item[0] == "DELETE"]
+        self.assertEqual(len(deletes), 1)
+        self.assertIn("evt-cancel", deletes[0][1])
+
+    def test_50_batch_confirm_pushes_each_google_event(self):
+        self._seed_google_connection()
+        self._login("agenda_agent_user")
+        calls = []
+        created_ids = []
+
+        def fake_http(method, url, **kwargs):
+            calls.append((method, url))
+            if method == "POST" and url.endswith("/events"):
+                event_id = f"evt-batch-{len(created_ids) + 1}"
+                created_ids.append(event_id)
+                return {"id": event_id}
+            raise AssertionError(f"unexpected {method} {url}")
+
+        data = {"item_count": "3", "confirm_ready": "1"}
+        data.update(self._batch_item_fields(0, "Visita lote 1"))
+        data.update(self._batch_item_fields(1, "Visita lote 2"))
+        data.update(self._batch_item_fields(2, "Visita lote 3"))
+
+        with patch(
+            "modules.google_calendar._http_json",
+            side_effect=fake_http,
+        ):
+            response = self.client.post("/agenda/compose", data=data)
+
+        self.assertEqual(response.status_code, 302)
+        posts = [item for item in calls if item[0] == "POST"]
+        self.assertEqual(len(posts), 3)
+        self.assertEqual(created_ids, ["evt-batch-1", "evt-batch-2", "evt-batch-3"])
+
+        agenda = build_agenda_view(self.org_a, agent_id=self.agent_a)
+        titles = {
+            task["title"]: task.get("google_event_id")
+            for section in agenda["sections"]
+            for task in section["tasks"]
+        }
+        self.assertEqual(titles.get("Visita lote 1"), "evt-batch-1")
+        self.assertEqual(titles.get("Visita lote 2"), "evt-batch-2")
+        self.assertEqual(titles.get("Visita lote 3"), "evt-batch-3")
+
+    def test_51_retry_restores_google_event_id(self):
+        from modules.google_calendar import GoogleCalendarHttpError
+
+        self._seed_google_connection()
+
+        def failing_http(method, url, **kwargs):
+            raise GoogleCalendarHttpError(500, "boom")
+
+        with patch(
+            "modules.google_calendar._http_json",
+            side_effect=failing_http,
+        ):
+            task = self._create(title="Visita pendiente Google")
+
+        self.assertFalse(task.get("google_event_id"))
+        self._login("agenda_agent_user")
+
+        def retry_http(method, url, **kwargs):
+            if method == "POST" and url.endswith("/events"):
+                return {"id": "evt-retried"}
+            raise AssertionError(f"unexpected {method} {url}")
+
+        with patch(
+            "modules.google_calendar._http_json",
+            side_effect=retry_http,
+        ):
+            retried = self.client.post(
+                "/agenda/calendar/retry",
+                data={"task_id": str(task["id"])},
+            )
+
+        self.assertEqual(retried.status_code, 302)
+        self.assertEqual(
+            get_agent_task(task["id"], self.org_a)["google_event_id"],
+            "evt-retried",
+        )
+
+    def test_52_task_card_shows_sync_states(self):
+        from modules.google_calendar import GoogleCalendarHttpError
+
+        self._seed_google_connection()
+        created = {"count": 0}
+
+        def fake_http(method, url, **kwargs):
+            if method == "POST" and url.endswith("/events"):
+                created["count"] += 1
+                if created["count"] == 1:
+                    return {"id": "evt-ok"}
+                raise GoogleCalendarHttpError(500, "boom")
+            if method == "GET" and "/events" in url:
+                return {"items": []}
+            raise AssertionError(f"unexpected {method} {url}")
+
+        with patch(
+            "modules.google_calendar._http_json",
+            side_effect=fake_http,
+        ):
+            self._create(title="Visita sincronizada OK")
+            self._create(title="Visita sin Google")
+            self._login("agenda_agent_user")
+            page = self.client.get("/agenda")
+
+        body = page.get_data(as_text=True)
+        self.assertIn("En Google", body)
+        self.assertIn("No pudimos sincronizar este evento con Google Calendar.", body)
+        self.assertIn("Reintentar", body)
+        self.assertIn("/agenda/calendar/retry", body)
+
+    def test_53_integrations_page_when_connected(self):
+        self._seed_google_connection()
+        calls = []
+
+        def fake_http(method, url, **kwargs):
+            calls.append((method, url))
+            if method == "POST" and url.endswith("/events"):
+                return {"id": "evt-sync-stamp"}
+            raise AssertionError(f"unexpected {method} {url}")
+
+        with patch(
+            "modules.google_calendar._http_json",
+            side_effect=fake_http,
+        ):
+            self._create(title="Visita para stamp")
+
+        self._login("agenda_agent_user")
+        page = self.client.get("/settings/integrations")
+        body = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("lucia@example.com", body)
+        self.assertIn("Conectado", body)
+        self.assertIn("Última sincronización", body)
+        self.assertIn("Sincronizar", body)
+        self.assertIn("Desconectar", body)
+        self.assertNotIn("No configurado", body)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,10 @@
         <span class="integration-card__badge">{{ t('settings_integrations_connected') }}</span>
         {% elif calendar.state == 'error' %}
         <span class="integration-card__badge integration-card__badge--warn">{{ t('agenda_calendar_error') }}</span>
+        {% elif calendar.state == 'disconnected' %}
+        <span class="integration-card__badge integration-card__badge--muted">{{ t('agenda_calendar_disconnected') }}</span>
+        {% elif calendar.state == 'unconfigured' %}
+        <span class="integration-card__badge integration-card__badge--muted">{{ t('agenda_calendar_unconfigured') }}</span>
         {% endif %}
     </header>
 
@@ -37,10 +41,15 @@
     </p>
     {% endif %}
     <div class="integration-card__actions">
+        {% if calendar.state == 'error' and calendar.can_connect %}
+        <a class="btn btn-primary" href="{{ url_for('agenda_calendar_connect') }}">
+            {{ t('agenda_calendar_error') }}
+        </a>
+        {% endif %}
         {% if calendar.can_sync %}
         <form method="post" action="{{ url_for('agenda_calendar_sync') }}">
             <input type="hidden" name="next" value="{{ url_for('settings_integrations') }}">
-            <button type="submit" class="btn btn-primary">{{ t('agenda_calendar_sync_now') }}</button>
+            <button type="submit" class="btn {% if calendar.state == 'error' %}btn-secondary{% else %}btn-primary{% endif %}">{{ t('agenda_calendar_sync_now') }}</button>
         </form>
         {% endif %}
         {% if calendar.can_disconnect %}

@@ -51,6 +51,21 @@
         <p class="agenda-badge agenda-badge--ok">{{ t('agenda_signal_confirmed') }}</p>
         {% endif %}
 
+        {% if not is_google and calendar_connected %}
+            {% if task.google_event_id %}
+            <p class="agenda-card__sync agenda-card__sync--ok">{{ t('agenda_sync_in_google') }}</p>
+            {% elif task.status == 'pending' %}
+            <p class="agenda-card__sync agenda-card__sync--pending">{{ t('agenda_sync_pending') }}</p>
+            <form method="post" action="{{ url_for('agenda_calendar_retry') }}" class="agenda-chip-form">
+                <input type="hidden" name="task_id" value="{{ task.id }}">
+                <input type="hidden" name="next" value="{{ back_to }}">
+                <button type="submit" class="agenda-chip agenda-chip--button">
+                    {{ t('agenda_sync_retry') }}
+                </button>
+            </form>
+            {% endif %}
+        {% endif %}
+
         {% if show_agent_name and task.agent_name %}
         <p class="agenda-card__person">{{ task.agent_name }}</p>
         {% endif %}

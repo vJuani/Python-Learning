@@ -420,6 +420,20 @@
     border-left-style: solid;
 }
 
+.agenda-card__sync {
+    margin: 6px 0 0;
+    font-size: 0.74rem;
+    font-weight: 700;
+}
+
+.agenda-card__sync--ok {
+    color: #15803d;
+}
+
+.agenda-card__sync--pending {
+    color: #c2410c;
+}
+
 .agenda-card--completed,
 .agenda-card--cancelled {
     opacity: 0.7;

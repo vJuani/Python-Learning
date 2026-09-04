@@ -261,6 +261,32 @@ def update_calendar_cache(
         db.close()
 
 
+def touch_calendar_synced(organization_id, user_id):
+    """Record a successful push without replacing the events overlay cache."""
+    organization_id = require_organization_id(organization_id)
+    db = get_connection()
+    cursor = db.cursor()
+    now = _now_iso()
+
+    try:
+        cursor.execute(
+            """
+            UPDATE google_calendar_connections
+            SET last_synced_at = ?,
+                updated_at = ?
+            WHERE organization_id = ?
+                AND user_id = ?
+            """,
+            (now, now, organization_id, user_id),
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def mark_calendar_error(organization_id, user_id, error_text, *, revoked=False):
     organization_id = require_organization_id(organization_id)
     db = get_connection()

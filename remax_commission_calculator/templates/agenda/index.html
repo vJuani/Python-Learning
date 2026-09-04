@@ -52,6 +52,7 @@
     </section>
 
     {% set calendar = calendar or {"state": "unconfigured"} %}
+    {% set calendar_connected = calendar.connected or calendar.state in ('synced', 'error') %}
     {% if calendar.state != 'hidden' %}
     <a
         class="agenda-calendar-chip agenda-calendar-chip--{{ calendar.state }}"
