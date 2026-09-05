@@ -2962,6 +2962,45 @@ def _migrate_arca_integration(cursor):
     )
 
 
+def _migrate_arca_connections(cursor):
+    """Per-user ARCA credentials, separate from fiscal identity profiles."""
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS arca_connections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            environment TEXT NOT NULL DEFAULT 'homologation',
+            connection_status TEXT NOT NULL DEFAULT 'not_configured',
+            point_of_sale TEXT,
+            certificate_encrypted TEXT,
+            private_key_encrypted TEXT,
+            csr_encrypted TEXT,
+            certificate_subject TEXT,
+            certificate_serial TEXT,
+            certificate_expires_at TEXT,
+            last_verified_at TEXT,
+            last_error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE,
+            UNIQUE (organization_id, user_id, environment)
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_arca_connections_org_user
+        ON arca_connections (organization_id, user_id, environment)
+        """
+    )
+
+
 def _migrate_operation_creation(cursor):
     """
     Side-aware operation creation: referral flags and per-side VAT
@@ -3579,6 +3618,7 @@ def migrate_schema(create_backup=True):
         _migrate_invoicing_v2(cursor)
         _migrate_arca_prep(cursor)
         _migrate_arca_integration(cursor)
+        _migrate_arca_connections(cursor)
         _migrate_operation_creation(cursor)
         _migrate_agent_account(cursor)
         _migrate_treasury_accounts(cursor)

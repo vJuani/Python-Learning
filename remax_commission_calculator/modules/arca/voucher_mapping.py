@@ -40,7 +40,7 @@ def resolve_voucher_type(
     if issuer in ("exento", "consumidor_final"):
         return VOUCHER_FACTURA_C
 
-    return VOUCHER_FACTURA_C
+    return None
 
 
 def split_amounts_for_voucher(

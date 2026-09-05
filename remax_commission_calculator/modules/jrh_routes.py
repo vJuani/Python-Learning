@@ -52,10 +52,34 @@ def attach_intent_urls(result):
             href = url_for("pendings_center")
         elif intent_type == INTENT_INVOICE:
             operation_id = data.get("operation_id")
-            if operation_id:
-                href = url_for("billing_new_from_operation", operation_id=operation_id)
+            side = data.get("side")
+            if operation_id and side:
+                href = url_for(
+                    "billing_prepare",
+                    operation_id=operation_id,
+                    side=side,
+                )
+            elif operation_id:
+                href = url_for(
+                    "billing_ai_select_operation",
+                    operation_id=operation_id,
+                )
+            elif data.get("candidates"):
+                for candidate in data["candidates"]:
+                    if candidate.get("id"):
+                        candidate["href"] = url_for(
+                            "billing_ai_select_operation",
+                            operation_id=candidate["id"],
+                        )
+                href = url_for(
+                    "billing_ai_prepare",
+                    prompt=data.get("source_prompt") or "",
+                )
             else:
-                href = url_for("billing_list")
+                href = url_for(
+                    "billing_ai_prepare",
+                    prompt=data.get("source_prompt") or "",
+                )
         elif intent_type == INTENT_OPERATION:
             operation_id = data.get("operation_id")
             if operation_id:

@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass, field
 
 from modules.arca.config import get_arca_environment, is_arca_fiscal_enabled
-from modules.arca.secrets import load_credentials
+from modules.arca.connections import ArcaConnectionError, load_credentials
 from modules.arca.voucher_mapping import resolve_voucher_type
 from modules.billing_issuer_validation import validate_cuit
 
@@ -29,6 +29,8 @@ def _digits(value: str) -> str:
 def validate_fiscal_issue(
     invoice: dict,
     issuer_profile: dict,
+    *,
+    connection=None,
 ) -> FiscalIssueValidation:
     missing = []
 
@@ -38,13 +40,15 @@ def validate_fiscal_issue(
             error_key="invoice_err_fiscal_issue_unavailable",
         )
 
-    status = (issuer_profile or {}).get(
-        "arca_connection_status"
-    )
-    if status not in ("connected", "configuring"):
+    if connection is None:
         return FiscalIssueValidation(
             is_valid=False,
-            error_key="invoice_err_arca_not_configured",
+            error_key="invoice_err_arca_not_linked",
+        )
+    if connection.get("connection_status") != "connected":
+        return FiscalIssueValidation(
+            is_valid=False,
+            error_key="invoice_err_arca_not_linked",
         )
 
     if invoice.get("status") not in (
@@ -56,19 +60,32 @@ def validate_fiscal_issue(
             error_key="invoice_err_invalid_transition",
         )
 
-    if (invoice.get("currency") or "ARS").upper() != "ARS":
+    currency = (invoice.get("currency") or "ARS").upper()
+    if currency == "USD":
+        rate = invoice.get("exchange_rate")
+        try:
+            if rate is None or float(rate) <= 0:
+                return FiscalIssueValidation(
+                    is_valid=False,
+                    error_key="invoice_err_arca_exchange_rate_missing",
+                )
+        except (TypeError, ValueError):
+            return FiscalIssueValidation(
+                is_valid=False,
+                error_key="invoice_err_arca_exchange_rate_missing",
+            )
+    elif currency != "ARS":
         return FiscalIssueValidation(
             is_valid=False,
             error_key="invoice_err_arca_currency_not_supported",
         )
 
-    # Credentials must exist (does not call ARCA).
     try:
-        load_credentials(issuer_profile)
-    except (FileNotFoundError, ValueError):
+        load_credentials(connection)
+    except ArcaConnectionError as error:
         return FiscalIssueValidation(
             is_valid=False,
-            error_key="invoice_err_arca_credentials_missing",
+            error_key=error.message_key,
         )
 
     cuit = issuer_profile.get("tax_id") or invoice.get(
@@ -78,7 +95,8 @@ def validate_fiscal_issue(
         missing.append("billing_missing_issuer_tax_id")
 
     pv_raw = (
-        issuer_profile.get("arca_point_of_sale")
+        (connection or {}).get("point_of_sale")
+        or issuer_profile.get("arca_point_of_sale")
         or issuer_profile.get("point_of_sale")
     )
     if not pv_raw or not str(pv_raw).strip().isdigit():
@@ -123,6 +141,12 @@ def validate_fiscal_issue(
         ),
         explicit_type=issuer_profile.get("arca_voucher_types"),
     )
+    if voucher_type is None:
+        return FiscalIssueValidation(
+            is_valid=False,
+            error_key="invoice_err_arca_preissue_incomplete",
+            missing=["invoice_err_arca_voucher_undetermined"],
+        )
 
     try:
         get_arca_environment()

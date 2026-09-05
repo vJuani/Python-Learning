@@ -23,7 +23,7 @@
             <ul class="jrh-result__candidates">
                 {% for candidate in intent.data.candidates %}
                 <li>
-                    <a href="{{ url_for('contacts_detail', contact_id=candidate.id) }}">{{ candidate.name }}</a>
+                    <a href="{{ candidate.href or url_for('contacts_detail', contact_id=candidate.id) }}">{{ candidate.name }}</a>
                 </li>
                 {% endfor %}
             </ul>

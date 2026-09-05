@@ -6,13 +6,15 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/billing-ai-page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/home-v2.css') }}">
 {% endblock %}
 
 {% block content %}
 <div class="billing-ai-page">
     <header class="billing-ai-page__header">
         <div>
-            <h1>✨ {{ t('billing_ai_page_title') }}</h1>
+            <p class="agenda-hero__kicker">{{ t('jrh_ia_label') }}</p>
+            <h1>{{ t('billing_ai_hero_question') }}</h1>
             <p>{{ t('billing_ai_page_subtitle') }}</p>
         </div>
         <a href="{{ url_for('billing_list', view='history') }}" class="billing-ai-btn billing-ai-btn--outline">{{ t('billing_ai_history') }}</a>
@@ -128,31 +130,48 @@
                 <button type="button" class="billing-ai-chip" data-prompt="{{ item.label }}">{{ item.label }}</button>
                 {% endfor %}
             </div>
-            <form method="post" action="{{ url_for('billing_ai_prepare') }}" class="billing-ai-chat__form">
+            <form method="post" action="{{ url_for('billing_ai_prepare') }}" class="billing-ai-chat__form" data-jrh-interpret>
                 <textarea name="prompt" rows="2" placeholder="{{ t('billing_ai_input_placeholder') }}" required></textarea>
+                <button type="button" class="jrh-hero__mic" data-jrh-voice aria-label="{{ t('jrh_voice_talk') }}">🎙</button>
                 <button type="submit" class="billing-ai-btn billing-ai-btn--primary">{{ t('billing_ai_send') }}</button>
+                <p class="jrh-hero__unsupported" data-jrh-voice-unsupported hidden>{{ t('jrh_voice_unsupported') }}</p>
             </form>
         </section>
 
         <section class="billing-ai-preview">
             <h2>{{ t('billing_ai_preview_title') }}</h2>
+            {% if arca and not arca.connected %}
+            <p class="flash-message flash-error">{{ t('invoice_err_arca_not_linked') }}</p>
+            <a class="billing-ai-btn billing-ai-btn--primary" href="{{ url_for('settings_arca_connect') }}">{{ t('arca_connect_cta') }}</a>
+            {% endif %}
             {% if ai_workspace.has_preview %}
             <article class="billing-ai-invoice-card">
                 <span class="billing-ai-invoice-card__badge">{{ ai_workspace.preview.draft_label }}</span>
                 <header>
-                    <strong>{{ t('billing_invoice') }} A</strong>
-                    <span>{{ ai_workspace.preview.issuer_name }}</span>
-                    <span>{{ ai_workspace.preview.issuer_tax_id }}</span>
+                    <strong>{{ ai_workspace.preview.voucher_label or t('billing_invoice') }}</strong>
+                    <span>{{ t('billing_ai_field_operation') }}: {{ ai_workspace.preview.property_address or ai_workspace.preview.operation_display_id }}</span>
                 </header>
                 <div class="billing-ai-invoice-card__client">
-                    <strong>{{ ai_workspace.preview.recipient_name }}</strong>
-                    <span>{{ ai_workspace.preview.recipient_tax_id }}</span>
+                    <strong>{{ t('billing_ai_field_issuer') }}</strong>
+                    <span>{{ ai_workspace.preview.issuer_name }}</span>
+                    <span>{{ t('billing_tax_id') }} {{ ai_workspace.preview.issuer_tax_id }}</span>
                 </div>
-                <p>{{ ai_workspace.preview.description }}</p>
+                <div class="billing-ai-invoice-card__client">
+                    <strong>{{ t('billing_ai_field_client') }}</strong>
+                    <span>{{ ai_workspace.preview.recipient_name }}</span>
+                    <span>{{ t('billing_tax_id') }} {{ ai_workspace.preview.recipient_tax_id }}</span>
+                </div>
                 <dl>
-                    <div><dt>{{ t('billing_ai_field_net_amount') }}</dt><dd>{{ ai_workspace.preview.net_amount_display }}</dd></div>
-                    <div><dt>{{ t('billing_ai_field_vat') }}</dt><dd>{{ ai_workspace.preview.vat_amount_display }}</dd></div>
+                    <div><dt>{{ t('billing_invoice') }}</dt><dd>{{ ai_workspace.preview.voucher_label or t('invoice_err_arca_voucher_undetermined') }}</dd></div>
+                    <div><dt>{{ t('billing_ai_field_concept') }}</dt><dd>{{ ai_workspace.preview.description }}</dd></div>
+                    <div><dt>{{ t('billing_ai_field_type') }}</dt><dd>{{ t('billing_ai_service_services') }}</dd></div>
+                    <div><dt>{{ t('billing_ai_field_condition') }}</dt><dd>{{ ai_workspace.preview.payment_condition }}</dd></div>
+                    <div><dt>{{ t('billing_ai_field_currency') }}</dt><dd>{{ ai_workspace.preview.currency }}</dd></div>
+                    {% if ai_workspace.preview.currency == 'USD' %}
+                    <div><dt>{{ t('billing_ai_field_exchange_rate') }}</dt><dd>{{ ai_workspace.preview.exchange_rate or t('invoice_err_arca_exchange_rate_missing') }}</dd></div>
+                    {% endif %}
                     <div><dt>{{ t('billing_ai_field_total') }}</dt><dd class="billing-ai-invoice-card__total">{{ ai_workspace.preview.total_amount_display }}</dd></div>
+                    <div><dt>{{ t('billing_ai_field_point_of_sale') }}</dt><dd>{{ ai_workspace.preview.point_of_sale or '—' }}</dd></div>
                 </dl>
             </article>
             {% else %}
@@ -175,10 +194,14 @@
             </ul>
             <p class="billing-ai-note">{{ t('billing_ai_review_notice') }}</p>
             {% if ai_workspace.operation_id and ai_workspace.side %}
+            {% if arca and arca.connected %}
             <form method="post" action="{{ url_for('billing_new_for_side', operation_id=ai_workspace.operation_id, side=ai_workspace.side) }}">
                 <button type="submit" class="billing-ai-btn billing-ai-btn--primary billing-ai-btn--block">{{ t('billing_ai_issue_invoice') }}</button>
             </form>
-            <a href="{{ url_for('billing_prepare', operation_id=ai_workspace.operation_id, side=ai_workspace.side) }}" class="billing-ai-link">{{ t('billing_ai_download_draft') }}</a>
+            {% else %}
+            <a class="billing-ai-btn billing-ai-btn--primary billing-ai-btn--block" href="{{ url_for('settings_arca_connect') }}">{{ t('arca_connect_cta') }}</a>
+            {% endif %}
+            <a href="{{ url_for('billing_prepare', operation_id=ai_workspace.operation_id, side=ai_workspace.side) }}" class="billing-ai-link">{{ t('billing_ai_edit_invoice') }}</a>
             {% endif %}
             {% else %}
             <p class="billing-ai-empty">{{ t('billing_ai_extracted_empty') }}</p>
@@ -190,6 +213,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/jrh-voice.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
 <script>
 (function () {
     document.querySelectorAll(".billing-ai-chip").forEach(function (chip) {

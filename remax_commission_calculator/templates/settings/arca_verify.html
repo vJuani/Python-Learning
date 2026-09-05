@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page {% endblock %}
+
+{% block title %}{{ t('arca_step_verify') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('arca_step_verify') }}</h2>
+    </div>
+</section>
+<article class="integration-card">
+    <p>{{ identity.legal_name }} · {{ identity.tax_id }}</p>
+    <p>{{ t('billing_arca_point_of_sale_label') }} {{ arca.point_of_sale }}</p>
+    <p>{{ t('billing_arca_env_homologation') }}</p>
+    <form method="post">
+        <button type="submit" class="btn btn-primary">{{ t('arca_verify_cta') }}</button>
+    </form>
+</article>
+{% endblock %}

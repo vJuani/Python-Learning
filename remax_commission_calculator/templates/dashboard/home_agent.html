@@ -185,6 +185,15 @@
                 <strong>{{ t('agenda_calendar_connect') }}</strong>
                 {% endif %}
             </a>
+            {% set arca = home.arca or {"state": "not_configured"} %}
+            <a class="jrh-integrations__row" href="{{ url_for('settings_arca') }}">
+                <span>{{ t('arca_title') }}</span>
+                {% if arca.connected %}
+                <strong>{{ t('jrh_integrations_connected') }}</strong>
+                {% else %}
+                <strong>{{ t('arca_connect_cta') }}</strong>
+                {% endif %}
+            </a>
         </section>
     </aside>
 </div>

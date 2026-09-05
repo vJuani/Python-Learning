@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page {% endblock %}
+
+{% block title %}{{ t('arca_step_authorize') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="agenda-hero__kicker">2 / 3</p>
+        <h2>{{ t('arca_authorize_title') }}</h2>
+    </div>
+</section>
+<article class="integration-card">
+    <ol>
+        <li>{{ t('arca_authorize_1') }}</li>
+        <li>{{ t('arca_authorize_2') }}</li>
+        <li>{{ t('arca_authorize_3') }}</li>
+        <li>{{ t('arca_authorize_4') }}</li>
+        <li>{{ t('arca_authorize_5') }}</li>
+    </ol>
+    <div class="integration-card__actions">
+        <a class="btn btn-secondary" href="{{ url_for('settings_arca_csr') }}">{{ t('arca_download_csr') }}</a>
+        <a class="btn btn-primary" href="{{ wsass_url }}" target="_blank" rel="noopener">{{ t('arca_continue_arca') }}</a>
+        <a class="btn btn-primary" href="{{ url_for('settings_arca_certificate') }}">{{ t('billing_continue') }}</a>
+    </div>
+</article>
+{% endblock %}

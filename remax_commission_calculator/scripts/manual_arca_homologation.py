@@ -56,15 +56,14 @@ def main() -> int:
 
     from modules.arca.client import ArcaClient
     from modules.arca.config import get_arca_environment
+    from modules.arca.secrets import load_isolated_dev_credentials
     from modules.arca.wsfev1 import get_last_authorized_voucher
 
     profile = {
         "tax_id": args.cuit,
-        "arca_connection_status": "connected",
         "arca_point_of_sale": str(args.point_of_sale),
-        "arca_certificate_ref": args.ref,
-        "issuer_key": args.ref,
     }
+    credentials = load_isolated_dev_credentials(ref=args.ref)
 
     env = get_arca_environment()
     print(f"Environment: {env}")
@@ -73,6 +72,7 @@ def main() -> int:
     ticket = client.authenticate(
         profile,
         {"issuer_tax_id": args.cuit},
+        credentials=credentials,
     )
     print(f"  OK — token expires {ticket.expires_at.isoformat()}")
 

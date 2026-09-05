@@ -18,6 +18,7 @@
 </section>
 
 {% set calendar = calendar or {"state": "unconfigured"} %}
+{% if calendar.state != 'hidden' %}
 <article class="integration-card">
     <header class="integration-card__head">
         <h3>{{ t('agenda_calendar_google') }}</h3>
@@ -73,5 +74,26 @@
     <p class="integration-card__meta">{{ t('agenda_calendar_flash_not_configured') }}</p>
     {% endif %}
     {% endif %}
+</article>
+{% endif %}
+
+{% set arca = arca or {"state": "not_configured"} %}
+<article class="integration-card">
+    <header class="integration-card__head">
+        <h3>{{ t('arca_title') }}</h3>
+        {% if arca.connected %}
+        <span class="integration-card__badge">{{ t('arca_connected') }}</span>
+        {% else %}
+        <span class="integration-card__badge integration-card__badge--muted">{{ t('arca_not_connected') }}</span>
+        {% endif %}
+    </header>
+    <p>{{ t('arca_help') }}</p>
+    <div class="integration-card__actions">
+        {% if arca.connected %}
+        <a class="btn btn-secondary" href="{{ url_for('settings_arca') }}">{{ t('arca_retry_test') }}</a>
+        {% else %}
+        <a class="btn btn-primary" href="{{ url_for('settings_arca_connect') }}">{{ t('arca_connect_cta') }}</a>
+        {% endif %}
+    </div>
 </article>
 {% endblock %}

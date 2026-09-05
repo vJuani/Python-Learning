@@ -174,10 +174,11 @@ def authenticate_wsaa(
     transport=None,
     cache_getter=None,
     cache_setter=None,
+    cache_key=None,
 ) -> TicketAcceso:
     """Obtain TA, using cache when valid."""
     environment = get_arca_environment()
-    cache_key = f"{cuit}:{service}:{environment}"
+    cache_key = cache_key or f"{cuit}:{service}:{environment}"
 
     if cache_getter:
         cached = cache_getter(cache_key)

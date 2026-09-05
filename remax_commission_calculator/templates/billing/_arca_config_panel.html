@@ -1,65 +1,23 @@
 {% if arca_display.enabled %}
 <section class="panel billing-arca-config">
-    <h3>{{ t('billing_arca_section_title') }}</h3>
+    <h3>{{ t('arca_title') }}</h3>
     <p class="billing-arca-test-banner">{{ t('billing_arca_test_environment') }}</p>
-
-    <dl class="billing-arca-status-grid">
-        <div>
-            <dt>{{ t('billing_arca_status_label') }}</dt>
-            <dd>
-                <span class="badge">{{ t('billing_arca_status_' ~ arca_display.status) }}</span>
-            </dd>
-        </div>
-        <div>
-            <dt>{{ t('billing_arca_cuit_label') }}</dt>
-            <dd>{{ arca_display.cuit or '—' }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('billing_point_of_sale') }}</dt>
-            <dd>{{ arca_display.point_of_sale or '—' }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('billing_arca_environment_label') }}</dt>
-            <dd>{{ t('billing_arca_env_homologation') }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('billing_arca_last_validated') }}</dt>
-            <dd>{{ arca_display.last_validated_at or '—' }}</dd>
-        </div>
-    </dl>
-
-    <form method="post" class="agent-form billing-arca-form">
-        <input type="hidden" name="action" value="arca_save">
-        {% if arca_profile_id is defined and arca_profile_id %}
-        <input type="hidden" name="profile_id" value="{{ arca_profile_id }}">
+    <p>{{ t('arca_help') }}</p>
+    <p>
+        {% if arca_display.credentials_available %}
+        <span class="badge">{{ t('arca_connected') }}</span>
+        {% else %}
+        <span class="badge">{{ t('arca_not_connected') }}</span>
         {% endif %}
-        <div class="form-group">
-            <label for="arca_point_of_sale">{{ t('billing_arca_point_of_sale_label') }}</label>
-            <input
-                id="arca_point_of_sale"
-                name="arca_point_of_sale"
-                class="form-input"
-                inputmode="numeric"
-                pattern="[0-9]+"
-                value="{{ arca_form.point_of_sale }}"
-                required
-            >
-        </div>
-        <div class="form-group">
-            <label for="arca_certificate_ref">{{ t('billing_arca_certificate_ref_label') }}</label>
-            <input
-                id="arca_certificate_ref"
-                name="arca_certificate_ref"
-                class="form-input"
-                value="{{ arca_form.certificate_ref }}"
-                required
-            >
-            <p class="form-hint">{{ t('billing_arca_certificate_ref_help') }}</p>
-        </div>
-        <div class="billing-arca-form-actions">
-            <button type="submit" class="btn btn-primary">{{ t('billing_arca_save') }}</button>
-            <button type="submit" name="action" value="arca_test" class="btn btn-secondary">{{ t('billing_arca_test_connection') }}</button>
-        </div>
-    </form>
+    </p>
+    <p>
+        <a class="btn btn-primary" href="{{ url_for('settings_arca') }}">
+            {% if arca_display.credentials_available %}
+            {{ t('arca_retry_test') }}
+            {% else %}
+            {{ t('arca_connect_cta') }}
+            {% endif %}
+        </a>
+    </p>
 </section>
 {% endif %}

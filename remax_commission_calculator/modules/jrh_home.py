@@ -9,6 +9,7 @@ from modules.database.agent_tasks_repository import (
     list_agent_tasks,
 )
 from modules.database.tenant import require_organization_id
+from modules.arca.connections import arca_chip_for
 from modules.google_calendar import calendar_chip_for
 from modules.i18n import translate
 from modules.organization_time import (
@@ -169,6 +170,7 @@ def build_agent_home(
             agent_id=agent_id,
             can_manage=True,
         ),
+        "arca": arca_chip_for(organization_id, user),
         "quick_actions": (
             {
                 "key": "search",

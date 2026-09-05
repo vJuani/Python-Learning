@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page {% endblock %}
+
+{% block title %}{{ t('arca_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="agenda-hero__kicker">{{ t('settings_integrations_title') }}</p>
+        <h2>{{ t('arca_title') }}</h2>
+        <p>{{ t('arca_help') }}</p>
+    </div>
+</section>
+
+<article class="integration-card">
+    <header class="integration-card__head">
+        <h3>{{ t('arca_title') }}</h3>
+        {% if arca.connection_status == 'connected' %}
+        <span class="integration-card__badge">{{ t('arca_connected') }}</span>
+        {% else %}
+        <span class="integration-card__badge integration-card__badge--muted">{{ t('arca_not_connected') }}</span>
+        {% endif %}
+    </header>
+    {% if identity.tax_id %}
+    <p class="integration-card__email">{{ identity.legal_name }} · {{ identity.tax_id }}</p>
+    {% endif %}
+    {% if arca.point_of_sale %}
+    <p class="integration-card__meta">{{ t('billing_arca_point_of_sale_label') }} {{ arca.point_of_sale }}</p>
+    {% endif %}
+    <p class="integration-card__meta">{{ t('billing_arca_env_homologation') }}</p>
+    {% if arca.certificate_expires_at %}
+    <p class="integration-card__meta">{{ t('arca_valid_until') }} {{ arca.certificate_expires_at }}</p>
+    {% endif %}
+    {% if arca.last_verified_at %}
+    <p class="integration-card__meta">{{ t('arca_last_verified') }} {{ arca.last_verified_at }}</p>
+    {% endif %}
+    <div class="integration-card__actions">
+        {% if arca.connection_status == 'connected' %}
+        <form method="post" action="{{ url_for('settings_arca_verify') }}">
+            <button type="submit" class="btn btn-secondary">{{ t('arca_retry_test') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('settings_arca_disconnect') }}">
+            <button type="submit" class="btn btn-secondary">{{ t('arca_disconnect') }}</button>
+        </form>
+        {% else %}
+        <a class="btn btn-primary" href="{{ url_for('settings_arca_connect') }}">{{ t('arca_connect_cta') }}</a>
+        {% endif %}
+    </div>
+</article>
+{% endblock %}

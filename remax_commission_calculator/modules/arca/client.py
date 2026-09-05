@@ -9,7 +9,9 @@ import re
 from typing import Protocol
 
 from modules.arca.config import WSAA_SERVICE_WSFE, get_arca_environment
-from modules.arca.secrets import ArcaCredentials, load_credentials
+from modules.arca.connections import load_credentials as load_connection_credentials
+from modules.arca.connections import ta_cache_key
+from modules.arca.secrets import ArcaCredentials
 from modules.arca.validation import validate_fiscal_issue
 from modules.arca.voucher_mapping import (
     CONCEPT_SERVICES,
@@ -63,8 +65,25 @@ class ArcaClient:
         self,
         issuer_profile: dict,
         invoice: dict,
+        *,
+        connection=None,
+        credentials: ArcaCredentials | None = None,
+        user_id=None,
+        organization_id=None,
     ) -> TicketAcceso:
-        credentials = load_credentials(issuer_profile)
+        if credentials is None:
+            if connection is None:
+                raise ValueError("invoice_err_arca_not_linked")
+            credentials = load_connection_credentials(connection)
+        cache_key = None
+        if organization_id is not None and user_id is not None:
+            cache_key = ta_cache_key(organization_id, user_id)
+        elif connection is not None:
+            cache_key = ta_cache_key(
+                connection.get("organization_id"),
+                connection.get("user_id"),
+                environment=connection.get("environment"),
+            )
         return authenticate_wsaa(
             credentials,
             cuit=self._cuit(issuer_profile, invoice),
@@ -72,6 +91,7 @@ class ArcaClient:
             transport=self.transport,
             cache_getter=self.cache_getter,
             cache_setter=self.cache_setter,
+            cache_key=cache_key,
         )
 
     def issue_invoice(
@@ -79,11 +99,16 @@ class ArcaClient:
         invoice: dict,
         issuer_profile: dict,
         *,
+        connection=None,
+        credentials: ArcaCredentials | None = None,
+        user_id=None,
+        organization_id=None,
         next_voucher_number: int | None = None,
     ) -> CaeIssueResult:
         validation = validate_fiscal_issue(
             invoice,
             issuer_profile,
+            connection=connection,
         )
         if not validation.is_valid:
             return CaeIssueResult(
@@ -91,7 +116,14 @@ class ArcaClient:
                 errors=[validation.error_key or "invalid"],
             )
 
-        ticket = self.authenticate(issuer_profile, invoice)
+        ticket = self.authenticate(
+            issuer_profile,
+            invoice,
+            connection=connection,
+            credentials=credentials,
+            user_id=user_id,
+            organization_id=organization_id,
+        )
         cuit = self._cuit(issuer_profile, invoice)
         pv = validation.point_of_sale
         cbte_tipo = validation.voucher_type
@@ -106,8 +138,14 @@ class ArcaClient:
             )
             next_voucher_number = last + 1
 
+        total_source = float(invoice.get("total_amount") or 0)
+        if (invoice.get("currency") or "ARS").upper() == "USD":
+            total_source = round(
+                total_source * float(invoice.get("exchange_rate") or 0),
+                2,
+            )
         net, vat, total = split_amounts_for_voucher(
-            float(invoice.get("total_amount") or 0),
+            total_source,
             cbte_tipo,
         )
 

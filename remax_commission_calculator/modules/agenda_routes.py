@@ -53,6 +53,7 @@ from modules.agent_tasks import (
 )
 from modules.auth import (
     get_current_user,
+    is_admin,
     is_agent,
     is_guest_session,
     login_required,
@@ -1265,18 +1266,28 @@ def register_agenda_routes(app, helpers):
     @app.route("/settings/integrations")
     @login_required
     def settings_integrations():
-        user, agent_id = _require_agent_user()
+        user = _require_user()
+        if is_guest_session():
+            abort(403)
         organization_id = require_user_organization()
-        calendar = calendar_chip_for(
-            organization_id,
-            user,
-            agent_id=agent_id,
-            can_manage=True,
-        )
+        from modules.arca.connections import arca_chip_for
+
+        if is_agent(user) and user.get("agent_id"):
+            calendar = calendar_chip_for(
+                organization_id,
+                user,
+                agent_id=user.get("agent_id"),
+                can_manage=True,
+            )
+        elif is_admin(user):
+            calendar = {"state": "hidden"}
+        else:
+            abort(403)
 
         return render_template(
             "settings/integrations.html",
             calendar=calendar,
+            arca=arca_chip_for(organization_id, user),
         )
 
     @app.route("/agenda/calendar/retry", methods=["POST"])

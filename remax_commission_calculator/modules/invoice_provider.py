@@ -277,6 +277,8 @@ class ArcaInvoiceProvider(InvoiceProvider):
     def validate_issuer_configuration(
         self,
         issuer_profile: dict,
+        *,
+        connection=None,
     ) -> IssuerConfigurationStatus:
         from modules.arca.validation import validate_fiscal_issue
 
@@ -293,6 +295,7 @@ class ArcaInvoiceProvider(InvoiceProvider):
         result = validate_fiscal_issue(
             dummy_invoice,
             issuer_profile,
+            connection=connection,
         )
         status = (
             issuer_profile or {}
@@ -315,11 +318,12 @@ class ArcaInvoiceProvider(InvoiceProvider):
             or "billing_arca_not_configured",
         )
 
-    def authenticate(self, issuer_profile: dict) -> bool:
+    def authenticate(self, issuer_profile: dict, *, connection=None) -> bool:
         try:
             self._client.authenticate(
                 issuer_profile,
                 {"issuer_tax_id": issuer_profile.get("tax_id")},
+                connection=connection,
             )
             return True
         except Exception:

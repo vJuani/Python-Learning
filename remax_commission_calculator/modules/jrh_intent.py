@@ -436,58 +436,85 @@ def _pending_intent(organization_id, agent_id, user_id, language, segment):
     return row
 
 
-def _invoice_intent(segment, organization_id, agent_id, language):
-    hint = ""
-    match = _OPERATION_HINT_RE.search(segment or "")
-    if match:
-        hint = (match.group(1) or "").strip(" .")
-    operations = []
-    if hint:
-        operations = filter_operations(
-            organization_id,
-            property_address=hint,
-            agent_id=agent_id,
-        )[:5]
-    if len(operations) == 1:
-        row = operations[0]
+def _invoice_intent(segment, organization_id, agent_id, language, user_id=None):
+    from modules.auth import ROLE_AGENT
+    from modules.invoice_ai_service import (
+        DisambiguationResult,
+        MissingSideResult,
+        ResolvedInvoiceIntent,
+        parse_invoice_intent,
+        resolve_invoice_intent,
+    )
+
+    parsed = parse_invoice_intent(segment)
+    resolved = resolve_invoice_intent(
+        parsed,
+        organization_id,
+        {
+            "id": user_id,
+            "role": ROLE_AGENT,
+            "agent_id": agent_id,
+        },
+        agent_scope=agent_id,
+    )
+    if isinstance(resolved, DisambiguationResult):
+        options = resolved.options or []
+        status = (
+            STATUS_NEEDS_ATTENTION if options else STATUS_NEEDS_ATTENTION
+        )
         return _intent(
             INTENT_INVOICE,
-            STATUS_READY,
+            status,
             language=language,
-            summary=row.get("property") or hint,
-            message_key="jrh_msg_invoice_redirect",
+            summary=segment,
+            message_key=resolved.message_key,
             data={
                 "source_prompt": segment,
-                "operation_id": row.get("db_id"),
-                "hint": hint,
+                "candidates": [
+                    {
+                        "id": item.get("operation_id"),
+                        "name": item.get("label"),
+                        "kind": "operation",
+                    }
+                    for item in options
+                ],
             },
             confirm_required=False,
         )
-    if operations:
+    if isinstance(resolved, MissingSideResult):
         return _intent(
             INTENT_INVOICE,
             STATUS_NEEDS_ATTENTION,
             language=language,
-            summary=hint,
-            message_key="jrh_msg_operation_ambiguous",
+            summary=resolved.operation_label or segment,
+            message_key=resolved.message_key,
             data={
                 "source_prompt": segment,
-                "hint": hint,
-                "operation_ids": [row.get("db_id") for row in operations],
+                "operation_id": resolved.operation_id,
             },
             confirm_required=False,
         )
+    if isinstance(resolved, ResolvedInvoiceIntent):
+        return _intent(
+            INTENT_INVOICE,
+            STATUS_READY,
+            language=language,
+            summary=(resolved.operation_display or {}).get("label") or segment,
+            message_key="jrh_msg_invoice_preview",
+            data={
+                "source_prompt": segment,
+                "operation_id": resolved.operation_id,
+                "side": resolved.side,
+            },
+            confirm_required=True,
+        )
     return _intent(
         INTENT_INVOICE,
-        STATUS_READY if not hint else STATUS_NEEDS_ATTENTION,
+        STATUS_NEEDS_ATTENTION,
         language=language,
-        summary=hint or _t("jrh_type_invoice", language),
-        message_key=(
-            "jrh_msg_invoice_redirect"
-            if not hint
-            else "jrh_msg_operation_missing"
-        ),
-        data={"source_prompt": segment, "hint": hint},
+        summary=segment,
+        message_key="jrh_msg_invoice_redirect",
+        data={"source_prompt": segment},
         confirm_required=False,
     )
 
@@ -600,7 +627,9 @@ def interpret_jrh_request(
             )
         elif kind == INTENT_INVOICE:
             intents.append(
-                _invoice_intent(segment, organization_id, agent_id, language)
+                _invoice_intent(
+                    segment, organization_id, agent_id, language, user_id
+                )
             )
         elif kind == INTENT_OPERATION:
             intents.append(

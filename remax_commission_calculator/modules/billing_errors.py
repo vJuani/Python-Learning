@@ -119,6 +119,12 @@ def resolve_billing_error_cta(
                 "label_key": "billing_cta_view_invoice",
             }
 
+    if key == "invoice_err_arca_not_linked":
+        return {
+            "url": url_for("settings_arca_connect"),
+            "label_key": "arca_connect_cta",
+        }
+
     if key in (
         "invoice_err_client_incomplete",
         "invoice_err_party_client_incomplete",

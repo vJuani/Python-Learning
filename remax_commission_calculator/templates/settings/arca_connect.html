@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page {% endblock %}
+
+{% block title %}{{ t('arca_step_fiscal') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="agenda-hero__kicker">1 / 3</p>
+        <h2>{{ t('arca_step_fiscal') }}</h2>
+    </div>
+</section>
+<form method="post" class="integration-card">
+    <div class="form-group">
+        <label>{{ t('billing_legal_name') }}</label>
+        <input class="form-input" name="legal_name" value="{{ identity.legal_name }}" {% if not identity.editable %}readonly{% endif %}>
+    </div>
+    <div class="form-group">
+        <label>{{ t('billing_tax_id') }}</label>
+        <input class="form-input" name="tax_id" value="{{ identity.tax_id }}" {% if not identity.editable %}readonly{% endif %}>
+    </div>
+    <div class="form-group">
+        <label>{{ t('billing_tax_condition') }}</label>
+        <select class="form-input" name="tax_condition" {% if not identity.editable %}disabled{% endif %}>
+            {% for tc in tax_conditions %}
+            <option value="{{ tc }}" {% if identity.tax_condition == tc %}selected{% endif %}>{{ t('billing_tax_' ~ tc) }}</option>
+            {% endfor %}
+        </select>
+        {% if not identity.editable %}
+        <input type="hidden" name="tax_condition" value="{{ identity.tax_condition }}">
+        {% endif %}
+    </div>
+    <div class="form-group">
+        <label>{{ t('billing_fiscal_address') }}</label>
+        <input class="form-input" name="fiscal_address" value="{{ identity.fiscal_address }}" {% if not identity.editable %}readonly{% endif %}>
+    </div>
+    <div class="form-group">
+        <label>{{ t('billing_arca_point_of_sale_label') }}</label>
+        <input class="form-input" name="point_of_sale" value="{{ arca.point_of_sale }}" required>
+    </div>
+    <button type="submit" class="btn btn-primary">{{ t('billing_continue') }}</button>
+</form>
+{% endblock %}

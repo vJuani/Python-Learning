@@ -97,9 +97,44 @@ def preview_to_workspace(preview, *, operation_id, side, language="es"):
             "value": preview.get("operation_display_id") or "—",
         },
         {
+            "key": "issuer",
+            "label": _t("billing_ai_field_issuer", language),
+            "value": preview.get("issuer_name") or "—",
+        },
+        {
             "key": "concept",
             "label": _t("billing_ai_field_concept", language),
             "value": preview.get("description") or "—",
+        },
+        {
+            "key": "voucher",
+            "label": _t("billing_invoice", language),
+            "value": preview.get("voucher_label") or "—",
+        },
+        {
+            "key": "service_type",
+            "label": _t("billing_ai_field_type", language),
+            "value": _t("billing_ai_service_services", language),
+        },
+        {
+            "key": "condition",
+            "label": _t("billing_ai_field_condition", language),
+            "value": preview.get("payment_condition") or "—",
+        },
+        {
+            "key": "currency",
+            "label": _t("billing_ai_field_currency", language),
+            "value": preview.get("currency") or "ARS",
+        },
+        {
+            "key": "exchange_rate",
+            "label": _t("billing_ai_field_exchange_rate", language),
+            "value": preview.get("exchange_rate") or "—",
+        },
+        {
+            "key": "point_of_sale",
+            "label": _t("billing_ai_field_point_of_sale", language),
+            "value": preview.get("point_of_sale") or "—",
         },
         {
             "key": "net_amount",
@@ -151,4 +186,17 @@ def format_preview_amounts(preview, language="es"):
     enriched["total_amount_display"] = _money(total)
     enriched["currency"] = currency
     enriched["draft_label"] = translate("billing_ai_draft_badge", language=language)
+    from modules.arca.voucher_mapping import resolve_voucher_type
+
+    voucher = resolve_voucher_type(
+        issuer_tax_condition=preview.get("issuer_tax_condition") or "",
+        recipient_tax_condition=preview.get("recipient_tax_condition") or "",
+    )
+    voucher_keys = {1: "billing_voucher_a", 6: "billing_voucher_b", 11: "billing_voucher_c"}
+    key = voucher_keys.get(voucher)
+    enriched["voucher_label"] = (
+        translate(key, language=language) if key else ""
+    )
+    enriched["voucher_undetermined"] = key is None
+    enriched["exchange_rate"] = preview.get("exchange_rate")
     return enriched

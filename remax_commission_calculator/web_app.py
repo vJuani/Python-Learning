@@ -332,6 +332,7 @@ from modules.agent_tasks import (
 
 from modules.agenda_routes import register_agenda_routes
 from modules.contact_routes import register_contact_routes
+from modules.arca_routes import register_arca_routes
 from modules.jrh_routes import register_jrh_routes
 
 from modules.organization_settings import (
@@ -8057,6 +8058,14 @@ register_pending_routes(
     helpers={
         "require_user_organization": require_user_organization,
         "get_current_language": get_current_language,
+    },
+)
+
+register_arca_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "flash_i18n": flash_i18n,
     },
 )
 

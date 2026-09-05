@@ -991,6 +991,35 @@ SCHEMA_STATEMENTS = (
     CREATE UNIQUE INDEX IF NOT EXISTS idx_google_calendar_user
     ON google_calendar_connections (organization_id, user_id)
     """,
+    f"""
+    CREATE TABLE IF NOT EXISTS arca_connections (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        user_id BIGINT NOT NULL,
+        environment TEXT NOT NULL DEFAULT 'homologation',
+        connection_status TEXT NOT NULL DEFAULT 'not_configured',
+        point_of_sale TEXT,
+        certificate_encrypted TEXT,
+        private_key_encrypted TEXT,
+        csr_encrypted TEXT,
+        certificate_subject TEXT,
+        certificate_serial TEXT,
+        certificate_expires_at TEXT,
+        last_verified_at TEXT,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id) ON DELETE RESTRICT,
+        FOREIGN KEY (user_id)
+            REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE (organization_id, user_id, environment)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_arca_connections_org_user
+    ON arca_connections (organization_id, user_id, environment)
+    """,
     """
     CREATE INDEX IF NOT EXISTS idx_agent_recurring_org_agent
     ON agent_recurring_charges (
@@ -1531,6 +1560,7 @@ POSTGRES_TABLES = (
     "invoices",
     "contacts",
     "external_listings",
+    "arca_connections",
 )
 
 

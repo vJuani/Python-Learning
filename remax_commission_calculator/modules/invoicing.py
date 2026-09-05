@@ -1487,6 +1487,14 @@ def issue_fiscal_invoice(
 
     from modules.arca.client import ArcaClient
     from modules.arca.config import get_arca_environment, is_arca_fiscal_enabled
+    from modules.arca.connections import (
+        ArcaConnectionError,
+        assert_identity_matches_certificate,
+        cuit_from_certificate,
+        inspect_certificate,
+        load_credentials,
+        require_user_connection,
+    )
     from modules.arca.issuer_profile import resolve_invoice_issuer_profile
     from modules.arca.validation import validate_fiscal_issue
     from modules.database.arca_repository import (
@@ -1521,9 +1529,24 @@ def issue_fiscal_invoice(
             "invoice_err_arca_not_configured"
         )
 
+    try:
+        arca_connection = require_user_connection(
+            organization_id,
+            user.get("id"),
+        )
+        credentials = load_credentials(arca_connection)
+        inspected = inspect_certificate(credentials.certificate_pem)
+        assert_identity_matches_certificate(
+            issuer_profile.get("tax_id") or invoice.get("issuer_tax_id"),
+            inspected.get("cuit") or cuit_from_certificate(inspected["certificate"]),
+        )
+    except ArcaConnectionError as error:
+        raise InvoicingError(error.message_key)
+
     validation = validate_fiscal_issue(
         invoice,
         issuer_profile,
+        connection=arca_connection,
     )
     if not validation.is_valid:
         raise InvoicingError(
@@ -1562,6 +1585,10 @@ def issue_fiscal_invoice(
         result = client.issue_invoice(
             invoice,
             issuer_profile,
+            connection=arca_connection,
+            credentials=credentials,
+            user_id=user.get("id"),
+            organization_id=organization_id,
         )
     except Exception as error:
         safe_error = str(error)[:200]

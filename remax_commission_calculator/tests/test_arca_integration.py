@@ -17,6 +17,7 @@ os.environ["DATABASE_PATH"] = str(
 )
 os.environ["INVOICE_PROVIDER"] = "arca"
 os.environ["ARCA_ENV"] = "homologation"
+os.environ["SECRET_KEY"] = "test-arca-secret"
 
 from modules.arca.secrets import ArcaCredentials
 
@@ -189,6 +190,7 @@ class ArcaIntegrationTests(unittest.TestCase):
         type(self)._voucher_seq += 50
         connection = get_connection()
         connection.execute("DELETE FROM arca_ta_cache")
+        connection.execute("DELETE FROM arca_connections")
         connection.commit()
         connection.close()
 
@@ -205,17 +207,47 @@ class ArcaIntegrationTests(unittest.TestCase):
             private_key_pem=b"-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----\n",
         )
 
+    def _self_signed_cert(self, key_pem, cuit):
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.x509.oid import NameOID
+
+        key = serialization.load_pem_private_key(key_pem, password=None)
+        digits = "".join(ch for ch in str(cuit) if ch.isdigit())
+        subject = x509.Name(
+            [
+                x509.NameAttribute(NameOID.COMMON_NAME, "JRH Test"),
+                x509.NameAttribute(NameOID.SERIAL_NUMBER, f"CUIT {digits}"),
+            ]
+        )
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.now(timezone.utc) - timedelta(days=1))
+            .not_valid_after(datetime.now(timezone.utc) + timedelta(days=365))
+            .sign(key, hashes.SHA256())
+        )
+        return cert.public_bytes(serialization.Encoding.PEM)
+
+    def _link_user(self, user_id, cuit, pos="5"):
+        from modules.arca.connections import generate_key_and_csr, store_credentials
+
+        key_pem, _csr = generate_key_and_csr(common_name="JRH Test", cuit=cuit)
+        store_credentials(
+            self.org,
+            user_id,
+            certificate_pem=self._self_signed_cert(key_pem, cuit),
+            private_key_pem=key_pem,
+            connection_status="connected",
+            point_of_sale=pos,
+            last_verified_at=datetime.now(timezone.utc).isoformat(),
+        )
+
     def _arca_cred_patches(self):
-        creds = self._mock_credentials()
         return (
-            patch(
-                "modules.arca.validation.load_credentials",
-                return_value=creds,
-            ),
-            patch(
-                "modules.arca.client.load_credentials",
-                return_value=creds,
-            ),
             patch(
                 "modules.arca.wsaa.sign_tra_cms",
                 return_value="MOCKCMS",
@@ -302,6 +334,9 @@ class ArcaIntegrationTests(unittest.TestCase):
                 issuer_mode="agent",
             )
         confirm_draft(self.org, inv["id"], self._admin_user())
+        from modules.invoicing import get_invoice
+
+        inv = get_invoice(self.org, inv["id"])
         profile = dict(
             self._agent_profile()
             if not office
@@ -329,18 +364,14 @@ class ArcaIntegrationTests(unittest.TestCase):
         transport = self._make_transport()
         client = ArcaClient(transport=transport)
         profile = self._agent_profile()
-        profile["arca_connection_status"] = "connected"
-        profile["arca_point_of_sale"] = "5"
         with patch(
-            "modules.arca.client.load_credentials",
-            return_value=self._mock_credentials(),
-        ), patch(
             "modules.arca.wsaa.sign_tra_cms",
             return_value="MOCKCMS",
         ):
             ticket = client.authenticate(
                 profile,
                 {"issuer_tax_id": profile["tax_id"]},
+                credentials=self._mock_credentials(),
             )
         self.assertEqual(ticket.token, "MOCK-TOKEN")
 
@@ -349,9 +380,6 @@ class ArcaIntegrationTests(unittest.TestCase):
         client = ArcaClient(transport=transport)
         profile = self._agent_profile()
         with patch(
-            "modules.arca.client.load_credentials",
-            return_value=self._mock_credentials(),
-        ), patch(
             "modules.arca.wsaa.sign_tra_cms",
             return_value="MOCKCMS",
         ):
@@ -359,23 +387,23 @@ class ArcaIntegrationTests(unittest.TestCase):
                 client.authenticate(
                     profile,
                     {"issuer_tax_id": profile["tax_id"]},
+                    credentials=self._mock_credentials(),
                 )
 
     def test_last_voucher(self):
         transport = self._make_transport()
         client = ArcaClient(transport=transport)
         profile = self._agent_profile()
-        profile["arca_connection_status"] = "connected"
-        profile["arca_point_of_sale"] = "5"
         inv = {"issuer_tax_id": profile["tax_id"], "total_amount": 100}
         with patch(
-            "modules.arca.client.load_credentials",
-            return_value=self._mock_credentials(),
-        ), patch(
             "modules.arca.wsaa.sign_tra_cms",
             return_value="MOCKCMS",
         ):
-            ticket = client.authenticate(profile, inv)
+            ticket = client.authenticate(
+                profile,
+                inv,
+                credentials=self._mock_credentials(),
+            )
         from modules.arca.wsfev1 import get_last_authorized_voucher
 
         last = get_last_authorized_voucher(
@@ -388,6 +416,7 @@ class ArcaIntegrationTests(unittest.TestCase):
         self.assertEqual(last, transport.last_voucher)
 
     def test_issue_success_agent_buyer(self):
+        self._link_user(self.user_agent, "20300000003")
         inv, _profile = self._ready_invoice(side=SIDE_BUYER)
         transport = self._make_transport()
         patches = self._arca_cred_patches()
@@ -397,7 +426,7 @@ class ArcaIntegrationTests(unittest.TestCase):
         issued = issue_fiscal_invoice(
             self.org,
             inv["id"],
-            self._admin_user(),
+            self._agent_user(),
             transport=transport,
         )
         self.assertEqual(issued["status"], "issued")
@@ -405,6 +434,7 @@ class ArcaIntegrationTests(unittest.TestCase):
         self.assertTrue(issued["cae"])
 
     def test_issue_success_broker_seller(self):
+        self._link_user(self.admin_id, "20112233445")
         inv, _profile = self._ready_invoice(
             side=SIDE_SELLER,
             office=True,
@@ -424,6 +454,7 @@ class ArcaIntegrationTests(unittest.TestCase):
         self.assertEqual(issued["side"], "seller")
 
     def test_double_submit_blocked(self):
+        self._link_user(self.user_agent, "20300000003")
         inv, _ = self._ready_invoice()
         transport = self._make_transport()
         patches = self._arca_cred_patches()
@@ -433,7 +464,7 @@ class ArcaIntegrationTests(unittest.TestCase):
         issue_fiscal_invoice(
             self.org,
             inv["id"],
-            self._admin_user(),
+            self._agent_user(),
             transport=transport,
         )
         from modules.invoicing import InvoicingError
@@ -442,11 +473,12 @@ class ArcaIntegrationTests(unittest.TestCase):
             issue_fiscal_invoice(
                 self.org,
                 inv["id"],
-                self._admin_user(),
+                self._agent_user(),
                 transport=transport,
             )
 
     def test_issue_error_sets_status(self):
+        self._link_user(self.user_agent, "20300000003")
         inv, _ = self._ready_invoice()
         transport = self._make_transport(auth_fail=True)
         patches = self._arca_cred_patches()
@@ -459,13 +491,14 @@ class ArcaIntegrationTests(unittest.TestCase):
             issue_fiscal_invoice(
                 self.org,
                 inv["id"],
-                self._admin_user(),
+                self._agent_user(),
                 transport=transport,
             )
         again = get_invoice(self.org, inv["id"])
         self.assertEqual(again["status"], "error")
 
     def test_retry_flow(self):
+        self._link_user(self.user_agent, "20300000003")
         inv, _ = self._ready_invoice()
         transport = self._make_transport(auth_fail=True)
         patches = self._arca_cred_patches()
@@ -478,29 +511,153 @@ class ArcaIntegrationTests(unittest.TestCase):
             issue_fiscal_invoice(
                 self.org,
                 inv["id"],
-                self._admin_user(),
+                self._agent_user(),
                 transport=transport,
             )
         retry_error_invoice(
             self.org,
             inv["id"],
-            self._admin_user(),
+            self._agent_user(),
         )
         draft = get_invoice(self.org, inv["id"])
         self.assertEqual(draft["status"], "draft")
         confirm_draft(
             self.org,
             inv["id"],
-            self._admin_user(),
+            self._agent_user(),
         )
         transport.auth_fail = False
         issued = issue_fiscal_invoice(
             self.org,
             inv["id"],
-            self._admin_user(),
+            self._agent_user(),
             transport=transport,
         )
         self.assertEqual(issued["status"], "issued")
+
+    def test_issue_without_connection_blocked(self):
+        inv, _ = self._ready_invoice()
+        from modules.invoicing import InvoicingError
+
+        with self.assertRaises(InvoicingError) as error:
+            issue_fiscal_invoice(
+                self.org,
+                inv["id"],
+                self._agent_user(),
+            )
+        self.assertEqual(error.exception.message_key, "invoice_err_arca_not_linked")
+
+    def test_agent_cannot_use_other_user_connection(self):
+        self._link_user(self.admin_id, "20112233445")
+        inv, _ = self._ready_invoice()
+        from modules.invoicing import InvoicingError
+
+        with self.assertRaises(InvoicingError) as error:
+            issue_fiscal_invoice(
+                self.org,
+                inv["id"],
+                self._agent_user(),
+            )
+        self.assertEqual(error.exception.message_key, "invoice_err_arca_not_linked")
+
+    def test_staff_cannot_use_agent_certificate(self):
+        self._link_user(self.user_agent, "20300000003")
+        inv, _ = self._ready_invoice(office=True)
+        from modules.invoicing import InvoicingError
+
+        with self.assertRaises(InvoicingError) as error:
+            issue_fiscal_invoice(
+                self.org,
+                inv["id"],
+                self._admin_user(),
+            )
+        self.assertEqual(error.exception.message_key, "invoice_err_arca_not_linked")
+
+    def test_cuit_mismatch_blocks(self):
+        self._link_user(self.user_agent, "20112233445")
+        inv, _ = self._ready_invoice()
+        from modules.invoicing import InvoicingError
+
+        with self.assertRaises(InvoicingError) as error:
+            issue_fiscal_invoice(
+                self.org,
+                inv["id"],
+                self._agent_user(),
+            )
+        self.assertEqual(error.exception.message_key, "arca_err_cuit_mismatch")
+
+    def test_usd_without_rate_blocks(self):
+        from modules.arca.validation import validate_fiscal_issue
+
+        self._link_user(self.user_agent, "20300000003")
+        inv, profile = self._ready_invoice()
+        inv["currency"] = "USD"
+        inv["exchange_rate"] = None
+        from modules.database.arca_connections_repository import get_arca_connection
+
+        connection = get_arca_connection(self.org, self.user_agent)
+        result = validate_fiscal_issue(inv, profile, connection=connection)
+        self.assertFalse(result.is_valid)
+        self.assertEqual(result.error_key, "invoice_err_arca_exchange_rate_missing")
+
+    def test_voucher_undetermined_blocks(self):
+        from modules.arca.validation import validate_fiscal_issue
+        from modules.database.arca_connections_repository import get_arca_connection
+
+        self._link_user(self.user_agent, "20300000003")
+        inv, profile = self._ready_invoice()
+        profile["tax_condition"] = ""
+        inv["issuer_tax_condition"] = ""
+        connection = get_arca_connection(self.org, self.user_agent)
+        result = validate_fiscal_issue(inv, profile, connection=connection)
+        self.assertFalse(result.is_valid)
+        self.assertIn("invoice_err_arca_voucher_undetermined", result.missing)
+
+    def test_ticket_cache_is_per_user(self):
+        from modules.arca.connections import ta_cache_key
+        from modules.database.arca_repository import store_cached_ta, get_cached_ta
+        from modules.arca.wsaa import TicketAcceso
+
+        ticket = TicketAcceso(
+            token="A-TOKEN",
+            sign="A-SIGN",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            service="wsfe",
+            cuit="20300000003",
+            environment="homologation",
+        )
+        store_cached_ta(ta_cache_key(self.org, self.user_agent), ticket)
+        self.assertIsNotNone(get_cached_ta(ta_cache_key(self.org, self.user_agent)))
+        self.assertIsNone(get_cached_ta(ta_cache_key(self.org, self.admin_id)))
+
+    def test_pdf_uses_real_fiscal_fields_without_qr(self):
+        self._link_user(self.user_agent, "20300000003")
+        inv, _ = self._ready_invoice()
+        transport = self._make_transport()
+        patches = self._arca_cred_patches()
+        for p in patches:
+            p.start()
+        self.addCleanup(lambda: [p.stop() for p in patches])
+        issued = issue_fiscal_invoice(
+            self.org,
+            inv["id"],
+            self._agent_user(),
+            transport=transport,
+        )
+        from modules.invoice_provider import ArcaInvoiceProvider
+
+        pdf = ArcaInvoiceProvider().generate_fiscal_pdf(issued)
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertTrue(issued.get("cae"))
+        self.assertTrue(issued.get("issuer_tax_id"))
+        self.assertNotIn("QR", ArcaInvoiceProvider.generate_fiscal_pdf.__doc__ or "")
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "modules"
+            / "invoice_provider.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("qr_code", source.lower())
+        self.assertEqual(issued["operation_id"], inv["operation_id"])
 
 
 if __name__ == "__main__":

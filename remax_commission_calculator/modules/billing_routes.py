@@ -358,6 +358,11 @@ def register_billing_routes(app, *, helpers):
             issuer_mode=issuer_mode,
             issuer_profile_id=issuer_profile_id,
         )
+        from modules.arca.connections import arca_chip_for
+
+        chip = arca_chip_for(organization_id, user)
+        if chip.get("point_of_sale"):
+            preview["point_of_sale"] = chip["point_of_sale"]
         language = get_current_language()
         enriched = format_preview_amounts(
             preview,
@@ -463,9 +468,12 @@ def register_billing_routes(app, *, helpers):
         if chat_messages is not None:
             session["billing_ai_chat"] = ai_workspace["chat_messages"]
 
+        from modules.arca.connections import arca_chip_for
+
         return render_template(
             "billing/list.html",
             view=view,
+            arca=arca_chip_for(organization_id, user),
             invoices=(
                 list_invoices(
                     organization_id,
@@ -491,12 +499,15 @@ def register_billing_routes(app, *, helpers):
             ai_workspace=ai_workspace,
         )
 
-    @app.route("/billing/ai/prepare", methods=["POST"])
+    @app.route("/billing/ai/prepare", methods=["GET", "POST"])
     @login_required
     def billing_ai_prepare():
         user = require_billing_user()
         organization_id = require_user_organization()
-        text = request.form.get("prompt", "").strip()
+        text = (
+            request.form.get("prompt", "").strip()
+            or request.args.get("prompt", "").strip()
+        )
         if not text:
             flash_i18n("billing_ai_empty_prompt", "error")
             return redirect(url_for("billing_list"))
@@ -678,12 +689,12 @@ def register_billing_routes(app, *, helpers):
     )
     @login_required
     def billing_new_from_operation(operation_id):
-        """Legacy URL: keep users in billing, not operation detail."""
+        """Keep users in the billing composer with the operation context."""
         require_billing_user()
         return redirect(
             url_for(
-                "billing_list",
-                tab="pending",
+                "billing_ai_select_operation",
+                operation_id=operation_id,
             )
         )
 
@@ -1373,18 +1384,7 @@ def register_billing_routes(app, *, helpers):
         if request.method == "POST":
             action = request.form.get("action", "save")
             if action in ("arca_save", "arca_test") and is_arca_fiscal_enabled():
-                profile_id = int(request.form["profile_id"])
-                profile = get_billing_issuer_profile(
-                    organization_id,
-                    profile_id,
-                )
-                _save_issuer_arca_config(
-                    organization_id,
-                    profile_id,
-                    profile,
-                    test_only=action == "arca_test",
-                )
-                return redirect(url_for("billing_issuers"))
+                return redirect(url_for("settings_arca"))
             if action == "deactivate":
                 deactivate_billing_issuer_profile(
                     organization_id,
@@ -1440,7 +1440,11 @@ def register_billing_routes(app, *, helpers):
                         profile,
                         require_active=False,
                     ),
-                    "arca_display": build_arca_display(profile),
+                    "arca_display": build_arca_display(
+                        profile,
+                        user=get_current_user(),
+                        organization_id=organization_id,
+                    ),
                     "arca_form": {
                         "point_of_sale": profile.get(
                             "arca_point_of_sale", ""
@@ -1712,22 +1716,7 @@ def register_billing_routes(app, *, helpers):
         if request.method == "POST":
             action = request.form.get("action", "save")
             if action in ("arca_save", "arca_test") and is_arca_fiscal_enabled():
-                profile = get_agent_billing_profile(
-                    organization_id,
-                    agent_id,
-                )
-                _save_agent_arca_config(
-                    organization_id,
-                    agent_id,
-                    profile,
-                    test_only=action == "arca_test",
-                )
-                return redirect(
-                    url_for(
-                        "billing_agent_profile",
-                        agent_id=agent_id,
-                    )
-                )
+                return redirect(url_for("settings_arca"))
 
             validation = validate_agent_billing_profile(
                 form_values,
@@ -1786,7 +1775,11 @@ def register_billing_routes(app, *, helpers):
             missing=missing if not ready else [],
             org_ready=org_ready,
             org_missing=org_missing,
-            arca_display=build_arca_display(profile),
+            arca_display=build_arca_display(
+                profile,
+                user=user,
+                organization_id=organization_id,
+            ),
             arca_form=arca_form,
             agent=agent,
             can_edit=can_edit,
