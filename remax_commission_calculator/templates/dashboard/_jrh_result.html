@@ -1,0 +1,38 @@
+{% if jrh_result %}
+<section class="jrh-result" data-jrh-result>
+    {% if jrh_result.understood_count == 1 %}
+    <p class="jrh-result__kicker">{{ t('jrh_understood_one') }}</p>
+    {% else %}
+    <p class="jrh-result__kicker">{{ t('jrh_understood_count', count=jrh_result.understood_count) }}</p>
+    {% endif %}
+    <ol class="jrh-result__list">
+        {% for intent in jrh_result.intents %}
+        <li class="jrh-result__item" data-status="{{ intent.status }}" data-type="{{ intent.type }}">
+            <div class="jrh-result__head">
+                <span class="jrh-result__index">{{ loop.index }}</span>
+                <strong>{{ intent.title }}</strong>
+                <span class="jrh-result__status">{{ t('jrh_status_' ~ intent.status) }}</span>
+            </div>
+            {% if intent.summary %}
+            <p class="jrh-result__summary">{{ intent.summary }}</p>
+            {% endif %}
+            {% if intent.message and intent.message != intent.summary %}
+            <p class="jrh-result__message">{{ intent.message }}</p>
+            {% endif %}
+            {% if intent.data.candidates %}
+            <ul class="jrh-result__candidates">
+                {% for candidate in intent.data.candidates %}
+                <li>
+                    <a href="{{ url_for('contacts_detail', contact_id=candidate.id) }}">{{ candidate.name }}</a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% if intent.href and intent.status != 'unsupported' %}
+            <a class="btn btn-small btn-primary" href="{{ intent.href }}">{{ t(intent.cta_key) }}</a>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+</section>
+{% endif %}

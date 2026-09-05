@@ -67,7 +67,7 @@
     <p>{{ t('settings_integrations_calendar_help') }}</p>
     {% if calendar.can_connect %}
     <a class="btn btn-primary" href="{{ url_for('agenda_calendar_connect') }}">
-        {{ t('agenda_calendar_connect') }}
+        {{ t('settings_integrations_calendar_connect') }}
     </a>
     {% elif calendar.state == 'unconfigured' %}
     <p class="integration-card__meta">{{ t('agenda_calendar_flash_not_configured') }}</p>

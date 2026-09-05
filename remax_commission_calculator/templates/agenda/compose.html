@@ -3,6 +3,7 @@
 {% block title %}{{ t('agenda_ai_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/jrh-voice.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
 {% endblock %}
 
@@ -61,7 +62,8 @@
             </button>
             <button type="submit" class="btn btn-primary">{{ t('agenda_ia_submit') }}</button>
         </div>
-        <p class="agenda-ia__hint" data-agenda-voice-status>{{ t('agenda_ai_voice_hint') }}</p>
+        <p class="agenda-ia__hint" data-agenda-voice-status data-listening="{{ t('agenda_ia_listening') }}" data-transcribing="{{ t('jrh_voice_transcribing') }}">{{ t('agenda_ai_voice_hint') }}</p>
+        <p class="agenda-ia__hint" data-jrh-voice-unsupported hidden>{{ t('jrh_voice_unsupported') }}</p>
     </form>
 </section>
 {% endblock %}

@@ -742,7 +742,9 @@ def register_agenda_routes(app, helpers):
 
                     return redirect(url_for("agenda_index"))
 
-        elif request.method == "POST":
+        elif request.method == "POST" or (
+            request.method == "GET" and prompt and not items
+        ):
             try:
                 bundle = interpret_agenda_input(
                     prompt,

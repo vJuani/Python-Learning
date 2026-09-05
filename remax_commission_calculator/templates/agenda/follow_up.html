@@ -5,6 +5,7 @@
 {% block title %}{{ t('agenda_followup_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/jrh-voice.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
 {% endblock %}
 

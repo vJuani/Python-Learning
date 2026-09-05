@@ -1844,6 +1844,51 @@ class AgentAgendaTests(unittest.TestCase):
         self.assertIn(staff.status_code, (302, 403))
         self.assertNotIn("Escribir resumen", staff.get_data(as_text=True))
 
+    def test_61_batch_partial_google_sync_keeps_jrh_tasks(self):
+        from modules.database.agent_tasks_repository import list_agent_tasks
+        from modules.google_calendar import GoogleCalendarHttpError
+
+        self._seed_google_connection()
+        self._login("agenda_agent_user")
+        created = {"count": 0}
+
+        def fake_http(method, url, **kwargs):
+            if method == "POST" and url.endswith("/events"):
+                created["count"] += 1
+                if created["count"] <= 2:
+                    return {"id": f"evt-partial-{created['count']}"}
+                raise GoogleCalendarHttpError(500, "boom")
+            if method == "GET" and "/events" in url:
+                return {"items": []}
+            raise AssertionError(f"unexpected {method} {url}")
+
+        data = {"item_count": "3", "confirm_ready": "1"}
+        data.update(self._batch_item_fields(0, "Visita sync 1"))
+        data.update(self._batch_item_fields(1, "Visita sync 2"))
+        data.update(self._batch_item_fields(2, "Visita sync 3"))
+
+        with patch(
+            "modules.google_calendar._http_json",
+            side_effect=fake_http,
+        ):
+            response = self.client.post("/agenda/compose", data=data)
+
+        self.assertEqual(response.status_code, 302)
+        tasks = list_agent_tasks(self.org_a, agent_id=self.agent_a)
+        titles = {task["title"]: task for task in tasks}
+        self.assertIn("Visita sync 1", titles)
+        self.assertIn("Visita sync 2", titles)
+        self.assertIn("Visita sync 3", titles)
+        self.assertEqual(titles["Visita sync 1"].get("google_event_id"), "evt-partial-1")
+        self.assertEqual(titles["Visita sync 2"].get("google_event_id"), "evt-partial-2")
+        self.assertFalse(titles["Visita sync 3"].get("google_event_id"))
+
+        page = self.client.get("/agenda")
+        body = page.get_data(as_text=True)
+        self.assertIn("2 sincronizadas con Google Calendar", body)
+        self.assertIn("1 pendiente", body)
+        self.assertIn("No pudimos sincronizar este evento con Google Calendar.", body)
+
 
 if __name__ == "__main__":
     unittest.main()

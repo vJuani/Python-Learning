@@ -332,6 +332,7 @@ from modules.agent_tasks import (
 
 from modules.agenda_routes import register_agenda_routes
 from modules.contact_routes import register_contact_routes
+from modules.jrh_routes import register_jrh_routes
 
 from modules.organization_settings import (
     COMMON_TIMEZONES,
@@ -1484,6 +1485,28 @@ def get_dashboard_context(
         "dashboard": dashboard,
         "team_block": team_block,
         "home_panel": home_panel,
+    }
+
+
+def get_agent_home_context(organization_id, agent_id, *, jrh_result=None):
+    from modules.jrh_home import build_agent_home
+
+    language = get_current_language()
+    context = get_dashboard_context(organization_id, agent_id=agent_id)
+    return {
+        **context,
+        "home": build_agent_home(
+            organization_id,
+            user=get_current_user(),
+            agent_id=agent_id,
+            language=language,
+        ),
+        "pending_summary": summarize_pending_actions(
+            _pending_actions_for_current_user(),
+            language=language,
+        ),
+        "agenda_summary": _agenda_summary_for_current_user(),
+        "jrh_result": jrh_result,
     }
 
 
@@ -3996,6 +4019,13 @@ def dashboard():
         agent_id=agent_id,
         raw_filters=request.args,
     )
+
+    user = get_current_user()
+    if is_agent(user) and agent_id is not None:
+        return render_template(
+            "dashboard/home_agent.html",
+            **get_agent_home_context(organization_id, agent_id),
+        )
 
     return render_template(
         "dashboard.html",
@@ -8027,6 +8057,17 @@ register_pending_routes(
     helpers={
         "require_user_organization": require_user_organization,
         "get_current_language": get_current_language,
+    },
+)
+
+register_jrh_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "get_agent_scope": get_agent_scope,
+        "get_agent_home_context": get_agent_home_context,
+        "flash_i18n": flash_i18n,
     },
 )
 
