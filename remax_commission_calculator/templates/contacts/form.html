@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-contacts-page {% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/contacts.js') }}" defer></script>
+{% endblock %}
+
+{% block title %}
+{% if mode == 'edit' %}{{ t('contacts_edit') }}{% else %}{{ t('contacts_new') }}{% endif %}
+| {{ t('contacts_title') }}
+{% endblock %}
+
+{% block content %}
+{% set prefs = form.preferences or {} %}
+<section class="contacts-form-page">
+    <header class="contacts-hero">
+        <div>
+            <p class="contacts-kicker">{{ t('contacts_title') }}</p>
+            <h1>{% if mode == 'edit' %}{{ t('contacts_edit') }}{% else %}{{ t('contacts_new') }}{% endif %}</h1>
+        </div>
+    </header>
+
+    {% if errors %}
+    <div class="flash-error" role="alert">
+        {% for error in errors %}<p>{{ t(error) }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" class="contact-form">
+        <section class="contact-panel">
+            <label class="contact-field">
+                <span>{{ t('contacts_field_name') }} *</span>
+                <input type="text" name="name" value="{{ form.name or '' }}" required>
+            </label>
+            <label class="contact-field" id="contact-phone">
+                <span>{{ t('contacts_field_phone') }}</span>
+                <input type="tel" name="phone" value="{{ form.phone or '' }}">
+            </label>
+            <label class="contact-field">
+                <span>{{ t('contacts_field_email') }}</span>
+                <input type="email" name="email" value="{{ form.email or '' }}">
+            </label>
+            <label class="contact-field">
+                <span>{{ t('contacts_field_status') }}</span>
+                <select name="status">
+                    {% for key in statuses %}
+                    <option value="{{ key }}" {% if form.status == key %}selected{% endif %}>{{ t('contacts_status_' ~ key) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="contact-field">
+                <span>{{ t('contacts_field_notes') }}</span>
+                <textarea name="notes" rows="3">{{ form.notes or '' }}</textarea>
+            </label>
+        </section>
+
+        {% if mode == 'edit' %}
+        <section class="contact-panel" id="contact-prefs">
+            <p class="contacts-kicker">{{ t('contacts_looking_for') }}</p>
+
+            <div class="contact-field" data-contact-chips>
+                <span>{{ t('contacts_field_areas') }}</span>
+                <div class="contact-chip-row">
+                    {% for item in prefs.areas or [] %}
+                    <label class="contact-chip-edit">
+                        {{ item }}
+                        <input type="hidden" name="area" value="{{ item }}">
+                        <button type="button" data-chip-remove aria-label="{{ t('contacts_remove_chip') }}">×</button>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div class="contact-chip-add">
+                    <input type="text" data-chip-input placeholder="{{ t('contacts_add_area') }}">
+                    <button type="button" class="btn btn-small btn-secondary" data-chip-add data-chip-name="area">+ {{ t('contacts_add') }}</button>
+                </div>
+            </div>
+
+            <div class="contact-budget">
+                <label class="contact-field">
+                    <span>{{ t('agenda_followup_currency') }}</span>
+                    <select name="budget_currency">
+                        {% for code in ('USD', 'ARS') %}
+                        <option value="{{ code }}" {% if (prefs.budget or {}).currency == code %}selected{% endif %}>{{ code }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="contact-field">
+                    <span>{{ t('contacts_budget_from') }}</span>
+                    <input type="number" name="budget_min" value="{{ (prefs.budget or {}).min or '' }}">
+                </label>
+                <label class="contact-field">
+                    <span>{{ t('contacts_budget_to') }}</span>
+                    <input type="number" name="budget_max" value="{{ (prefs.budget or {}).max or '' }}">
+                </label>
+            </div>
+
+            <label class="contact-field">
+                <span>{{ t('contacts_field_type') }}</span>
+                <input type="text" name="property_types" value="{{ (prefs.property_types or []) | join(', ') }}">
+            </label>
+            <div class="contact-budget">
+                <label class="contact-field">
+                    <span>{{ t('contacts_field_rooms') }}</span>
+                    <input type="number" name="rooms" value="{{ prefs.rooms or '' }}">
+                </label>
+                <label class="contact-field">
+                    <span>{{ t('contacts_field_bedrooms') }}</span>
+                    <input type="number" name="bedrooms" value="{{ prefs.bedrooms or '' }}">
+                </label>
+            </div>
+
+            <div class="contact-field" data-contact-chips>
+                <span>{{ t('contacts_field_features') }}</span>
+                <div class="contact-chip-row">
+                    {% for item in prefs.features or [] %}
+                    <label class="contact-chip-edit">
+                        {{ item }}
+                        <input type="hidden" name="feature" value="{{ item }}">
+                        <button type="button" data-chip-remove aria-label="{{ t('contacts_remove_chip') }}">×</button>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div class="contact-chip-add">
+                    <input type="text" data-chip-input placeholder="{{ t('contacts_add_feature') }}">
+                    <button type="button" class="btn btn-small btn-secondary" data-chip-add data-chip-name="feature">+ {{ t('contacts_add') }}</button>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
+        <div class="contact-form__actions">
+            <button type="submit" class="btn btn-primary">
+                {% if mode == 'edit' %}{{ t('contacts_save') }}{% else %}{{ t('contacts_create') }}{% endif %}
+            </button>
+            <a class="btn btn-secondary" href="{{ url_for('contacts_index') }}">{{ t('contacts_cancel') }}</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

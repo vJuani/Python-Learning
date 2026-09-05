@@ -11,7 +11,13 @@ from modules.database.operations_repository import filter_operations
 from modules.database.properties_repository import STATUS_APPROVED
 from modules.database.tenant import require_organization_id
 from modules.i18n import translate
-from modules.property_types import PROPERTY_TYPES
+from modules.property_inventory import decorate_property_for_display
+from modules.property_types import (
+    COMMERCIAL_STATUSES,
+    LISTING_CURRENCIES,
+    LISTING_PURPOSES,
+    PROPERTY_TYPES,
+)
 from modules.validators import date_to_sortable
 
 
@@ -263,9 +269,10 @@ def build_properties_directory(
         agent_name = property_row.get("agent_name") or "—"
         parts = agent_name.split()
 
+        decorated = decorate_property_for_display(property_row, language)
         rows.append(
             {
-                **property_row,
+                **decorated,
                 "title": _property_title(property_row, language),
                 "code": f"PROP-{property_row['id']:05d}",
                 "type_label": _property_type_label(property_type, language),
@@ -274,7 +281,7 @@ def build_properties_directory(
                     language,
                 ),
                 "category": _property_category(property_type),
-                "currency": "USD",
+                "currency": decorated.get("listing_currency"),
                 "display_status": display_status,
                 "agent_initials": (
                     f"{parts[0][0:1].upper()}"
@@ -319,6 +326,7 @@ def build_properties_directory(
             or search_q in (row.get("title") or "").lower()
             or search_q in row["code"].lower()
             or search_q in (row.get("external_id") or "").lower()
+            or search_q in (row.get("neighborhood") or "").lower()
         ]
 
     if type_filter and type_filter in PROPERTY_TYPES:
@@ -453,10 +461,17 @@ def build_properties_directory(
             "jurisdiction": raw_filters.get("jurisdiction") or "",
             "min_price": raw_filters.get("min_price") or "",
             "max_price": raw_filters.get("max_price") or "",
+            "neighborhood": raw_filters.get("neighborhood") or "",
+            "listing_purpose": raw_filters.get("listing_purpose") or "",
+            "commercial_status": raw_filters.get("commercial_status") or "",
+            "listing_currency": raw_filters.get("listing_currency") or "",
             "per_page": page_size,
         },
         "agent_options": agents,
         "property_types": PROPERTY_TYPES,
+        "listing_purposes": LISTING_PURPOSES,
+        "commercial_statuses": COMMERCIAL_STATUSES,
+        "listing_currencies": LISTING_CURRENCIES,
         "featured": featured,
         "occupancy_breakdown": [
             {

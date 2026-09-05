@@ -2,20 +2,36 @@
 
 {% block title %}{{ property_display_id }} | {{ t('app_title') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/properties-page.css') }}">
+{% endblock %}
+
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ property_data.address }}</h2>
+        {% if property_data.neighborhood %}
+        <p class="property-neighborhood">{{ property_data.neighborhood }}</p>
+        {% endif %}
         {% if property_data.external_id %}
         <span class="entity-external-id">#{{ property_data.external_id }}</span>
         {% endif %}
         {% if property_data.listing_price is not none %}
-        <p class="entity-hero-price money money-emphasis">{{ property_data.listing_price|money }}</p>
+        <p class="entity-hero-price money money-emphasis">{{ property_data.listing_price|listing_money(property_data.listing_currency) }}</p>
+        {% if not property_data.currency_known %}
+        <p class="field-help">{{ t('listing_currency_unknown') }}</p>
+        {% endif %}
         {% endif %}
         <p class="entity-hero-meta">
             <span class="type-tag badge-{{ property_data.jurisdiction|lower }}">{{ property_data.jurisdiction }}</span>
+            {% if property_data.purpose_label %}
+            <span>{{ property_data.purpose_label }}</span>
+            {% endif %}
             <span>{{ property_data.agent_name or '—' }}</span>
             <span class="badge badge-soft">{{ t('property_status_' ~ (property_data.status or 'approved')) }}</span>
+            {% if property_data.commercial_status_label %}
+            <span class="badge badge-soft">{{ property_data.commercial_status_label }}</span>
+            {% endif %}
         </p>
         <p class="field-help">{{ t('property_detail_subtitle') }}</p>
     </div>
@@ -61,11 +77,62 @@
         <dt>{{ t('property_listing_price') }}</dt>
         <dd>
             {% if property_data.listing_price is not none %}
-            {{ property_data.listing_price|money }}
+            {{ property_data.listing_price|listing_money(property_data.listing_currency) }}
+            {% if not property_data.currency_known %}
+            <span class="field-help">{{ t('listing_currency_unknown') }}</span>
+            {% endif %}
             {% else %}
             —
             {% endif %}
         </dd>
+        <dt>{{ t('listing_currency') }}</dt>
+        <dd>{{ property_data.currency_label }}</dd>
+        {% if property_data.neighborhood %}
+        <dt>{{ t('property_neighborhood') }}</dt>
+        <dd>{{ property_data.neighborhood }}</dd>
+        {% endif %}
+        {% if property_data.rooms is not none %}
+        <dt>{{ t('property_rooms') }}</dt>
+        <dd>{{ property_data.rooms }}</dd>
+        {% endif %}
+        {% if property_data.bedrooms is not none %}
+        <dt>{{ t('property_bedrooms') }}</dt>
+        <dd>{{ property_data.bedrooms }}</dd>
+        {% endif %}
+        {% if property_data.bathrooms is not none %}
+        <dt>{{ t('property_bathrooms') }}</dt>
+        <dd>{{ property_data.bathrooms }}</dd>
+        {% endif %}
+        {% if property_data.covered_m2 is not none %}
+        <dt>{{ t('property_covered_m2') }}</dt>
+        <dd>{{ property_data.covered_m2 }}</dd>
+        {% endif %}
+        {% if property_data.total_m2 is not none %}
+        <dt>{{ t('property_total_m2') }}</dt>
+        <dd>{{ property_data.total_m2 }}</dd>
+        {% endif %}
+        {% if property_data.parking_spaces is not none %}
+        <dt>{{ t('property_parking_spaces') }}</dt>
+        <dd>{{ property_data.parking_spaces }}</dd>
+        {% endif %}
+        {% if property_data.commercial_status_label %}
+        <dt>{{ t('commercial_status') }}</dt>
+        <dd>{{ property_data.commercial_status_label }}</dd>
+        {% endif %}
+        {% if property_data.feature_labels %}
+        <dt>{{ t('property_section_extras') }}</dt>
+        <dd>
+            <ul class="property-feature-list">
+                {% for label in property_data.feature_labels %}
+                <li>{{ label }}</li>
+                {% endfor %}
+            </ul>
+        </dd>
+        {% endif %}
+        {% if property_data.description %}
+        <dt>{{ t('property_description') }}</dt>
+        <dd>{{ property_data.description }}</dd>
+        {% endif %}
     </dl>
 
     {% if property_data.status == 'rejected' and property_data.rejection_reason %}
@@ -89,11 +156,15 @@
         <dt>{{ t('property_listing_price') }}</dt>
         <dd>
             {% if pending_change.proposed_listing_price is not none %}
-            {{ pending_change.proposed_listing_price|money }}
+            {{ pending_change.proposed_listing_price|listing_money(pending_change.proposed_listing_currency) }}
             {% else %}
             —
             {% endif %}
         </dd>
+        {% if pending_change.proposed_listing_currency %}
+        <dt>{{ t('listing_currency') }}</dt>
+        <dd>{{ pending_change.proposed_listing_currency }}</dd>
+        {% endif %}
         <dt>{{ t('property_listing_purpose') }}</dt>
         <dd>
             {% if pending_change.proposed_listing_purpose %}

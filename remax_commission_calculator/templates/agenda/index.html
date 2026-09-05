@@ -143,12 +143,22 @@
         </form>
     </details>
 
-    {% if can_manage and agenda.overdue_count and is_day_home %}
+    {% if can_manage and is_day_home and (agenda.overdue_count or agenda.missing_followup_count) %}
     <aside class="agenda-recommend">
         <p class="agenda-recommend__kicker">{{ t('agenda_recommend_title') }}</p>
+        {% if agenda.overdue_count %}
         <a href="{{ url_for('agenda_index', filter='overdue') }}">
             {{ t('agenda_recommend_overdue', count=agenda.overdue_count) }}
         </a>
+        {% endif %}
+        {% if agenda.missing_followup_count and agenda.missing_followup_id %}
+        <a href="{{ url_for('agenda_follow_up', task_id=agenda.missing_followup_id) }}">
+            {{ t('agenda_recommend_missing_followup') }}
+        </a>
+        <a class="agenda-recommend__action" href="{{ url_for('agenda_follow_up', task_id=agenda.missing_followup_id) }}">
+            {{ t('agenda_recommend_missing_followup_action') }}
+        </a>
+        {% endif %}
     </aside>
     {% endif %}
 

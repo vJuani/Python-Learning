@@ -10,12 +10,21 @@
 <form method="post" action="{{ url_for('agenda_compose') }}" class="agenda-preview-list">
     <input type="hidden" name="prompt" value="{{ prompt or '' }}">
     <input type="hidden" name="item_count" value="{{ total_count }}">
+    {% if compose_contact %}
+    <input type="hidden" name="compose_contact_id" value="{{ compose_contact.id }}">
+    {% endif %}
 
     {% for draft in items %}
     {% set index = loop.index0 %}
     {% set status = draft.item_status or 'ready' %}
     {% set candidates = draft.property_candidates or [] %}
+    {% set contact_candidates = draft.contact_candidates or [] %}
+    {% set contact_preview = draft.contact_preview or (contact_candidates[0] if contact_candidates|length == 1 else none) %}
     {% set is_ambiguous = draft.property_match == 'ambiguous' and not draft.property_id %}
+    {% set contact_none = draft.contact_match == 'none' and draft.contact_name %}
+    {% set contact_unclear = draft.contact_match == 'single' and not draft.contact_id %}
+    {% set contact_many = draft.contact_match == 'ambiguous' and not draft.contact_id %}
+    {% set creating = creating_contact_index == index %}
     {% set prefix = 'items-' ~ index ~ '-' %}
 
     <article class="agenda-preview agenda-card" data-item-status="{{ status }}">
@@ -35,7 +44,16 @@
         {% if draft.due_date %}
         <p>{{ draft.due_date }}{% if draft.due_time %} · {{ draft.due_time }}{% endif %}</p>
         {% endif %}
-        {% if draft.contact_name %}<p>{{ draft.contact_name }}</p>{% endif %}
+        {% if draft.contact_id and contact_preview %}
+        <div class="agenda-preview__contact">
+            <span>{{ t('agenda_ai_contact_label') }}</span>
+            <strong>{{ contact_preview.name }}</strong>
+            {% if contact_preview.search_line %}<p>{{ contact_preview.search_line }}</p>{% endif %}
+            {% if contact_preview.budget_label %}<p>{{ t('contacts_until') }} {{ contact_preview.budget_label }}</p>{% endif %}
+        </div>
+        {% elif draft.contact_name and not contact_unclear and not contact_many and not contact_none %}
+        <p>{{ draft.contact_name }}</p>
+        {% endif %}
         {% if draft.property_address and not is_ambiguous %}<p>{{ draft.property_address }}</p>{% endif %}
 
         {% if draft.warnings and status != 'ready' %}
@@ -52,12 +70,13 @@
         </ul>
         {% endif %}
 
-        {% for key in ['title', 'task_type', 'contact_name', 'property_id', 'property_address', 'property_query', 'property_match', 'description', 'duration_minutes', 'reminder_minutes', 'attendance_status', 'source_prompt', 'ui_status', 'item_status'] %}
+        {% for key in ['title', 'task_type', 'contact_name', 'contact_id', 'contact_match', 'property_id', 'property_address', 'property_query', 'property_match', 'description', 'duration_minutes', 'reminder_minutes', 'attendance_status', 'source_prompt', 'ui_status', 'item_status'] %}
         <input type="hidden" name="{{ prefix }}{{ key }}" value="{{ draft[key] or '' }}">
         {% endfor %}
         <input type="hidden" name="{{ prefix }}date_found" value="{{ '1' if draft.date_found else '0' }}">
         <input type="hidden" name="{{ prefix }}time_found" value="{{ '1' if draft.time_found else '0' }}">
         <input type="hidden" name="{{ prefix }}candidates" value="{{ candidates | tojson | forceescape }}">
+        <input type="hidden" name="{{ prefix }}contact_candidates" value="{{ contact_candidates | tojson | forceescape }}">
 
         <div class="agenda-preview__when">
             {% if not draft.due_date %}
@@ -91,6 +110,74 @@
                 <input type="radio" name="{{ prefix }}property_choice" value="none">
                 <span>{{ t('agenda_ai_create_without_property') }}</span>
             </label>
+        </fieldset>
+        {% endif %}
+
+        {% if creating %}
+        <fieldset class="agenda-preview__quick-create">
+            <legend>{{ t('contacts_quick_create') }}</legend>
+            <label class="agenda-preview__field">
+                <span>{{ t('contacts_field_name') }}</span>
+                <input type="text" name="quick_name" value="{{ draft.contact_name or '' }}" required>
+            </label>
+            <label class="agenda-preview__field">
+                <span>{{ t('contacts_field_phone') }}</span>
+                <input type="tel" name="quick_phone" value="">
+            </label>
+            <label class="agenda-preview__field">
+                <span>{{ t('contacts_field_email') }}</span>
+                <input type="email" name="quick_email" value="">
+            </label>
+            <button type="submit" class="btn btn-small btn-primary" name="quick_create_contact" value="{{ index }}">
+                {{ t('agenda_ai_contact_create_link') }}
+            </button>
+        </fieldset>
+        {% elif contact_none %}
+        <div class="agenda-preview__contact-match">
+            <p>{{ t('agenda_ai_contact_none', name=draft.contact_name) }}</p>
+            <div class="agenda-preview__actions">
+                <button type="submit" class="btn btn-small btn-secondary" name="{{ prefix }}contact_choice" value="none">
+                    {{ t('agenda_ai_contact_continue') }}
+                </button>
+                <button type="submit" class="btn btn-small btn-secondary" name="create_contact_item" value="{{ index }}">
+                    {{ t('agenda_ai_contact_create') }}
+                </button>
+            </div>
+        </div>
+        {% elif contact_unclear and contact_preview %}
+        <div class="agenda-preview__contact-match">
+            <p>{{ t('agenda_ai_contact_found', name=contact_preview.name) }}</p>
+            <strong>{{ contact_preview.name }}</strong>
+            {% if contact_preview.phone %}<p>{{ contact_preview.phone }}</p>{% endif %}
+            {% if contact_preview.search_line %}<p>{{ contact_preview.search_line }}</p>{% endif %}
+            <div class="agenda-preview__actions">
+                <button type="submit" class="btn btn-small btn-primary" name="{{ prefix }}contact_choice" value="{{ contact_preview.id }}">
+                    {{ t('agenda_ai_contact_link') }}
+                </button>
+                <button type="submit" class="btn btn-small btn-secondary" name="{{ prefix }}contact_choice" value="none">
+                    {{ t('agenda_ai_contact_name_only') }}
+                </button>
+            </div>
+        </div>
+        {% elif contact_many %}
+        <fieldset class="agenda-preview__candidates">
+            <legend>{{ t('agenda_ai_contact_many', count=contact_candidates|length) }}</legend>
+            {% for candidate in contact_candidates %}
+            <label class="agenda-preview__candidate">
+                <input type="radio" name="{{ prefix }}contact_choice" value="{{ candidate.id }}">
+                <span>
+                    <strong>{{ candidate.name }}</strong>
+                    {% if candidate.phone %}<br>{{ candidate.phone }}{% endif %}
+                    {% if candidate.search_line %}<br>{{ candidate.search_line }}{% endif %}
+                    {% if candidate.budget_label %}<br>{{ t('contacts_until') }} {{ candidate.budget_label }}{% endif %}
+                </span>
+            </label>
+            {% endfor %}
+            <label class="agenda-preview__candidate">
+                <input type="radio" name="{{ prefix }}contact_choice" value="none">
+                <span>{{ t('agenda_ai_contact_name_only') }}</span>
+            </label>
+            <button type="submit" class="btn btn-small btn-primary">{{ t('agenda_ai_contact_resolve') }}</button>
         </fieldset>
         {% endif %}
 

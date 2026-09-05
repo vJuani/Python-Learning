@@ -1,5 +1,12 @@
 from datetime import datetime
 
+from modules.listings_normalize import normalize_neighborhood
+from modules.property_features import (
+    features_to_json,
+    normalize_property_features,
+)
+from modules.property_types import COMMERCIAL_STATUS_AVAILABLE
+
 from .connection import (
     execute_insert,
     get_connection,
@@ -15,6 +22,8 @@ STATUS_PENDING = "pending"
 STATUS_APPROVED = "approved"
 STATUS_REJECTED = "rejected"
 
+UNSET = object()
+
 
 def _now_iso():
     return datetime.utcnow().replace(
@@ -22,10 +31,19 @@ def _now_iso():
     ).isoformat()
 
 
+def _optional_text(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _build_property_dict(row):
     external_id = None
     if len(row) > 16 and row[16]:
         external_id = str(row[16]).strip() or None
+
+    features_raw = row[27] if len(row) > 27 else None
 
     return {
         "id": row[0],
@@ -45,6 +63,18 @@ def _build_property_dict(row):
         "listing_purpose": row[14] if len(row) > 14 else None,
         "last_synced_at": row[15] if len(row) > 15 else None,
         "external_id": external_id,
+        "listing_currency": row[17] if len(row) > 17 else None,
+        "neighborhood": row[18] if len(row) > 18 else None,
+        "rooms": row[19] if len(row) > 19 else None,
+        "bedrooms": row[20] if len(row) > 20 else None,
+        "bathrooms": row[21] if len(row) > 21 else None,
+        "covered_m2": row[22] if len(row) > 22 else None,
+        "total_m2": row[23] if len(row) > 23 else None,
+        "parking_spaces": row[24] if len(row) > 24 else None,
+        "description": row[25] if len(row) > 25 else None,
+        "commercial_status": row[26] if len(row) > 26 else None,
+        "features_json": features_raw,
+        "features": normalize_property_features(features_raw),
     }
 
 
@@ -66,7 +96,18 @@ PROPERTIES_BASE_QUERY = """
         properties.listing_price,
         properties.listing_purpose,
         properties.last_synced_at,
-        properties.external_id
+        properties.external_id,
+        properties.listing_currency,
+        properties.neighborhood,
+        properties.rooms,
+        properties.bedrooms,
+        properties.bathrooms,
+        properties.covered_m2,
+        properties.total_m2,
+        properties.parking_spaces,
+        properties.description,
+        properties.commercial_status,
+        properties.features_json
     FROM properties
     LEFT JOIN agents
         ON properties.agent_id = agents.id
@@ -318,6 +359,19 @@ def add_property(
     listing_price=None,
     listing_purpose=None,
     external_id=None,
+    last_synced_at=None,
+    listing_currency=None,
+    neighborhood=None,
+    rooms=None,
+    bedrooms=None,
+    bathrooms=None,
+    covered_m2=None,
+    total_m2=None,
+    parking_spaces=None,
+    description=None,
+    commercial_status=COMMERCIAL_STATUS_AVAILABLE,
+    features=None,
+    features_json=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -340,6 +394,14 @@ def add_property(
     if external_id is not None:
         cleaned_external_id = str(external_id).strip() or None
 
+    stored_features = features_to_json(features)
+    if stored_features is None and features_json is not None:
+        stored_features = features_to_json(features_json)
+
+    currency = _optional_text(listing_currency)
+    if currency:
+        currency = currency.upper()
+
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -357,9 +419,21 @@ def add_property(
             property_type,
             listing_price,
             listing_purpose,
-            external_id
+            external_id,
+            last_synced_at,
+            listing_currency,
+            neighborhood,
+            rooms,
+            bedrooms,
+            bathrooms,
+            covered_m2,
+            total_m2,
+            parking_spaces,
+            description,
+            commercial_status,
+            features_json
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             address.strip(),
@@ -373,6 +447,18 @@ def add_property(
             listing_price,
             listing_purpose,
             cleaned_external_id,
+            last_synced_at,
+            currency,
+            normalize_neighborhood(neighborhood),
+            rooms,
+            bedrooms,
+            bathrooms,
+            covered_m2,
+            total_m2,
+            parking_spaces,
+            _optional_text(description),
+            commercial_status,
+            stored_features,
         )
     )
 
@@ -382,16 +468,41 @@ def add_property(
     return property_id
 
 
+def _normalize_optional_currency(value):
+    currency = _optional_text(value)
+    if currency:
+        return currency.upper()
+    return None
+
+
+def _normalize_optional_features(value):
+    if value is None or value == "":
+        return None
+    return features_to_json(value)
+
+
 def update_property(
     property_id,
     address,
     jurisdiction,
     organization_id,
     agent_id=None,
-    property_type=None,
-    listing_price=None,
-    listing_purpose=None,
-    external_id=None,
+    property_type=UNSET,
+    listing_price=UNSET,
+    listing_purpose=UNSET,
+    external_id=UNSET,
+    listing_currency=UNSET,
+    neighborhood=UNSET,
+    rooms=UNSET,
+    bedrooms=UNSET,
+    bathrooms=UNSET,
+    covered_m2=UNSET,
+    total_m2=UNSET,
+    parking_spaces=UNSET,
+    description=UNSET,
+    commercial_status=UNSET,
+    features=UNSET,
+    features_json=UNSET,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -407,35 +518,72 @@ def update_property(
             organization_id
         )
 
-    cleaned_external_id = None
-    if external_id is not None:
-        cleaned_external_id = str(external_id).strip() or None
+    assignments = [
+        "address = ?",
+        "jurisdiction = ?",
+        "agent_id = ?",
+    ]
+    params = [
+        address.strip(),
+        jurisdiction.strip(),
+        agent_id,
+    ]
+
+    optional_fields = {
+        "property_type": (
+            property_type,
+            _optional_text,
+        ),
+        "listing_price": (listing_price, None),
+        "listing_purpose": (
+            listing_purpose,
+            _optional_text,
+        ),
+        "external_id": (
+            external_id,
+            _optional_text,
+        ),
+        "listing_currency": (
+            listing_currency,
+            _normalize_optional_currency,
+        ),
+        "neighborhood": (
+            neighborhood,
+            normalize_neighborhood,
+        ),
+        "rooms": (rooms, None),
+        "bedrooms": (bedrooms, None),
+        "bathrooms": (bathrooms, None),
+        "covered_m2": (covered_m2, None),
+        "total_m2": (total_m2, None),
+        "parking_spaces": (parking_spaces, None),
+        "description": (description, _optional_text),
+        "commercial_status": (
+            commercial_status,
+            _optional_text,
+        ),
+        "features_json": (
+            features if features is not UNSET else features_json,
+            _normalize_optional_features,
+        ),
+    }
+
+    for column_name, (value, transform) in optional_fields.items():
+        if value is UNSET:
+            continue
+        assignments.append(f"{column_name} = ?")
+        params.append(transform(value) if transform else value)
+
+    params.extend([property_id, organization_id])
 
     cursor.execute(
-        """
+        f"""
         UPDATE properties
-        SET
-            address = ?,
-            jurisdiction = ?,
-            agent_id = ?,
-            property_type = COALESCE(?, property_type),
-            listing_price = COALESCE(?, listing_price),
-            listing_purpose = COALESCE(?, listing_purpose),
-            external_id = COALESCE(?, external_id)
+        SET {", ".join(assignments)}
         WHERE id = ?
             AND organization_id = ?
         """,
-        (
-            address.strip(),
-            jurisdiction.strip(),
-            agent_id,
-            property_type,
-            listing_price,
-            listing_purpose,
-            cleaned_external_id,
-            property_id,
-            organization_id,
-        )
+        params,
     )
 
     if cursor.rowcount == 0:
@@ -604,6 +752,11 @@ def filter_properties(
     listing_purpose=None,
     min_price=None,
     max_price=None,
+    min_listing_price=None,
+    max_listing_price=None,
+    neighborhood=None,
+    listing_currency=None,
+    commercial_status=None,
     status=None,
     include_all_statuses=False,
     only_with_operations=False,
@@ -657,6 +810,37 @@ def filter_properties(
             "properties.listing_purpose = ?"
         )
         params.append(listing_purpose)
+
+    neighborhood_value = normalize_neighborhood(neighborhood)
+    if neighborhood_value is not None:
+        conditions.append(
+            "LOWER(properties.neighborhood) LIKE ?"
+        )
+        params.append(f"%{neighborhood_value.lower()}%")
+
+    if listing_currency is not None:
+        conditions.append(
+            "properties.listing_currency = ?"
+        )
+        params.append(str(listing_currency).strip().upper())
+
+    if commercial_status is not None:
+        conditions.append(
+            "properties.commercial_status = ?"
+        )
+        params.append(commercial_status)
+
+    if min_listing_price is not None:
+        conditions.append(
+            "properties.listing_price >= ?"
+        )
+        params.append(min_listing_price)
+
+    if max_listing_price is not None:
+        conditions.append(
+            "properties.listing_price <= ?"
+        )
+        params.append(max_listing_price)
 
     if status is not None:
         conditions.append(

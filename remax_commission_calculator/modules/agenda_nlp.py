@@ -274,54 +274,92 @@ def parse_agenda_prompt(prompt, *, today=None, now_local=None):
     }
 
 
+_AREA_STOP = {
+    "el",
+    "la",
+    "los",
+    "las",
+    "un",
+    "una",
+    "departamento",
+    "depto",
+    "casa",
+    "propiedad",
+}
+
+
 def parse_visit_outcome(text):
     """Extract a structured post-visit summary from free text."""
+    from modules.visit_outcome import normalize_visit_outcome
+
     raw = (text or "").strip()
     folded = _fold(raw)
-    interest = "neutral"
+    parsed = {"note": raw}
 
-    if any(token in folded for token in ("positivo", "interesad", "le gusto", "le gustó")):
-        interest = "positive"
+    if any(
+        token in folded
+        for token in ("positivo", "interesad", "le gusto", "le gusto mucho")
+    ):
+        parsed["interest"] = "positive"
     elif any(token in folded for token in ("negativo", "no le gusto", "no va")):
-        interest = "negative"
+        parsed["interest"] = "negative"
 
-    objection = ""
-    objection_match = re.search(
-        r"(?:objeci[oó]n[:\s]+|pero\s+|el\s+)(.{8,80})",
+    objections = []
+    pero = re.search(r"pero\s+(.{8,90}?)(?:\.|$)", raw, re.IGNORECASE)
+    if pero:
+        objections.append(pero.group(1).strip(" ."))
+    if not objections:
+        objection_match = re.search(
+            r"objeci[oó]n[:\s]+(.{8,80})",
+            raw,
+            re.IGNORECASE,
+        )
+        if objection_match:
+            objections.append(objection_match.group(1).strip(" ."))
+    if objections:
+        parsed["objections"] = objections
+
+    areas = []
+    for match in re.finditer(
+        r"(?:zona|por|en)\s+([A-ZÁÉÍÓÚÑÜ][\wÁÉÍÓÚÑÜáéíóúñü]+)",
         raw,
-        re.IGNORECASE,
-    )
-    if "chico" in folded or "pequeño" in folded or "pequeno" in folded:
-        objection = "El segundo dormitorio es chico."
-    elif objection_match:
-        objection = objection_match.group(1).strip(" .")
+    ):
+        token = match.group(1).strip()
+        if _fold(token) not in _AREA_STOP:
+            areas.append(token)
+    if areas:
+        parsed["areas"] = areas
 
-    area = ""
-    area_match = re.search(
-        r"(?:zona|en|por)\s+([A-ZÁÉÍÓÚÑÜ][\wÁÉÍÓÚÑÜáéíóúñü]+)",
-        raw,
-    )
-    if area_match:
-        area = area_match.group(1)
+    amount = None
+    mil = re.search(r"(\d[\d\.]*)\s*mil", folded)
+    if mil:
+        try:
+            amount = int(float(mil.group(1).replace(".", ""))) * 1000
+        except ValueError:
+            amount = None
+    if amount is None:
+        dotted = re.search(r"(\d{1,3}(?:\.\d{3})+)", raw)
+        if dotted:
+            amount = int(dotted.group(1).replace(".", ""))
+    if amount is not None:
+        currency = "ARS" if "peso" in folded or "ars" in folded else "USD"
+        parsed["budget"] = {"max": amount, "currency": currency}
 
-    budget = ""
-    budget_match = re.search(
-        r"(?:usd|u\$s|us\$|presupuesto)?\s*([\d\.]{3,})",
-        folded,
-        re.IGNORECASE,
-    )
-    if budget_match:
-        budget = budget_match.group(1)
+    preferences = []
+    if "balcon" in folded:
+        preferences.append("balcón")
+    if preferences:
+        parsed["preferences"] = preferences
 
-    next_action = "Seguimiento"
-    if "alternativa" in folded or "buscar" in folded:
-        next_action = "Buscar alternativas"
+    if (
+        "alternativa" in folded
+        or "seguir viendo" in folded
+        or ("buscar" in folded and "propiedad" in folded)
+    ):
+        parsed["next_action"] = "Buscar alternativas"
+    elif "llamar" in folded:
+        parsed["next_action"] = "Llamar"
+    elif "seguimiento" in folded:
+        parsed["next_action"] = "Seguimiento"
 
-    return {
-        "note": raw,
-        "interest": interest,
-        "objection": objection,
-        "area": area,
-        "budget": budget,
-        "next_action": next_action,
-    }
+    return normalize_visit_outcome(parsed)

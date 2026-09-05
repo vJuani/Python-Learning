@@ -96,6 +96,7 @@ from modules.database import (
 )
 
 from modules.formatting import (
+    format_listing_money,
     format_money,
     format_number,
     format_short_date,
@@ -283,7 +284,19 @@ from modules.operation_commission_credit import (
     reverse_operation_commission,
 )
 from modules.agent_account import AgentAccountError
-from modules.property_types import LISTING_PURPOSES, PROPERTY_TYPES
+from modules.property_features import FEATURE_KEYS, features_from_form
+from modules.property_inventory import (
+    decorate_property_for_display,
+    identity_fields_changed,
+)
+from modules.property_types import (
+    COMMERCIAL_STATUSES,
+    LISTING_CURRENCIES,
+    LISTING_PURPOSES,
+    PROPERTY_TYPES,
+    normalize_listing_purpose,
+    normalize_property_type,
+)
 
 from modules.workflow import (
     OPERATION_STATUSES,
@@ -318,6 +331,7 @@ from modules.agent_tasks import (
 )
 
 from modules.agenda_routes import register_agenda_routes
+from modules.contact_routes import register_contact_routes
 
 from modules.organization_settings import (
     COMMON_TIMEZONES,
@@ -824,6 +838,16 @@ def money_filter(amount, currency="USD"):
     )
 
 
+@app.template_filter("listing_money")
+def listing_money_filter(amount, currency=None):
+    formatted = format_listing_money(
+        amount,
+        currency=currency,
+        language=get_current_language(),
+    )
+    return formatted if formatted is not None else "—"
+
+
 @app.template_filter("number")
 def number_filter(amount, decimals=2):
     return format_number(
@@ -1177,33 +1201,123 @@ def _property_form_fields_from_request():
         "Property listing price",
     )
 
+    raw_type = request.form.get("property_type", "").strip()
+    raw_purpose = request.form.get("listing_purpose", "").strip()
+    raw_currency = request.form.get("listing_currency", "").strip()
+    raw_status = request.form.get("commercial_status", "").strip()
+
+    from modules.validators import (
+        parse_optional_non_negative_int,
+        parse_optional_non_negative_number,
+    )
+    from modules.listings_normalize import normalize_neighborhood
+
+    rooms, _rooms_error = parse_optional_non_negative_int(
+        request.form.get("rooms"),
+        "err_invalid_rooms",
+    )
+    bedrooms, _bedrooms_error = parse_optional_non_negative_int(
+        request.form.get("bedrooms"),
+        "err_invalid_bedrooms",
+    )
+    bathrooms, _bathrooms_error = parse_optional_non_negative_int(
+        request.form.get("bathrooms"),
+        "err_invalid_bathrooms",
+    )
+    parking_spaces, _parking_error = parse_optional_non_negative_int(
+        request.form.get("parking_spaces"),
+        "err_invalid_parking_spaces",
+    )
+    covered_m2, _covered_error = parse_optional_non_negative_number(
+        request.form.get("covered_m2"),
+        "err_invalid_covered_m2",
+    )
+    total_m2, _total_error = parse_optional_non_negative_number(
+        request.form.get("total_m2"),
+        "err_invalid_total_m2",
+    )
+
+    features = features_from_form(request.form)
+    currency = raw_currency.upper() if raw_currency else None
+    if currency not in LISTING_CURRENCIES:
+        currency = None
+
     return {
         "address": request.form.get("address", "").strip(),
         "jurisdiction": request.form.get(
             "jurisdiction",
             "",
         ).strip(),
-        "property_type": request.form.get(
-            "property_type",
-            "",
-        ).strip(),
+        "property_type": normalize_property_type(raw_type) or raw_type,
         "listing_price_raw": listing_price_raw,
         "listing_price": listing_price,
-        "listing_purpose": request.form.get(
-            "listing_purpose",
-            "",
-        ).strip(),
+        "listing_purpose": (
+            normalize_listing_purpose(raw_purpose) or raw_purpose
+        ),
+        "listing_currency": currency,
+        "listing_currency_raw": raw_currency,
         "agent_id": request.form.get(
             "agent_id",
             "",
         ).strip(),
+        "neighborhood": normalize_neighborhood(
+            request.form.get("neighborhood")
+        ),
+        "rooms": rooms,
+        "bedrooms": bedrooms,
+        "bathrooms": bathrooms,
+        "covered_m2": covered_m2,
+        "total_m2": total_m2,
+        "parking_spaces": parking_spaces,
+        "description": (
+            request.form.get("description", "").strip() or None
+        ),
+        "commercial_status": raw_status or None,
+        "features": features,
     }
 
 
 def _property_form_context(property_data):
+    selected_features = []
+    if property_data:
+        from modules.property_features import active_feature_keys
+
+        selected_features = active_feature_keys(
+            property_data.get("features")
+            or property_data.get("features_json")
+        )
+
     return {
         "property_types": PROPERTY_TYPES,
         "listing_purposes": LISTING_PURPOSES,
+        "listing_currencies": LISTING_CURRENCIES,
+        "commercial_statuses": COMMERCIAL_STATUSES,
+        "feature_keys": FEATURE_KEYS,
+        "selected_features": selected_features,
+    }
+
+
+def _property_inventory_kwargs(fields):
+    return {
+        "neighborhood": fields.get("neighborhood"),
+        "rooms": fields.get("rooms"),
+        "bedrooms": fields.get("bedrooms"),
+        "bathrooms": fields.get("bathrooms"),
+        "covered_m2": fields.get("covered_m2"),
+        "total_m2": fields.get("total_m2"),
+        "parking_spaces": fields.get("parking_spaces"),
+        "description": fields.get("description"),
+        "commercial_status": fields.get("commercial_status"),
+        "features": fields.get("features"),
+    }
+
+
+def _property_identity_kwargs(fields):
+    return {
+        "property_type": fields.get("property_type"),
+        "listing_price": fields.get("listing_price"),
+        "listing_purpose": fields.get("listing_purpose"),
+        "listing_currency": fields.get("listing_currency"),
     }
 
 
@@ -1219,6 +1333,19 @@ def _property_form_data_from_fields(fields, owner_agent_id):
             else fields["listing_price"]
         ),
         "listing_purpose": fields["listing_purpose"],
+        "listing_currency": fields.get("listing_currency_raw")
+        or fields.get("listing_currency")
+        or "",
+        "neighborhood": fields.get("neighborhood") or "",
+        "rooms": fields.get("rooms"),
+        "bedrooms": fields.get("bedrooms"),
+        "bathrooms": fields.get("bathrooms"),
+        "covered_m2": fields.get("covered_m2"),
+        "total_m2": fields.get("total_m2"),
+        "parking_spaces": fields.get("parking_spaces"),
+        "description": fields.get("description") or "",
+        "commercial_status": fields.get("commercial_status") or "",
+        "features": fields.get("features") or {},
     }
 
 
@@ -4484,6 +4611,19 @@ def properties_list():
         "type": request.args.get("type", "").strip(),
         "status": request.args.get("status", "").strip(),
         "sort": request.args.get("sort", "recent").strip(),
+        "neighborhood": request.args.get("neighborhood", "").strip(),
+        "listing_purpose": request.args.get(
+            "listing_purpose",
+            "",
+        ).strip(),
+        "commercial_status": request.args.get(
+            "commercial_status",
+            "",
+        ).strip(),
+        "listing_currency": request.args.get(
+            "listing_currency",
+            "",
+        ).strip(),
     }
 
     raw_panel_filters = dict(filters)
@@ -4492,6 +4632,9 @@ def properties_list():
     raw_panel_filters["page"] = request.args.get("page")
 
     agent_id, scope_blocked = get_agent_scope()
+    if agent_id is not None:
+        filters["agent_id"] = str(agent_id)
+        raw_panel_filters["agent_id"] = str(agent_id)
 
     if scope_blocked:
         flash_i18n("agent_scope_missing", "error")
@@ -4580,6 +4723,16 @@ def properties_new():
             fields["property_type"],
             listing_price=fields["listing_price_raw"],
             listing_purpose=fields["listing_purpose"],
+            listing_currency=fields.get("listing_currency_raw"),
+            neighborhood=fields.get("neighborhood"),
+            rooms=request.form.get("rooms"),
+            bedrooms=request.form.get("bedrooms"),
+            bathrooms=request.form.get("bathrooms"),
+            covered_m2=request.form.get("covered_m2"),
+            total_m2=request.form.get("total_m2"),
+            parking_spaces=request.form.get("parking_spaces"),
+            commercial_status=fields.get("commercial_status"),
+            description=fields.get("description"),
         )
 
         if owner_agent_id is None:
@@ -4607,7 +4760,12 @@ def properties_new():
                 lock_agent_selection=forced,
                 errors=localize_form_errors(errors),
                 is_edit=False,
-                **_property_form_context({}),
+                **_property_form_context(
+                    _property_form_data_from_fields(
+                        fields,
+                        owner_agent_id,
+                    )
+                ),
             )
 
         property_status = (
@@ -4626,6 +4784,8 @@ def properties_new():
             property_type=fields["property_type"],
             listing_price=fields["listing_price"],
             listing_purpose=fields["listing_purpose"],
+            listing_currency=fields.get("listing_currency"),
+            **_property_inventory_kwargs(fields),
         )
 
         if property_status == PROPERTY_STATUS_PENDING:
@@ -4650,6 +4810,17 @@ def properties_new():
             "property_type": "",
             "listing_price": "",
             "listing_purpose": "",
+            "listing_currency": "",
+            "neighborhood": "",
+            "rooms": None,
+            "bedrooms": None,
+            "bathrooms": None,
+            "covered_m2": None,
+            "total_m2": None,
+            "parking_spaces": None,
+            "description": "",
+            "commercial_status": "available",
+            "features": {},
         },
         jurisdictions=JURISDICTIONS,
         agents=agents,
@@ -4696,7 +4867,10 @@ def properties_detail(property_id):
 
     return render_template(
         "properties/detail.html",
-        property_data=property_data,
+        property_data=decorate_property_for_display(
+            property_data,
+            language=language,
+        ),
         property_display_id=format_property_display_id(
             property_data["id"]
         ),
@@ -4958,6 +5132,16 @@ def properties_edit(property_id):
             fields["property_type"],
             listing_price=fields["listing_price_raw"],
             listing_purpose=fields["listing_purpose"],
+            listing_currency=fields.get("listing_currency_raw"),
+            neighborhood=fields.get("neighborhood"),
+            rooms=request.form.get("rooms"),
+            bedrooms=request.form.get("bedrooms"),
+            bathrooms=request.form.get("bathrooms"),
+            covered_m2=request.form.get("covered_m2"),
+            total_m2=request.form.get("total_m2"),
+            parking_spaces=request.form.get("parking_spaces"),
+            commercial_status=fields.get("commercial_status"),
+            description=fields.get("description"),
         )
 
         if owner_agent_id is None:
@@ -4993,6 +5177,21 @@ def properties_edit(property_id):
             )
 
         current_user = get_current_user()
+        inventory_kwargs = _property_inventory_kwargs(fields)
+        identity_kwargs = _property_identity_kwargs(fields)
+        proposed_identity = {
+            "address": fields["address"],
+            "jurisdiction": fields["jurisdiction"],
+            "agent_id": owner_agent_id,
+            "property_type": fields["property_type"],
+            "listing_price": fields["listing_price"],
+            "listing_purpose": fields["listing_purpose"],
+            "listing_currency": fields.get("listing_currency"),
+        }
+        identity_changed = identity_fields_changed(
+            property_data,
+            proposed_identity,
+        )
 
         if is_admin(current_user):
             update_property(
@@ -5001,15 +5200,14 @@ def properties_edit(property_id):
                 fields["jurisdiction"],
                 organization_id,
                 agent_id=owner_agent_id,
-                property_type=fields["property_type"],
-                listing_price=fields["listing_price"],
-                listing_purpose=fields["listing_purpose"],
+                **identity_kwargs,
+                **inventory_kwargs,
             )
             flash_i18n("property_updated", "success")
         elif property_is_official(
             property_data.get("status")
         ):
-            if get_pending_change_for_property(
+            if identity_changed and get_pending_change_for_property(
                 property_id,
                 organization_id
             ) is not None:
@@ -5036,18 +5234,33 @@ def properties_edit(property_id):
                     **_property_form_context(property_data),
                 )
 
-            create_property_change_request(
+            if identity_changed:
+                create_property_change_request(
+                    property_id,
+                    organization_id,
+                    current_user["id"],
+                    fields["address"],
+                    fields["jurisdiction"],
+                    owner_agent_id,
+                    proposed_property_type=fields["property_type"],
+                    proposed_listing_price=fields["listing_price"],
+                    proposed_listing_purpose=fields["listing_purpose"],
+                    proposed_listing_currency=fields.get(
+                        "listing_currency"
+                    ),
+                )
+                flash_i18n("property_change_submitted", "success")
+            else:
+                flash_i18n("property_updated", "success")
+
+            update_property(
                 property_id,
+                property_data["address"],
+                property_data["jurisdiction"],
                 organization_id,
-                current_user["id"],
-                fields["address"],
-                fields["jurisdiction"],
-                owner_agent_id,
-                proposed_property_type=fields["property_type"],
-                proposed_listing_price=fields["listing_price"],
-                proposed_listing_purpose=fields["listing_purpose"],
+                agent_id=property_data.get("agent_id"),
+                **inventory_kwargs,
             )
-            flash_i18n("property_change_submitted", "success")
         else:
             update_property(
                 property_id,
@@ -5055,9 +5268,8 @@ def properties_edit(property_id):
                 fields["jurisdiction"],
                 organization_id,
                 agent_id=owner_agent_id,
-                property_type=fields["property_type"],
-                listing_price=fields["listing_price"],
-                listing_purpose=fields["listing_purpose"],
+                **identity_kwargs,
+                **inventory_kwargs,
             )
 
             if property_data.get("status") == PROPERTY_STATUS_REJECTED:
@@ -7695,6 +7907,15 @@ register_agenda_routes(
         "get_current_language": get_current_language,
         "flash_i18n": flash_i18n,
         "get_safe_redirect_target": get_safe_redirect_target,
+    },
+)
+
+register_contact_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
     },
 )
 

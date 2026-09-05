@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-contacts-page {% endblock %}
+
+{% block title %}{{ t('contacts_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="contacts-home">
+    <header class="contacts-hero">
+        <div>
+            <p class="contacts-kicker">{{ t('contacts_title') }}</p>
+            <h1>{{ t('contacts_title') }}</h1>
+        </div>
+        {% if can_manage %}
+        <a class="btn btn-primary" href="{{ url_for('contacts_new') }}">+ {{ t('contacts_new') }}</a>
+        {% endif %}
+    </header>
+
+    <form method="get" class="contacts-search" action="{{ url_for('contacts_index') }}">
+        <input type="hidden" name="filter" value="{{ contact_filter }}">
+        <input
+            type="search"
+            name="q"
+            value="{{ search }}"
+            placeholder="{{ t('contacts_search_placeholder') }}"
+        >
+        <button type="submit" class="btn btn-small btn-secondary">{{ t('contacts_search') }}</button>
+    </form>
+
+    <nav class="contacts-filters" aria-label="{{ t('contacts_filters') }}">
+        {% for key, label in [
+            ('all', t('contacts_filter_all')),
+            ('active', t('contacts_filter_active')),
+            ('leads', t('contacts_filter_leads')),
+            ('no_next', t('contacts_filter_no_next')),
+        ] %}
+        <a
+            class="contacts-filter{% if contact_filter == key %} is-active{% endif %}"
+            href="{{ url_for('contacts_index', filter=key, q=search) }}"
+        >{{ label }}</a>
+        {% endfor %}
+    </nav>
+
+    {% if contacts %}
+    <div class="contacts-list">
+        {% for contact in contacts %}
+        <article class="contacts-card">
+            <a class="contacts-card__main" href="{{ url_for('contacts_detail', contact_id=contact.id) }}">
+                <h2>{{ contact.name }}</h2>
+                <p class="contacts-card__status">{{ contact.status_label }}</p>
+                {% if contact.search_line or contact.budget_label %}
+                <p>
+                    <span>{{ t('contacts_looking_for') }}</span>
+                    {% if contact.search_line %}{{ contact.search_line }}{% endif %}
+                </p>
+                {% endif %}
+                {% if contact.budget_label %}
+                <p>{{ t('contacts_until') }} {{ contact.budget_label }}</p>
+                {% endif %}
+                {% if contact.last_interaction_label %}
+                <p class="contacts-card__last">
+                    <span>{{ t('contacts_last_interaction') }}</span>
+                    {{ contact.last_interaction_label }}
+                </p>
+                {% endif %}
+                {% if contact.has_next_action %}
+                <p class="contacts-card__next">
+                    <span>{{ t('contacts_next_action') }}</span>
+                    {{ contact.next_action_label }}
+                </p>
+                {% endif %}
+            </a>
+            <div class="contacts-card__actions">
+                {% if contact.whatsapp_url %}
+                <a class="agenda-chip" href="{{ contact.whatsapp_url }}" target="_blank" rel="noopener">{{ t('agenda_action_whatsapp') }}</a>
+                {% endif %}
+                <a class="agenda-chip" href="{{ url_for('contacts_detail', contact_id=contact.id) }}">{{ t('contacts_view') }}</a>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="contacts-empty">{{ t('contacts_empty') }}</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,262 @@
+.contacts-home,
+.contact-profile,
+.contacts-form-page {
+    width: 100%;
+    max-width: 46rem;
+    margin: 0 auto;
+    padding-bottom: 6rem;
+}
+
+.contacts-kicker {
+    margin: 0 0 4px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent, #0d47ff);
+}
+
+.contacts-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 0 0 16px;
+}
+
+.contacts-hero h1,
+.contact-profile__hero h1 {
+    margin: 0;
+    font-size: 1.7rem;
+    letter-spacing: -0.03em;
+}
+
+.contacts-search {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.contacts-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    border-radius: 14px;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #d5dde8);
+    padding: 12px 14px;
+    font: inherit;
+}
+
+.contacts-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.contacts-filter {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(13, 71, 255, 0.08);
+    color: var(--text, #0a1633);
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.contacts-filter.is-active {
+    background: var(--accent, #0d47ff);
+    color: #fff;
+}
+
+.contacts-list,
+.contact-profile__grid {
+    display: grid;
+    gap: 12px;
+}
+
+.contacts-card,
+.contact-panel {
+    padding: 16px;
+    border-radius: 20px;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #d5dde8);
+}
+
+.contacts-card__main {
+    display: grid;
+    gap: 4px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.contacts-card h2,
+.contact-panel h2 {
+    margin: 0;
+    font-size: 1.15rem;
+}
+
+.contacts-card__status,
+.contact-profile__status {
+    margin: 0;
+    font-weight: 800;
+    color: var(--accent, #0d47ff);
+}
+
+.contacts-card p,
+.contact-panel p {
+    margin: 0;
+}
+
+.contacts-card__next {
+    margin-top: 8px;
+    font-weight: 700;
+}
+
+.contacts-card p span,
+.contacts-card__last span,
+.contacts-card__next span,
+.contact-panel__muted {
+    display: block;
+    color: var(--text-muted, #33415c);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.contacts-card__actions,
+.contact-profile__cta,
+.contact-form__actions,
+.contact-chip-add,
+.contact-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.contacts-empty {
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-muted, #33415c);
+}
+
+.contact-profile__hero {
+    margin-bottom: 18px;
+}
+
+.contact-viewed {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+    display: grid;
+    gap: 6px;
+}
+
+.contact-panel--recommend {
+    border-color: rgba(13, 71, 255, 0.35);
+}
+
+.contact-panel__summary {
+    font-size: 1.05rem;
+    line-height: 1.45;
+    font-weight: 650;
+}
+
+.contact-chips {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+}
+
+.contact-chips li,
+.contact-chip-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(13, 71, 255, 0.1);
+    color: var(--accent, #0d47ff);
+    font-size: 0.86rem;
+    font-weight: 800;
+}
+
+.contact-history-day h3 {
+    margin: 14px 0 8px;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.contact-history-item {
+    display: grid;
+    gap: 2px;
+    padding: 8px 0;
+    border-top: 1px solid var(--border, #d5dde8);
+}
+
+.contact-field {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 12px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-muted, #33415c);
+}
+
+.contact-field input,
+.contact-field select,
+.contact-field textarea,
+.contact-chip-add input {
+    width: 100%;
+    border: 0;
+    border-radius: 12px;
+    background: rgba(13, 71, 255, 0.06);
+    padding: 12px 14px;
+    font: inherit;
+    color: var(--text, #0a1633);
+}
+
+.contact-budget {
+    display: grid;
+    gap: 10px;
+}
+
+.contact-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.contact-chip-edit button {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+@media (min-width: 900px) {
+    .contact-profile__grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .contact-panel--history {
+        grid-column: 1 / -1;
+    }
+
+    .contact-budget {
+        grid-template-columns: 7rem 1fr 1fr;
+    }
+}
+
+html[data-theme="dark"] .contacts-card,
+html[data-theme="dark"] .contact-panel,
+html[data-theme="dark"] .contacts-search input {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--text);
+}

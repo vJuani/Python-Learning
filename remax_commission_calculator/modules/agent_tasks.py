@@ -21,6 +21,7 @@ import json
 import logging
 from datetime import date, timedelta
 
+from modules.visit_outcome import normalize_visit_outcome, outcome_is_present
 from modules.database.agent_tasks_repository import (
     PRIORITIES,
     PRIORITY_HIGH,
@@ -33,6 +34,7 @@ from modules.database.agent_tasks_repository import (
     create_agent_task,
     get_agent_task,
     list_agent_tasks,
+    list_visits_missing_outcome,
     save_task_outcome,
     set_agent_task_status,
     set_attendance_status,
@@ -226,6 +228,29 @@ def _resolve_operation(organization_id, operation_id):
     return record["db_id"]
 
 
+def _resolve_contact(organization_id, contact_id, *, agent_id):
+    if contact_id in (None, ""):
+        return None, None
+
+    from modules.contacts import ContactError, load_contact
+
+    try:
+        contact_id = int(contact_id)
+    except (TypeError, ValueError):
+        raise AgentTaskError("contacts_err_not_found") from None
+
+    try:
+        contact = load_contact(
+            organization_id,
+            contact_id,
+            agent_id=agent_id,
+        )
+    except ContactError as error:
+        raise AgentTaskError(error.message_key) from error
+
+    return contact["id"], contact.get("name") or None
+
+
 def validate_task_payload(organization_id, agent_id, payload):
     """
     Validate a task form payload and resolve its relations.
@@ -288,6 +313,13 @@ def validate_task_payload(organization_id, agent_id, payload):
         organization_id,
         payload.get("operation_id"),
     )
+    contact_id, linked_name = _resolve_contact(
+        organization_id,
+        payload.get("contact_id"),
+        agent_id=agent["id"],
+    )
+    if linked_name:
+        contact_name = linked_name
 
     return {
         "agent_id": agent["id"],
@@ -306,6 +338,7 @@ def validate_task_payload(organization_id, agent_id, payload):
         ),
         "related_entity_id": payload.get("related_entity_id") or None,
         "contact_name": contact_name or None,
+        "contact_id": contact_id,
         "duration_minutes": duration_minutes,
         "reminder_minutes": reminder_minutes,
         "attendance_status": (
@@ -339,6 +372,7 @@ def create_task(
         related_entity_type=validated["related_entity_type"],
         related_entity_id=validated["related_entity_id"],
         contact_name=validated["contact_name"],
+        contact_id=validated["contact_id"],
         duration_minutes=validated["duration_minutes"],
         reminder_minutes=validated["reminder_minutes"],
         attendance_status=validated["attendance_status"],
@@ -486,6 +520,10 @@ def complete_task(
         task,
         actor_user_id=actor_user_id,
     )
+    if task.get("contact_id"):
+        from modules.contacts import touch_contact_interaction
+
+        touch_contact_interaction(organization_id, task["contact_id"])
 
     return task
 
@@ -590,18 +628,8 @@ def _whatsapp_text(task, language):
 
 
 def _parse_outcome(raw):
-    if not raw:
-        return None
-
-    if isinstance(raw, dict):
-        return raw
-
-    try:
-        parsed = json.loads(raw)
-    except (TypeError, ValueError):
-        return None
-
-    return parsed if isinstance(parsed, dict) else None
+    normalized = normalize_visit_outcome(raw)
+    return normalized or None
 
 
 def greeting_for_user(user, *, now_local, language="es"):
@@ -636,13 +664,17 @@ def save_visit_outcome(
         task_id,
         agent_id=agent_id,
     )
-    payload = json.dumps(outcome, ensure_ascii=False)
+    payload = json.dumps(normalize_visit_outcome(outcome), ensure_ascii=False)
     updated = save_task_outcome(task_id, organization_id, payload)
 
     if updated is None:
         raise AgentTaskError("agent_task_err_not_found")
 
     emit_task_event("task_outcome_saved", updated)
+    if updated.get("contact_id"):
+        from modules.contacts import touch_contact_interaction
+
+        touch_contact_interaction(organization_id, updated["contact_id"])
 
     return updated
 
@@ -728,7 +760,7 @@ def decorate_task(task, *, tz, now, language="es"):
             else None
         ),
         "outcome": outcome,
-        "has_outcome": bool(outcome),
+        "has_outcome": outcome_is_present(outcome),
         "is_overdue": is_overdue,
         "is_high_priority": task["priority"] == PRIORITY_HIGH,
         "starts_soon": starts_soon,
@@ -876,6 +908,12 @@ def build_agenda_view(
         ),
         "timezone_name": str(tz),
         "now_local": now_local,
+        **_missing_followup_fields(
+            organization_id,
+            agent_id=agent_id,
+            language=language,
+            now=now,
+        ),
     }
 
 
@@ -1195,6 +1233,36 @@ def _month_label(value, language):
     }
 
     return names.get(language, names["es"])[value.month - 1]
+
+
+def _missing_followup_fields(organization_id, *, agent_id, language, now):
+    if agent_id is None:
+        return {
+            "missing_followup_count": 0,
+            "missing_followup_id": None,
+        }
+
+    missing = list_visits_missing_outcome(
+        organization_id,
+        agent_id=agent_id,
+        limit=5,
+    )
+    first = missing[0] if missing else None
+
+    return {
+        "missing_followup_count": len(missing),
+        "missing_followup_id": first["id"] if first else None,
+        "missing_followup": (
+            decorate_task(
+                first,
+                tz=organization_timezone(organization_id),
+                now=now,
+                language=language,
+            )
+            if first
+            else None
+        ),
+    }
 
 
 __all__ = [

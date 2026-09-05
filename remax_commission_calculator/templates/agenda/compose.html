@@ -21,6 +21,12 @@
 {% endif %}
 
 <section class="agenda-chat">
+    {% if compose_contact %}
+    <p class="agenda-compose-contact">
+        {{ t('agenda_ai_scheduling_for') }}
+        <strong>{{ compose_contact.name }}</strong>
+    </p>
+    {% endif %}
     {% if prompt %}
     <p class="agenda-chat__user">{{ prompt }}</p>
     {% endif %}
@@ -34,6 +40,9 @@
     {% endif %}
 
     <form method="post" class="agenda-ia agenda-ia--chat" id="agenda-ia-form" data-agenda-interpret>
+        {% if compose_contact %}
+        <input type="hidden" name="compose_contact_id" value="{{ compose_contact.id }}">
+        {% endif %}
         <span class="agenda-ia__label">{{ t('agenda_ia_label') }}</span>
         <div class="agenda-ia__row">
             <input

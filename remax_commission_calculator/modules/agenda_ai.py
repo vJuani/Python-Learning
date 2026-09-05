@@ -18,6 +18,12 @@ from modules.agenda_nlp import (
     parse_visit_outcome,
     split_agenda_segments,
 )
+from modules.contacts import (
+    apply_known_contact,
+    match_contacts,
+    public_contact_candidate,
+)
+from modules.visit_outcome import normalize_visit_outcome
 from modules.cash_ai_provider import (
     CashAiProviderError,
     build_multimodal_user_content,
@@ -158,6 +164,11 @@ def item_status(draft):
         return "invalid"
     if draft.get("property_match") == "ambiguous" and not draft.get("property_id"):
         return "needs_attention"
+    contact_match = draft.get("contact_match")
+    if contact_match == "ambiguous" and not draft.get("contact_id"):
+        return "needs_attention"
+    if contact_match == "single" and not draft.get("contact_id"):
+        return "needs_attention"
     if not draft.get("date_found") or not draft.get("due_date"):
         return "needs_attention"
     if draft.get("task_type") in TIME_REQUIRED_TYPES and (
@@ -192,6 +203,8 @@ def _draft_warnings(draft, match):
         warnings.append("agenda_ai_warn_property_not_found")
         if draft.get("task_type") == "visit":
             warnings.append("agenda_ai_warn_visit_without_property")
+    if draft.get("contact_match") == "ambiguous" and not draft.get("contact_id"):
+        warnings.append("agenda_ai_warn_contact_ambiguous")
 
     return warnings
 
@@ -218,11 +231,45 @@ def _enrich_draft(draft, organization_id, agent_id):
     draft["property_address"] = chosen["address"] if chosen else query_text
     draft["property_match"] = match["status"]
     draft["property_candidates"] = _public_candidates(match["candidates"])
+    _apply_contact_match(draft, organization_id, agent_id)
     draft["warnings"] = _draft_warnings(draft, match)
     draft["ui_status"] = _draft_ui_status(draft, match)
     _apply_structured_title(draft)
     draft["item_status"] = item_status(draft)
 
+    return draft
+
+
+def _apply_contact_match(draft, organization_id, agent_id):
+    if draft.get("contact_match") == "skipped":
+        draft["contact_id"] = ""
+        draft["contact_candidates"] = draft.get("contact_candidates") or []
+        return draft
+
+    if draft.get("contact_id"):
+        draft["contact_match"] = "single"
+        if not draft.get("contact_candidates") and draft.get("contact_preview"):
+            draft["contact_candidates"] = [draft["contact_preview"]]
+        return draft
+
+    match = match_contacts(
+        organization_id,
+        agent_id,
+        draft.get("contact_name"),
+    )
+    draft["contact_match"] = match["status"]
+    draft["contact_candidates"] = [
+        public_contact_candidate(record) for record in match["candidates"]
+    ]
+    chosen = match.get("contact")
+    if match["status"] == "single" and match.get("clear") and chosen:
+        apply_known_contact(draft, chosen)
+    elif chosen:
+        draft["contact_id"] = ""
+        draft["contact_preview"] = public_contact_candidate(chosen)
+    else:
+        draft["contact_id"] = ""
+        draft["contact_preview"] = None
     return draft
 
 
@@ -300,6 +347,10 @@ def refresh_item(draft):
     draft["time_found"] = bool(draft.get("due_time"))
     if draft.get("property_id"):
         draft["property_match"] = "single"
+    if draft.get("contact_id"):
+        draft["contact_match"] = "single"
+    elif draft.get("contact_match") == "skipped":
+        draft["contact_id"] = ""
     draft["item_status"] = item_status(draft)
     if draft["item_status"] == "ready":
         draft["ui_status"] = "ready"
@@ -390,13 +441,18 @@ def summarize_visit_outcome(text):
 
     if os.environ.get("OPENAI_API_KEY", "").strip():
         try:
-            parsed = {**parsed, **_openai_outcome(note)}
+            ai_fields = {
+                key: value
+                for key, value in _openai_outcome(note).items()
+                if value not in (None, "", [])
+            }
+            parsed = {**parsed, **ai_fields}
         except CashAiProviderError:
             logger.info("agenda_ai_outcome_fallback")
 
     parsed["note"] = note
 
-    return parsed
+    return normalize_visit_outcome(parsed)
 
 
 def _openai_item_schema():
@@ -498,22 +554,29 @@ def _openai_compose(prompt, now_local, *, image_bytes=None, image_content_type=N
 
 def _openai_outcome(note):
     schema = {
-        "interest": "positive|neutral|negative",
-        "objection": "string|null",
-        "area": "string|null",
-        "budget": "string|null",
+        "interest": "positive|neutral|negative|null",
+        "objections": ["string"],
+        "areas": ["string"],
+        "budget": {
+            "min": "number|null",
+            "max": "number|null",
+            "currency": "USD|ARS|null",
+        },
+        "preferences": ["string"],
         "next_action": "string|null",
+        "suggested_task": {
+            "type": "follow_up|call|visit|meeting|reminder|null",
+            "prompt": "string|null",
+        },
     }
     parsed = request_structured_json(
         instructions=(
-            "Summarize a property visit outcome. Return ONLY JSON: "
-            f"{json.dumps(schema)}."
+            "Summarize a property visit outcome from the agent's words. "
+            "Return ONLY JSON matching this schema and omit anything the "
+            f"agent did not say: {json.dumps(schema)}."
         ),
         user_content=[{"type": "text", "text": note}],
         log_prefix="agenda_ai_outcome",
     )
 
-    return {
-        key: parsed.get(key) or ""
-        for key in ("interest", "objection", "area", "budget", "next_action")
-    }
+    return normalize_visit_outcome(parsed)

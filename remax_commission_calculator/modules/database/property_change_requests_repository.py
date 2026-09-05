@@ -50,6 +50,8 @@ def _build_change_dict(row):
         "current_agent_name": row[21] if len(row) > 21 else None,
         "proposed_agent_name": row[22] if len(row) > 22 else None,
         "requester_name": row[23] if len(row) > 23 else None,
+        "proposed_listing_currency": row[24] if len(row) > 24 else None,
+        "current_listing_currency": row[25] if len(row) > 25 else None,
     }
 
 
@@ -78,7 +80,9 @@ CHANGE_DETAIL_QUERY = """
         properties.listing_purpose,
         current_agents.name,
         proposed_agents.name,
-        requester.username
+        requester.username,
+        property_change_requests.proposed_listing_currency,
+        properties.listing_currency
     FROM property_change_requests
     JOIN properties
         ON properties.id = property_change_requests.property_id
@@ -168,6 +172,7 @@ def create_property_change_request(
     proposed_property_type=None,
     proposed_listing_price=None,
     proposed_listing_purpose=None,
+    proposed_listing_currency=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -210,10 +215,11 @@ def create_property_change_request(
             proposed_property_type,
             proposed_listing_price,
             proposed_listing_purpose,
+            proposed_listing_currency,
             status,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             organization_id,
@@ -225,6 +231,7 @@ def create_property_change_request(
             proposed_property_type,
             proposed_listing_price,
             proposed_listing_purpose,
+            proposed_listing_currency,
             STATUS_PENDING,
             _now_iso()
         )
@@ -286,7 +293,8 @@ def approve_property_change_request(
             proposed_agent_id,
             proposed_property_type,
             proposed_listing_price,
-            proposed_listing_purpose
+            proposed_listing_purpose,
+            proposed_listing_currency
         FROM property_change_requests
         WHERE id = ?
             AND organization_id = ?
@@ -319,7 +327,8 @@ def approve_property_change_request(
             agent_id = ?,
             property_type = ?,
             listing_price = ?,
-            listing_purpose = ?
+            listing_purpose = ?,
+            listing_currency = COALESCE(?, listing_currency)
         WHERE id = ?
             AND organization_id = ?
         """,
@@ -330,6 +339,7 @@ def approve_property_change_request(
             row[4],
             row[5],
             row[6],
+            row[7],
             property_id,
             organization_id
         )

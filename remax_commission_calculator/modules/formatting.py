@@ -71,6 +71,18 @@ def format_money(
     return f"{currency} {number}"
 
 
+def format_listing_money(amount, currency=None, language="es"):
+    """Format a listing price without inventing USD when currency is unknown."""
+    if amount is None or amount == "":
+        return None
+
+    number = format_number(amount, language=language)
+    cleaned = str(currency or "").strip().upper()
+    if cleaned in CURRENCIES:
+        return f"{cleaned} {number}"
+    return number
+
+
 def format_short_date(value, language="es"):
     """Format DD/MM/YYYY or ISO date for UI (language-aware)."""
     if value is None:

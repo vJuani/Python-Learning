@@ -3638,6 +3638,18 @@ def migrate_schema(create_backup=True):
     )
 
     migrate_google_calendar_sqlite()
+
+    from .contacts_migration import (
+        migrate_contacts_sqlite,
+    )
+
+    migrate_contacts_sqlite()
+
+    from .property_inventory_migration import (
+        migrate_property_inventory_sqlite,
+    )
+
+    migrate_property_inventory_sqlite()
     _migrate_document_storage_folders()
 
     return backup_path

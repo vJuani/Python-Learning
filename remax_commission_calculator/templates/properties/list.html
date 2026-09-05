@@ -140,6 +140,37 @@
                                 <span>{{ t('max_price') }}</span>
                                 <input type="number" step="0.01" min="0" name="max_price" value="{{ properties_panel.filters.max_price }}">
                             </label>
+                            <label>
+                                <span>{{ t('property_neighborhood') }}</span>
+                                <input type="text" name="neighborhood" value="{{ properties_panel.filters.neighborhood }}">
+                            </label>
+                            <label>
+                                <span>{{ t('property_listing_purpose') }}</span>
+                                <select name="listing_purpose">
+                                    <option value="">{{ t('all') }}</option>
+                                    {% for listing_purpose in properties_panel.listing_purposes %}
+                                    <option value="{{ listing_purpose }}" {% if properties_panel.filters.listing_purpose == listing_purpose %}selected{% endif %}>{{ t('listing_purpose_' ~ listing_purpose) }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label>
+                                <span>{{ t('commercial_status') }}</span>
+                                <select name="commercial_status">
+                                    <option value="">{{ t('all') }}</option>
+                                    {% for status in properties_panel.commercial_statuses %}
+                                    <option value="{{ status }}" {% if properties_panel.filters.commercial_status == status %}selected{% endif %}>{{ t('commercial_status_' ~ status) }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label>
+                                <span>{{ t('listing_currency') }}</span>
+                                <select name="listing_currency">
+                                    <option value="">{{ t('all') }}</option>
+                                    {% for currency in properties_panel.listing_currencies %}
+                                    <option value="{{ currency }}" {% if properties_panel.filters.listing_currency == currency %}selected{% endif %}>{{ currency }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
                         </div>
                     </details>
                     <button type="submit" class="properties-btn properties-btn--ghost">{{ t('filter') }}</button>
@@ -193,11 +224,23 @@
                             <tr>
                                 <td>
                                     <div class="properties-property-cell">
-                                        <span class="properties-thumb" aria-hidden="true"></span>
+                                        <span class="property-media-placeholder" aria-hidden="true"></span>
                                         <div>
-                                            <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="properties-property-cell__title">{{ row.title }}</a>
-                                            <span class="properties-property-cell__address">{{ row.address }}</span>
+                                            <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="properties-property-cell__title">{{ row.address }}</a>
+                                            {% if row.neighborhood %}
+                                            <span class="properties-property-cell__address">{{ row.neighborhood }}</span>
+                                            {% endif %}
                                             <span class="properties-property-cell__code">{{ row.code }}</span>
+                                            {% if row.fact_parts or row.area_label %}
+                                            <span class="properties-property-cell__facts">
+                                                {{ (row.fact_parts + ([row.area_label] if row.area_label else []))|join(' · ') }}
+                                            </span>
+                                            {% endif %}
+                                            {% if row.feature_labels or row.parking_label %}
+                                            <span class="properties-property-cell__facts">
+                                                {{ (row.feature_labels + ([row.parking_label] if row.parking_label else []))|join(' · ') }}
+                                            </span>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </td>
@@ -209,12 +252,17 @@
                                 </td>
                                 <td class="money">
                                     {% if row.listing_price is not none %}
-                                    {{ row.listing_price|money }}
+                                    {{ row.listing_price|listing_money(row.listing_currency) }}
+                                    {% if row.purpose_label %}
+                                    <span class="properties-property-cell__facts">{{ row.purpose_label }}</span>
+                                    {% endif %}
                                     {% else %}
                                     —
                                     {% endif %}
                                 </td>
-                                <td>{{ row.currency }}</td>
+                                <td>
+                                    {{ row.currency_label }}
+                                </td>
                                 <td>
                                     <div class="properties-agent-cell">
                                         <span class="properties-avatar" aria-hidden="true">{{ row.agent_initials }}</span>
@@ -243,12 +291,35 @@
                 <div class="property-mobile-list hide-desktop">
                     {% for row in properties_panel.rows %}
                     <article class="property-mobile-card">
-                        <span class="property-mobile-card__thumb" aria-hidden="true"></span>
+                        <span class="property-media-placeholder property-media-placeholder--card" aria-hidden="true"></span>
                         <div>
                             <span class="property-mobile-card__type">{{ row.category_label }}</span>
-                            <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__title">{{ row.title }}</a>
-                            <p class="property-mobile-card__addr">📍 {{ row.address }}</p>
-                            <p class="property-mobile-card__price money">{% if row.listing_price is not none %}{{ row.listing_price|money }}{% else %}—{% endif %}</p>
+                            <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__title">{{ row.address }}</a>
+                            {% if row.neighborhood %}
+                            <p class="property-mobile-card__addr">{{ row.neighborhood }}</p>
+                            {% endif %}
+                            <p class="property-mobile-card__price money">
+                                {% if row.listing_price is not none %}
+                                {{ row.listing_price|listing_money(row.listing_currency) }}
+                                {% else %}
+                                —
+                                {% endif %}
+                            </p>
+                            {% if not row.currency_known and row.listing_price is not none %}
+                            <p class="property-mobile-card__addr">{{ t('listing_currency_unknown') }}</p>
+                            {% endif %}
+                            {% if row.purpose_label %}
+                            <p class="property-mobile-card__addr">{{ row.purpose_label }}</p>
+                            {% endif %}
+                            {% if row.fact_parts or row.area_label %}
+                            <p class="property-mobile-card__addr">{{ (row.fact_parts + ([row.area_label] if row.area_label else []))|join(' · ') }}</p>
+                            {% endif %}
+                            {% if row.feature_labels or row.parking_label %}
+                            <p class="property-mobile-card__addr">{{ (row.feature_labels + ([row.parking_label] if row.parking_label else []))|join(' · ') }}</p>
+                            {% endif %}
+                            {% if row.commercial_status_label %}
+                            <p class="property-mobile-card__addr">{{ row.commercial_status_label }}</p>
+                            {% endif %}
                             <span class="entity-card__agent">
                                 <span class="entity-card__avatar">{{ row.agent_initials }}</span>
                                 {{ row.agent_name or '—' }}
@@ -296,6 +367,10 @@
                         <input type="hidden" name="jurisdiction" value="{{ properties_panel.filters.jurisdiction }}">
                         <input type="hidden" name="min_price" value="{{ properties_panel.filters.min_price }}">
                         <input type="hidden" name="max_price" value="{{ properties_panel.filters.max_price }}">
+                        <input type="hidden" name="neighborhood" value="{{ properties_panel.filters.neighborhood }}">
+                        <input type="hidden" name="listing_purpose" value="{{ properties_panel.filters.listing_purpose }}">
+                        <input type="hidden" name="commercial_status" value="{{ properties_panel.filters.commercial_status }}">
+                        <input type="hidden" name="listing_currency" value="{{ properties_panel.filters.listing_currency }}">
                     </form>
                 </footer>
                 {% else %}
@@ -318,10 +393,10 @@
                 <ul class="properties-featured-list">
                     {% for row in properties_panel.featured %}
                     <li>
-                        <span class="properties-thumb properties-thumb--small" aria-hidden="true"></span>
+                        <span class="property-media-placeholder property-media-placeholder--small" aria-hidden="true"></span>
                         <div>
-                            <a href="{{ url_for('properties_detail', property_id=row.id) }}">{{ row.title }}</a>
-                            <span class="money">{% if row.listing_price is not none %}{{ row.listing_price|money }}{% else %}—{% endif %}</span>
+                            <a href="{{ url_for('properties_detail', property_id=row.id) }}">{{ row.address }}</a>
+                            <span class="money">{% if row.listing_price is not none %}{{ row.listing_price|listing_money(row.listing_currency) }}{% else %}—{% endif %}</span>
                         </div>
                         <span class="properties-status properties-status--{{ row.display_status.tone }}">{{ row.display_status.label }}</span>
                     </li>

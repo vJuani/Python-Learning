@@ -13,7 +13,14 @@ from modules.database import (
     get_agents
 )
 
+from modules.listings_normalize import normalize_neighborhood
 from modules.menus import choose_agent
+from modules.property_types import (
+    COMMERCIAL_STATUSES,
+    LISTING_CURRENCIES,
+    LISTING_PURPOSES,
+    normalize_listing_purpose,
+)
 
 from modules.validators import (
     JURISDICTIONS,
@@ -28,7 +35,11 @@ def empty_property_filters():
         "jurisdiction": "",
         "agent_id": "",
         "min_price": "",
-        "max_price": ""
+        "max_price": "",
+        "neighborhood": "",
+        "listing_purpose": "",
+        "commercial_status": "",
+        "listing_currency": "",
     }
 
 
@@ -64,7 +75,11 @@ def validate_property_filters(
         "jurisdiction": None,
         "filter_agent_id": None,
         "min_price": None,
-        "max_price": None
+        "max_price": None,
+        "neighborhood": None,
+        "listing_purpose": None,
+        "commercial_status": None,
+        "listing_currency": None,
     }
 
     property_id = raw_filters.get(
@@ -144,6 +159,42 @@ def validate_property_filters(
             "than maximum price."
         )
 
+    neighborhood = normalize_neighborhood(
+        raw_filters.get("neighborhood", "")
+    )
+    if neighborhood:
+        parsed["neighborhood"] = neighborhood
+
+    listing_purpose = normalize_listing_purpose(
+        raw_filters.get("listing_purpose")
+    )
+    raw_purpose = str(
+        raw_filters.get("listing_purpose") or ""
+    ).strip()
+    if raw_purpose:
+        if listing_purpose not in LISTING_PURPOSES:
+            errors.append("err_invalid_property_listing_purpose")
+        else:
+            parsed["listing_purpose"] = listing_purpose
+
+    commercial_status = str(
+        raw_filters.get("commercial_status") or ""
+    ).strip()
+    if commercial_status:
+        if commercial_status not in COMMERCIAL_STATUSES:
+            errors.append("err_invalid_commercial_status")
+        else:
+            parsed["commercial_status"] = commercial_status
+
+    listing_currency = str(
+        raw_filters.get("listing_currency") or ""
+    ).strip().upper()
+    if listing_currency:
+        if listing_currency not in LISTING_CURRENCIES:
+            errors.append("err_invalid_listing_currency")
+        else:
+            parsed["listing_currency"] = listing_currency
+
     return errors, parsed
 
 
@@ -185,8 +236,12 @@ def get_filtered_properties(
         property_id=parsed["property_id"],
         address=parsed["address"],
         jurisdiction=parsed["jurisdiction"],
-        min_price=parsed["min_price"],
-        max_price=parsed["max_price"],
+        min_listing_price=parsed["min_price"],
+        max_listing_price=parsed["max_price"],
+        neighborhood=parsed["neighborhood"],
+        listing_purpose=parsed["listing_purpose"],
+        commercial_status=parsed["commercial_status"],
+        listing_currency=parsed["listing_currency"],
         agent_id=effective_agent_id,
         include_all_statuses=include_all_statuses,
     )

@@ -66,6 +66,17 @@
     </svg>
     <span class="app-nav-link__label">{{ t('agenda_title') }}</span>
 </a>
+<a
+    href="{{ url_for('contacts_index') }}"
+    class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('contacts_') %} active{% endif %}"
+>
+    <svg class="app-nav-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.75"/>
+        <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+        <path d="M16 8h5M18.5 5.5v5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+    </svg>
+    <span class="app-nav-link__label">{{ t('contacts_title') }}</span>
+</a>
 {% endif %}
 {% if is_admin() %}
 <a

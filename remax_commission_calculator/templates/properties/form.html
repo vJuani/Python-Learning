@@ -2,6 +2,10 @@
 
 {% block title %}{% if is_edit %}{{ t('edit_property_title') }}{% else %}{{ t('new_property_title') }}{% endif %} | {{ t('app_title') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/properties-page.css') }}">
+{% endblock %}
+
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
@@ -36,115 +40,234 @@
 
 <section class="panel">
     <form
-        class="agent-form"
+        class="agent-form property-inventory-form"
         method="post"
         action="{% if is_edit %}{{ url_for('properties_edit', property_id=property_data.id) }}{% else %}{{ url_for('properties_new') }}{% endif %}"
     >
-        <div class="form-group">
-            <label for="address">{{ t('address') }}</label>
-            <input
-                type="text"
-                id="address"
-                name="address"
-                class="form-input"
-                value="{{ property_data.address }}"
-                required
-            >
-        </div>
+        <fieldset class="property-form-section">
+            <legend>{{ t('property_section_main') }}</legend>
 
-        <div class="form-group">
-            <label for="jurisdiction">{{ t('jurisdiction') }}</label>
-            <select
-                id="jurisdiction"
-                name="jurisdiction"
-                class="form-input"
-                required
-            >
-                <option value="">{{ t('select_jurisdiction') }}</option>
-                {% for jurisdiction in jurisdictions %}
-                <option
-                    value="{{ jurisdiction }}"
-                    {% if property_data.jurisdiction == jurisdiction %}selected{% endif %}
+            <div class="form-group">
+                <label for="address">{{ t('address') }}</label>
+                <input
+                    type="text"
+                    id="address"
+                    name="address"
+                    class="form-input"
+                    value="{{ property_data.address }}"
+                    required
                 >
-                    {{ jurisdiction }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
+            </div>
 
-        <div class="form-group">
-            <label for="property_type">{{ t('property_type') }}</label>
-            <select
-                id="property_type"
-                name="property_type"
-                class="form-input"
-                required
-            >
-                <option value="">{{ t('select_property_type') }}</option>
-                {% for property_type in property_types %}
-                <option
-                    value="{{ property_type }}"
-                    {% if property_data.property_type == property_type %}selected{% endif %}
+            <div class="form-group">
+                <label for="neighborhood">{{ t('property_neighborhood') }}</label>
+                <input
+                    type="text"
+                    id="neighborhood"
+                    name="neighborhood"
+                    class="form-input"
+                    value="{{ property_data.neighborhood or '' }}"
                 >
-                    {{ t('property_type_' ~ property_type) }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
+            </div>
 
-        <div class="form-group">
-            <label for="listing_price">{{ t('property_listing_price') }}</label>
-            <input
-                type="number"
-                step="0.01"
-                min="0"
-                id="listing_price"
-                name="listing_price"
-                class="form-input"
-                value="{{ property_data.listing_price if property_data.listing_price is not none else '' }}"
-                required
-            >
-        </div>
-
-        <div class="form-group">
-            <label for="listing_purpose">{{ t('property_listing_purpose') }}</label>
-            <select
-                id="listing_purpose"
-                name="listing_purpose"
-                class="form-input"
-                required
-            >
-                <option value="">{{ t('select_listing_purpose') }}</option>
-                {% for listing_purpose in listing_purposes %}
-                <option
-                    value="{{ listing_purpose }}"
-                    {% if property_data.listing_purpose == listing_purpose %}selected{% endif %}
+            <div class="form-group">
+                <label for="jurisdiction">{{ t('jurisdiction') }}</label>
+                <select
+                    id="jurisdiction"
+                    name="jurisdiction"
+                    class="form-input"
+                    required
                 >
-                    {{ t('listing_purpose_' ~ listing_purpose) }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
+                    <option value="">{{ t('select_jurisdiction') }}</option>
+                    {% for jurisdiction in jurisdictions %}
+                    <option
+                        value="{{ jurisdiction }}"
+                        {% if property_data.jurisdiction == jurisdiction %}selected{% endif %}
+                    >
+                        {{ jurisdiction }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
 
-        <div class="form-group">
-            <label for="agent_id">{{ t('agent') }}</label>
-            {% if lock_agent_selection %}
-            <input type="hidden" name="agent_id" value="{{ property_data.agent_id }}">
-            <select id="agent_id" class="form-input" disabled>
-            {% else %}
-            <select id="agent_id" name="agent_id" class="form-input" required>
-            {% endif %}
-                <option value="">{{ t('select_agent') }}</option>
-                {% for agent in agents %}
-                <option
-                    value="{{ agent.id }}"
-                    {% if property_data.agent_id|string == agent.id|string %}selected{% endif %}
+            <div class="form-group">
+                <label for="property_type">{{ t('property_type') }}</label>
+                <select
+                    id="property_type"
+                    name="property_type"
+                    class="form-input"
+                    required
                 >
-                    {{ agent.name }} ({{ agent.type }})
-                </option>
+                    <option value="">{{ t('select_property_type') }}</option>
+                    {% for property_type in property_types %}
+                    <option
+                        value="{{ property_type }}"
+                        {% if property_data.property_type == property_type %}selected{% endif %}
+                    >
+                        {{ t('property_type_' ~ property_type) }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="agent_id">{{ t('agent') }}</label>
+                {% if lock_agent_selection %}
+                <input type="hidden" name="agent_id" value="{{ property_data.agent_id }}">
+                <select id="agent_id" class="form-input" disabled>
+                {% else %}
+                <select id="agent_id" name="agent_id" class="form-input" required>
+                {% endif %}
+                    <option value="">{{ t('select_agent') }}</option>
+                    {% for agent in agents %}
+                    <option
+                        value="{{ agent.id }}"
+                        {% if property_data.agent_id|string == agent.id|string %}selected{% endif %}
+                    >
+                        {{ agent.name }} ({{ agent.type }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </fieldset>
+
+        <fieldset class="property-form-section">
+            <legend>{{ t('property_section_price') }}</legend>
+
+            <div class="form-group">
+                <label for="listing_price">{{ t('property_listing_price') }}</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    id="listing_price"
+                    name="listing_price"
+                    class="form-input"
+                    value="{{ property_data.listing_price if property_data.listing_price is not none else '' }}"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="listing_currency">{{ t('listing_currency') }}</label>
+                <select
+                    id="listing_currency"
+                    name="listing_currency"
+                    class="form-input"
+                >
+                    <option value="">{{ t('select_listing_currency') }}</option>
+                    {% for currency in listing_currencies %}
+                    <option
+                        value="{{ currency }}"
+                        {% if property_data.listing_currency == currency %}selected{% endif %}
+                    >
+                        {{ currency }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="field-help">{{ t('listing_currency_help') }}</p>
+            </div>
+
+            <div class="form-group">
+                <label for="listing_purpose">{{ t('property_listing_purpose') }}</label>
+                <select
+                    id="listing_purpose"
+                    name="listing_purpose"
+                    class="form-input"
+                    required
+                >
+                    <option value="">{{ t('select_listing_purpose') }}</option>
+                    {% for listing_purpose in listing_purposes %}
+                    <option
+                        value="{{ listing_purpose }}"
+                        {% if property_data.listing_purpose == listing_purpose %}selected{% endif %}
+                    >
+                        {{ t('listing_purpose_' ~ listing_purpose) }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="commercial_status">{{ t('commercial_status') }}</label>
+                <select
+                    id="commercial_status"
+                    name="commercial_status"
+                    class="form-input"
+                >
+                    <option value="">{{ t('commercial_status_unknown') }}</option>
+                    {% for status in commercial_statuses %}
+                    <option
+                        value="{{ status }}"
+                        {% if property_data.commercial_status == status %}selected{% endif %}
+                    >
+                        {{ t('commercial_status_' ~ status) }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </fieldset>
+
+        <fieldset class="property-form-section">
+            <legend>{{ t('property_section_features') }}</legend>
+
+            <div class="property-form-grid">
+                <div class="form-group">
+                    <label for="rooms">{{ t('property_rooms') }}</label>
+                    <input type="number" min="0" step="1" id="rooms" name="rooms" class="form-input" value="{{ property_data.rooms if property_data.rooms is not none else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="bedrooms">{{ t('property_bedrooms') }}</label>
+                    <input type="number" min="0" step="1" id="bedrooms" name="bedrooms" class="form-input" value="{{ property_data.bedrooms if property_data.bedrooms is not none else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="bathrooms">{{ t('property_bathrooms') }}</label>
+                    <input type="number" min="0" step="1" id="bathrooms" name="bathrooms" class="form-input" value="{{ property_data.bathrooms if property_data.bathrooms is not none else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="covered_m2">{{ t('property_covered_m2') }}</label>
+                    <input type="number" min="0" step="0.01" id="covered_m2" name="covered_m2" class="form-input" value="{{ property_data.covered_m2 if property_data.covered_m2 is not none else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="total_m2">{{ t('property_total_m2') }}</label>
+                    <input type="number" min="0" step="0.01" id="total_m2" name="total_m2" class="form-input" value="{{ property_data.total_m2 if property_data.total_m2 is not none else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="parking_spaces">{{ t('property_parking_spaces') }}</label>
+                    <input type="number" min="0" step="1" id="parking_spaces" name="parking_spaces" class="form-input" value="{{ property_data.parking_spaces if property_data.parking_spaces is not none else '' }}">
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="property-form-section">
+            <legend>{{ t('property_section_extras') }}</legend>
+            <div class="property-feature-chips" role="group" aria-label="{{ t('property_section_extras') }}">
+                {% for feature_key in feature_keys %}
+                <label class="property-feature-chip">
+                    <input
+                        type="checkbox"
+                        name="feature"
+                        value="{{ feature_key }}"
+                        {% if feature_key in selected_features %}checked{% endif %}
+                    >
+                    <span>{{ t('property_feature_' ~ feature_key) }}</span>
+                </label>
                 {% endfor %}
-            </select>
-        </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="property-form-section">
+            <legend>{{ t('property_section_description') }}</legend>
+            <div class="form-group">
+                <label for="description">{{ t('property_description') }}</label>
+                <textarea
+                    id="description"
+                    name="description"
+                    class="form-input"
+                    rows="4"
+                >{{ property_data.description or '' }}</textarea>
+            </div>
+        </fieldset>
 
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">

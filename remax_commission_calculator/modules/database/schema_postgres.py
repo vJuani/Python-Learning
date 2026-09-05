@@ -107,6 +107,17 @@ SCHEMA_STATEMENTS = (
         property_type TEXT,
         listing_price {_MONEY},
         listing_purpose TEXT,
+        listing_currency TEXT,
+        neighborhood TEXT,
+        rooms INTEGER,
+        bedrooms INTEGER,
+        bathrooms INTEGER,
+        covered_m2 {_MONEY},
+        total_m2 {_MONEY},
+        parking_spaces INTEGER,
+        description TEXT,
+        commercial_status TEXT,
+        features_json TEXT,
         last_synced_at TEXT,
         external_id TEXT,
         status TEXT NOT NULL DEFAULT 'approved',
@@ -353,6 +364,7 @@ SCHEMA_STATEMENTS = (
         proposed_property_type TEXT,
         proposed_listing_price {_MONEY},
         proposed_listing_purpose TEXT,
+        proposed_listing_currency TEXT,
 
         FOREIGN KEY (organization_id)
             REFERENCES organizations(id)
@@ -909,6 +921,47 @@ SCHEMA_STATEMENTS = (
     """
     CREATE INDEX IF NOT EXISTS idx_agent_tasks_google_event
     ON agent_tasks (organization_id, google_event_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_tasks_contact
+    ON agent_tasks (organization_id, contact_id)
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS contacts (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        agent_id BIGINT NOT NULL,
+        name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        status TEXT NOT NULL DEFAULT 'lead',
+        source TEXT NOT NULL DEFAULT 'manual',
+        visibility TEXT NOT NULL DEFAULT 'private',
+        notes TEXT,
+        preferences_json TEXT,
+        last_interacted_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id) ON DELETE RESTRICT,
+        FOREIGN KEY (agent_id)
+            REFERENCES agents(id) ON DELETE RESTRICT,
+        CHECK (status IN ('lead', 'active', 'inactive', 'closed')),
+        CHECK (source IN ('manual', 'whatsapp', 'agenda', 'operation', 'other')),
+        CHECK (visibility IN ('private', 'team', 'organization'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_contacts_owner
+    ON contacts (organization_id, agent_id, status, updated_at)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_contacts_org_visibility
+    ON contacts (organization_id, visibility, agent_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_contacts_org_name
+    ON contacts (organization_id, name)
     """,
     f"""
     CREATE TABLE IF NOT EXISTS google_calendar_connections (
@@ -1476,6 +1529,7 @@ POSTGRES_TABLES = (
     "billing_issuer_profiles",
     "operation_parties",
     "invoices",
+    "contacts",
 )
 
 
@@ -2333,6 +2387,7 @@ def create_postgres_schema():
             ("attendance_status", "TEXT"),
             ("outcome_json", "TEXT"),
             ("google_event_id", "TEXT"),
+            ("contact_id", "BIGINT"),
         ):
             cursor.execute(
                 f"""
@@ -2354,6 +2409,134 @@ def create_postgres_schema():
                 {column_name} {column_sql}
                 """
             )
+
+        for column_name, column_sql in (
+            ("listing_currency", "TEXT"),
+            ("neighborhood", "TEXT"),
+            ("rooms", "INTEGER"),
+            ("bedrooms", "INTEGER"),
+            ("bathrooms", "INTEGER"),
+            ("covered_m2", f"{_MONEY}"),
+            ("total_m2", f"{_MONEY}"),
+            ("parking_spaces", "INTEGER"),
+            ("description", "TEXT"),
+            ("commercial_status", "TEXT"),
+            ("features_json", "TEXT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE properties
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        cursor.execute(
+            """
+            ALTER TABLE property_change_requests
+            ADD COLUMN IF NOT EXISTS
+            proposed_listing_currency TEXT
+            """
+        )
+
+        cursor.execute(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conname = 'ck_properties_listing_currency'
+                ) THEN
+                    ALTER TABLE properties
+                    ADD CONSTRAINT ck_properties_listing_currency
+                    CHECK (
+                        listing_currency IS NULL
+                        OR listing_currency IN ('USD', 'ARS')
+                    );
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conname = 'ck_properties_commercial_status'
+                ) THEN
+                    ALTER TABLE properties
+                    ADD CONSTRAINT ck_properties_commercial_status
+                    CHECK (
+                        commercial_status IS NULL
+                        OR commercial_status IN (
+                            'available',
+                            'reserved',
+                            'sold',
+                            'rented',
+                            'withdrawn'
+                        )
+                    );
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conname
+                        = 'ck_pcr_proposed_listing_currency'
+                ) THEN
+                    ALTER TABLE property_change_requests
+                    ADD CONSTRAINT ck_pcr_proposed_listing_currency
+                    CHECK (
+                        proposed_listing_currency IS NULL
+                        OR proposed_listing_currency IN ('USD', 'ARS')
+                    );
+                END IF;
+            END
+            $$;
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_properties_org_commercial
+            ON properties (organization_id, commercial_status)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_properties_org_neighborhood
+            ON properties (organization_id, neighborhood)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_properties_org_purpose_currency
+            ON properties (
+                organization_id,
+                listing_purpose,
+                listing_currency
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            UPDATE properties
+            SET listing_currency = unique_src.listing_currency
+            FROM (
+                SELECT
+                    property_id,
+                    MIN(listing_currency) AS listing_currency
+                FROM property_external_listings
+                WHERE listing_currency IN ('USD', 'ARS')
+                GROUP BY property_id
+                HAVING COUNT(DISTINCT listing_currency) = 1
+            ) AS unique_src
+            WHERE properties.id = unique_src.property_id
+                AND (
+                    properties.listing_currency IS NULL
+                    OR BTRIM(properties.listing_currency) = ''
+                )
+            """
+        )
 
         if not _schema_version_applied(
             cursor,

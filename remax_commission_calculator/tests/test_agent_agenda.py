@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -751,7 +752,10 @@ class AgentAgendaTests(unittest.TestCase):
 
         page = self.client.get(f"/agenda/{task['id']}/follow-up")
         self.assertEqual(page.status_code, 200)
-        self.assertIn("agenda-followup", page.get_data(as_text=True))
+        body = page.get_data(as_text=True)
+        self.assertIn("agenda-followup", body)
+        self.assertIn("Ahora no", body)
+        self.assertIn("Escribir resumen", body)
 
     def test_26_visit_outcome_is_saved(self):
         from modules.agent_tasks import save_visit_outcome
@@ -1604,6 +1608,241 @@ class AgentAgendaTests(unittest.TestCase):
         self.assertIn("Sincronizar", body)
         self.assertIn("Desconectar", body)
         self.assertNotIn("No configurado", body)
+
+    def test_54_parser_extracts_structured_visit_outcome(self):
+        from modules.agenda_ai import summarize_visit_outcome
+        from modules.visit_outcome import format_budget_label, normalize_visit_outcome
+
+        outcome = summarize_visit_outcome(
+            "Le gustó mucho el departamento pero le pareció chica "
+            "la segunda habitación. Quiere seguir viendo en Núñez, "
+            "hasta 180 mil dólares, si puede ser con balcón."
+        )
+        self.assertEqual(outcome["interest"], "positive")
+        self.assertTrue(
+            any("habitación" in item.lower() or "chica" in item.lower()
+                for item in outcome.get("objections") or [])
+        )
+        self.assertIn("Núñez", outcome.get("areas") or [])
+        self.assertEqual((outcome.get("budget") or {}).get("max"), 180000)
+        self.assertEqual((outcome.get("budget") or {}).get("currency"), "USD")
+        self.assertIn("balcón", outcome.get("preferences") or [])
+        self.assertEqual(outcome["next_action"], "Buscar alternativas")
+        self.assertEqual(format_budget_label(outcome["budget"]), "USD 180.000")
+
+        legacy = normalize_visit_outcome(
+            {
+                "note": "Viejo",
+                "interest": "positive",
+                "objection": "habitación chica",
+                "area": "Núñez",
+                "budget": "180000",
+            }
+        )
+        self.assertEqual(legacy["objections"], ["habitación chica"])
+        self.assertEqual(legacy["areas"], ["Núñez"])
+        self.assertEqual(legacy["budget"]["max"], 180000)
+
+    def test_55_now_skip_keeps_completed_visit_without_outcome(self):
+        task = self._create(title="Visita omitida")
+        self._login("agenda_agent_user")
+        self.client.post(f"/agenda/{task['id']}/complete")
+        page = self.client.get(f"/agenda/{task['id']}/follow-up")
+        self.assertIn("Ahora no", page.get_data(as_text=True))
+        stored = get_agent_task(task["id"], self.org_a)
+        self.assertEqual(stored["status"], "completed")
+        self.assertFalse(stored.get("outcome_json"))
+
+    def test_56_save_and_edit_and_discard_preview(self):
+        task = self._create(title="Visita resumen", contact_name="Carolina")
+        complete_task(
+            self.org_a,
+            task["id"],
+            agent_id=self.agent_a,
+            actor_user_id=self.agent_user,
+        )
+        self._login("agenda_agent_user")
+        preview = self.client.post(
+            f"/agenda/{task['id']}/follow-up",
+            data={
+                "intent": "summarize",
+                "note": (
+                    "Le gustó mucho pero le pareció chica la segunda "
+                    "habitación. Quiere seguir viendo en Núñez hasta "
+                    "180 mil dólares, si puede ser con balcón."
+                ),
+            },
+        )
+        body = preview.get_data(as_text=True)
+        self.assertEqual(preview.status_code, 200)
+        self.assertIn("Resumen de JRH", body)
+        self.assertIn("Positivo", body)
+        self.assertIn("Núñez", body)
+        self.assertIn("Guardar seguimiento", body)
+        self.assertFalse(get_agent_task(task["id"], self.org_a).get("outcome_json"))
+
+        edited = self.client.post(
+            f"/agenda/{task['id']}/follow-up",
+            data={
+                "intent": "edit",
+                "outcome_json": json.dumps(
+                    {
+                        "note": "Positiva",
+                        "interest": "positive",
+                        "objections": ["segunda habitación chica"],
+                        "areas": ["Núñez"],
+                    }
+                ),
+            },
+        )
+        self.assertIn("name=\"interest\"", edited.get_data(as_text=True))
+
+        discarded = self.client.post(
+            f"/agenda/{task['id']}/follow-up",
+            data={"intent": "discard"},
+        )
+        discarded_body = discarded.get_data(as_text=True)
+        self.assertIn("Escribir resumen", discarded_body)
+        self.assertNotIn("Resumen de JRH", discarded_body)
+        self.assertEqual(get_agent_task(task["id"], self.org_a)["status"], "completed")
+        self.assertFalse(get_agent_task(task["id"], self.org_a).get("outcome_json"))
+
+        saved = self.client.post(
+            f"/agenda/{task['id']}/follow-up",
+            data={
+                "intent": "save",
+                "outcome_json": json.dumps(
+                    {
+                        "note": "Positiva",
+                        "interest": "positive",
+                        "objections": ["segunda habitación chica"],
+                        "areas": ["Núñez"],
+                        "budget": {"max": 180000, "currency": "USD"},
+                        "preferences": ["balcón"],
+                        "next_action": "Buscar alternativas",
+                    }
+                ),
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(saved.status_code, 302)
+        self.assertIn("step=next", saved.headers.get("Location", ""))
+        stored = get_agent_task(task["id"], self.org_a)
+        payload = json.loads(stored["outcome_json"])
+        self.assertEqual(payload["interest"], "positive")
+        self.assertEqual(payload["areas"], ["Núñez"])
+        self.assertEqual(payload["budget"]["max"], 180000)
+
+    def test_57_next_action_preview_does_not_create_task(self):
+        task = self._create(title="Visita con próxima", contact_name="Carolina")
+        complete_task(
+            self.org_a,
+            task["id"],
+            agent_id=self.agent_a,
+            actor_user_id=self.agent_user,
+        )
+        self._login("agenda_agent_user")
+        response = self.client.post(
+            f"/agenda/{task['id']}/follow-up",
+            data={
+                "intent": "save",
+                "outcome_json": json.dumps(
+                    {
+                        "note": "Llamar mañana",
+                        "interest": "positive",
+                        "next_action": "Llamar",
+                        "suggested_task": {
+                            "type": "call",
+                            "prompt": "Llamar a Carolina mañana a las 11",
+                        },
+                    }
+                ),
+            },
+            follow_redirects=True,
+        )
+        body = response.get_data(as_text=True)
+        self.assertIn("JRH te sugiere", body)
+        self.assertIn("Agendar", body)
+        from modules.database.agent_tasks_repository import list_agent_tasks
+
+        after = list_agent_tasks(
+            self.org_a,
+            agent_id=self.agent_a,
+            statuses=("pending",),
+            limit=200,
+        )
+        self.assertFalse(
+            any(item.get("contact_name") == "Carolina" and item["task_type"] == "call" for item in after)
+        )
+        self.assertEqual(get_agent_task(task["id"], self.org_a)["status"], "completed")
+
+    def test_58_confirm_next_action_creates_agenda_task(self):
+        task = self._create(title="Visita a confirmar", contact_name="Carolina")
+        complete_task(
+            self.org_a,
+            task["id"],
+            agent_id=self.agent_a,
+            actor_user_id=self.agent_user,
+        )
+        self._login("agenda_agent_user")
+        due_date, due_time = self._local_parts(self.org_a, timedelta(hours=20))
+        scheduled = self.client.post(
+            f"/agenda/{task['id']}/follow-up",
+            data={
+                "intent": "schedule",
+                "item_count": "1",
+                "items-0-title": "Llamar a Carolina",
+                "items-0-task_type": "call",
+                "items-0-due_date": due_date,
+                "items-0-due_time": due_time,
+                "items-0-contact_name": "Carolina",
+                "items-0-item_status": "ready",
+                "items-0-date_found": "1",
+                "items-0-time_found": "1",
+                "items-0-candidates": "[]",
+            },
+        )
+        self.assertEqual(scheduled.status_code, 302)
+        agenda = build_agenda_view(self.org_a, agent_id=self.agent_a)
+        titles = [
+            item["title"]
+            for section in agenda["sections"]
+            for item in section["tasks"]
+        ]
+        self.assertIn("Llamar a Carolina", titles)
+
+    def test_59_completed_visit_without_outcome_is_recommended(self):
+        task = self._create(title="Visita huérfana")
+        complete_task(
+            self.org_a,
+            task["id"],
+            agent_id=self.agent_a,
+            actor_user_id=self.agent_user,
+        )
+        self._login("agenda_agent_user")
+        page = self.client.get("/agenda")
+        body = page.get_data(as_text=True)
+        self.assertIn("Tenés una visita sin seguimiento.", body)
+        self.assertIn("Completar seguimiento", body)
+        self.assertIn(f"/agenda/{task['id']}/follow-up", body)
+
+        foreign = self._login("agenda_agent_other")
+        other_page = self.client.get("/agenda")
+        self.assertNotIn(
+            "Tenés una visita sin seguimiento.",
+            other_page.get_data(as_text=True),
+        )
+
+    def test_60_follow_up_stays_in_agent_scope(self):
+        task = self._create(title="Visita ajena")
+        self._login("agenda_agent_other")
+        blocked = self.client.get(f"/agenda/{task['id']}/follow-up")
+        self.assertEqual(blocked.status_code, 404)
+
+        self._login("agenda_admin_a")
+        staff = self.client.get(f"/agenda/{task['id']}/follow-up")
+        self.assertIn(staff.status_code, (302, 403))
+        self.assertNotIn("Escribir resumen", staff.get_data(as_text=True))
 
 
 if __name__ == "__main__":

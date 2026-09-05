@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block body_class %}is-agenda-page is-followup-page {% endblock %}
+
 {% block title %}{{ t('agenda_followup_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_js %}
@@ -7,9 +9,18 @@
 {% endblock %}
 
 {% block content %}
-<section class="agenda-followup">
-    <h2>{{ t('agenda_followup_title') }}</h2>
-    <p>{{ task.title }}{% if task.property_address %} · {{ task.property_address }}{% endif %}</p>
+{% set step = step or 'entry' %}
+{% set outcome = outcome or {} %}
+<section class="agenda-followup-page">
+    <header class="agenda-followup-hero">
+        <p class="agenda-followup-hero__kicker">{{ t('agenda_followup_kicker') }}</p>
+        <h1>{{ t('agenda_followup_title') }}</h1>
+        <p class="agenda-followup-hero__context">
+            {{ task.title }}
+            {% if task.property_address %} · {{ task.property_address }}{% endif %}
+            {% if task.contact_name %} · {{ task.contact_name }}{% endif %}
+        </p>
+    </header>
 
     {% if errors %}
     <div class="flash-error" role="alert">
@@ -17,62 +28,289 @@
     </div>
     {% endif %}
 
-    <form method="post" class="agenda-ia" id="agenda-ia-form">
-        <button type="button" class="agenda-followup__mic" data-agenda-voice>
-            {{ t('agenda_followup_tell') }}
-        </button>
-        <label class="agenda-form__field">
-            <textarea
-                name="note"
-                rows="4"
-                placeholder="{{ t('agenda_followup_placeholder') }}"
-                required
-            >{{ note }}</textarea>
-        </label>
-        <button type="submit" class="btn btn-secondary">{{ t('agenda_followup_summarize') }}</button>
-    </form>
+    <div class="agenda-followup-layout">
+        <div class="agenda-followup-layout__main">
+            {% if note and step != 'entry' %}
+            <p class="agenda-chat__user">{{ note }}</p>
+            {% endif %}
 
-    {% if outcome %}
-    <section class="agenda-summary">
-        <h3>{{ t('agenda_followup_summary') }}</h3>
-        <form method="post" class="agenda-form">
-            <input type="hidden" name="save" value="1">
-            <input type="hidden" name="note" value="{{ outcome.note }}">
+            {% if step == 'entry' %}
+            <div class="agenda-followup-entry">
+                <form method="post" class="agenda-followup-card agenda-followup-card--voice" id="agenda-ia-form" data-agenda-interpret>
+                    <input type="hidden" name="intent" value="summarize">
+                    <textarea name="note" class="sr-only" rows="2">{{ note }}</textarea>
+                    <button type="button" class="agenda-followup-voice" data-agenda-voice>
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.75"/>
+                            <path d="M6 11a6 6 0 0 0 12 0M12 17v4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                        </svg>
+                        {{ t('agenda_followup_tell') }}
+                    </button>
+                    <p class="agenda-followup-hint" data-agenda-voice-status data-listening="{{ t('agenda_ai_listening') }}">
+                        {{ t('agenda_ai_voice_hint') }}
+                    </p>
+                </form>
 
-            <label class="agenda-form__field">
-                <span>{{ t('agenda_followup_interest') }}</span>
-                <select name="interest">
-                    {% for key in ('positive', 'neutral', 'negative') %}
-                    <option value="{{ key }}" {% if outcome.interest == key %}selected{% endif %}>
-                        {{ t('agenda_interest_' ~ key) }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </label>
-            <label class="agenda-form__field">
-                <span>{{ t('agenda_followup_objection') }}</span>
-                <input type="text" name="objection" value="{{ outcome.objection }}">
-            </label>
-            <label class="agenda-form__field">
-                <span>{{ t('agenda_followup_area') }}</span>
-                <input type="text" name="area" value="{{ outcome.area }}">
-            </label>
-            <label class="agenda-form__field">
-                <span>{{ t('agenda_followup_budget') }}</span>
-                <input type="text" name="budget" value="{{ outcome.budget }}">
-            </label>
-            <label class="agenda-form__field">
-                <span>{{ t('agenda_followup_next') }}</span>
-                <input type="text" name="next_action" value="{{ outcome.next_action }}">
-            </label>
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary">{{ t('agenda_followup_save') }}</button>
-                <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">
-                    {{ t('agenda_followup_search') }}
+                <details class="agenda-followup-card agenda-followup-card--write"{% if note %} open{% endif %}>
+                    <summary>
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-3L16.5 4.5a2 2 0 0 0-3 0L3 15v5Z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+                        </svg>
+                        {{ t('agenda_followup_write') }}
+                    </summary>
+                    <form method="post" data-agenda-interpret>
+                        <input type="hidden" name="intent" value="summarize">
+                        <textarea
+                            name="note"
+                            rows="4"
+                            placeholder="{{ t('agenda_followup_placeholder') }}"
+                            required
+                        >{{ note }}</textarea>
+                        <button type="submit" class="btn btn-primary">{{ t('agenda_followup_summarize') }}</button>
+                    </form>
+                </details>
+
+                <a class="agenda-followup-skip" href="{{ url_for('agenda_index') }}">
+                    {{ t('agenda_followup_now') }}
                 </a>
             </div>
-        </form>
-    </section>
-    {% endif %}
+            {% endif %}
+
+            {% if step == 'preview' and outcome %}
+            <article class="agenda-followup-card agenda-followup-card--preview">
+                <p class="agenda-preview__kicker">{{ t('agenda_followup_summary') }}</p>
+
+                {% if outcome.interest %}
+                <div class="agenda-followup-field">
+                    <span>{{ t('agenda_followup_interest') }}</span>
+                    <strong class="agenda-followup-chip agenda-followup-chip--{{ outcome.interest }}">
+                        {{ t('agenda_interest_' ~ outcome.interest) }}
+                    </strong>
+                </div>
+                {% endif %}
+
+                {% if outcome.objections %}
+                <div class="agenda-followup-field">
+                    <span>{{ t('agenda_followup_objection') }}</span>
+                    <ul>
+                        {% for item in outcome.objections %}<li>{{ item }}</li>{% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if outcome.areas %}
+                <div class="agenda-followup-field">
+                    <span>{{ t('agenda_followup_area') }}</span>
+                    <ul>
+                        {% for item in outcome.areas %}<li>{{ item }}</li>{% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if budget_label %}
+                <div class="agenda-followup-field">
+                    <span>{{ t('agenda_followup_budget_max') }}</span>
+                    <strong>{{ budget_label }}</strong>
+                </div>
+                {% endif %}
+
+                {% if outcome.preferences %}
+                <div class="agenda-followup-field">
+                    <span>{{ t('agenda_followup_preferences') }}</span>
+                    <ul class="agenda-followup-prefs">
+                        {% for item in outcome.preferences %}
+                        <li class="agenda-followup-chip">{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if outcome.next_action %}
+                <div class="agenda-followup-field">
+                    <span>{{ t('agenda_followup_next') }}</span>
+                    <strong>{{ outcome.next_action }}</strong>
+                </div>
+                {% endif %}
+
+                <div class="agenda-followup-actions">
+                    <form method="post">
+                        <input type="hidden" name="intent" value="save">
+                        <input type="hidden" name="outcome_json" value="{{ outcome | tojson | forceescape }}">
+                        <button type="submit" class="btn btn-primary">{{ t('agenda_followup_save') }}</button>
+                    </form>
+                    <form method="post">
+                        <input type="hidden" name="intent" value="edit">
+                        <input type="hidden" name="outcome_json" value="{{ outcome | tojson | forceescape }}">
+                        <button type="submit" class="btn btn-secondary">{{ t('agenda_ai_edit') }}</button>
+                    </form>
+                    <form method="post">
+                        <input type="hidden" name="intent" value="discard">
+                        <button type="submit" class="btn btn-secondary">{{ t('agenda_followup_discard') }}</button>
+                    </form>
+                </div>
+            </article>
+            {% endif %}
+
+            {% if step == 'edit' and outcome %}
+            <form method="post" class="agenda-followup-card agenda-followup-card--edit">
+                <input type="hidden" name="intent" value="preview">
+                <p class="agenda-preview__kicker">{{ t('agenda_ai_edit') }}</p>
+
+                <fieldset class="agenda-followup-interest">
+                    <legend>{{ t('agenda_followup_interest') }}</legend>
+                    {% for key in ('positive', 'neutral', 'negative') %}
+                    <label class="agenda-followup-chip-option">
+                        <input type="radio" name="interest" value="{{ key }}" {% if outcome.interest == key %}checked{% endif %}>
+                        <span>{{ t('agenda_interest_' ~ key) }}</span>
+                    </label>
+                    {% endfor %}
+                </fieldset>
+
+                <label class="agenda-followup-input">
+                    <span>{{ t('agenda_followup_objection') }}</span>
+                    <textarea name="objections" rows="3">{{ (outcome.objections or []) | join('\n') }}</textarea>
+                </label>
+                <label class="agenda-followup-input">
+                    <span>{{ t('agenda_followup_area') }}</span>
+                    <textarea name="areas" rows="2">{{ (outcome.areas or []) | join('\n') }}</textarea>
+                </label>
+                <div class="agenda-followup-budget">
+                    <label class="agenda-followup-input">
+                        <span>{{ t('agenda_followup_budget_min') }}</span>
+                        <input type="number" name="budget_min" value="{{ (outcome.budget or {}).min or '' }}">
+                    </label>
+                    <label class="agenda-followup-input">
+                        <span>{{ t('agenda_followup_budget_max') }}</span>
+                        <input type="number" name="budget_max" value="{{ (outcome.budget or {}).max or '' }}">
+                    </label>
+                    <label class="agenda-followup-input">
+                        <span>{{ t('agenda_followup_currency') }}</span>
+                        <select name="budget_currency">
+                            {% for code in ('USD', 'ARS') %}
+                            <option value="{{ code }}" {% if (outcome.budget or {}).currency == code %}selected{% endif %}>{{ code }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+                <label class="agenda-followup-input">
+                    <span>{{ t('agenda_followup_preferences') }}</span>
+                    <textarea name="preferences" rows="2">{{ (outcome.preferences or []) | join('\n') }}</textarea>
+                </label>
+                <label class="agenda-followup-input">
+                    <span>{{ t('agenda_followup_note') }}</span>
+                    <textarea name="note" rows="3">{{ outcome.note or note }}</textarea>
+                </label>
+                <label class="agenda-followup-input">
+                    <span>{{ t('agenda_followup_next') }}</span>
+                    <input type="text" name="next_action" value="{{ outcome.next_action or '' }}">
+                </label>
+                {% if outcome.suggested_task %}
+                <input type="hidden" name="suggested_task_type" value="{{ outcome.suggested_task.type }}">
+                <input type="hidden" name="suggested_task_prompt" value="{{ outcome.suggested_task.prompt }}">
+                {% endif %}
+                <div class="agenda-followup-actions">
+                    <button type="submit" class="btn btn-primary">{{ t('agenda_followup_apply_edit') }}</button>
+                    <button type="submit" class="btn btn-secondary" name="intent" value="discard">{{ t('agenda_followup_discard') }}</button>
+                </div>
+            </form>
+            {% endif %}
+
+            {% if step == 'contact_prefs' and followup_contact and merge_preview %}
+            <article class="agenda-followup-card agenda-followup-card--preview">
+                <p class="agenda-preview__kicker">{{ t('contacts_jrh') }}</p>
+                <h2>{{ t('contacts_merge_title', name=followup_contact.name) }}</h2>
+                <ul class="agenda-followup-prefs">
+                    {% for item in merge_preview.additions %}
+                    <li>{{ t(item.label_key, value=item.value) }}</li>
+                    {% endfor %}
+                    {% for item in merge_preview.fills %}
+                    {% if item.key == 'budget_max' %}
+                    <li>+ {{ t('agenda_followup_budget_max') }}: {{ item.value }}</li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+                <form method="post">
+                    <input type="hidden" name="intent" value="apply_contact_prefs">
+                    <input type="hidden" name="outcome_json" value="{{ outcome | tojson | forceescape }}">
+                    {% for item in merge_preview.conflicts %}
+                    <label class="agenda-followup-chip-option">
+                        <input type="checkbox" name="accept_conflict" value="{{ item.key }}">
+                        <span>
+                            {{ t('contacts_merge_budget_max') if item.key == 'budget_max' else item.field }}
+                            <br>{{ item.current_label }} → {{ item.incoming_label }}
+                            {% if item.key == 'budget_max' %}
+                            <br>{{ t('contacts_merge_confirm_budget') }}
+                            {% endif %}
+                        </span>
+                    </label>
+                    {% endfor %}
+                    <div class="agenda-followup-actions">
+                        <button type="submit" class="btn btn-primary">{{ t('contacts_merge_update') }}</button>
+                    </div>
+                </form>
+                <form method="post">
+                    <input type="hidden" name="intent" value="skip_contact_prefs">
+                    <button type="submit" class="btn btn-secondary">{{ t('contacts_merge_skip') }}</button>
+                </form>
+            </article>
+            {% endif %}
+
+            {% if step == 'next' %}
+            <article class="agenda-followup-card agenda-followup-card--next">
+                <p class="agenda-preview__kicker">{{ t('agenda_followup_suggest_title') }}</p>
+
+                {% if is_search_action %}
+                <h2>{{ outcome.next_action or t('agenda_followup_search') }}</h2>
+                <a
+                    class="btn btn-primary"
+                    href="{{ url_for('properties_list', **properties_query) }}"
+                >
+                    {{ t('agenda_followup_search') }}
+                </a>
+                {% endif %}
+
+                {% if items %}
+                {% set draft = items[0] %}
+                <div class="agenda-followup-next">
+                    <h2>{{ draft.title }}</h2>
+                    <p>
+                        {% if draft.due_date %}{{ draft.due_date }}{% endif %}
+                        {% if draft.due_time %} · {{ draft.due_time }}{% endif %}
+                    </p>
+                    <form method="post" class="agenda-followup-actions">
+                        <input type="hidden" name="intent" value="schedule">
+                        <input type="hidden" name="item_count" value="1">
+                        <input type="hidden" name="outcome_json" value="{{ outcome | tojson | forceescape }}">
+                        {% for key in ['title', 'task_type', 'due_date', 'due_time', 'contact_name', 'contact_id', 'contact_match', 'property_id', 'property_address', 'property_query', 'property_match', 'description', 'duration_minutes', 'reminder_minutes', 'attendance_status', 'source_prompt', 'ui_status', 'item_status'] %}
+                        <input type="hidden" name="items-0-{{ key }}" value="{{ draft[key] or '' }}">
+                        {% endfor %}
+                        <input type="hidden" name="items-0-date_found" value="{{ '1' if draft.date_found else '0' }}">
+                        <input type="hidden" name="items-0-time_found" value="{{ '1' if draft.time_found else '0' }}">
+                        <input type="hidden" name="items-0-candidates" value="{{ (draft.property_candidates or []) | tojson | forceescape }}">
+                        <input type="hidden" name="items-0-contact_candidates" value="{{ (draft.contact_candidates or []) | tojson | forceescape }}">
+                        {% if draft.item_status == 'ready' %}
+                        <button type="submit" class="btn btn-primary">{{ t('agenda_followup_schedule') }}</button>
+                        {% endif %}
+                        <a
+                            class="btn btn-secondary"
+                            href="{% if task.contact_id %}{{ url_for('agenda_compose', prompt=(outcome.suggested_task.prompt if outcome.suggested_task else ''), contact_id=task.contact_id) }}{% else %}{{ url_for('agenda_compose', prompt=(outcome.suggested_task.prompt if outcome.suggested_task else '')) }}{% endif %}"
+                        >
+                            {{ t('agenda_ai_edit') }}
+                        </a>
+                        <a class="btn btn-secondary" href="{{ url_for('agenda_index') }}">
+                            {{ t('agenda_followup_now') }}
+                        </a>
+                    </form>
+                </div>
+                {% elif not is_search_action %}
+                <p>{{ t('agenda_followup_no_next') }}</p>
+                <a class="btn btn-secondary" href="{{ url_for('agenda_index') }}">{{ t('agenda_followup_now') }}</a>
+                {% else %}
+                <a class="agenda-followup-skip" href="{{ url_for('agenda_index') }}">{{ t('agenda_followup_now') }}</a>
+                {% endif %}
+            </article>
+            {% endif %}
+        </div>
+    </div>
 </section>
 {% endblock %}

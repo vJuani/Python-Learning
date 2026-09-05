@@ -65,14 +65,19 @@
                     <td>{{ t('property_listing_price') }}</td>
                     <td>
                         {% if change_request.current_listing_price is not none %}
-                        {{ change_request.current_listing_price|money }}
+                        {{ change_request.current_listing_price|listing_money(change_request.current_listing_currency) }}
                         {% else %}—{% endif %}
                     </td>
                     <td>
                         {% if change_request.proposed_listing_price is not none %}
-                        {{ change_request.proposed_listing_price|money }}
+                        {{ change_request.proposed_listing_price|listing_money(change_request.proposed_listing_currency) }}
                         {% else %}—{% endif %}
                     </td>
+                </tr>
+                <tr{% if change_request.current_listing_currency != change_request.proposed_listing_currency %} class="diff-row"{% endif %}>
+                    <td>{{ t('listing_currency') }}</td>
+                    <td>{{ change_request.current_listing_currency or t('listing_currency_unknown') }}</td>
+                    <td>{{ change_request.proposed_listing_currency or t('listing_currency_unknown') }}</td>
                 </tr>
                 <tr{% if change_request.current_listing_purpose != change_request.proposed_listing_purpose %} class="diff-row"{% endif %}>
                     <td>{{ t('property_listing_purpose') }}</td>

@@ -32,7 +32,7 @@
         recognition.addEventListener("result", function (event) {
             var transcript = event.results[0][0].transcript;
             input.value = transcript;
-            if (form && input.name === "prompt") {
+            if (form && (input.name === "prompt" || input.name === "note")) {
                 form.submit();
             }
         });

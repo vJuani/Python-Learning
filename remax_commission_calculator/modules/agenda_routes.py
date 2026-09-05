@@ -22,6 +22,16 @@ from modules.agenda_ai import (
     refresh_item,
     summarize_visit_outcome,
 )
+from modules.contacts import (
+    ContactError,
+    apply_known_contact,
+    bind_compose_contact,
+    create_agent_contact,
+    diff_preference_update,
+    load_contact,
+    preferences_from_outcome,
+    save_contact_preference_update,
+)
 from modules.agent_tasks import (
     AGENDA_FILTERS,
     DURATION_CHOICES,
@@ -60,11 +70,20 @@ from modules.google_calendar import (
     retry_task_sync,
     sync_now,
 )
+from modules.i18n import translate
 from modules.organization_time import (
     format_local_date_iso,
     format_local_time,
     now_utc,
     organization_timezone,
+)
+from modules.visit_outcome import (
+    attach_suggested_task,
+    format_budget_label,
+    is_search_next_action,
+    outcome_from_form,
+    outcome_is_present,
+    properties_search_args,
 )
 
 
@@ -76,6 +95,8 @@ _ITEM_KEYS = (
     "due_date",
     "due_time",
     "contact_name",
+    "contact_id",
+    "contact_match",
     "property_id",
     "property_address",
     "property_query",
@@ -129,6 +150,34 @@ def _items_from_form(form):
                     item["property_address"] = candidate.get("address") or ""
                     break
 
+        raw_contacts = form.get(f"{prefix}contact_candidates") or "[]"
+        try:
+            item["contact_candidates"] = json.loads(raw_contacts)
+        except (TypeError, ValueError):
+            item["contact_candidates"] = []
+
+        contact_choice = (form.get(f"{prefix}contact_choice") or "").strip()
+        if contact_choice == "none":
+            item["contact_id"] = ""
+            item["contact_match"] = "skipped"
+            item["contact_preview"] = None
+        elif contact_choice:
+            for candidate in item["contact_candidates"]:
+                if str(candidate.get("id")) == str(contact_choice):
+                    item["contact_id"] = candidate.get("id")
+                    item["contact_name"] = (
+                        candidate.get("name") or item.get("contact_name")
+                    )
+                    item["contact_match"] = "single"
+                    item["contact_preview"] = candidate
+                    break
+
+        if item.get("contact_id") and not item.get("contact_preview"):
+            for candidate in item.get("contact_candidates") or []:
+                if str(candidate.get("id")) == str(item["contact_id"]):
+                    item["contact_preview"] = candidate
+                    break
+
         items.append(refresh_item(item))
 
     return items
@@ -148,6 +197,7 @@ def _item_to_payload(item):
         "property_id": (item.get("property_id") or "") or None,
         "operation_id": None,
         "contact_name": item.get("contact_name"),
+        "contact_id": (item.get("contact_id") or "") or None,
         "duration_minutes": item.get("duration_minutes"),
         "reminder_minutes": item.get("reminder_minutes"),
         "attendance_status": item.get("attendance_status"),
@@ -185,6 +235,22 @@ def register_agenda_routes(app, helpers):
             abort(403)
 
         return user, agent_id
+
+    def _scoped_contact(organization_id, agent_id, raw_id):
+        if raw_id in (None, ""):
+            return None
+        try:
+            contact_id = int(raw_id)
+        except (TypeError, ValueError):
+            abort(404)
+        try:
+            return load_contact(
+                organization_id,
+                contact_id,
+                agent_id=agent_id,
+            )
+        except ContactError:
+            abort(404)
 
     def _redirect_back(default_endpoint="agenda_index", **kwargs):
         target = get_safe_redirect_target(
@@ -362,14 +428,28 @@ def register_agenda_routes(app, helpers):
     def agenda_compose():
         user, agent_id = _require_agent_user()
         organization_id = require_user_organization()
+        language = get_current_language()
         draft = None
         errors = []
+        creating_contact_index = None
+        compose_contact = _scoped_contact(
+            organization_id,
+            agent_id,
+            request.form.get("compose_contact_id")
+            or request.args.get("contact_id"),
+        )
         prompt = (
             request.form.get("prompt")
             or request.form.get("whatsapp_text")
             or request.args.get("prompt")
             or ""
         ).strip()
+        if compose_contact and not prompt:
+            prompt = translate(
+                "contacts_schedule_prompt",
+                language,
+                name=compose_contact["name"],
+            )
 
         items = []
 
@@ -377,11 +457,49 @@ def register_agenda_routes(app, helpers):
             request.form.get("confirm_ready")
             or request.form.get("confirm_one")
             or request.form.get("remove_item") not in (None, "")
+            or request.form.get("quick_create_contact") not in (None, "")
+            or request.form.get("create_contact_item") not in (None, "")
             or request.form.get("item_count")
         ):
             items = _items_from_form(request.form)
             confirm_one = (request.form.get("confirm_one") or "").strip()
             confirm_ready = bool(request.form.get("confirm_ready"))
+            create_at = (request.form.get("create_contact_item") or "").strip()
+            quick_at = (request.form.get("quick_create_contact") or "").strip()
+
+            if quick_at != "":
+                try:
+                    index = int(quick_at)
+                except (TypeError, ValueError):
+                    index = -1
+                if 0 <= index < len(items):
+                    try:
+                        created_contact = create_agent_contact(
+                            organization_id,
+                            agent_id,
+                            {
+                                "name": request.form.get("quick_name")
+                                or items[index].get("contact_name"),
+                                "phone": request.form.get("quick_phone"),
+                                "email": request.form.get("quick_email"),
+                                "source": "agenda",
+                            },
+                        )
+                    except ContactError as error:
+                        errors = [error.message_key]
+                        creating_contact_index = index
+                    else:
+                        apply_known_contact(
+                            items[index],
+                            created_contact,
+                            language=language,
+                        )
+                        refresh_item(items[index])
+            elif create_at != "":
+                try:
+                    creating_contact_index = int(create_at)
+                except (TypeError, ValueError):
+                    creating_contact_index = None
 
             if confirm_one != "" or confirm_ready:
                 selected = []
@@ -514,6 +632,14 @@ def register_agenda_routes(app, helpers):
                     agent_id,
                 )
                 items = bundle["items"]
+                if compose_contact:
+                    bind_compose_contact(
+                        items,
+                        compose_contact,
+                        language=language,
+                    )
+                    for item in items:
+                        refresh_item(item)
                 draft = items[0] if len(items) == 1 else None
             except AgendaAiError as error:
                 errors = [error.message_key]
@@ -524,6 +650,8 @@ def register_agenda_routes(app, helpers):
             draft=draft,
             items=items,
             errors=errors,
+            compose_contact=compose_contact,
+            creating_contact_index=creating_contact_index,
             voice_mode=request.args.get("mode") == "voice",
         )
 
@@ -683,19 +811,40 @@ def register_agenda_routes(app, helpers):
             abort(404)
 
         outcome = None
+        items = []
         errors = []
+        followup_contact = None
+        merge_preview = None
+        if task.get("contact_id"):
+            try:
+                followup_contact = load_contact(
+                    organization_id,
+                    task["contact_id"],
+                    agent_id=agent_id,
+                )
+            except ContactError:
+                followup_contact = None
         note = (request.form.get("note") or "").strip()
+        step = (request.form.get("step") or request.args.get("step") or "entry")
+        intent = (request.form.get("intent") or "").strip()
 
-        if request.method == "POST" and request.form.get("save"):
-            outcome = {
-                "note": note,
-                "interest": request.form.get("interest") or "neutral",
-                "objection": request.form.get("objection") or "",
-                "area": request.form.get("area") or "",
-                "budget": request.form.get("budget") or "",
-                "next_action": request.form.get("next_action") or "",
-            }
+        if request.method == "POST" and intent == "discard":
+            outcome = None
+            note = ""
+            step = "entry"
 
+        elif request.method == "POST" and intent == "edit":
+            outcome = attach_suggested_task(outcome_from_form(request.form), task)
+            note = outcome.get("note") or note
+            step = "edit"
+
+        elif request.method == "POST" and intent == "preview":
+            outcome = attach_suggested_task(outcome_from_form(request.form), task)
+            note = outcome.get("note") or note
+            step = "preview"
+
+        elif request.method == "POST" and intent == "save":
+            outcome = attach_suggested_task(outcome_from_form(request.form), task)
             try:
                 save_visit_outcome(
                     organization_id,
@@ -705,23 +854,165 @@ def register_agenda_routes(app, helpers):
                 )
             except AgentTaskError as error:
                 errors = [error.message_key]
+                step = "preview"
             else:
                 flash_i18n("agenda_followup_saved", "success")
+                next_step = "next"
+                if followup_contact:
+                    preview = diff_preference_update(
+                        followup_contact.get("preferences_json"),
+                        preferences_from_outcome(outcome),
+                    )
+                    if preview.get("has_changes"):
+                        next_step = "contact_prefs"
+                return redirect(
+                    url_for(
+                        "agenda_follow_up",
+                        task_id=task["id"],
+                        step=next_step,
+                    )
+                )
 
-                return redirect(url_for("agenda_index"))
+        elif request.method == "POST" and intent == "apply_contact_prefs":
+            if followup_contact:
+                try:
+                    save_contact_preference_update(
+                        organization_id,
+                        followup_contact["id"],
+                        preferences_from_outcome(
+                            outcome_from_form(request.form)
+                            or task.get("outcome_json")
+                        ),
+                        accepted_conflicts=request.form.getlist(
+                            "accept_conflict"
+                        ),
+                        agent_id=agent_id,
+                    )
+                except ContactError as error:
+                    errors = [error.message_key]
+                    step = "contact_prefs"
+                else:
+                    flash_i18n("contacts_flash_prefs_updated", "success")
+                    return redirect(
+                        url_for(
+                            "agenda_follow_up",
+                            task_id=task["id"],
+                            step="next",
+                        )
+                    )
+            else:
+                return redirect(
+                    url_for("agenda_follow_up", task_id=task["id"], step="next")
+                )
+
+        elif request.method == "POST" and intent == "skip_contact_prefs":
+            return redirect(
+                url_for("agenda_follow_up", task_id=task["id"], step="next")
+            )
+
+        elif request.method == "POST" and intent == "schedule":
+            selected = _items_from_form(request.form)
+            ready = [
+                item for item in selected if item.get("item_status") == "ready"
+            ]
+            if not ready:
+                errors = ["agenda_ai_err_none_ready"]
+                outcome = attach_suggested_task(
+                    outcome_from_form(request.form),
+                    task,
+                )
+                step = "next"
+                items = selected
+            else:
+                try:
+                    create_task(
+                        organization_id,
+                        agent_id,
+                        _item_to_payload(ready[0]),
+                        created_by_user_id=user["id"],
+                    )
+                except AgentTaskError as error:
+                    errors = [error.message_key]
+                    outcome = attach_suggested_task(
+                        outcome_from_form(request.form),
+                        task,
+                    )
+                    step = "next"
+                    items = selected
+                else:
+                    flash_i18n("agent_task_flash_created", "success")
+                    return redirect(url_for("agenda_index"))
+
+        elif request.method == "POST" and intent == "summarize":
+            try:
+                outcome = attach_suggested_task(
+                    summarize_visit_outcome(note),
+                    task,
+                )
+                step = "preview"
+            except AgendaAiError as error:
+                errors = [error.message_key]
+                step = "entry"
 
         elif request.method == "POST":
             try:
-                outcome = summarize_visit_outcome(note)
+                outcome = attach_suggested_task(
+                    summarize_visit_outcome(note),
+                    task,
+                )
+                step = "preview"
             except AgendaAiError as error:
                 errors = [error.message_key]
+                step = "entry"
+
+        if step == "contact_prefs":
+            if outcome is None and outcome_is_present(task.get("outcome_json")):
+                outcome = attach_suggested_task(task.get("outcome_json"), task)
+            if followup_contact and outcome:
+                merge_preview = diff_preference_update(
+                    followup_contact.get("preferences_json"),
+                    preferences_from_outcome(outcome),
+                )
+            if not merge_preview or not merge_preview.get("has_changes"):
+                step = "next"
+
+        if step == "next":
+            if outcome is None and outcome_is_present(task.get("outcome_json")):
+                outcome = attach_suggested_task(task.get("outcome_json"), task)
+            if outcome:
+                prompt = (outcome.get("suggested_task") or {}).get("prompt") or ""
+                if prompt:
+                    try:
+                        items = interpret_agenda_input(
+                            prompt,
+                            organization_id,
+                            agent_id,
+                        )["items"]
+                        if followup_contact:
+                            bind_compose_contact(
+                                items,
+                                followup_contact,
+                            )
+                            for item in items:
+                                refresh_item(item)
+                    except AgendaAiError as error:
+                        errors.append(error.message_key)
 
         return render_template(
             "agenda/follow_up.html",
             task=task,
             outcome=outcome,
-            note=note,
+            note=note or (outcome or {}).get("note") or "",
             errors=errors,
+            step=step,
+            items=items,
+            followup_contact=followup_contact,
+            merge_preview=merge_preview,
+            budget_label=format_budget_label((outcome or {}).get("budget")),
+            is_search_action=is_search_next_action(
+                (outcome or {}).get("next_action")
+            ),
+            properties_query=properties_search_args(outcome),
         )
 
     @app.route("/agenda/<int:task_id>/reschedule", methods=["POST"])
@@ -926,6 +1217,7 @@ def _form_values_from_request():
         ).strip()
         or None,
         "contact_name": request.form.get("contact_name"),
+        "contact_id": (request.form.get("contact_id") or "") or None,
         "duration_minutes": request.form.get("duration_minutes"),
         "reminder_minutes": request.form.get("reminder_minutes"),
         "attendance_status": request.form.get("attendance_status"),

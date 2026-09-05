@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-contacts-page {% endblock %}
+
+{% block title %}{{ contact.name }} | {{ t('contacts_title') }}{% endblock %}
+
+{% block content %}
+<article class="contact-profile">
+    <header class="contact-profile__hero">
+        <p class="contacts-kicker">{{ t('contacts_title') }}</p>
+        <h1>{{ contact.name }}</h1>
+        <p class="contact-profile__status">{{ contact.status_label }}</p>
+        <div class="contact-profile__cta">
+            {% if contact.whatsapp_url %}
+            <a class="btn btn-primary" href="{{ contact.whatsapp_url }}" target="_blank" rel="noopener">{{ t('agenda_action_whatsapp') }}</a>
+            {% elif can_manage %}
+            <a class="btn btn-secondary" href="{{ url_for('contacts_edit', contact_id=contact.id) }}#contact-phone">{{ t('contacts_add_phone') }}</a>
+            {% endif %}
+            {% if contact.tel_url %}
+            <a class="btn btn-secondary" href="{{ contact.tel_url }}">{{ t('agenda_action_call') }}</a>
+            {% endif %}
+            {% if can_manage %}
+            <a class="btn btn-secondary" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('contacts_schedule') }}</a>
+            {% endif %}
+        </div>
+    </header>
+
+    <div class="contact-profile__grid">
+        {% if contact.summary %}
+        <section class="contact-panel">
+            <p class="contacts-kicker">{{ t('contacts_jrh') }}</p>
+            <p class="contact-panel__summary">{{ contact.summary }}</p>
+        </section>
+        {% endif %}
+
+        <section class="contact-panel">
+            <p class="contacts-kicker">{{ t('contacts_looking_for') }}</p>
+            {% if contact.preferences.rooms %}
+            <p>{{ t('contacts_rooms_label', count=contact.preferences.rooms) }}</p>
+            {% endif %}
+            {% if contact.preferences.areas %}
+            <p>{{ contact.preferences.areas | join(' · ') }}</p>
+            {% endif %}
+            {% if contact.budget_range_label %}
+            <p>{{ contact.budget_range_label }}</p>
+            {% endif %}
+            {% if contact.preferences.features %}
+            <ul class="contact-chips">
+                {% for item in contact.preferences.features %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% if not contact.preferences %}
+            <p class="contact-panel__muted">{{ t('contacts_no_preferences') }}</p>
+            {% endif %}
+            {% if can_manage %}
+            <a class="btn btn-small btn-secondary" href="{{ url_for('contacts_edit', contact_id=contact.id) }}#contact-prefs">{{ t('contacts_edit_preferences') }}</a>
+            {% endif %}
+        </section>
+
+        {% if contact.recommendation and can_manage %}
+        <section class="contact-panel contact-panel--recommend">
+            <p class="contacts-kicker">{{ t('contacts_recommend_title') }}</p>
+            {% if contact.recommendation.key == 'overdue' %}
+            <p>{{ t('contacts_recommend_overdue') }}</p>
+            <a class="btn btn-small btn-primary" href="{{ url_for('agenda_index') }}">{{ t('contacts_open_agenda') }}</a>
+            {% elif contact.recommendation.key == 'missing_outcome' %}
+            <p>{{ t('contacts_recommend_missing_outcome') }}</p>
+            <a class="btn btn-small btn-primary" href="{{ url_for('agenda_follow_up', task_id=contact.recommendation.task.id) }}">{{ t('contacts_recommend_followup') }}</a>
+            {% else %}
+            <p>{{ t('contacts_recommend_no_next', name=contact.name.split(' ')[0]) }}</p>
+            <a class="btn btn-small btn-primary" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('contacts_recommend_schedule') }}</a>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        <section class="contact-panel">
+            <p class="contacts-kicker">{{ t('contacts_next_action') }}</p>
+            {% if contact.has_next_action %}
+            <h2>{{ contact.next_task.title }}</h2>
+            <p>{{ contact.next_action_label }}</p>
+            <a class="btn btn-small btn-secondary" href="{{ url_for('agenda_index') }}">{{ t('contacts_open_agenda') }}</a>
+            {% else %}
+            <p class="contact-panel__muted">{{ t('contacts_no_next') }}</p>
+            {% if can_manage %}
+            <a class="btn btn-small btn-secondary" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('contacts_schedule') }}</a>
+            {% endif %}
+            {% endif %}
+        </section>
+
+        {% if contact.viewed_count %}
+        <section class="contact-panel">
+            <p class="contacts-kicker">{{ t('contacts_viewed_properties') }}</p>
+            <p><strong>{{ contact.viewed_count }}</strong></p>
+            <ul class="contact-viewed">
+                {% for property in contact.viewed_properties %}
+                <li>{{ property.address }}</li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
+        <section class="contact-panel contact-panel--history">
+            <p class="contacts-kicker">{{ t('contacts_history') }}</p>
+            {% if contact.linked_task_count == 0 %}
+            <p class="contact-panel__muted">{{ t('contacts_history_limited') }}</p>
+            {% endif %}
+            {% for group in contact.history %}
+            <div class="contact-history-day">
+                <h3>{{ group.day_label }}</h3>
+                {% for event in group.events %}
+                <article class="contact-history-item">
+                    <span>{{ event.time_label }}</span>
+                    <strong>{{ event.title }}</strong>
+                    {% if event.detail %}<p>{{ event.detail }}</p>{% endif %}
+                    {% if event.outcome %}
+                    {% if event.outcome.interest %}
+                    <p>{{ t('agenda_interest_' ~ event.outcome.interest) }}</p>
+                    {% endif %}
+                    {% if event.outcome.objections %}
+                    <p>{{ t('agenda_followup_objection') }}: {{ event.outcome.objections | join(', ') }}</p>
+                    {% endif %}
+                    {% if event.outcome.areas %}
+                    <p>{{ event.outcome.areas | join(' · ') }}</p>
+                    {% endif %}
+                    {% endif %}
+                </article>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </section>
+    </div>
+</article>
+{% endblock %}

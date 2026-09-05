@@ -106,6 +106,7 @@ AGENT_TASKS_EXTRA_COLUMNS = (
     ("attendance_status", "TEXT"),
     ("outcome_json", "TEXT"),
     ("google_event_id", "TEXT"),
+    ("contact_id", "INTEGER"),
 )
 
 

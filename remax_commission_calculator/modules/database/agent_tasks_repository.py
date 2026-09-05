@@ -70,7 +70,8 @@ _TASK_SELECT = """
         agent.name,
         property.address,
         operation.id,
-        task.google_event_id
+        task.google_event_id,
+        task.contact_id
     FROM agent_tasks AS task
     LEFT JOIN agents AS agent
         ON agent.id = task.agent_id
@@ -126,6 +127,7 @@ def _build_task(row):
             else None
         ),
         "google_event_id": row[26],
+        "contact_id": row[27] if len(row) > 27 else None,
         "source": "jrh",
     }
 
@@ -144,6 +146,7 @@ def create_agent_task(
     related_entity_type=None,
     related_entity_id=None,
     contact_name=None,
+    contact_id=None,
     duration_minutes=None,
     reminder_minutes=None,
     attendance_status=None,
@@ -172,6 +175,7 @@ def create_agent_task(
                 related_entity_type,
                 related_entity_id,
                 contact_name,
+                contact_id,
                 duration_minutes,
                 reminder_minutes,
                 attendance_status,
@@ -179,7 +183,7 @@ def create_agent_task(
                 created_at,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 organization_id,
@@ -195,6 +199,7 @@ def create_agent_task(
                 related_entity_type,
                 related_entity_id,
                 contact_name,
+                contact_id,
                 duration_minutes,
                 reminder_minutes,
                 attendance_status,
@@ -245,6 +250,7 @@ def list_agent_tasks(
     operation_id=None,
     related_entity_type=None,
     related_entity_id=None,
+    contact_id=None,
     order="asc",
     limit=100,
 ):
@@ -294,6 +300,10 @@ def list_agent_tasks(
     if related_entity_id is not None:
         clauses.append("task.related_entity_id = ?")
         params.append(related_entity_id)
+
+    if contact_id is not None:
+        clauses.append("task.contact_id = ?")
+        params.append(contact_id)
 
     if search:
         needle = f"%{search.strip().lower()}%"
@@ -375,6 +385,49 @@ def count_agent_tasks(
     return int(row[0] or 0) if row else 0
 
 
+def list_visits_missing_outcome(
+    organization_id,
+    *,
+    agent_id=None,
+    limit=5,
+):
+    """Completed visits that still have no post-visit summary."""
+    organization_id = require_organization_id(organization_id)
+    clauses = [
+        "task.organization_id = ?",
+        "task.task_type = ?",
+        "task.status = ?",
+        """(
+            task.outcome_json IS NULL
+            OR TRIM(task.outcome_json) = ''
+            OR task.outcome_json = '{}'
+        )""",
+    ]
+    params = [organization_id, "visit", STATUS_COMPLETED]
+
+    if agent_id is not None:
+        clauses.append("task.agent_id = ?")
+        params.append(agent_id)
+
+    connection = get_connection()
+
+    try:
+        rows = connection.execute(
+            _TASK_SELECT
+            + f"""
+            WHERE {" AND ".join(clauses)}
+            ORDER BY COALESCE(task.completed_at, task.updated_at) DESC,
+                task.id DESC
+            LIMIT ?
+            """,
+            [*params, int(limit)],
+        ).fetchall()
+    finally:
+        connection.close()
+
+    return [_build_task(row) for row in rows]
+
+
 def update_agent_task_fields(
     task_id,
     organization_id,
@@ -387,6 +440,7 @@ def update_agent_task_fields(
     property_id=_UNSET,
     operation_id=_UNSET,
     contact_name=None,
+    contact_id=_UNSET,
     duration_minutes=None,
     reminder_minutes=None,
     attendance_status=None,
@@ -419,6 +473,7 @@ def update_agent_task_fields(
     for column, value in (
         ("property_id", property_id),
         ("operation_id", operation_id),
+        ("contact_id", contact_id),
     ):
         if value is not _UNSET:
             assignments.append(f"{column} = ?")
