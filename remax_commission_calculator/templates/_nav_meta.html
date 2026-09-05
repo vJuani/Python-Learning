@@ -62,6 +62,7 @@
         and (
             request.endpoint.startswith('csv_import_')
             or request.endpoint.startswith('remax_export_')
+            or request.endpoint.startswith('remax_catalog_')
         )
     ) %}
     <details class="nav-dropdown{% if import_active %} is-active{% endif %}">
@@ -79,6 +80,11 @@
                 class="nav-dropdown-item{% if request.endpoint and request.endpoint.startswith('remax_export_') %} active{% endif %}"
                 role="menuitem"
             >{{ t('nav_remax_export') }}</a>
+            <a
+                href="{{ url_for('remax_catalog_upload') }}"
+                class="nav-dropdown-item{% if request.endpoint and request.endpoint.startswith('remax_catalog_') %} active{% endif %}"
+                role="menuitem"
+            >{{ t('nav_remax_catalog') }}</a>
         </div>
     </details>
     {% endif %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('remax_catalog_preview_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('remax_catalog_preview_title') }}</h2>
+        <p>{{ t('remax_catalog_destination') }}</p>
+    </div>
+</section>
+
+<section class="panel">
+    <p><strong>{{ t('remax_export_choose_file') }}</strong>: {{ preview.filename }}</p>
+    <p>{{ t('remax_catalog_detected', count=preview.detected) }}</p>
+    <p>{{ t('remax_catalog_new', count=preview.created) }}</p>
+    <p>{{ t('remax_catalog_updatable', count=preview.updated) }}</p>
+    <p>{{ t('remax_catalog_invalid', count=preview.invalid) }}</p>
+    <p><strong>{{ t('remax_catalog_destination') }}</strong></p>
+    <p class="field-help">{{ t('remax_catalog_destination_note') }}</p>
+    {% if preview.snapshot %}
+    <p>{{ t('remax_catalog_snapshot') }}</p>
+    {% endif %}
+
+    {% if preview.error_rows %}
+    <ul>
+        {% for row in preview.error_rows %}
+        <li>{{ row.row_number }} · {{ row.mlsid or '—' }} · {{ row.errors | join(', ') }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="form-actions">
+        <form method="post" action="{{ url_for('remax_catalog_cancel') }}">
+            <input type="hidden" name="batch_id" value="{{ batch_id }}">
+            <button type="submit" class="btn btn-secondary">{{ t('remax_catalog_cancel') }}</button>
+        </form>
+        {% if preview.can_confirm %}
+        <form method="post" action="{{ url_for('remax_catalog_confirm') }}">
+            <input type="hidden" name="batch_id" value="{{ batch_id }}">
+            <button type="submit" class="btn btn-primary">{{ t('remax_catalog_confirm') }}</button>
+        </form>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

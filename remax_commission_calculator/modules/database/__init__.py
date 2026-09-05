@@ -306,3 +306,16 @@ from .csv_import_batches_repository import (
     delete_csv_import_batch,
     get_csv_import_batch,
 )
+
+from .external_listings_repository import (
+    UPSERT_CREATED,
+    UPSERT_UNCHANGED,
+    UPSERT_UPDATED,
+    get_external_listing,
+    get_external_listing_by_source_id,
+    list_active_external_listings,
+    list_external_listings,
+    mark_external_listing_inactive,
+    mark_external_listing_seen,
+    upsert_external_listing,
+)

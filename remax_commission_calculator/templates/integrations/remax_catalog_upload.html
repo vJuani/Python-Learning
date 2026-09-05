@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('remax_catalog_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('remax_catalog_title') }}</h2>
+        <p>{{ t('remax_catalog_subtitle') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('remax_export_upload') }}" class="btn btn-secondary">{{ t('remax_catalog_office_card') }}</a>
+        <a href="{{ url_for('organization_settings') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>{{ t('remax_catalog_sources_title') }}</h3>
+    <ul class="matches-sources">
+        {% for source, cap in listing_sources.items() %}
+        <li data-search="{{ cap.search }}">
+            {% if cap.visible_in_match %}<span>✓</span>{% else %}<span>—</span>{% endif %}
+            {{ t(cap.label_key) }}
+            <em>{{ t(cap.search_label_key) }}</em>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+
+<section class="panel">
+    <form
+        class="agent-form"
+        method="post"
+        action="{{ url_for('remax_catalog_upload') }}"
+        enctype="multipart/form-data"
+    >
+        <div class="form-group">
+            <label for="remax_file">{{ t('remax_catalog_choose_file') }}</label>
+            <input
+                type="file"
+                id="remax_file"
+                name="remax_file"
+                class="form-input"
+                accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                required
+            >
+            <small class="field-help">{{ t('remax_export_upload_help') }}</small>
+        </div>
+        <label class="contact-field">
+            <input type="checkbox" name="snapshot" value="1">
+            {{ t('remax_catalog_snapshot') }}
+        </label>
+        <small class="field-help">{{ t('remax_catalog_snapshot_help') }}</small>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{{ t('remax_catalog_refresh') }}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

@@ -59,7 +59,10 @@ from modules.auth import (
 )
 from modules.database.agents_repository import get_agents
 from modules.database.operations_repository import filter_operations
-from modules.database.properties_repository import get_properties
+from modules.database.properties_repository import (
+    get_properties,
+    get_property_record,
+)
 from modules.google_calendar import (
     GoogleCalendarError,
     attach_google_overlay,
@@ -98,7 +101,11 @@ _ITEM_KEYS = (
     "contact_id",
     "contact_match",
     "property_id",
+    "external_listing_id",
     "property_address",
+    "listing_source_label",
+    "listing_neighborhood",
+    "listing_price",
     "property_query",
     "property_match",
     "description",
@@ -195,6 +202,9 @@ def _item_to_payload(item):
         "due_date": item.get("due_date"),
         "due_time": due_time,
         "property_id": (item.get("property_id") or "") or None,
+        "external_listing_id": (
+            item.get("external_listing_id") or ""
+        ) or None,
         "operation_id": None,
         "contact_name": item.get("contact_name"),
         "contact_id": (item.get("contact_id") or "") or None,
@@ -399,6 +409,10 @@ def register_agenda_routes(app, helpers):
             organization_id,
             property_id=(request.args.get("property_id") or "").strip()
             or None,
+            external_listing_id=(
+                request.args.get("external_listing_id") or ""
+            ).strip()
+            or None,
             operation_id=(
                 request.args.get("operation_id") or ""
             ).strip()
@@ -452,6 +466,110 @@ def register_agenda_routes(app, helpers):
             )
 
         items = []
+        property_id = (request.args.get("property_id") or "").strip()
+        external_listing_id = (
+            request.args.get("external_listing_id") or ""
+        ).strip()
+        requested_type = (request.args.get("type") or "").strip()
+        if (
+            request.method == "GET"
+            and compose_contact
+            and (property_id or external_listing_id)
+        ):
+            defaults = default_form_values(organization_id)
+            if external_listing_id:
+                from modules.database.external_listings_repository import (
+                    get_external_listing,
+                )
+                from modules.listing_sources import SOURCE_LABEL_KEYS
+                from modules.property_inventory import format_listing_money
+
+                try:
+                    external_listing_id = int(external_listing_id)
+                except (TypeError, ValueError):
+                    abort(404)
+                listing_row = get_external_listing(
+                    external_listing_id,
+                    organization_id,
+                )
+                if listing_row is None:
+                    abort(404)
+                source_label = translate(
+                    SOURCE_LABEL_KEYS.get(
+                        listing_row["source"],
+                        "listing_source_internal",
+                    ),
+                    language,
+                )
+                price = format_listing_money(
+                    listing_row.get("price"),
+                    listing_row.get("currency"),
+                    language=language,
+                )
+                draft = {
+                    "title": translate(
+                        "matches_visit_title",
+                        language,
+                        name=compose_contact["name"],
+                        address=listing_row.get("address") or "",
+                    ),
+                    "task_type": requested_type or "visit",
+                    "property_id": "",
+                    "external_listing_id": listing_row["id"],
+                    "property_address": listing_row.get("address") or "",
+                    "listing_source_label": source_label,
+                    "listing_neighborhood": listing_row.get("neighborhood") or "",
+                    "listing_price": price or "",
+                    "property_match": "single",
+                    "description": " · ".join(
+                        part
+                        for part in (
+                            source_label,
+                            listing_row.get("neighborhood"),
+                            price,
+                        )
+                        if part
+                    ),
+                    "due_date": defaults["due_date"],
+                    "due_time": defaults["due_time"],
+                    "duration_minutes": 60,
+                    "reminder_minutes": 15,
+                }
+            else:
+                try:
+                    property_id = int(property_id)
+                except (TypeError, ValueError):
+                    abort(404)
+                property_row = get_property_record(property_id, organization_id)
+                if property_row is None:
+                    abort(404)
+                if agent_id is not None and property_row.get("agent_id") != agent_id:
+                    abort(404)
+                draft = {
+                    "title": translate(
+                        "matches_visit_title",
+                        language,
+                        name=compose_contact["name"],
+                        address=property_row.get("address") or "",
+                    ),
+                    "task_type": requested_type or "visit",
+                    "property_id": property_row["id"],
+                    "external_listing_id": "",
+                    "property_address": property_row.get("address") or "",
+                    "listing_source_label": "",
+                    "listing_neighborhood": "",
+                    "listing_price": "",
+                    "property_match": "single",
+                    "description": "",
+                    "due_date": defaults["due_date"],
+                    "due_time": defaults["due_time"],
+                    "duration_minutes": 60,
+                    "reminder_minutes": 15,
+                }
+            apply_known_contact(draft, compose_contact, language=language)
+            draft = refresh_item(draft)
+            items = [draft]
+            prompt = draft["title"]
 
         if request.method == "POST" and (
             request.form.get("confirm_ready")
@@ -753,6 +871,7 @@ def register_agenda_routes(app, helpers):
                 "due_date": _local_date(organization_id, task),
                 "due_time": _local_time(organization_id, task),
                 "property_id": task["property_id"] or "",
+                "external_listing_id": task.get("external_listing_id") or "",
                 "operation_id": task["operation_id"] or "",
                 "contact_name": task.get("contact_name") or "",
                 "duration_minutes": task.get("duration_minutes") or 60,
@@ -1210,6 +1329,10 @@ def _form_values_from_request():
         "due_time": request.form.get("due_time"),
         "property_id": (
             request.form.get("property_id") or ""
+        ).strip()
+        or None,
+        "external_listing_id": (
+            request.form.get("external_listing_id") or ""
         ).strip()
         or None,
         "operation_id": (

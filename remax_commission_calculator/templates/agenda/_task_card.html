@@ -102,6 +102,10 @@
             <a class="agenda-chip" href="{{ url_for('properties_detail', property_id=task.property_id) }}">
                 {{ t('agenda_action_view_property') }}
             </a>
+            {% elif task.external_url %}
+            <a class="agenda-chip" href="{{ task.external_url }}" target="_blank" rel="noopener">
+                {{ t('matches_view_listing') }}
+            </a>
             {% endif %}
             {% if task.needs_attendance %}
             <form method="post" action="{{ url_for('agenda_confirm_attendance', task_id=task.id) }}" class="agenda-chip-form">

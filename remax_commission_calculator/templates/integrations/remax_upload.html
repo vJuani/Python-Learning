@@ -16,6 +16,15 @@
 </section>
 
 <section class="panel">
+    <h3>{{ t('remax_catalog_office_card') }}</h3>
+    <p class="field-help">{{ t('remax_catalog_office_help') }}</p>
+    <p>
+        <a href="{{ url_for('remax_catalog_upload') }}">{{ t('remax_catalog_card') }}</a>
+        — {{ t('remax_catalog_card_help') }}
+    </p>
+</section>
+
+<section class="panel">
     <form
         class="agent-form"
         method="post"

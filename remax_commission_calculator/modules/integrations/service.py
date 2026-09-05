@@ -169,6 +169,9 @@ def confirm_remax_export(organization_id, batch_id):
     if batch is None:
         raise ValueError("csv_batch_not_found")
 
+    if (batch.get("payload") or {}).get("mode") == "remax_catalog":
+        raise ValueError("remax_catalog_wrong_mode")
+
     if not batch["preview"].get("can_confirm"):
         raise ValueError("csv_batch_has_blockers")
 

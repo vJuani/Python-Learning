@@ -3650,6 +3650,12 @@ def migrate_schema(create_backup=True):
     )
 
     migrate_property_inventory_sqlite()
+
+    from .external_listings_migration import (
+        migrate_external_listings_sqlite,
+    )
+
+    migrate_external_listings_sqlite()
     _migrate_document_storage_folders()
 
     return backup_path

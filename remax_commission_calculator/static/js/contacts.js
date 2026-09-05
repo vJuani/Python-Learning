@@ -24,6 +24,35 @@
         row.appendChild(label);
     }
 
+    function updateShareBar(form) {
+        var checks = form.querySelectorAll("[data-match-check]:checked");
+        var button = form.querySelector("[data-share-submit]");
+        if (!button) {
+            return;
+        }
+        if (!checks.length) {
+            button.hidden = true;
+            return;
+        }
+        button.hidden = false;
+        var label = button.getAttribute("data-label") || button.textContent;
+        button.textContent = label.replace(/\d+/, String(checks.length));
+        if (button.textContent.indexOf(String(checks.length)) < 0) {
+            button.textContent = checks.length + " · " + label;
+        }
+    }
+
+    document.querySelectorAll("[data-matches-share]").forEach(function (form) {
+        var button = form.querySelector("[data-share-submit]");
+        if (button && !button.getAttribute("data-label")) {
+            button.setAttribute("data-label", button.textContent);
+        }
+        form.addEventListener("change", function () {
+            updateShareBar(form);
+        });
+        updateShareBar(form);
+    });
+
     document.querySelectorAll("[data-contact-chips]").forEach(function (root) {
         var input = root.querySelector("[data-chip-input]");
         var add = root.querySelector("[data-chip-add]");

@@ -203,6 +203,23 @@ def _resolve_property(organization_id, property_id):
     return record["id"]
 
 
+def _resolve_external_listing(organization_id, external_listing_id):
+    if external_listing_id in (None, ""):
+        return None
+
+    from modules.database.external_listings_repository import get_external_listing
+
+    try:
+        listing_id = int(external_listing_id)
+    except (TypeError, ValueError):
+        raise AgentTaskError("listing_err_not_found") from None
+
+    record = get_external_listing(listing_id, organization_id)
+    if record is None:
+        raise AgentTaskError("listing_err_not_found")
+    return record["id"]
+
+
 def _resolve_operation(organization_id, operation_id):
     """
     Return the operation database id, rejecting other organizations.
@@ -309,6 +326,10 @@ def validate_task_payload(organization_id, agent_id, payload):
         organization_id,
         payload.get("property_id"),
     )
+    external_listing_id = _resolve_external_listing(
+        organization_id,
+        payload.get("external_listing_id"),
+    )
     operation_id = _resolve_operation(
         organization_id,
         payload.get("operation_id"),
@@ -332,6 +353,7 @@ def validate_task_payload(organization_id, agent_id, payload):
         "priority": priority,
         "due_at": due_at,
         "property_id": property_id,
+        "external_listing_id": external_listing_id,
         "operation_id": operation_id,
         "related_entity_type": (
             payload.get("related_entity_type") or None
@@ -368,6 +390,7 @@ def create_task(
         priority=validated["priority"],
         description=validated["description"] or None,
         property_id=validated["property_id"],
+        external_listing_id=validated.get("external_listing_id"),
         operation_id=validated["operation_id"],
         related_entity_type=validated["related_entity_type"],
         related_entity_id=validated["related_entity_id"],
@@ -432,6 +455,7 @@ def update_task(
         due_at=validated["due_at"],
         priority=validated["priority"],
         property_id=validated["property_id"],
+        external_listing_id=validated.get("external_listing_id"),
         operation_id=validated["operation_id"],
         contact_name=validated["contact_name"] or "",
         duration_minutes=validated["duration_minutes"],
@@ -1185,6 +1209,7 @@ def default_form_values(organization_id, *, now=None, **overrides):
         "due_date": suggested.date().isoformat(),
         "due_time": suggested.strftime("%H:%M"),
         "property_id": "",
+        "external_listing_id": "",
         "operation_id": "",
         "contact_name": "",
         "duration_minutes": 60,

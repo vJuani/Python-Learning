@@ -110,12 +110,17 @@ def normalize_preferences(raw):
 
     from modules.visit_outcome import _as_list, _normalize_budget
 
+    from modules.property_types import normalize_listing_purpose
+
     areas = _as_list(raw.get("areas"))
     features = _as_list(raw.get("features"))
     types = _as_list(raw.get("property_types") or raw.get("property_type"))
     budget = _normalize_budget(raw.get("budget"))
     rooms = _small_int(raw.get("rooms"))
     bedrooms = _small_int(raw.get("bedrooms"))
+    purpose = normalize_listing_purpose(
+        raw.get("purpose") or raw.get("listing_purpose")
+    )
 
     prefs = {}
     if areas:
@@ -130,6 +135,8 @@ def normalize_preferences(raw):
         prefs["bedrooms"] = bedrooms
     if features:
         prefs["features"] = features
+    if purpose:
+        prefs["purpose"] = purpose
 
     return prefs
 
@@ -160,7 +167,7 @@ def merge_contact_preferences(existing, incoming):
     if current_budget:
         merged["budget"] = current_budget
 
-    for key in ("rooms", "bedrooms"):
+    for key in ("rooms", "bedrooms", "purpose"):
         if merged.get(key) is None and extra.get(key) is not None:
             merged[key] = extra[key]
 
@@ -546,6 +553,7 @@ def preferences_from_form(form):
             "property_types": types,
             "rooms": form.get("rooms"),
             "bedrooms": form.get("bedrooms"),
+            "purpose": form.get("purpose") or form.get("listing_purpose"),
             "budget": {
                 "min": form.get("budget_min"),
                 "max": form.get("budget_max"),

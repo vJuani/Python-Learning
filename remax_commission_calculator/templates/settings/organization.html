@@ -277,6 +277,22 @@
 
 <section class="panel">
     <div class="panel-header">
+        <h3>{{ t('settings_listing_sources') }}</h3>
+    </div>
+    <p class="field-help">{{ t('settings_listing_sources_help') }}</p>
+    <ul class="matches-sources">
+        {% for source, cap in listing_sources.items() %}
+        <li data-search="{{ cap.search }}">
+            {% if cap.visible_in_match %}<span>✓</span>{% else %}<span>—</span>{% endif %}
+            {{ t(cap.label_key) }}
+            <em>{{ t(cap.search_label_key) }}</em>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
         <h3>{{ t('guest_links_title') }}</h3>
     </div>
     <p class="field-help">{{ t('guest_links_help') }}</p>

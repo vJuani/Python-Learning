@@ -68,10 +68,12 @@ _TASK_SELECT = """
         task.completed_at,
         task.cancelled_at,
         agent.name,
-        property.address,
+        COALESCE(property.address, listing.address),
         operation.id,
         task.google_event_id,
-        task.contact_id
+        task.contact_id,
+        task.external_listing_id,
+        listing.external_url
     FROM agent_tasks AS task
     LEFT JOIN agents AS agent
         ON agent.id = task.agent_id
@@ -82,6 +84,9 @@ _TASK_SELECT = """
     LEFT JOIN operations AS operation
         ON operation.id = task.operation_id
         AND operation.organization_id = task.organization_id
+    LEFT JOIN external_listings AS listing
+        ON listing.id = task.external_listing_id
+        AND listing.organization_id = task.organization_id
 """
 
 
@@ -128,6 +133,8 @@ def _build_task(row):
         ),
         "google_event_id": row[26],
         "contact_id": row[27] if len(row) > 27 else None,
+        "external_listing_id": row[28] if len(row) > 28 else None,
+        "external_url": row[29] if len(row) > 29 else None,
         "source": "jrh",
     }
 
@@ -147,6 +154,7 @@ def create_agent_task(
     related_entity_id=None,
     contact_name=None,
     contact_id=None,
+    external_listing_id=None,
     duration_minutes=None,
     reminder_minutes=None,
     attendance_status=None,
@@ -176,6 +184,7 @@ def create_agent_task(
                 related_entity_id,
                 contact_name,
                 contact_id,
+                external_listing_id,
                 duration_minutes,
                 reminder_minutes,
                 attendance_status,
@@ -183,7 +192,7 @@ def create_agent_task(
                 created_at,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 organization_id,
@@ -200,6 +209,7 @@ def create_agent_task(
                 related_entity_id,
                 contact_name,
                 contact_id,
+                external_listing_id,
                 duration_minutes,
                 reminder_minutes,
                 attendance_status,
@@ -441,6 +451,7 @@ def update_agent_task_fields(
     operation_id=_UNSET,
     contact_name=None,
     contact_id=_UNSET,
+    external_listing_id=_UNSET,
     duration_minutes=None,
     reminder_minutes=None,
     attendance_status=None,
@@ -474,6 +485,7 @@ def update_agent_task_fields(
         ("property_id", property_id),
         ("operation_id", operation_id),
         ("contact_id", contact_id),
+        ("external_listing_id", external_listing_id),
     ):
         if value is not _UNSET:
             assignments.append(f"{column} = ?")

@@ -1530,6 +1530,7 @@ POSTGRES_TABLES = (
     "operation_parties",
     "invoices",
     "contacts",
+    "external_listings",
 )
 
 
@@ -2388,6 +2389,7 @@ def create_postgres_schema():
             ("outcome_json", "TEXT"),
             ("google_event_id", "TEXT"),
             ("contact_id", "BIGINT"),
+            ("external_listing_id", "BIGINT"),
         ):
             cursor.execute(
                 f"""
@@ -2396,6 +2398,71 @@ def create_postgres_schema():
                 {column_name} {column_sql}
                 """
             )
+
+        cursor.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS external_listings (
+                id {_ID},
+                organization_id BIGINT NOT NULL,
+                source TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                external_url TEXT,
+                address TEXT,
+                neighborhood TEXT,
+                jurisdiction TEXT,
+                property_type TEXT,
+                purpose TEXT,
+                price {_MONEY},
+                currency TEXT,
+                rooms INTEGER,
+                bedrooms INTEGER,
+                bathrooms INTEGER,
+                covered_m2 {_MONEY},
+                total_m2 {_MONEY},
+                parking_spaces INTEGER,
+                features_json TEXT,
+                description TEXT,
+                images_json TEXT,
+                commercial_status TEXT,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                source_updated_at TEXT,
+                is_active {_FLAG} NOT NULL DEFAULT 1,
+                content_hash TEXT,
+                duplicate_group_id TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (organization_id)
+                    REFERENCES organizations(id) ON DELETE RESTRICT,
+                UNIQUE (organization_id, source, external_id),
+                CHECK (source IN (
+                    'remax',
+                    'zonaprop',
+                    'argenprop',
+                    'mercadolibre'
+                )),
+                CHECK (currency IS NULL OR currency IN ('USD', 'ARS'))
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_external_listings_org_source
+            ON external_listings (organization_id, source, is_active)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_external_listings_org_active
+            ON external_listings (organization_id, is_active, last_seen_at)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_agent_tasks_external_listing
+            ON agent_tasks (organization_id, external_listing_id)
+            """
+        )
 
         for column_name, column_sql in (
             ("events_cache_json", "TEXT"),

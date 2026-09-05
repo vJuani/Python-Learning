@@ -19,6 +19,7 @@
             {% if contact.tel_url %}
             <a class="btn btn-secondary" href="{{ contact.tel_url }}">{{ t('agenda_action_call') }}</a>
             {% endif %}
+            <a class="btn btn-primary" href="{{ url_for('contacts_property_matches', contact_id=contact.id) }}">{{ t('matches_search') }}</a>
             {% if can_manage %}
             <a class="btn btn-secondary" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('contacts_schedule') }}</a>
             {% endif %}

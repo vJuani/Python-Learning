@@ -54,7 +54,10 @@
         {% elif draft.contact_name and not contact_unclear and not contact_many and not contact_none %}
         <p>{{ draft.contact_name }}</p>
         {% endif %}
+        {% if draft.listing_source_label %}<p>{{ draft.listing_source_label }}</p>{% endif %}
         {% if draft.property_address and not is_ambiguous %}<p>{{ draft.property_address }}</p>{% endif %}
+        {% if draft.listing_neighborhood %}<p>{{ draft.listing_neighborhood }}</p>{% endif %}
+        {% if draft.listing_price %}<p>{{ draft.listing_price }}</p>{% endif %}
 
         {% if draft.warnings and status != 'ready' %}
         <ul class="agenda-preview__warnings">
@@ -70,7 +73,7 @@
         </ul>
         {% endif %}
 
-        {% for key in ['title', 'task_type', 'contact_name', 'contact_id', 'contact_match', 'property_id', 'property_address', 'property_query', 'property_match', 'description', 'duration_minutes', 'reminder_minutes', 'attendance_status', 'source_prompt', 'ui_status', 'item_status'] %}
+        {% for key in ['title', 'task_type', 'contact_name', 'contact_id', 'contact_match', 'property_id', 'external_listing_id', 'property_address', 'listing_source_label', 'listing_neighborhood', 'listing_price', 'property_query', 'property_match', 'description', 'duration_minutes', 'reminder_minutes', 'attendance_status', 'source_prompt', 'ui_status', 'item_status'] %}
         <input type="hidden" name="{{ prefix }}{{ key }}" value="{{ draft[key] or '' }}">
         {% endfor %}
         <input type="hidden" name="{{ prefix }}date_found" value="{{ '1' if draft.date_found else '0' }}">
@@ -198,6 +201,7 @@
                     title=draft.title,
                     contact_name=draft.contact_name,
                     property_id=draft.property_id,
+                    external_listing_id=draft.external_listing_id,
                     due_date=draft.due_date,
                     due_time=draft.due_time,
                     description=draft.description,

@@ -281,7 +281,7 @@
                         <input type="hidden" name="intent" value="schedule">
                         <input type="hidden" name="item_count" value="1">
                         <input type="hidden" name="outcome_json" value="{{ outcome | tojson | forceescape }}">
-                        {% for key in ['title', 'task_type', 'due_date', 'due_time', 'contact_name', 'contact_id', 'contact_match', 'property_id', 'property_address', 'property_query', 'property_match', 'description', 'duration_minutes', 'reminder_minutes', 'attendance_status', 'source_prompt', 'ui_status', 'item_status'] %}
+                        {% for key in ['title', 'task_type', 'due_date', 'due_time', 'contact_name', 'contact_id', 'contact_match', 'property_id', 'external_listing_id', 'property_address', 'property_query', 'property_match', 'description', 'duration_minutes', 'reminder_minutes', 'attendance_status', 'source_prompt', 'ui_status', 'item_status'] %}
                         <input type="hidden" name="items-0-{{ key }}" value="{{ draft[key] or '' }}">
                         {% endfor %}
                         <input type="hidden" name="items-0-date_found" value="{{ '1' if draft.date_found else '0' }}">

@@ -740,6 +740,13 @@ def inject_organization_branding():
 
 
 @app.context_processor
+def inject_listing_sources():
+    from modules.listing_sources import listing_source_capabilities
+
+    return {"listing_sources": listing_source_capabilities()}
+
+
+@app.context_processor
 def inject_product_branding():
     from modules.branding import (
         get_app_domain,
@@ -3670,6 +3677,129 @@ def remax_export_cancel():
     flash_i18n("remax_export_cancelled", "success")
 
     return redirect(url_for("remax_export_upload"))
+
+
+@app.route(
+    "/integrations/remax/catalog",
+    methods=["GET", "POST"],
+)
+@admin_required
+def remax_catalog_upload():
+    organization_id = require_user_organization()
+    from modules.listing_sources import listing_source_capabilities
+    from modules.integrations.remax_catalog import (
+        RemaxCatalogError,
+        preview_remax_catalog,
+    )
+
+    if request.method == "GET":
+        return render_template(
+            "integrations/remax_catalog_upload.html",
+            listing_sources=listing_source_capabilities(),
+        )
+
+    upload = request.files.get("remax_file")
+    if upload is None or upload.filename == "":
+        flash_i18n("remax_export_no_file", "error")
+        return redirect(url_for("remax_catalog_upload"))
+
+    filename = upload.filename or ""
+    lower_name = filename.lower()
+    if not (
+        lower_name.endswith(".csv")
+        or lower_name.endswith(".xlsx")
+    ):
+        flash_i18n("remax_export_bad_extension", "error")
+        return redirect(url_for("remax_catalog_upload"))
+
+    try:
+        batch = preview_remax_catalog(
+            organization_id,
+            upload.read(),
+            filename=filename,
+            snapshot=request.form.get("snapshot") == "1",
+        )
+    except RemaxCatalogError as error:
+        flash_i18n(str(error) or "remax_export_parse_failed", "error")
+        return redirect(url_for("remax_catalog_upload"))
+
+    session["remax_catalog_batch_id"] = batch["id"]
+    return redirect(
+        url_for("remax_catalog_preview", batch_id=batch["id"])
+    )
+
+
+@app.route(
+    "/integrations/remax/catalog/preview/<batch_id>",
+    methods=["GET"],
+)
+@admin_required
+def remax_catalog_preview(batch_id):
+    organization_id = require_user_organization()
+    from modules.database.csv_import_batches_repository import (
+        get_csv_import_batch,
+    )
+
+    batch = get_csv_import_batch(batch_id, organization_id)
+    if batch is None:
+        flash_i18n("remax_export_batch_missing", "error")
+        return redirect(url_for("remax_catalog_upload"))
+    if (batch.get("payload") or {}).get("mode") != "remax_catalog":
+        flash_i18n("remax_catalog_wrong_mode", "error")
+        return redirect(url_for("remax_catalog_upload"))
+    session["remax_catalog_batch_id"] = batch["id"]
+    return render_template(
+        "integrations/remax_catalog_preview.html",
+        preview=batch["preview"],
+        batch_id=batch["id"],
+    )
+
+
+@app.route(
+    "/integrations/remax/catalog/confirm",
+    methods=["POST"],
+)
+@admin_required
+def remax_catalog_confirm():
+    organization_id = require_user_organization()
+    from modules.integrations.remax_catalog import (
+        RemaxCatalogError,
+        confirm_remax_catalog,
+    )
+
+    batch_id = request.form.get("batch_id") or session.get(
+        "remax_catalog_batch_id"
+    )
+    if not batch_id:
+        flash_i18n("remax_export_batch_missing", "error")
+        return redirect(url_for("remax_catalog_upload"))
+    try:
+        confirm_remax_catalog(organization_id, batch_id)
+    except RemaxCatalogError as error:
+        flash_i18n(str(error), "error")
+        return redirect(url_for("remax_catalog_upload"))
+    session.pop("remax_catalog_batch_id", None)
+    flash_i18n("remax_catalog_success", "success")
+    return redirect(url_for("remax_catalog_upload"))
+
+
+@app.route(
+    "/integrations/remax/catalog/cancel",
+    methods=["POST"],
+)
+@admin_required
+def remax_catalog_cancel():
+    organization_id = require_user_organization()
+    from modules.integrations.remax_catalog import cancel_remax_catalog
+
+    batch_id = request.form.get("batch_id") or session.get(
+        "remax_catalog_batch_id"
+    )
+    if batch_id:
+        cancel_remax_catalog(organization_id, batch_id)
+    session.pop("remax_catalog_batch_id", None)
+    flash_i18n("remax_catalog_cancelled", "success")
+    return redirect(url_for("remax_catalog_upload"))
 
 
 @app.route(

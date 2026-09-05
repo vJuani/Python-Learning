@@ -920,3 +920,94 @@ def filter_properties(
         _build_property_dict(row)
         for row in rows
     ]
+
+
+UNAVAILABLE_FOR_MATCH = ("sold", "rented", "withdrawn")
+
+
+def list_match_candidates(
+    organization_id,
+    *,
+    agent_id=None,
+    property_types=None,
+    listing_purpose=None,
+    listing_currency=None,
+    max_listing_price=None,
+    limit=300,
+):
+    """Approved, commercially available listings for the matcher."""
+    organization_id = require_organization_id(organization_id)
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    conditions = [
+        "properties.organization_id = ?",
+        "properties.status = ?",
+        """
+        (
+            properties.commercial_status IS NULL
+            OR properties.commercial_status NOT IN ({})
+        )
+        """.format(
+            ", ".join("?" for _ in UNAVAILABLE_FOR_MATCH)
+        ),
+    ]
+    params = [organization_id, STATUS_APPROVED, *UNAVAILABLE_FOR_MATCH]
+
+    if agent_id is not None:
+        conditions.append("properties.agent_id = ?")
+        params.append(agent_id)
+
+    types = [value for value in (property_types or []) if value]
+    if types:
+        placeholders = ", ".join("?" for _ in types)
+        conditions.append(
+            f"("
+            f"properties.property_type IN ({placeholders})"
+            f" OR properties.property_type IS NULL"
+            f")"
+        )
+        params.extend(types)
+
+    if listing_purpose is not None:
+        conditions.append(
+            "("
+            "properties.listing_purpose = ?"
+            " OR properties.listing_purpose IS NULL"
+            ")"
+        )
+        params.append(listing_purpose)
+
+    if listing_currency is not None and max_listing_price is not None:
+        conditions.append(
+            "("
+            "properties.listing_currency IS NULL"
+            " OR properties.listing_currency != ?"
+            " OR properties.listing_price IS NULL"
+            " OR properties.listing_price <= ?"
+            ")"
+        )
+        params.extend(
+            [
+                str(listing_currency).strip().upper(),
+                max_listing_price,
+            ]
+        )
+
+    try:
+        limit_value = max(1, int(limit))
+    except (TypeError, ValueError):
+        limit_value = 300
+
+    cursor.execute(
+        PROPERTIES_BASE_QUERY
+        + " WHERE "
+        + " AND ".join(conditions)
+        + " ORDER BY properties.id LIMIT ?",
+        (*params, limit_value),
+    )
+    rows = cursor.fetchall()
+    connection.close()
+
+    return [_build_property_dict(row) for row in rows]

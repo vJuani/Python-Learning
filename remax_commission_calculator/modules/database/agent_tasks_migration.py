@@ -107,6 +107,7 @@ AGENT_TASKS_EXTRA_COLUMNS = (
     ("outcome_json", "TEXT"),
     ("google_event_id", "TEXT"),
     ("contact_id", "INTEGER"),
+    ("external_listing_id", "INTEGER"),
 )
 
 

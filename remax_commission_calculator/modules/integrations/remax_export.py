@@ -100,6 +100,14 @@ OPTIONAL_HEADER_ALIASES = {
         "pct vendedor",
         "porcentaje vendedor",
     ),
+    "url": ("url", "link", "permalink", "listing url", "web"),
+    "rooms": ("ambientes", "rooms"),
+    "bedrooms": ("dormitorios", "habitaciones", "bedrooms"),
+    "bathrooms": ("baños", "banos", "bathrooms"),
+    "covered_m2": ("m2 cubiertos", "covered_m2", "sup cubierta"),
+    "total_m2": ("m2 totales", "total_m2", "sup total"),
+    "parking_spaces": ("cocheras", "parking", "parking_spaces"),
+    "description": ("descripcion", "descripción", "description", "observaciones"),
 }
 
 STATUS_ALIASES = {
@@ -321,6 +329,13 @@ class RemaxSourceRow:
     jurisdiction: Optional[str]
     jurisdiction_source: str
     url: Optional[str] = None
+    rooms: Optional[int] = None
+    bedrooms: Optional[int] = None
+    bathrooms: Optional[int] = None
+    covered_m2: Optional[float] = None
+    total_m2: Optional[float] = None
+    parking_spaces: Optional[int] = None
+    description: Optional[str] = None
     blockers: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -570,6 +585,21 @@ def _decimal_to_float(value: Optional[Decimal]) -> Optional[float]:
     if value is None:
         return None
     return float(value)
+
+
+def _optional_number(raw: str, *, as_int=False):
+    text = normalize_text(raw)
+    if not text:
+        return None
+    try:
+        number = float(text.replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    if number < 0:
+        return None
+    if as_int:
+        return int(number)
+    return number
 
 
 def _rows_from_csv_text(text: str) -> tuple[list[str], list[dict]]:
@@ -912,6 +942,30 @@ def _parse_rows(
                 ),
                 jurisdiction=jurisdiction,
                 jurisdiction_source=jurisdiction_source,
+                url=_cell(raw_row, mapping, "url") or None,
+                rooms=_optional_number(
+                    _cell(raw_row, mapping, "rooms"),
+                    as_int=True,
+                ),
+                bedrooms=_optional_number(
+                    _cell(raw_row, mapping, "bedrooms"),
+                    as_int=True,
+                ),
+                bathrooms=_optional_number(
+                    _cell(raw_row, mapping, "bathrooms"),
+                    as_int=True,
+                ),
+                covered_m2=_optional_number(
+                    _cell(raw_row, mapping, "covered_m2"),
+                ),
+                total_m2=_optional_number(
+                    _cell(raw_row, mapping, "total_m2"),
+                ),
+                parking_spaces=_optional_number(
+                    _cell(raw_row, mapping, "parking_spaces"),
+                    as_int=True,
+                ),
+                description=_cell(raw_row, mapping, "description") or None,
                 blockers=blockers,
                 warnings=warnings,
             )

@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-contacts-page is-matches-page {% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/contacts.js') }}" defer></script>
+{% endblock %}
+
+{% block title %}{{ t('matches_title', name=first_name) }} | {{ t('contacts_title') }}{% endblock %}
+
+{% block content %}
+<article class="matches-page">
+    <header class="matches-hero">
+        <p class="contacts-kicker">{{ t('contacts_jrh') }}</p>
+        <h1>{{ t('matches_title', name=first_name) }}</h1>
+        {% if is_temporary %}
+        <p class="matches-temp">{{ t('matches_temporary') }}</p>
+        {% else %}
+        <p class="matches-sub">{{ t('matches_based_on') }}</p>
+        {% endif %}
+        {% if chips %}
+        <ul class="contact-chips matches-chips">
+            {% for chip in chips %}
+            <li>{{ chip }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        <details class="matches-search">
+            <summary class="btn btn-small btn-secondary">{{ t('matches_edit_search') }}</summary>
+            <form method="post" class="matches-search-form">
+                <label class="contact-field">
+                    <span>{{ t('contacts_field_areas') }}</span>
+                    <textarea name="areas" rows="2">{{ (criteria.areas or []) | join('\n') }}</textarea>
+                </label>
+                <div class="contact-budget">
+                    <label class="contact-field">
+                        <span>{{ t('contacts_budget_from') }}</span>
+                        <input type="text" name="budget_min" value="{{ criteria.budget.min if criteria.budget and criteria.budget.min else '' }}">
+                    </label>
+                    <label class="contact-field">
+                        <span>{{ t('contacts_budget_to') }}</span>
+                        <input type="text" name="budget_max" value="{{ criteria.budget.max if criteria.budget and criteria.budget.max else '' }}">
+                    </label>
+                    <label class="contact-field">
+                        <span>USD / ARS</span>
+                        <select name="budget_currency">
+                            {% set currency = criteria.budget.currency if criteria.budget else 'USD' %}
+                            <option value="USD" {% if currency == 'USD' %}selected{% endif %}>USD</option>
+                            <option value="ARS" {% if currency == 'ARS' %}selected{% endif %}>ARS</option>
+                        </select>
+                    </label>
+                </div>
+                <label class="contact-field">
+                    <span>{{ t('contacts_field_type') }}</span>
+                    <input type="text" name="property_types" value="{{ (criteria.property_types or []) | join(', ') }}">
+                </label>
+                <label class="contact-field">
+                    <span>{{ t('matches_purpose') }}</span>
+                    <select name="purpose">
+                        <option value="">—</option>
+                        {% for purpose in listing_purposes %}
+                        <option value="{{ purpose }}" {% if criteria.purpose == purpose %}selected{% endif %}>{{ t('listing_purpose_' ~ purpose) }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <div class="matches-search-grid">
+                    <label class="contact-field">
+                        <span>{{ t('contacts_field_rooms') }}</span>
+                        <input type="number" name="rooms" min="1" value="{{ criteria.rooms or '' }}">
+                    </label>
+                    <label class="contact-field">
+                        <span>{{ t('contacts_field_bedrooms') }}</span>
+                        <input type="number" name="bedrooms" min="1" value="{{ criteria.bedrooms or '' }}">
+                    </label>
+                </div>
+                <fieldset class="matches-features">
+                    <legend>{{ t('contacts_field_features') }}</legend>
+                    {% for key in feature_keys %}
+                    <label>
+                        <input type="checkbox" name="feature" value="{{ key }}" {% if key in (criteria.features or []) %}checked{% endif %}>
+                        {{ t('property_feature_' ~ key) }}
+                    </label>
+                    {% endfor %}
+                </fieldset>
+                <div class="matches-search-actions">
+                    <button type="submit" class="btn btn-secondary">{{ t('matches_apply_search') }}</button>
+                    {% if can_manage %}
+                    <button type="submit" name="save_search" value="1" class="btn btn-primary">{{ t('matches_save_search', name=first_name) }}</button>
+                    {% endif %}
+                </div>
+            </form>
+        </details>
+    </header>
+
+    {% if listing_sources %}
+    <ul class="matches-sources">
+        {% for source, cap in listing_sources.items() %}
+        {% if cap.visible_in_match %}
+        <li data-search="{{ cap.search }}">
+            <span class="matches-sources__mark">✓</span>
+            {{ t(cap.label_key) }}
+            <em>{{ t(cap.search_label_key) }}</em>
+        </li>
+        {% endif %}
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <p class="matches-count">
+        {{ t('matches_compatible', count=compatible_count) }}
+        <span>{{ t('matches_sort') }}</span>
+    </p>
+
+    {% if not matches %}
+    <p class="contact-panel__muted">{{ t('matches_none') }}</p>
+    {% else %}
+    <form method="get" action="{{ url_for('contacts_property_matches_share', contact_id=contact.id) }}" class="matches-list" data-matches-share>
+        {% for match in matches %}
+        {% set listing = match.listing %}
+        {% set display = match.display %}
+        <article class="matches-card" data-match-score="{{ match.score }}">
+            <label class="matches-pick">
+                {% if match.external_listing_id %}
+                <input type="checkbox" name="external_listing_id" value="{{ match.external_listing_id }}" data-match-check>
+                {% else %}
+                <input type="checkbox" name="property_id" value="{{ match.property_id }}" data-match-check>
+                {% endif %}
+                <span class="visually-hidden">{{ listing.address }}</span>
+            </label>
+            <div class="matches-score">
+                <strong>{{ match.score }}% MATCH</strong>
+                <span>{{ match.level_label }}</span>
+            </div>
+            {% if match.source_label %}
+            <p class="matches-badge matches-source">{{ match.source_label }}</p>
+            {% endif %}
+            {% if match.discarded %}
+            <p class="matches-badge">{{ t('matches_discarded') }}</p>
+            {% elif match.visited %}
+            <p class="matches-badge">{{ t('matches_visited') }}</p>
+            {% endif %}
+            <h2>{{ listing.address }}</h2>
+            {% if listing.neighborhood %}
+            <p class="matches-hood">{{ listing.neighborhood }}</p>
+            {% endif %}
+            {% if display.price_display %}
+            <p class="matches-price">{{ display.price_display }}</p>
+            {% endif %}
+            {% if display.fact_parts or display.area_label or display.feature_labels %}
+            <p class="matches-facts">
+                {{ (display.fact_parts + ([display.area_label] if display.area_label else []) + display.feature_labels) | join(' · ') }}
+            </p>
+            {% endif %}
+            {% if match.hits %}
+            <p class="matches-coincide">{{ t('matches_coincide') }}</p>
+            <ul class="matches-hits">
+                {% for hit in match.hits %}
+                <li data-state="{{ hit.state }}">
+                    {% if hit.state == 'match' %}✓{% elif hit.state == 'conflict' %}✗{% else %}?{% endif %}
+                    {{ hit.label }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            <div class="matches-actions">
+                {% if match.external_listing_id %}
+                {% if match.view_url %}
+                <a class="btn btn-small btn-secondary" href="{{ match.view_url }}" target="_blank" rel="noopener">{{ t('matches_view_listing') }}</a>
+                {% endif %}
+                {% else %}
+                <a class="btn btn-small btn-secondary" href="{{ match.view_url or match.internal_url }}">{{ t('matches_view') }}</a>
+                {% endif %}
+                {% if contact.whatsapp_url %}
+                <a class="btn btn-small btn-secondary" href="{{ match.share_url }}">{{ t('matches_share') }}</a>
+                {% endif %}
+                {% if can_manage %}
+                <a class="btn btn-small btn-primary" href="{{ match.agenda_url }}">{{ t('matches_schedule') }}</a>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+        {% if contact.whatsapp_url %}
+        <div class="matches-sharebar">
+            <button type="submit" class="btn btn-primary" data-share-submit hidden>{{ t('matches_share_n', count=0) }}</button>
+        </div>
+        {% endif %}
+    </form>
+    {% endif %}
+
+    {% if hidden_count and not show_more %}
+    <form method="post" class="matches-more">
+        {% if criteria.areas %}<input type="hidden" name="areas" value="{{ criteria.areas | join('\n') }}">{% endif %}
+        {% if criteria.budget and criteria.budget.min %}<input type="hidden" name="budget_min" value="{{ criteria.budget.min }}">{% endif %}
+        {% if criteria.budget and criteria.budget.max %}<input type="hidden" name="budget_max" value="{{ criteria.budget.max }}">{% endif %}
+        {% if criteria.budget and criteria.budget.currency %}<input type="hidden" name="budget_currency" value="{{ criteria.budget.currency }}">{% endif %}
+        {% if criteria.property_types %}<input type="hidden" name="property_types" value="{{ criteria.property_types | join(', ') }}">{% endif %}
+        {% if criteria.rooms %}<input type="hidden" name="rooms" value="{{ criteria.rooms }}">{% endif %}
+        {% if criteria.bedrooms %}<input type="hidden" name="bedrooms" value="{{ criteria.bedrooms }}">{% endif %}
+        {% if criteria.purpose %}<input type="hidden" name="purpose" value="{{ criteria.purpose }}">{% endif %}
+        {% for feature in criteria.features or [] %}
+        <input type="hidden" name="feature" value="{{ feature }}">
+        {% endfor %}
+        <input type="hidden" name="show_more" value="1">
+        <button type="submit" class="btn btn-secondary">{{ t('matches_show_more') }}</button>
+    </form>
+    {% endif %}
+</article>
+{% endblock %}
