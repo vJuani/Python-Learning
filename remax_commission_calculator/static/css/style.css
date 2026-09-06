@@ -1962,6 +1962,12 @@ body.is-auth-page .site-footer {
     text-decoration: underline;
 }
 
+.footer-legal {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem 1rem;
+}
+
 .dashboard-welcome {
     display: flex;
     align-items: center;

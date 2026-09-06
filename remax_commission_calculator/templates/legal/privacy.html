@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-legal-page {% endblock %}
+
+{% block title %}{{ t('legal_privacy_title') }} | {{ brand_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/legal-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<article class="legal-page">
+    <header class="legal-page__header">
+        <p class="legal-page__kicker">{{ brand_name }}</p>
+        <h1>{{ t('legal_privacy_title') }}</h1>
+        <p class="legal-page__meta">{{ t('legal_updated') }}</p>
+    </header>
+
+    <p>Esta página explica, en lenguaje simple, qué datos usa JRH One para prestar el servicio. No es un contrato extra ni una cesión de derechos más allá de lo necesario para operar la plataforma.</p>
+
+    <h2>1. Quiénes somos</h2>
+    <p>JRH One es un software de gestión para inmobiliarias y agentes. El responsable del tratamiento de los datos de tu cuenta es el operador de esta instancia de JRH One.</p>
+    <p>{{ t('legal_support_label') }}: <a href="mailto:soporte@{{ brand_domain }}">soporte@{{ brand_domain }}</a></p>
+
+    <h2>2. Qué datos tratamos</h2>
+    <p>Según cómo uses el producto, podemos tratar:</p>
+    <ul>
+        <li>datos de cuenta (nombre, usuario, correo, rol y organización);</li>
+        <li>datos operativos que vos o tu oficina cargan (propiedades, operaciones, contactos, agenda, facturación y caja);</li>
+        <li>registros técnicos básicos (inicio de sesión, errores y actividad necesaria para seguridad y soporte).</li>
+    </ul>
+    <p>No pedimos datos que no hacen falta para esas funciones.</p>
+
+    <h2>3. Google Calendar</h2>
+    <p>La conexión con Google Calendar es opcional. Si un agente la activa, JRH One:</p>
+    <ul>
+        <li>pide autorización OAuth a Google;</li>
+        <li>recibe el correo de la cuenta de Google y tokens de acceso/actualización;</li>
+        <li>usa el alcance de eventos de calendario para crear, actualizar o borrar eventos que el agente genera o modifica en la Agenda de JRH;</li>
+        <li>puede leer eventos del calendario conectado solo para mostrarlos como referencia en JRH, sin convertirlos en tareas propias salvo que el producto lo indique.</li>
+    </ul>
+    <p>Podés desconectar Google Calendar cuando quieras. Al desconectar, JRH intenta revocar el token y borra la conexión guardada.</p>
+    <p>Google trata esos datos según su propia política. JRH no usa tu calendario para publicidad ni lo comparte con otras inmobiliarias.</p>
+
+    <h2>4. Facturación e integraciones fiscales</h2>
+    <p>Si vinculás ARCA u otra integración fiscal, JRH guarda solo lo necesario para emitir o verificar comprobantes (por ejemplo, certificado y clave privada de la conexión). Esas credenciales sensibles se cifran en reposo.</p>
+    <p><strong>JRH One nunca pide ni guarda tu Clave Fiscal.</strong> La autorización ante ARCA/AFIP la hacés vos en los sistemas oficiales.</p>
+
+    <h2>5. No vendemos datos personales</h2>
+    <p>JRH One no vende datos personales. Tampoco los cede para publicidad de terceros.</p>
+    <p>Podemos usar proveedores que ayudan a operar el servicio (hosting, correo, Google, si conectás Calendar). Les damos solo lo necesario para esa función.</p>
+
+    <h2>6. Conservación y seguridad</h2>
+    <p>Conservamos los datos mientras la cuenta u organización esté activa y el tiempo extra que pida la operación del servicio o una obligación legal. Las credenciales sensibles (tokens de Google, certificados y claves de conexión fiscal) se almacenan cifradas.</p>
+    <p>Ningún sistema es infalible. Si detectamos un incidente que afecte tus datos, vamos a avisarte por los medios de contacto que tengamos.</p>
+
+    <h2>7. Tus opciones</h2>
+    <p>Podés pedir acceso, corrección o baja de datos de cuenta escribiendo a soporte. Algunas bajas pueden quedar limitadas si la oficina necesita conservar operaciones o facturas por su propia gestión.</p>
+
+    <h2>8. Cambios</h2>
+    <p>Si actualizamos esta política, vamos a publicar la nueva versión en esta misma URL. El uso continuado del servicio después de un cambio relevante implica que tomaste conocimiento de la versión vigente.</p>
+
+    <nav class="legal-page__nav">
+        <a href="{{ url_for('terms') }}">{{ t('legal_terms_title') }}</a>
+        <a href="{{ url_for('login') }}">{{ t('legal_back_to_login') }}</a>
+    </nav>
+</article>
+{% endblock %}

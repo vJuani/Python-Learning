@@ -147,8 +147,8 @@
             <footer class="login-page__legal">
                 <p>{{ t('login_copyright') }}</p>
                 <div class="login-page__legal-links">
-                    <a href="#">{{ t('login_terms') }}</a>
-                    <a href="#">{{ t('login_privacy') }}</a>
+                    <a href="{{ url_for('terms') }}">{{ t('login_terms') }}</a>
+                    <a href="{{ url_for('privacy') }}">{{ t('login_privacy') }}</a>
                 </div>
             </footer>
         </div>

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-legal-page {% endblock %}
+
+{% block title %}{{ t('legal_terms_title') }} | {{ brand_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/legal-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<article class="legal-page">
+    <header class="legal-page__header">
+        <p class="legal-page__kicker">{{ brand_name }}</p>
+        <h1>{{ t('legal_terms_title') }}</h1>
+        <p class="legal-page__meta">{{ t('legal_updated') }}</p>
+    </header>
+
+    <p>Estos términos describen el uso de JRH One como software de gestión inmobiliaria (SaaS). Son condiciones básicas de uso, no un asesoramiento legal, contable ni fiscal.</p>
+
+    <h2>1. El servicio</h2>
+    <p>JRH One permite a oficinas y agentes administrar propiedades, operaciones, contactos, agenda, facturación y caja. El alcance concreto depende del plan, la organización y las funciones habilitadas.</p>
+    <p>Nos esforzamos por mantener el servicio disponible, pero no prometemos un uptime ilimitado ni la ausencia total de errores o mantenimientos.</p>
+
+    <h2>2. Cuentas y uso aceptable</h2>
+    <p>Para usar JRH One hace falta una cuenta autorizada por una organización. Sos responsable de:</p>
+    <ul>
+        <li>la veracidad de los datos que cargás;</li>
+        <li>cuidar tu usuario y contraseña;</li>
+        <li>usar el producto para la actividad profesional de la inmobiliaria, sin abusar de la plataforma ni intentar acceder a datos de otra organización.</li>
+    </ul>
+    <p>La organización es responsable de quién invita, aprueba o desactiva en su equipo.</p>
+
+    <h2>3. Integraciones</h2>
+    <p>Algunas funciones dependen de terceros:</p>
+    <ul>
+        <li><strong>Google Calendar:</strong> si la conectás, autorizás a JRH a gestionar eventos de tu calendario según los permisos que aceptes en Google. Podés desconectar cuando quieras.</li>
+        <li><strong>ARCA / facturación:</strong> si la vinculás, JRH usa la conexión del usuario autenticado para emitir o verificar comprobantes en el ambiente habilitado. JRH no pide Clave Fiscal y no opera con credenciales compartidas de toda la oficina.</li>
+    </ul>
+    <p>Si Google, ARCA u otro proveedor interrumpe su API, esa integración puede dejar de funcionar sin que JRH pueda reemplazarla de inmediato.</p>
+
+    <h2>4. Datos y confidencialidad</h2>
+    <p>Los datos de cada organización quedan aislados de las demás. El tratamiento de datos personales se describe en la <a href="{{ url_for('privacy') }}">Política de privacidad</a>.</p>
+    <p>JRH One no vende datos personales. Las credenciales sensibles se cifran. No uses JRH para guardar secretos que el producto no pide.</p>
+
+    <h2>5. Contenido y propiedad</h2>
+    <p>Vos y tu oficina conservan los derechos sobre la información que cargan. JRH One y sus marcas, diseño y código siguen siendo de sus titulares. No está permitido copiar el producto, descompilarlo ni usarlo para crear un servicio competidor a partir de acceso no autorizado.</p>
+
+    <h2>6. Responsabilidad</h2>
+    <p>JRH One es una herramienta de gestión. No reemplaza el criterio profesional ni las obligaciones fiscales, laborales o registrales de la inmobiliaria.</p>
+    <p>En la medida permitida por la ley argentina, la responsabilidad de JRH One por el uso del servicio se limita a daños directos y previsibles vinculados a una falla atribuible al producto, y no incluye lucro cesante ni daños indirectos. Nada de esto busca excluir responsabilidades que la ley no permite limitar.</p>
+
+    <h2>7. Suspensión y cambios</h2>
+    <p>Podemos suspender una cuenta si hay abuso, riesgo de seguridad o falta de pago, avisando cuando sea razonable. También podemos actualizar funciones o estos términos; la versión vigente queda publicada en esta URL.</p>
+
+    <h2>8. Contacto</h2>
+    <p>{{ t('legal_support_label') }}: <a href="mailto:soporte@{{ brand_domain }}">soporte@{{ brand_domain }}</a></p>
+
+    <nav class="legal-page__nav">
+        <a href="{{ url_for('privacy') }}">{{ t('legal_privacy_title') }}</a>
+        <a href="{{ url_for('login') }}">{{ t('legal_back_to_login') }}</a>
+    </nav>
+</article>
+{% endblock %}

@@ -56,7 +56,7 @@
     {% endif %}
     {% block extra_css %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}{% if current_user or guest_access %} has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password') %} is-auth-page{% endif %}">
+<body class="{% block body_class %}{% endblock %}{% if current_user or guest_access %} has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password', 'privacy', 'terms') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
     <aside class="app-rail" aria-label="{{ t('nav_aria') }}">
         <div class="app-rail-top">
@@ -491,6 +491,10 @@
                     <p>{{ brand_name }} · {{ t('app_slogan') }}</p>
                 </div>
             </div>
+            <nav class="footer-legal" aria-label="{{ t('login_privacy') }}">
+                <a class="footer-link" href="{{ url_for('privacy') }}">{{ t('login_privacy') }}</a>
+                <a class="footer-link" href="{{ url_for('terms') }}">{{ t('login_terms') }}</a>
+            </nav>
         </div>
     </footer>
     </div>

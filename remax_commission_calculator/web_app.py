@@ -395,6 +395,8 @@ PUBLIC_ENDPOINTS = (
     "verify_email_resend",
     "forgot_password",
     "reset_password",
+    "privacy",
+    "terms",
     "guest_access",
     "set_language",
     "static"
@@ -1962,6 +1964,16 @@ def handle_server_error(error):
     return render_template(
         "errors/500.html"
     ), 500
+
+
+@app.route("/privacy")
+def privacy():
+    return render_template("legal/privacy.html")
+
+
+@app.route("/terms")
+def terms():
+    return render_template("legal/terms.html")
 
 
 @app.route(
