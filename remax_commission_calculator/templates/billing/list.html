@@ -119,7 +119,15 @@
                 {% if ai_workspace.ai_options %}
                 <ul class="billing-ai-options">
                     {% for opt in ai_workspace.ai_options %}
-                    <li><a href="{{ url_for('billing_ai_select_operation', operation_id=opt.operation_id) }}">{{ opt.label }}</a></li>
+                    <li>
+                        {% if opt.charge_id and is_staff %}
+                        <a href="{{ url_for('billing_prepare_charge', charge_id=opt.charge_id) }}">{{ opt.label or opt.name }}</a>
+                        {% elif opt.operation_id %}
+                        <a href="{{ url_for('billing_ai_select_operation', operation_id=opt.operation_id) }}">{{ opt.label or opt.name }}</a>
+                        {% else %}
+                        {{ opt.label or opt.name }}
+                        {% endif %}
+                    </li>
                     {% endfor %}
                 </ul>
                 {% endif %}

@@ -8,9 +8,11 @@ from modules.i18n import translate
 
 
 SUGGESTION_KEYS = (
+    "billing_ai_suggestion_fee",
     "billing_ai_suggestion_rent",
-    "billing_ai_suggestion_sale",
     "billing_ai_suggestion_buyer",
+    "billing_ai_suggestion_seller",
+    "billing_ai_suggestion_pending",
 )
 
 

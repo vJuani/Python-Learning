@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import timedelta
+from datetime import date, timedelta
 
 from modules.jrh_ai_intents import (
     ALL_INTENTS,
@@ -25,6 +25,10 @@ from modules.jrh_ai_intents import (
     START_AGENT_PAYMENT,
     START_INVOICE,
 )
+
+ORIGIN_CHARGE = "agent_account_charge"
+ORIGIN_OPERATION = "operation"
+ORIGIN_UNKNOWN = "unknown"
 from modules.property_types import (
     COMMERCIAL_STATUS_AVAILABLE,
     normalize_listing_purpose,
@@ -119,7 +123,7 @@ PERSON_RE = re.compile(
 )
 PERSON_STOP = frozenset(
     {
-        "las", "los", "la", "el", "de", "del", "una", "un", "hoy", "manana", "mañana",
+        "las", "los", "la", "el", "de", "del", "lo", "una", "un", "hoy", "manana", "mañana",
         "septiembre", "fee", "cuenta", "factura", "pago", "capital",
         "caba", "nunez", "nuñez", "belgrano", "palermo",
         "propiedades", "propiedad", "departamentos", "departamento",
@@ -212,6 +216,10 @@ def parse_price_amount(text):
 
 
 def _usable_person_name(name):
+    parts = [part for part in (name or "").split() if part]
+    while parts and fold_text(parts[-1]) in PERSON_STOP:
+        parts.pop()
+    name = " ".join(parts)
     folded = fold_text(name)
     if not folded or folded in PERSON_STOP:
         return ""
@@ -529,6 +537,144 @@ def format_agenda_day_label(day, language="es"):
     )
 
 
+def extract_invoice_side(text):
+    folded = fold_text(text)
+    buyer = any(
+        token in folded
+        for token in (
+            "comprador",
+            "compradora",
+            "buyer",
+            "punta compradora",
+            "punta comprador",
+        )
+    )
+    seller = any(
+        token in folded
+        for token in (
+            "vendedor",
+            "vendedora",
+            "seller",
+            "punta vendedora",
+            "punta vendedor",
+        )
+    )
+    if buyer and not seller:
+        return "buyer"
+    if seller and not buyer:
+        return "seller"
+    return None
+
+
+def normalize_billing_period(text, *, today=None):
+    folded = fold_text(text)
+    today = today or date.today()
+    year = today.year
+    year_match = re.search(r"\b(20\d{2})\b", folded)
+    if year_match:
+        year = int(year_match.group(1))
+    slash = re.search(r"\b(\d{1,2})[/-](20\d{2})\b", folded)
+    if slash:
+        return f"{int(slash.group(2)):04d}-{int(slash.group(1)):02d}"
+    if "este mes" in folded:
+        return f"{today.year:04d}-{today.month:02d}"
+    if "mes pasado" in folded:
+        month = today.month - 1 or 12
+        year = today.year if today.month > 1 else today.year - 1
+        return f"{year:04d}-{month:02d}"
+    for index, name in enumerate(MONTH_LABELS_ES, start=1):
+        if name in folded:
+            return f"{year:04d}-{index:02d}"
+    return ""
+
+
+def detect_invoice_origin(text, entities=None):
+    folded = fold_text(text)
+    entities = entities or {}
+    charge_hits = any(
+        token in folded
+        for token in (
+            "fee",
+            "cargo",
+            "cuenta corriente",
+            "jrh one",
+            "lo que tengo",
+            "lo pendiente",
+            "lo que tenga",
+        )
+    )
+    operation_hits = any(
+        token in folded
+        for token in (
+            "operacion",
+            "venta",
+            "alquiler",
+            "comprador",
+            "vendedor",
+            "punta",
+            "propiedad",
+        )
+    ) or bool(entities.get("address") or entities.get("property_text"))
+    if charge_hits and not operation_hits:
+        return ORIGIN_CHARGE
+    if operation_hits and not charge_hits:
+        return ORIGIN_OPERATION
+    if charge_hits:
+        return ORIGIN_CHARGE
+    if operation_hits:
+        return ORIGIN_OPERATION
+    if entities.get("amount") and entities.get("agent_name"):
+        return ORIGIN_CHARGE
+    return ORIGIN_UNKNOWN
+
+
+def extract_invoice_entities(text, *, context=None, today=None):
+    context = context or {}
+    last = context.get("last_entity") or {}
+    folded = fold_text(text)
+    entities = {}
+    side = extract_invoice_side(text)
+    if side:
+        entities["side"] = side
+    period = normalize_billing_period(text, today=today)
+    if period:
+        entities["billing_period"] = period
+        entities["period"] = period
+    amount = parse_price_amount(text)
+    if amount and "hasta" not in folded:
+        entities["amount"] = amount
+    if any(token in folded for token in ("usd", "dolar", "dolares")):
+        entities["currency"] = "USD"
+    elif any(token in folded for token in ("ars", "peso", "pesos")):
+        entities["currency"] = "ARS"
+    if "fee" in folded:
+        entities["charge_category"] = "fee"
+        entities["charge_hint"] = "fee"
+    elif "jrh" in folded:
+        entities["charge_category"] = "jrh"
+        entities["charge_hint"] = "jrh"
+    address = re.search(
+        r"(libertador|santa fe|cabildo|corrientes|madero|hubac|quesada|fitz roy)(?:\s+\d+)?",
+        folded,
+    )
+    if address:
+        entities["property_text"] = address.group(0)
+    if re.search(r"\bmi fee\b|\blo que tengo\b|\blo pendiente\b", folded):
+        entities["self"] = True
+    if last.get("kind") == "operation" and last.get("id") and (
+        side or re.search(r"\b(la del|eso|esa)\b", folded)
+    ):
+        entities["refers_to_previous"] = True
+        entities["previous_kind"] = "operation"
+        entities["previous_id"] = last.get("id")
+        entities["origin_type"] = ORIGIN_OPERATION
+    entities["origin_type"] = entities.get("origin_type") or detect_invoice_origin(
+        text,
+        entities,
+    )
+    return entities
+
+
 def extract_entities(text, *, context=None):
     context = context or {}
     last = context.get("last_entity") or {}
@@ -540,6 +686,10 @@ def extract_entities(text, *, context=None):
     if person:
         entities["agent_name"] = person
         entities["contact_name"] = person
+    invoice = extract_invoice_entities(text, context=context)
+    for key, value in invoice.items():
+        if value not in (None, ""):
+            entities[key] = value
     if "fee" in folded:
         entities["charge_hint"] = "fee"
     period = re.search(
@@ -581,9 +731,14 @@ def classify_intent(prompt, *, context=None):
         phrase in folded
         for phrase in (
             "facturame",
+            "facturale",
             "quiero facturar",
             "quiero hacer la factura",
             "haceme la factura",
+            "haceme la del",
+            "la del comprador",
+            "la del vendedor",
+            "la de usd",
         )
     ) or re.search(r"\bfactur[aá]\b", folded):
         scores[START_INVOICE] = 0.88
@@ -594,6 +749,8 @@ def classify_intent(prompt, *, context=None):
             for phrase in ("lo que tengo", "lo que tenga", "lo pendiente")
         ) and not entities.get("agent_name"):
             entities["self"] = True
+        if entities.get("origin_type") == ORIGIN_UNKNOWN and entities.get("side"):
+            entities["origin_type"] = ORIGIN_OPERATION
     if any(
         phrase in folded
         for phrase in ("que debe", "saldo de", "cuenta de", "cuanto debe")

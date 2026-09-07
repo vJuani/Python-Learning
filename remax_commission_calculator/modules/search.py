@@ -37,6 +37,47 @@ def matches_partial_text(value, query_folded):
     return query_folded in fold_text(value)
 
 
+def token_edit_distance(left, right, limit=2):
+    """Small Levenshtein with an early exit. No extra dependency."""
+    a = fold_text(left)
+    b = fold_text(right)
+    if a == b:
+        return 0
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    previous = list(range(len(b) + 1))
+    for i, char_a in enumerate(a, start=1):
+        current = [i]
+        row_min = i
+        for j, char_b in enumerate(b, start=1):
+            insert_cost = current[j - 1] + 1
+            delete_cost = previous[j] + 1
+            replace_cost = previous[j - 1] + (char_a != char_b)
+            value = min(insert_cost, delete_cost, replace_cost)
+            current.append(value)
+            row_min = min(row_min, value)
+        if row_min > limit:
+            return limit + 1
+        previous = current
+    return previous[-1]
+
+
+def fuzzy_token_match(value, query, *, max_dist=2):
+    query_folded = fold_text(query)
+    haystack = fold_text(value)
+    if not query_folded or not haystack:
+        return False
+    if query_folded in haystack:
+        return True
+    if len(query_folded) < 4:
+        return False
+    return any(
+        token_edit_distance(token, query_folded, limit=max_dist) <= max_dist
+        for token in haystack.split()
+        if len(token) >= 4
+    )
+
+
 def search_agents(query, organization_id, limit=None):
     """Search agents by name/type — not by internal ID."""
     search_query = normalize_query(query)
@@ -60,6 +101,31 @@ def search_agents(query, organization_id, limit=None):
         return results[:limit]
 
     return results
+
+
+def search_agents_flexible(query, organization_id, limit=8):
+    """Partial name first, then a light typo fallback."""
+    matches = search_agents(query, organization_id, limit=limit)
+    if matches:
+        return matches
+    query_folded = fold_text(query)
+    if len(query_folded) < 4:
+        return []
+    scored = []
+    for agent in get_agents(organization_id):
+        name = agent.get("name") or ""
+        if not fuzzy_token_match(name, query_folded, max_dist=2):
+            continue
+        distances = [
+            token_edit_distance(token, query_folded, limit=2)
+            for token in fold_text(name).split()
+            if token
+        ]
+        if not distances:
+            continue
+        scored.append((min(distances), agent))
+    scored.sort(key=lambda item: item[0])
+    return [item[1] for item in scored[:limit]]
 
 
 def suggest_agents(query, organization_id, limit=8):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from modules.auth import is_agent
 from modules.contacts import match_contacts
 from modules.database.tenant import require_organization_id
-from modules.search import search_agents, search_operations
+from modules.search import search_agents_flexible, search_operations
 
 
 def _viewer_agent_id(user, agent_id):
@@ -17,7 +17,7 @@ def _viewer_agent_id(user, agent_id):
 def resolve_agents(organization_id, query, *, user, agent_id=None, limit=8):
     organization_id = require_organization_id(organization_id)
     scoped = _viewer_agent_id(user, agent_id)
-    matches = search_agents(query or "", organization_id, limit=limit)
+    matches = search_agents_flexible(query or "", organization_id, limit=limit)
     if scoped is not None:
         matches = [item for item in matches if int(item.get("id") or 0) == scoped]
         if not matches and not (query or "").strip():

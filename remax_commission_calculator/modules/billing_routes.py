@@ -67,9 +67,11 @@ from modules.billing_ai_workspace import (
 from modules.i18n import translate
 from modules.invoice_ai_service import (
     DisambiguationResult,
+    ExistingInvoiceResult,
     INTENT_LIST_PENDING,
     MissingSideResult,
     ParsedInvoiceIntent,
+    ResolvedChargeIntent,
     ResolvedInvoiceIntent,
     parse_invoice_intent,
     resolve_invoice_intent,
@@ -548,6 +550,39 @@ def register_billing_routes(app, *, helpers):
                     url_for("billing_list", tab="pending")
                 )
 
+        if isinstance(result, ExistingInvoiceResult):
+            session["billing_ai_message"] = result.message_key
+            if result.invoice_id:
+                return redirect(
+                    url_for("billing_detail", invoice_id=result.invoice_id)
+                )
+            return redirect(url_for("billing_list"))
+
+        if isinstance(result, ResolvedChargeIntent):
+            _clear_billing_ai_context()
+            _set_billing_ai_context(
+                last_entity={
+                    "kind": "charge",
+                    "id": result.charge_id,
+                    "label": (result.charge or {}).get("name") or "",
+                }
+            )
+            if is_admin(user):
+                return redirect(
+                    url_for(
+                        "billing_prepare_charge",
+                        charge_id=result.charge_id,
+                    )
+                )
+            session["billing_ai_message"] = "jrh_ai_invoice_one"
+            session["billing_ai_options"] = [
+                {
+                    "charge_id": result.charge_id,
+                    "label": (result.charge or {}).get("name") or "",
+                }
+            ]
+            return redirect(url_for("billing_list"))
+
         if isinstance(result, DisambiguationResult):
             session["billing_ai_message"] = result.message_key
             session["billing_ai_options"] = result.options
@@ -556,6 +591,11 @@ def register_billing_routes(app, *, helpers):
         if isinstance(result, MissingSideResult):
             _set_billing_ai_context(
                 operation_id=result.operation_id,
+                last_entity={
+                    "kind": "operation",
+                    "id": result.operation_id,
+                    "label": result.operation_label,
+                },
             )
             session["billing_ai_message"] = (
                 result.message_key

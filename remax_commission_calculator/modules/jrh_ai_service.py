@@ -964,132 +964,45 @@ def _handle_start_invoice(
     session,
     **_kwargs,
 ):
-    if entities.get("refers_to_previous") and entities.get("previous_id"):
-        previous_kind = entities.get("previous_kind")
-        if previous_kind == "charge":
-            return _invoice_charge_preview(
-                organization_id,
-                entities.get("previous_id"),
-                language=language,
-                confidence=confidence,
-                session=session,
-                prompt=prompt,
-            )
-        if previous_kind == "agent" and not entities.get("agent_name"):
-            from modules.database.agents_repository import get_agent_record
-
-            previous_agent = get_agent_record(
-                entities.get("previous_id"),
-                organization_id,
-            )
-            if previous_agent:
-                entities = dict(entities)
-                entities["agent_name"] = previous_agent.get("name") or ""
-
-    query = entities.get("agent_name") or ""
-    use_self = bool(entities.get("self") and agent_id) or (
-        is_agent(user) and agent_id and not query
-    )
-    if use_self:
-        from modules.database.agents_repository import get_agent_record
-
-        own = get_agent_record(agent_id, organization_id)
-        matches = (
-            [{"id": own["id"], "name": own.get("name") or "", "kind": "agent"}]
-            if own
-            else []
-        )
-        query = (own or {}).get("name") or query
-    else:
-        matches = resolve_agents(
-            organization_id,
-            query,
-            user=user,
-            agent_id=agent_id,
-        )
-    if (query or use_self) and matches:
-        status, chosen, matches = pick_unique(matches, confidence=confidence)
-        if status == "ambiguous":
-            return _result(
-                START_INVOICE,
-                "needs_attention",
-                language=language,
-                message_key="jrh_ai_agent_ambiguous",
-                candidates=matches,
-                confidence=confidence,
-            )
-        if status == "unique":
-            charges = resolve_pending_charges(
-                organization_id,
-                chosen["id"],
-                currency=entities.get("currency"),
-                hint=entities.get("charge_hint") or entities.get("period") or "",
-            )
-            if len(charges) > 1:
-                return _result(
-                    START_INVOICE,
-                    "needs_attention",
-                    language=language,
-                    message_key="jrh_ai_invoice_candidates",
-                    candidates=charges,
-                    cards=[
-                        {
-                            "title": charge.get("name") or "",
-                            "subtitle": (
-                                f"{charge.get('currency')} {charge.get('amount')}"
-                            ),
-                        }
-                        for charge in charges[:5]
-                    ],
-                    confidence=confidence,
-                    entity=chosen,
-                    data={"count": len(charges), "source_prompt": prompt},
-                    actions=[
-                        {
-                            "label_key": "jrh_ai_view_current_account",
-                            "href_name": (
-                                "my_agent_account"
-                                if is_agent(user)
-                                else "agent_account_detail"
-                            ),
-                            "href_args": (
-                                {}
-                                if is_agent(user)
-                                else {"agent_id": chosen["id"]}
-                            ),
-                        }
-                    ],
-                )
-            if len(charges) == 1:
-                return _invoice_charge_preview(
-                    organization_id,
-                    charges[0]["id"],
-                    language=language,
-                    confidence=confidence,
-                    session=session,
-                    prompt=prompt,
-                    agent=chosen,
-                    charge=charges[0],
-                )
-            if use_self:
-                return _result(
-                    START_INVOICE,
-                    "needs_attention",
-                    language=language,
-                    message_key="jrh_ai_invoice_need_context",
-                    confidence=confidence,
-                    data={"source_prompt": prompt},
-                )
-
     from modules.auth import ROLE_AGENT, ROLE_ADMIN
     from modules.invoice_ai_service import (
         DisambiguationResult,
+        ExistingInvoiceResult,
+        MissingSideResult,
+        ResolvedChargeIntent,
         ResolvedInvoiceIntent,
         parse_invoice_intent,
         resolve_invoice_intent,
     )
 
-    parsed = parse_invoice_intent(prompt)
+    if entities.get("previous_kind") == "agent" and not entities.get("agent_name"):
+        from modules.database.agents_repository import get_agent_record
+
+        previous_agent = get_agent_record(
+            entities.get("previous_id"),
+            organization_id,
+        )
+        if previous_agent:
+            entities = dict(entities)
+            entities["agent_name"] = previous_agent.get("name") or ""
+
+    parsed = parse_invoice_intent(
+        prompt,
+        context={
+            "last_entity": {
+                "kind": entities.get("previous_kind"),
+                "id": entities.get("previous_id"),
+            }
+            if entities.get("refers_to_previous")
+            else {},
+        },
+    )
+    merged = dict(parsed.entities or {})
+    merged.update({key: value for key, value in entities.items() if value not in (None, "")})
+    parsed.entities = merged
+    if merged.get("origin_type"):
+        parsed.origin_type = merged["origin_type"]
+    parsed.side = parsed.side or merged.get("side")
     resolved = resolve_invoice_intent(
         parsed,
         organization_id,
@@ -1100,12 +1013,75 @@ def _handle_start_invoice(
         },
         agent_scope=agent_id if is_agent(user) else None,
     )
+    if isinstance(resolved, ExistingInvoiceResult):
+        return _result(
+            START_INVOICE,
+            "needs_attention",
+            language=language,
+            message_key="billing_ai_invoice_exists",
+            actions=[
+                {
+                    "label_key": "jrh_cta_open",
+                    "href_name": "billing_detail",
+                    "href_args": {"invoice_id": resolved.invoice_id},
+                }
+            ]
+            if resolved.invoice_id
+            else [],
+            confidence=confidence,
+            data={"source_prompt": prompt},
+        )
+    if isinstance(resolved, ResolvedChargeIntent):
+        return _invoice_charge_preview(
+            organization_id,
+            resolved.charge_id,
+            language=language,
+            confidence=confidence,
+            session=session,
+            prompt=prompt,
+            agent=resolved.agent,
+            charge=resolved.charge,
+        )
+    if isinstance(resolved, MissingSideResult):
+        return _result(
+            START_INVOICE,
+            "needs_attention",
+            language=language,
+            message_key="billing_ai_ask_side",
+            confidence=confidence,
+            entity={
+                "kind": "operation",
+                "id": resolved.operation_id,
+                "label": resolved.operation_label,
+            },
+            data={"source_prompt": prompt},
+            actions=[
+                {
+                    "label_key": "billing_invoice_buyer",
+                    "href_name": "billing_prepare",
+                    "href_args": {
+                        "operation_id": resolved.operation_id,
+                        "side": "buyer",
+                    },
+                },
+                {
+                    "label_key": "billing_invoice_seller",
+                    "href_name": "billing_prepare",
+                    "href_args": {
+                        "operation_id": resolved.operation_id,
+                        "side": "seller",
+                    },
+                },
+            ],
+        )
     if isinstance(resolved, DisambiguationResult):
         options = [
             {
-                "id": item.get("operation_id"),
-                "name": item.get("label"),
-                "kind": "operation",
+                "id": item.get("id") or item.get("charge_id") or item.get("operation_id"),
+                "name": item.get("name") or item.get("label"),
+                "kind": item.get("kind") or "operation",
+                "amount": item.get("amount"),
+                "currency": item.get("currency"),
             }
             for item in (resolved.options or [])
         ]
@@ -1115,7 +1091,21 @@ def _handle_start_invoice(
             language=language,
             message_key=resolved.message_key or "jrh_ai_invoice_ambiguous",
             candidates=options,
+            cards=[
+                {
+                    "title": item.get("name") or "",
+                    "subtitle": " · ".join(
+                        part
+                        for part in (
+                            f"{item.get('currency') or ''} {item.get('amount') or ''}".strip(),
+                        )
+                        if part
+                    ),
+                }
+                for item in options[:5]
+            ],
             confidence=confidence,
+            data={"count": len(options), "source_prompt": prompt},
         )
     if isinstance(resolved, ResolvedInvoiceIntent):
         draft = {
@@ -1185,7 +1175,13 @@ def _invoice_charge_preview(
         "ready",
         language=language,
         summary=title or prompt,
-        cards=[{"title": title, "subtitle": subtitle}],
+        cards=[
+            {
+                "title": title,
+                "subtitle": subtitle,
+                "detail": _t("billing_origin_agent_account", language),
+            }
+        ],
         message_key="jrh_ai_invoice_one",
         actions=[
             {
