@@ -626,9 +626,28 @@ class ArcaIntegrationTests(unittest.TestCase):
             cuit="20300000003",
             environment="homologation",
         )
-        store_cached_ta(ta_cache_key(self.org, self.user_agent), ticket)
-        self.assertIsNotNone(get_cached_ta(ta_cache_key(self.org, self.user_agent)))
+        key = ta_cache_key(self.org, self.user_agent)
+        store_cached_ta(key, ticket)
+        loaded = get_cached_ta(key)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded.token, "A-TOKEN")
+        self.assertEqual(loaded.sign, "A-SIGN")
         self.assertIsNone(get_cached_ta(ta_cache_key(self.org, self.admin_id)))
+        from modules.database.connection import get_connection
+
+        connection = get_connection()
+        try:
+            row = connection.execute(
+                "SELECT token, sign FROM arca_ta_cache WHERE cache_key = ?",
+                (key,),
+            ).fetchone()
+        finally:
+            connection.close()
+        self.assertIsNotNone(row)
+        self.assertNotEqual(row[0], "A-TOKEN")
+        self.assertNotEqual(row[1], "A-SIGN")
+        self.assertNotIn("A-TOKEN", row[0])
+        self.assertNotIn("A-SIGN", row[1])
 
     def test_pdf_uses_real_fiscal_fields_without_qr(self):
         self._link_user(self.user_agent, "20300000003")

@@ -2419,8 +2419,22 @@ def create_postgres_schema():
                 service TEXT NOT NULL,
                 cuit TEXT NOT NULL,
                 environment TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                generation_time TEXT,
+                created_at TEXT
             )
+            """
+        )
+        cursor.execute(
+            """
+            ALTER TABLE arca_ta_cache
+            ADD COLUMN IF NOT EXISTS generation_time TEXT
+            """
+        )
+        cursor.execute(
+            """
+            ALTER TABLE arca_ta_cache
+            ADD COLUMN IF NOT EXISTS created_at TEXT
             """
         )
 

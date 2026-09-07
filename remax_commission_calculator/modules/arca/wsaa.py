@@ -43,6 +43,7 @@ _RFC2822_WEEKDAY = re.compile(
 )
 
 USER_AUTH_ERROR_KEY = "invoice_err_arca_auth_failed"
+USER_TA_PENDING_KEY = "invoice_err_arca_ta_pending"
 DEBUG_WSAA_SCHEMA = "arca_err_wsaa_schema"
 DEBUG_WSAA_CMS = "arca_err_wsaa_cms"
 DEBUG_WSAA_UNAUTHORIZED = "arca_err_wsaa_unauthorized"
@@ -60,6 +61,7 @@ class TicketAcceso:
     service: str
     cuit: str
     environment: str
+    generation_time: datetime | None = None
 
 
 class WsaaAuthError(ValueError):
@@ -69,12 +71,18 @@ class WsaaAuthError(ValueError):
         self,
         *,
         debug_key=USER_AUTH_ERROR_KEY,
+        user_key=None,
         http_status=None,
         faultcode="",
         faultstring="",
     ):
-        super().__init__(USER_AUTH_ERROR_KEY)
-        self.user_key = USER_AUTH_ERROR_KEY
+        mapped_user_key = user_key or (
+            USER_TA_PENDING_KEY
+            if debug_key == DEBUG_WSAA_TA_EXISTS
+            else USER_AUTH_ERROR_KEY
+        )
+        super().__init__(mapped_user_key)
+        self.user_key = mapped_user_key
         self.debug_key = debug_key or USER_AUTH_ERROR_KEY
         self.http_status = http_status
         self.faultcode = faultcode or ""
@@ -83,6 +91,28 @@ class WsaaAuthError(ValueError):
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _aware(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def ta_is_reusable(
+    ticket: TicketAcceso | None,
+    *,
+    now: datetime | None = None,
+    margin_seconds: int = TA_RENEWAL_MARGIN_SECONDS,
+    require_margin: bool = True,
+) -> bool:
+    if ticket is None or not ticket.token or not ticket.sign:
+        return False
+    current = _aware(now or _utc_now())
+    expires = _aware(ticket.expires_at)
+    if require_margin:
+        return expires > current + timedelta(seconds=margin_seconds)
+    return expires > current
 
 
 def _tra_now() -> datetime:
@@ -163,6 +193,15 @@ def parse_login_ticket_response(xml_text: str) -> TicketAcceso:
     expires_at = datetime.fromisoformat(
         expiration_text.replace("Z", "+00:00")
     )
+    generation_text = (header.findtext("generationTime") or "").strip()
+    generation_time = None
+    if generation_text:
+        try:
+            generation_time = datetime.fromisoformat(
+                generation_text.replace("Z", "+00:00")
+            )
+        except ValueError:
+            generation_time = None
     service = (header.findtext("service") or WSAA_SERVICE_WSFE).strip()
     cuit = re.sub(r"\D", "", header.findtext("uniqueId") or "")
 
@@ -173,6 +212,7 @@ def parse_login_ticket_response(xml_text: str) -> TicketAcceso:
         service=service,
         cuit=cuit,
         environment=get_arca_environment(),
+        generation_time=generation_time,
     )
 
 
@@ -230,6 +270,13 @@ def map_wsaa_fault(faultcode: str, faultstring: str) -> str:
     blob = f"{faultcode} {faultstring}".lower()
     if not blob.strip():
         return USER_AUTH_ERROR_KEY
+    if (
+        "alreadyauthenticated" in blob
+        or "ya posee un ta" in blob
+        or "ta valido" in blob
+        or "ta válido" in blob
+    ):
+        return DEBUG_WSAA_TA_EXISTS
     if "schema" in blob or "interpretar el xml" in blob:
         return DEBUG_WSAA_SCHEMA
     if "cms.sign" in blob or "firma inválida" in blob or "firma invalida" in blob:
@@ -242,8 +289,6 @@ def map_wsaa_fault(faultcode: str, faultstring: str) -> str:
         return DEBUG_WSAA_CERTIFICATE
     if "generationtime" in blob or "expirationtime" in blob or "clock" in blob:
         return DEBUG_WSAA_CLOCK
-    if "ya posee un ta" in blob or "ta valido" in blob or "ta válido" in blob:
-        return DEBUG_WSAA_TA_EXISTS
     if "unavailable" in blob or "timeout" in blob:
         return DEBUG_WSAA_UNAVAILABLE
     return USER_AUTH_ERROR_KEY
@@ -359,29 +404,40 @@ def authenticate_wsaa(
     """Obtain TA, using cache when valid."""
     environment = get_arca_environment()
     cache_key = cache_key or f"{cuit}:{service}:{environment}"
-
-    if cache_getter:
-        cached = cache_getter(cache_key)
-        if cached and cached.expires_at > (
-            _utc_now()
-            + timedelta(seconds=TA_RENEWAL_MARGIN_SECONDS)
-        ):
-            logger.info("arca_auth_success: cache_hit")
-            return cached
+    cached = cache_getter(cache_key) if cache_getter else None
+    if ta_is_reusable(cached):
+        logger.info("arca_auth_success cache_hit")
+        return cached
 
     logger.info("arca_auth_start")
-    tra = build_tra_xml(service)
-    cms = sign_tra_cms(tra, credentials)
-    ticket_xml = wsaa_login_cms(cms, transport=transport)
-    ticket = parse_login_ticket_response(ticket_xml)
-    ticket = TicketAcceso(
-        token=ticket.token,
-        sign=ticket.sign,
-        expires_at=ticket.expires_at,
-        service=service,
-        cuit=re.sub(r"\D", "", cuit),
-        environment=environment,
-    )
+    try:
+        tra = build_tra_xml(service)
+        cms = sign_tra_cms(tra, credentials)
+        ticket_xml = wsaa_login_cms(cms, transport=transport)
+        ticket = parse_login_ticket_response(ticket_xml)
+        ticket = TicketAcceso(
+            token=ticket.token,
+            sign=ticket.sign,
+            expires_at=ticket.expires_at,
+            service=service,
+            cuit=re.sub(r"\D", "", cuit),
+            environment=environment,
+            generation_time=ticket.generation_time,
+        )
+    except WsaaAuthError as error:
+        if error.debug_key == DEBUG_WSAA_TA_EXISTS:
+            logger.info("arca_auth_ta_exists")
+            if ta_is_reusable(cached, require_margin=False):
+                logger.info("arca_auth_success cache_reuse_after_ta_exists")
+                return cached
+            raise WsaaAuthError(
+                debug_key=DEBUG_WSAA_TA_EXISTS,
+                user_key=USER_TA_PENDING_KEY,
+                http_status=error.http_status,
+                faultcode=error.faultcode,
+                faultstring=error.faultstring,
+            ) from None
+        raise
 
     if cache_setter:
         cache_setter(cache_key, ticket)

@@ -2991,10 +2991,24 @@ def _migrate_arca_integration(cursor):
             service TEXT NOT NULL,
             cuit TEXT NOT NULL,
             environment TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            generation_time TEXT,
+            created_at TEXT
         )
         """
     )
+    if _table_exists(cursor, "arca_ta_cache"):
+        for column_name, column_sql in (
+            ("generation_time", "TEXT"),
+            ("created_at", "TEXT"),
+        ):
+            if not _column_exists(cursor, "arca_ta_cache", column_name):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE arca_ta_cache
+                    ADD COLUMN {column_name} {column_sql}
+                    """
+                )
 
     cursor.execute(
         """

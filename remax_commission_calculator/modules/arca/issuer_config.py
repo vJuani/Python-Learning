@@ -80,17 +80,38 @@ def test_arca_connection(
             cache_getter=get_cached_ta,
             cache_setter=store_cached_ta,
         )
-        client.authenticate(
+        ticket = client.authenticate(
             issuer_profile or {},
             {"issuer_tax_id": (issuer_profile or {}).get("tax_id")},
             connection=connection,
             organization_id=organization_id,
             user_id=user_id,
         )
-        return "connected", None
     except Exception as error:
         from modules.arca.wsaa import USER_AUTH_ERROR_KEY, WsaaAuthError
 
         if isinstance(error, WsaaAuthError):
             return "error", error.user_key
         return "error", USER_AUTH_ERROR_KEY
+
+    try:
+        from modules.arca.voucher_mapping import (
+            VOUCHER_FACTURA_C,
+            resolve_voucher_type,
+        )
+        from modules.arca.wsfev1 import get_last_authorized_voucher
+
+        voucher_type = resolve_voucher_type(
+            issuer_tax_condition=(issuer_profile or {}).get("tax_condition") or "",
+            recipient_tax_condition="consumidor_final",
+        ) or VOUCHER_FACTURA_C
+        get_last_authorized_voucher(
+            ticket=ticket,
+            cuit=(issuer_profile or {}).get("tax_id") or "",
+            point_of_sale=int(str(connection.get("point_of_sale")).strip()),
+            voucher_type=voucher_type,
+            transport=transport,
+        )
+        return "connected", None
+    except Exception:
+        return "error", "invoice_err_arca_wsfe_failed"

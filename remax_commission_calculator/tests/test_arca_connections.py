@@ -216,6 +216,17 @@ class ArcaConnectionTests(unittest.TestCase):
   </credentials>
 </loginTicketResponse>"""
 
+            def wsfe_call(self, action, envelope, ticket, cuit):
+                return """<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+                  <soap:Body>
+                    <FECompUltimoAutorizadoResponse>
+                      <FECompUltimoAutorizadoResult>
+                        <CbteNro>0</CbteNro>
+                      </FECompUltimoAutorizadoResult>
+                    </FECompUltimoAutorizadoResponse>
+                  </soap:Body>
+                </soap:Envelope>"""
+
         key_pem, _ = generate_key_and_csr(common_name="Juan", cuit="20300000003")
         stored = store_credentials(
             self.org,
