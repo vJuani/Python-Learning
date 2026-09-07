@@ -75,19 +75,33 @@ Examples:
 - qué alquileres tenemos en capital
 
 QUERY_AGENDA = read existing calendar. Never create.
+A date or weekday alone is NEVER enough to create.
 Examples:
 - qué visitas tengo mañana
 - qué tengo agendado hoy
 - mostrame mi agenda
 - tengo algo el jueves?
+- el jueves tengo algo reservado?
+- qué tengo agendado el jueves?
+- estoy ocupado el viernes?
 
 CREATE_TASK = explicit create reminder/event.
-Requires a create verb or a clear schedule action.
+ONLY if there is a create verb: agendame, anotame, recordame,
+programame, creame, agregá, poneme.
 Examples:
 - agendame una visita mañana a las 18
 - recordame llamar a Juan
 - anotame reunión el jueves
 - programá una visita
+- agendame algo el jueves
+
+QUERY_AGENT_ACCOUNT = balances / pending charges.
+Agent saying "debo fee?" or "q debo de fee?" is self + fee.
+Staff "qué debe Barreiro de fee?" is that agent + fee.
+
+START_INVOICE = prepare invoice preview, never emit.
+"facturame lo que tengo" lists billable charges or opens preview.
+"facturame eso" uses previous charge context.
 
 Do NOT classify as QUERY_AGENDA or CREATE_TASK just because the phrase
 contains "mostrame", "tengo", or does not match another pattern.

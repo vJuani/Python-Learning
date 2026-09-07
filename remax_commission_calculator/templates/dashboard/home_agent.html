@@ -43,7 +43,7 @@
                         name="prompt"
                         class="jrh-hero__input"
                         placeholder="{{ t('jrh_hero_placeholder') }}"
-                        value="{{ (jrh_result.prompt if jrh_result else '') }}"
+                        value="{{ (jrh_ask.data.source_prompt if jrh_ask and jrh_ask.data else (jrh_result.prompt if jrh_result else '')) }}"
                         autocomplete="off"
                         required
                     >
@@ -102,6 +102,7 @@
             </ul>
         </section>
 
+        {% include "dashboard/_jrh_ask_result.html" %}
         {% include "dashboard/_jrh_result.html" %}
 
         <section class="jrh-quick" aria-label="{{ t('jrh_quick_title') }}">

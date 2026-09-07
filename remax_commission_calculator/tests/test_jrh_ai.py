@@ -36,7 +36,14 @@ from modules.jrh_ai_intents import (
     START_INVOICE,
     START_AGENT_PAYMENT,
 )
-from modules.jrh_ai_classify import normalize_location, parse_price_amount
+from datetime import datetime, timezone
+
+from modules.jrh_ai_classify import (
+    extract_entities,
+    normalize_location,
+    parse_price_amount,
+    resolve_agenda_date,
+)
 from modules.jrh_ai_provider import (
     MockAIIntentProvider,
     get_intent_provider,
@@ -95,6 +102,7 @@ class JrhAiTests(unittest.TestCase):
         cls.jose_martinez = add_agent("José Martínez", "Alto", cls.org)
         cls.pablo = add_agent("Pablo Gómez", "Alto", cls.org)
         cls.own_agent = add_agent("Home Agent", "Alto", cls.org)
+        cls.quiroga = add_agent("Laura Quiroga", "Alto", cls.org)
         cls.foreign_barreiro = add_agent("José Luis Barreiro", "Alto", cls.other_org)
 
         cls.admin = add_user(
@@ -171,6 +179,14 @@ class JrhAiTests(unittest.TestCase):
             amount="65",
             created_by_user_id=cls.admin,
         )
+        cls.own_fee = cls._charge(
+            cls.org,
+            cls.own_agent,
+            description="Fee septiembre",
+            charge_category="fee",
+            amount="65",
+            created_by_user_id=cls.admin,
+        )
         cls._charge(
             cls.other_org,
             cls.foreign_barreiro,
@@ -198,6 +214,16 @@ class JrhAiTests(unittest.TestCase):
             neighborhood="Belgrano",
             rooms=2,
             listing_price=400000,
+            property_type="apartment",
+        )
+        add_property(
+            "Av. Cabildo 2500",
+            "CABA",
+            cls.org,
+            agent_id=cls.own_agent,
+            neighborhood="Belgrano",
+            rooms=3,
+            listing_price=210000,
             property_type="apartment",
         )
         add_property(
@@ -587,6 +613,9 @@ class JrhAiTests(unittest.TestCase):
         for phrase in (
             "qué visitas tengo mañana",
             "qué tengo agendado hoy",
+            "tengo algo el jueves?",
+            "qué tengo agendado el jueves?",
+            "el jueves tengo algo reservado?",
         ):
             parsed = interpret_with_rules(phrase)
             self.assertEqual(parsed["intent"], QUERY_AGENDA, phrase)
@@ -595,6 +624,8 @@ class JrhAiTests(unittest.TestCase):
         for phrase in (
             "agendame una visita mañana a las 18",
             "recordame llamar a Juan",
+            "agendame algo el jueves",
+            "agendame una visita el jueves a las 17",
         ):
             parsed = interpret_with_rules(phrase)
             self.assertEqual(parsed["intent"], CREATE_TASK, phrase)
@@ -649,6 +680,231 @@ class JrhAiTests(unittest.TestCase):
         titles = " ".join(card["title"] for card in result["cards"])
         self.assertNotIn("Privada Otras Manos", titles)
         self.assertNotEqual(result.get("entity", {}).get("id"), other_agent_property)
+
+    def test_27_capital_available_answers_with_filtered_cards(self):
+        parsed = interpret_with_rules(
+            "mostrame qué propiedades disponibles tengo en capital"
+        )
+        self.assertEqual(parsed["intent"], QUERY_PROPERTIES)
+        self.assertEqual(parsed["entities"].get("jurisdiction"), "CABA")
+        self.assertEqual(parsed["entities"].get("availability"), "available")
+        result = self._ask(
+            "mostrame qué propiedades disponibles tengo en capital",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        self.assertEqual(result["intent"], QUERY_PROPERTIES)
+        self.assertIn("Encontré", result["message"])
+        self.assertIn("CABA", result["message"])
+        self.assertNotIn("Te llevo al listado", result["message"])
+        titles = " ".join(card["title"] for card in result["cards"])
+        self.assertIn("Libertador", titles)
+        self.assertNotIn("Foreign Capital", titles)
+        action = result["actions"][0]
+        self.assertEqual(action["href_args"].get("jurisdiction"), "CABA")
+        self.assertEqual(action["href_args"].get("commercial_status"), "available")
+
+    def test_28_nunez_apartments(self):
+        parsed = interpret_with_rules("qué deptos tenemos en Núñez")
+        self.assertEqual(parsed["intent"], QUERY_PROPERTIES)
+        self.assertEqual(parsed["entities"].get("neighborhood"), "Núñez")
+        self.assertEqual(parsed["entities"].get("property_type"), "apartment")
+        result = self._ask(
+            "qué deptos tenemos en Núñez",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        titles = " ".join(card["title"] for card in result["cards"])
+        self.assertIn("Libertador", titles)
+        self.assertNotIn("Cabildo", titles)
+
+    def test_29_belgrano_max_price(self):
+        parsed = interpret_with_rules("hay algo en Belgrano hasta 250 mil?")
+        self.assertEqual(parsed["intent"], QUERY_PROPERTIES)
+        self.assertEqual(parsed["entities"].get("neighborhood"), "Belgrano")
+        self.assertEqual(parsed["entities"].get("max_price"), 250000)
+        result = self._ask(
+            "hay algo en Belgrano hasta 250 mil?",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        titles = " ".join(card["title"] for card in result["cards"])
+        self.assertIn("Cabildo 2500", titles)
+        self.assertNotIn("Cabildo 1000", titles)
+
+    def test_30_view_all_preserves_filters(self):
+        result = self._ask(
+            "mostrame qué propiedades disponibles tengo en capital",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        href_args = result["actions"][0]["href_args"]
+        self.assertEqual(href_args.get("jurisdiction"), "CABA")
+        self.assertEqual(href_args.get("commercial_status"), "available")
+        self.assertEqual(result["data"].get("filters"), href_args)
+
+    def test_31_thursday_query_is_not_create(self):
+        for phrase in (
+            "tengo algo el jueves?",
+            "qué tengo agendado el jueves?",
+        ):
+            parsed = interpret_with_rules(phrase)
+            self.assertEqual(parsed["intent"], QUERY_AGENDA, phrase)
+            result = self._ask(
+                phrase,
+                user=self.agent_record,
+                agent_id=self.own_agent,
+            )
+            self.assertEqual(result["intent"], QUERY_AGENDA, phrase)
+            self.assertNotEqual(result["intent"], CREATE_TASK)
+
+    def test_32_thursday_date_resolves(self):
+        monday = datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc)
+        resolved = resolve_agenda_date(
+            extract_entities("tengo algo el jueves?"),
+            monday,
+        )
+        self.assertEqual(resolved["start"].isoformat(), "2026-09-10")
+        thursday = datetime(2026, 9, 10, 12, 0, tzinfo=timezone.utc)
+        same = resolve_agenda_date(extract_entities("el jueves tengo algo?"), thursday)
+        self.assertEqual(same["start"].isoformat(), "2026-09-10")
+        nxt = resolve_agenda_date(extract_entities("próximo jueves"), thursday)
+        self.assertEqual(nxt["start"].isoformat(), "2026-09-17")
+
+    def test_33_empty_agenda_is_not_create(self):
+        result = self._ask(
+            "tengo algo el jueves?",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        self.assertEqual(result["intent"], QUERY_AGENDA)
+        self.assertIn("nada agendado", result["message"])
+        hrefs = [action.get("href_name") for action in result["actions"]]
+        self.assertIn("agenda_compose", hrefs)
+        self.assertFalse(result.get("confirm_required"))
+
+    def test_34_thursday_agenda_lists_existing_task(self):
+        tz = organization_timezone(self.org)
+        thursday = resolve_agenda_date(
+            extract_entities("tengo algo el jueves?"),
+            now_utc().astimezone(tz),
+        )["start"]
+        create_task(
+            self.org,
+            self.own_agent,
+            {
+                "title": "Llamar a Martín",
+                "task_type": "call",
+                "due_date": thursday.isoformat(),
+                "due_time": "10:00",
+                "contact_name": "Martín",
+            },
+            created_by_user_id=self.agent_user,
+        )
+        result = self._ask(
+            "qué tengo agendado el jueves?",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        self.assertEqual(result["intent"], QUERY_AGENDA)
+        titles = " ".join(card["title"] for card in result["cards"])
+        self.assertIn("Martín", titles)
+        self.assertNotIn("nada agendado", result["message"])
+
+    def test_35_agent_own_fee(self):
+        parsed = interpret_with_rules("debo fee?")
+        self.assertEqual(parsed["intent"], QUERY_AGENT_ACCOUNT)
+        self.assertTrue(parsed["entities"].get("self"))
+        result = self._ask(
+            "q debo de fee?",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        self.assertEqual(result["intent"], QUERY_AGENT_ACCOUNT)
+        self.assertIn("Fee", result["message"] + str(result["cards"]))
+        self.assertEqual(result["entity"].get("id"), self.own_fee["id"])
+
+    def test_36_staff_barreiro_fee(self):
+        parsed = interpret_with_rules("qué debe Barreiro de fee?")
+        self.assertEqual(parsed["intent"], QUERY_AGENT_ACCOUNT)
+        self.assertEqual(parsed["entities"].get("agent_name"), "Barreiro")
+        result = self._ask("qué debe Barreiro de fee?")
+        self.assertEqual(result["intent"], QUERY_AGENT_ACCOUNT)
+        titles = " ".join(card["title"] for card in result["cards"])
+        self.assertIn("Fee", titles)
+        self.assertNotIn("JRH One", titles)
+
+    def test_37_no_fee_pending(self):
+        result = self._ask("qué debe Quiroga de fee?")
+        self.assertEqual(result["intent"], QUERY_AGENT_ACCOUNT)
+        self.assertIn("No tenés Fee pendiente", result["message"])
+
+    def test_38_invoice_vague_many_candidates(self):
+        result = self._ask(
+            "facturame lo q tengo",
+            user=self.barreiro_record,
+            agent_id=self.barreiro,
+        )
+        self.assertEqual(result["intent"], START_INVOICE)
+        self.assertEqual(result["status"], "needs_attention")
+        self.assertGreaterEqual(len(result["candidates"]), 2)
+        self.assertFalse(result["wrote"])
+        self.assertIn("cargos", result["message"])
+
+    def test_39_invoice_vague_one_preview(self):
+        result = self._ask(
+            "facturame lo que tengo",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        self.assertEqual(result["intent"], START_INVOICE)
+        self.assertTrue(result["confirm_required"])
+        self.assertFalse(result["wrote"])
+        self.assertEqual(result["entity"].get("id"), self.own_fee["id"])
+        hrefs = [action.get("href_name") for action in result["actions"]]
+        self.assertIn("billing_prepare_charge", hrefs)
+
+    def test_40_facturame_eso_uses_context(self):
+        session = {}
+        first = self._ask(
+            "q debo de fee?",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+            session=session,
+        )
+        self.assertEqual(first["entity"].get("kind"), "charge")
+        second = self._ask(
+            "facturame eso",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+            session=session,
+        )
+        self.assertEqual(second["intent"], START_INVOICE)
+        self.assertTrue(second["confirm_required"])
+        self.assertFalse(second["wrote"])
+        self.assertEqual(second["entity"].get("id"), self.own_fee["id"])
+
+    def test_41_home_and_ask_http_answer_properties(self):
+        client = self._login("jrh_ai_agent")
+        page = client.post(
+            "/jrh",
+            data={"prompt": "mostrame qué propiedades disponibles tengo en capital"},
+        )
+        body = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Encontré", body)
+        self.assertIn("Libertador", body)
+        self.assertNotIn("QUERY_PROPERTIES", body)
+        self.assertNotIn("Te llevo al listado", body)
+        home = client.post(
+            "/jrh/interpret",
+            data={"prompt": "mostrame qué propiedades disponibles tengo en capital"},
+        )
+        home_body = home.get_data(as_text=True)
+        self.assertEqual(home.status_code, 200)
+        self.assertIn("Encontré", home_body)
+        self.assertNotIn("Entendí 1 cosa", home_body)
+        self.assertNotIn("Te llevo al listado", home_body)
 
 
 if __name__ == "__main__":

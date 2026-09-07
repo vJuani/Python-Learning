@@ -634,6 +634,16 @@ textarea.form-input:focus {
     color: var(--muted, #666);
 }
 
+.jrh-ask__cards a {
+    display: inline-block;
+    margin-top: 0.4rem;
+}
+
+.jrh-ask__intent,
+.jrh-ask__result [data-intent] {
+    display: none;
+}
+
 .jrh-ask__actions {
     display: flex;
     flex-wrap: wrap;

@@ -145,7 +145,7 @@ def resolve_properties(
             if expected in (None, ""):
                 continue
             try:
-                if int(row.get(field) or 0) != int(expected):
+                if int(row.get(field) or 0) < int(expected):
                     return False
             except (TypeError, ValueError):
                 return False
@@ -168,7 +168,7 @@ def resolve_properties(
         return True
 
     rows = [row for row in rows if _keep(row)]
-    return [
+    items = [
         {
             "id": row.get("id") or row.get("db_id"),
             "name": row.get("address") or row.get("name") or "",
@@ -179,9 +179,13 @@ def resolve_properties(
             "listing_price": row.get("listing_price"),
             "listing_currency": row.get("listing_currency") or "",
             "rooms": row.get("rooms"),
+            "bedrooms": row.get("bedrooms"),
+            "bathrooms": row.get("bathrooms"),
+            "covered_m2": row.get("covered_m2") or row.get("total_m2"),
         }
         for row in rows[:limit]
     ]
+    return items, len(rows)
 
 
 def resolve_operations(

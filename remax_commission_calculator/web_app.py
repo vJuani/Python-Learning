@@ -1492,7 +1492,7 @@ def get_dashboard_context(
     }
 
 
-def get_agent_home_context(organization_id, agent_id, *, jrh_result=None):
+def get_agent_home_context(organization_id, agent_id, *, jrh_result=None, jrh_ask=None):
     from modules.jrh_home import build_agent_home
 
     language = get_current_language()
@@ -1511,6 +1511,7 @@ def get_agent_home_context(organization_id, agent_id, *, jrh_result=None):
         ),
         "agenda_summary": _agenda_summary_for_current_user(),
         "jrh_result": jrh_result,
+        "jrh_ask": jrh_ask,
     }
 
 

@@ -22,6 +22,7 @@ from modules.jrh_intent import (
     INTENT_PROPERTY_SEARCH,
     JrhIntentError,
     interpret_jrh_request,
+    split_jrh_segments,
 )
 
 
@@ -134,6 +135,25 @@ def register_jrh_routes(app, helpers):
         prompt = (request.form.get("prompt") or "").strip()
         language = get_current_language()
         try:
+            if len(split_jrh_segments(prompt)) <= 1:
+                result = attach_ask_urls(
+                    ask_jrh(
+                        prompt,
+                        organization_id=organization_id,
+                        user=user,
+                        agent_id=agent_id,
+                        language=language,
+                        session=session,
+                    )
+                )
+                return render_template(
+                    "dashboard/home_agent.html",
+                    **get_agent_home_context(
+                        organization_id,
+                        agent_id,
+                        jrh_ask=result,
+                    ),
+                )
             result = attach_intent_urls(
                 interpret_jrh_request(
                     prompt,

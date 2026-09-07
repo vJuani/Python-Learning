@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import timedelta
 
 from modules.agent_account import build_agent_detail_view
 from modules.auth import is_admin, is_agent
 from modules.database.tenant import require_organization_id
 from modules.i18n import translate
+from modules.jrh_ai_classify import (
+    CABA_ALIASES,
+    fold_text,
+    format_agenda_day_label,
+    normalize_user_text,
+    resolve_agenda_date,
+)
 from modules.jrh_ai_context import load_context, store_context
 from modules.jrh_ai_intents import (
     CREATE_TASK,
@@ -36,11 +42,7 @@ from modules.jrh_ai_resolver import (
     resolve_pending_charges,
     resolve_properties,
 )
-from modules.organization_time import (
-    local_date_bounds_utc,
-    now_utc,
-    organization_timezone,
-)
+from modules.organization_time import now_utc, organization_timezone
 from modules.pending_actions import (
     build_agent_pending_actions,
     build_staff_pending_actions,
@@ -118,7 +120,7 @@ def ask_jrh(
     now=None,
 ):
     organization_id = require_organization_id(organization_id)
-    text = (prompt or "").strip()
+    text = normalize_user_text(prompt)
     if not text:
         return _result(
             FALLBACK,
@@ -257,7 +259,12 @@ def _handle_account(
     **_kwargs,
 ):
     query = ""
-    if entities.get("self") and agent_id:
+    use_self = bool(entities.get("self") and agent_id) or (
+        is_agent(user)
+        and agent_id
+        and not entities.get("agent_name")
+    )
+    if use_self:
         from modules.database.agents_repository import get_agent_record
 
         own = get_agent_record(agent_id, organization_id)
@@ -293,13 +300,62 @@ def _handle_account(
             candidates=matches,
             confidence=confidence,
         )
+    hint = entities.get("charge_hint") or ""
+    charges = resolve_pending_charges(
+        organization_id,
+        chosen["id"],
+        hint=hint,
+    )
+    href_name = "my_agent_account" if is_agent(user) else "agent_account_detail"
+    href_args = {} if is_agent(user) else {"agent_id": chosen["id"]}
+    account_action = {
+        "label_key": "jrh_ai_view_current_account",
+        "href_name": href_name,
+        "href_args": href_args,
+    }
+    if fold_text(hint) == "fee":
+        if not charges:
+            return _result(
+                QUERY_AGENT_ACCOUNT,
+                "ready",
+                language=language,
+                message_key="jrh_ai_fee_clear",
+                actions=[account_action],
+                confidence=confidence,
+                entity=chosen,
+                data={"source_prompt": prompt},
+            )
+        cards = [
+            {
+                "title": " · ".join(
+                    part
+                    for part in (
+                        "Fee",
+                        charge.get("period_label") or charge.get("name") or "",
+                    )
+                    if part
+                ),
+                "subtitle": f"{charge.get('currency') or ''} {charge.get('amount') or ''}".strip(),
+            }
+            for charge in charges[:5]
+        ]
+        return _result(
+            QUERY_AGENT_ACCOUNT,
+            "ready",
+            language=language,
+            message_key="jrh_ai_fee_pending",
+            cards=cards,
+            actions=[account_action],
+            confidence=confidence,
+            entity=charges[0] if len(charges) == 1 else chosen,
+            data={"source_prompt": prompt},
+        )
     view = build_agent_detail_view(
         organization_id,
         chosen["id"],
         language=language,
     )
     balances = view.get("display_balances") or {}
-    charges = resolve_pending_charges(organization_id, chosen["id"])
     cards = [
         {
             "title": chosen["name"],
@@ -316,8 +372,6 @@ def _handle_account(
                 "subtitle": f"{charge.get('currency')} {charge.get('amount')}",
             }
         )
-    href_name = "my_agent_account" if is_agent(user) else "agent_account_detail"
-    href_args = {} if is_agent(user) else {"agent_id": chosen["id"]}
     return _result(
         QUERY_AGENT_ACCOUNT,
         "ready",
@@ -325,7 +379,7 @@ def _handle_account(
         summary=chosen["name"],
         cards=cards,
         actions=[
-            {"label_key": "jrh_ai_view_account", "href_name": href_name, "href_args": href_args},
+            account_action,
             {
                 "label_key": "jrh_ai_register_payment",
                 "href_name": "agent_payment_ai_new",
@@ -343,6 +397,36 @@ def _handle_account(
     )
 
 
+def _agenda_when_phrase(resolved, language, *, empty=False):
+    when = resolved.get("when")
+    start = resolved["start"]
+    if when == "today":
+        return _t("jrh_ai_when_today_empty" if empty else "jrh_ai_when_today", language)
+    if when == "tomorrow":
+        return _t("jrh_ai_when_tomorrow_empty" if empty else "jrh_ai_when_tomorrow", language)
+    if when == "day_after_tomorrow":
+        return _t("jrh_ai_when_day_after_empty" if empty else "jrh_ai_when_day_after", language)
+    if when == "this_week":
+        return _t("jrh_ai_when_this_week", language)
+    label = format_agenda_day_label(start, language)
+    if language == "es":
+        return f"el {label}" if empty else f"El {label}"
+    return label
+
+
+def _collect_agenda_items(agenda, start, end):
+    items = []
+    start_iso = start.isoformat()
+    end_iso = end.isoformat()
+    for section in agenda.get("sections") or []:
+        for task in section.get("tasks") or []:
+            due = task.get("due_date_value") or ""
+            if due and not (start_iso <= due <= end_iso):
+                continue
+            items.append(task)
+    return items
+
+
 def _handle_agenda(
     *,
     organization_id,
@@ -350,48 +434,186 @@ def _handle_agenda(
     agent_id,
     language,
     entities,
+    prompt,
     confidence,
     now=None,
     **_kwargs,
 ):
-    from modules.database.agent_tasks_repository import (
-        STATUS_PENDING,
-        list_agent_tasks,
-    )
+    from modules.agent_tasks import build_agenda_view
+    from modules.google_calendar import attach_google_overlay
 
     if not agent_id and is_agent(user):
         return _fallback(language, confidence)
     scoped = agent_id if is_agent(user) else None
     tz = organization_timezone(organization_id)
     current = (now or now_utc()).astimezone(tz)
-    day = current.date()
-    if entities.get("when") == "tomorrow":
-        day = day + timedelta(days=1)
-    start, end = local_date_bounds_utc(day, tz)
-    tasks = list_agent_tasks(
+    resolved = resolve_agenda_date(entities, current)
+    start = resolved["start"]
+    end = resolved["end"]
+    when_phrase = _agenda_when_phrase(resolved, language)
+    when_empty = _agenda_when_phrase(resolved, language, empty=True)
+    due_date = start.isoformat() if start == end else None
+    agenda = build_agenda_view(
         organization_id,
         agent_id=scoped,
-        statuses=(STATUS_PENDING,),
-        due_from=start,
-        due_to=end,
-        limit=20,
+        due_date=due_date,
+        language=language,
+        now=now or now_utc(),
     )
-    cards = [
-        {
-            "title": item.get("title") or item.get("task_type") or "",
-            "subtitle": item.get("due_label") or item.get("contact_name") or "",
-        }
-        for item in tasks[:8]
-    ]
+    if agent_id:
+        try:
+            agenda = attach_google_overlay(
+                agenda,
+                organization_id,
+                agent_id=agent_id,
+                language=language,
+                now=now or now_utc(),
+            )
+        except Exception:
+            logger.info("jrh_ai agenda google overlay skipped")
+    tasks = _collect_agenda_items(agenda, start, end)
+    cards = []
+    for item in tasks[:8]:
+        time_label = item.get("due_time_label") or item.get("due_time_value") or ""
+        title = item.get("title") or item.get("type_label") or ""
+        relation = item.get("relation_label") or item.get("contact_name") or ""
+        cards.append(
+            {
+                "title": " — ".join(part for part in (time_label, title) if part),
+                "subtitle": relation,
+            }
+        )
+    if (
+        resolved.get("when") == "today"
+        and is_agent(user)
+        and agent_id
+    ):
+        pending = summarize_pending_actions(
+            build_agent_pending_actions(
+                organization_id,
+                agent_id,
+                user_id=(user or {}).get("id"),
+                language=language,
+            ),
+            language=language,
+        )
+        pending_total = pending.get("total") or 0
+        if pending_total:
+            cards.append(
+                {
+                    "title": _t("jrh_ai_pendings_group", language),
+                    "subtitle": _t(
+                        "jrh_ai_pendings_count",
+                        language,
+                        count=pending_total,
+                    ),
+                    "href_name": "pendings_center",
+                }
+            )
+    agenda_href = {"date": start.isoformat()} if start == end else {}
+    if not tasks:
+        return _result(
+            QUERY_AGENDA,
+            "ready",
+            language=language,
+            message_key="jrh_ai_agenda_empty",
+            cards=cards,
+            actions=[
+                {
+                    "label_key": "jrh_ai_schedule_something",
+                    "href_name": "agenda_compose",
+                },
+                {
+                    "label": _t(
+                        "jrh_ai_view_agenda_day",
+                        language,
+                        when=when_phrase,
+                    ),
+                    "href_name": "agenda_index",
+                    "href_args": agenda_href,
+                },
+            ],
+            confidence=confidence,
+            data={"when": when_empty, "count": 0, "source_prompt": prompt},
+        )
     return _result(
         QUERY_AGENDA,
         "ready",
         language=language,
-        summary=_t("jrh_ai_agenda_count", language, count=len(tasks)),
+        message_key="jrh_ai_agenda_found",
         cards=cards,
-        actions=[{"label_key": "jrh_cta_view", "href_name": "agenda_index"}],
+        actions=[
+            {
+                "label": _t(
+                    "jrh_ai_view_agenda_day",
+                    language,
+                    when=when_phrase,
+                ),
+                "href_name": "agenda_index",
+                "href_args": agenda_href,
+            }
+        ],
         confidence=confidence,
+        data={
+            "when": when_phrase,
+            "count": len(tasks),
+            "source_prompt": prompt,
+        },
     )
+
+
+def _property_place_label(entities):
+    neighborhood = entities.get("neighborhood") or ""
+    jurisdiction = entities.get("jurisdiction") or ""
+    location = entities.get("location") or ""
+    if neighborhood:
+        return neighborhood
+    if jurisdiction:
+        return jurisdiction
+    folded = fold_text(location)
+    if folded in CABA_ALIASES:
+        return "CABA"
+    return location
+
+
+def _property_list_href_args(entities):
+    args = {}
+    if entities.get("jurisdiction"):
+        args["jurisdiction"] = entities["jurisdiction"]
+    if entities.get("neighborhood"):
+        args["neighborhood"] = entities["neighborhood"]
+    if entities.get("availability"):
+        args["commercial_status"] = entities["availability"]
+    purpose = entities.get("listing_purpose") or entities.get("operation_type")
+    if purpose:
+        args["listing_purpose"] = purpose
+    if entities.get("max_price") not in (None, ""):
+        args["max_price"] = entities["max_price"]
+    if entities.get("min_price") not in (None, ""):
+        args["min_price"] = entities["min_price"]
+    if entities.get("currency"):
+        args["listing_currency"] = entities["currency"]
+    if entities.get("property_type"):
+        args["type"] = entities["property_type"]
+    return args
+
+
+def _format_listing_price(item):
+    if item.get("listing_price") in (None, ""):
+        return ""
+    currency = item.get("listing_currency") or ""
+    return f"{currency} {item.get('listing_price')}".strip()
+
+
+def _property_detail_line(item):
+    parts = []
+    if item.get("rooms"):
+        parts.append(f"{item['rooms']} amb")
+    if item.get("bedrooms"):
+        parts.append(f"{item['bedrooms']} dorm")
+    if item.get("covered_m2"):
+        parts.append(f"{item['covered_m2']} m²")
+    return " · ".join(parts)
 
 
 def _handle_properties(
@@ -401,10 +623,11 @@ def _handle_properties(
     agent_id,
     language,
     entities,
+    prompt,
     confidence,
     **_kwargs,
 ):
-    matches = resolve_properties(
+    matches, total = resolve_properties(
         organization_id,
         user=user,
         agent_id=agent_id,
@@ -438,51 +661,69 @@ def _handle_properties(
                 f"property_type_{item['property_type']}",
                 language,
             )
-        price = ""
-        if item.get("listing_price") not in (None, ""):
-            amount = item.get("listing_price")
-            currency = item.get("listing_currency") or ""
-            price = f"{currency} {amount}".strip()
-        rooms_label = (
-            f"{item.get('rooms')} amb" if item.get("rooms") else ""
-        )
         zone = item.get("neighborhood") or item.get("jurisdiction") or ""
-        subtitle = " · ".join(
-            part for part in (zone, type_label, price, rooms_label) if part
-        )
         cards.append(
             {
                 "title": item.get("name") or "",
-                "subtitle": subtitle,
+                "subtitle": " · ".join(part for part in (zone, type_label) if part),
+                "meta": _format_listing_price(item),
+                "detail": _property_detail_line(item),
+                "cta_key": "jrh_ai_view_property",
                 "href_name": "properties_detail",
                 "href_args": {"property_id": item.get("id")},
             }
         )
-    actions = [
-        {"label_key": "jrh_cta_view_all", "href_name": "properties_list"},
-    ]
-    if not matches:
+    list_args = _property_list_href_args(entities)
+    actions = []
+    if total:
+        actions.append(
+            {
+                "label": _t("jrh_ai_view_all_count", language, count=total),
+                "href_name": "properties_list",
+                "href_args": list_args,
+            }
+        )
+    else:
         actions.extend(
             [
-                {"label_key": "jrh_ai_suggest_widen", "href_name": "properties_list"},
-                {"label_key": "jrh_ai_suggest_budget", "href_name": "properties_list"},
+                {
+                    "label_key": "jrh_ai_suggest_widen",
+                    "href_name": "properties_list",
+                    "href_args": list_args,
+                },
+                {
+                    "label_key": "jrh_ai_suggest_budget",
+                    "href_name": "properties_list",
+                    "href_args": list_args,
+                },
             ]
         )
+    place = _property_place_label(entities)
+    availability_label = (
+        _t("jrh_ai_properties_available_label", language)
+        if entities.get("availability")
+        else ""
+    )
+    place_label = f" en {place}" if place else ""
     return _result(
         QUERY_PROPERTIES,
         "ready" if matches else "needs_attention",
         language=language,
         message_key=(
-            "jrh_ai_properties_count"
+            "jrh_ai_properties_found"
             if matches
             else "jrh_ai_properties_empty"
         ),
         data={
-            "count": len(matches),
+            "count": total,
+            "availability_label": availability_label,
+            "place_label": place_label,
             "empty_hint": "" if matches else _t(
                 "jrh_ai_properties_empty_hint",
                 language,
             ),
+            "source_prompt": prompt,
+            "filters": list_args,
         },
         cards=cards,
         actions=actions,
@@ -746,13 +987,27 @@ def _handle_start_invoice(
                 entities["agent_name"] = previous_agent.get("name") or ""
 
     query = entities.get("agent_name") or ""
-    matches = resolve_agents(
-        organization_id,
-        query,
-        user=user,
-        agent_id=agent_id,
+    use_self = bool(entities.get("self") and agent_id) or (
+        is_agent(user) and agent_id and not query
     )
-    if query and matches:
+    if use_self:
+        from modules.database.agents_repository import get_agent_record
+
+        own = get_agent_record(agent_id, organization_id)
+        matches = (
+            [{"id": own["id"], "name": own.get("name") or "", "kind": "agent"}]
+            if own
+            else []
+        )
+        query = (own or {}).get("name") or query
+    else:
+        matches = resolve_agents(
+            organization_id,
+            query,
+            user=user,
+            agent_id=agent_id,
+        )
+    if (query or use_self) and matches:
         status, chosen, matches = pick_unique(matches, confidence=confidence)
         if status == "ambiguous":
             return _result(
@@ -775,10 +1030,35 @@ def _handle_start_invoice(
                     START_INVOICE,
                     "needs_attention",
                     language=language,
-                    message_key="jrh_ai_charge_ambiguous",
+                    message_key="jrh_ai_invoice_candidates",
                     candidates=charges,
+                    cards=[
+                        {
+                            "title": charge.get("name") or "",
+                            "subtitle": (
+                                f"{charge.get('currency')} {charge.get('amount')}"
+                            ),
+                        }
+                        for charge in charges[:5]
+                    ],
                     confidence=confidence,
                     entity=chosen,
+                    data={"count": len(charges), "source_prompt": prompt},
+                    actions=[
+                        {
+                            "label_key": "jrh_ai_view_current_account",
+                            "href_name": (
+                                "my_agent_account"
+                                if is_agent(user)
+                                else "agent_account_detail"
+                            ),
+                            "href_args": (
+                                {}
+                                if is_agent(user)
+                                else {"agent_id": chosen["id"]}
+                            ),
+                        }
+                    ],
                 )
             if len(charges) == 1:
                 return _invoice_charge_preview(
@@ -790,6 +1070,15 @@ def _handle_start_invoice(
                     prompt=prompt,
                     agent=chosen,
                     charge=charges[0],
+                )
+            if use_self:
+                return _result(
+                    START_INVOICE,
+                    "needs_attention",
+                    language=language,
+                    message_key="jrh_ai_invoice_need_context",
+                    confidence=confidence,
+                    data={"source_prompt": prompt},
                 )
 
     from modules.auth import ROLE_AGENT, ROLE_ADMIN
@@ -888,16 +1177,19 @@ def _invoice_charge_preview(
     title = (agent or {}).get("name") or ""
     subtitle = ""
     if charge:
-        subtitle = f"{charge.get('name')} · {charge.get('currency')} {charge.get('amount')}"
+        title = charge.get("name") or title
+        subtitle = f"{charge.get('currency')} {charge.get('amount')}".strip()
+    draft["source_prompt"] = prompt
     return _result(
         START_INVOICE,
         "ready",
         language=language,
         summary=title or prompt,
         cards=[{"title": title, "subtitle": subtitle}],
+        message_key="jrh_ai_invoice_one",
         actions=[
             {
-                "label_key": "jrh_ai_generate_invoice",
+                "label_key": "jrh_ai_prepare_invoice",
                 "href_name": "billing_prepare_charge",
                 "href_args": {"charge_id": charge_id},
             }

@@ -16,6 +16,7 @@ from modules.contacts import create_agent_contact
 from modules.database import (
     add_agent,
     add_organization,
+    add_property,
     add_user,
     create_tables,
 )
@@ -95,6 +96,16 @@ class JrhHomeTests(unittest.TestCase):
             cls.org,
             cls.agent_id,
             {"name": "Martín Pérez", "phone": "5491122222222"},
+        )
+        add_property(
+            "Av. Córdoba 3200",
+            "CABA",
+            cls.org,
+            agent_id=cls.agent_id,
+            neighborhood="Palermo",
+            rooms=3,
+            listing_price=185000,
+            property_type="apartment",
         )
 
     def _login(self, username, role=ROLE_AGENT, org=None, user_id=None):
@@ -269,8 +280,7 @@ class JrhHomeTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         body = response.get_data(as_text=True)
-        self.assertIn("Entendí 1 cosa", body)
-        self.assertIn("Revisar", body)
+        self.assertTrue("Revisar" in body or "Confirmar" in body)
         self.assertEqual(_task_count(self.org), before)
 
     def test_voice_uses_same_router(self):
@@ -422,6 +432,30 @@ class JrhHomeTests(unittest.TestCase):
         self.assertIn("Entendí 3 cosas", body)
         self.assertIn("Buscar propiedades", body)
         self.assertIn("Pendientes", body)
+
+    def test_http_inventory_answers_without_router_copy(self):
+        client = self._login("jrh_agent")
+        page = client.post(
+            "/jrh/interpret",
+            data={"prompt": "mostrame qué propiedades disponibles tengo en capital"},
+        )
+        body = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Encontré", body)
+        self.assertIn("Córdoba 3200", body)
+        self.assertNotIn("Entendí 1 cosa", body)
+        self.assertNotIn("Te llevo al listado", body)
+
+    def test_http_thursday_query_is_not_schedule_form(self):
+        client = self._login("jrh_agent")
+        page = client.post(
+            "/jrh/interpret",
+            data={"prompt": "tengo algo el jueves?"},
+        )
+        body = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("agendado", body.lower())
+        self.assertNotIn("Me falta un dato para agendar", body)
 
 
 if __name__ == "__main__":
