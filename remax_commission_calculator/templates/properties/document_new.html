@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('property_docs_upload') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/properties-page.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/property-documents.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('property_docs_upload') }}</h2>
+        <p class="field-help">{{ property_data.address }}</p>
+    </div>
+    <div class="page-actions">
+        <a
+            href="{{ url_for('properties_detail', property_id=property_data.id) }}"
+            class="btn btn-secondary btn-back"
+        ><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <form
+        method="post"
+        enctype="multipart/form-data"
+        class="property-doc-form"
+        data-property-doc-form
+    >
+        <label class="contact-field">
+            <span>{{ t('property_docs_type') }}</span>
+            <select name="document_type" required>
+                {% for item in document_types %}
+                <option value="{{ item.value }}">{{ t(item.label_key) }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="contact-field">
+            <span>{{ t('property_docs_title_label') }}</span>
+            <input type="text" name="title" required maxlength="120">
+        </label>
+        <label class="contact-field">
+            <span>{{ t('property_docs_description_label') }}</span>
+            <textarea name="description" rows="2"></textarea>
+        </label>
+        <label class="contact-field">
+            <span>{{ t('property_docs_files_label') }}</span>
+            <input
+                type="file"
+                name="files"
+                accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf"
+                multiple
+                required
+                data-property-doc-input
+            >
+            <small class="field-help">{{ t('property_docs_files_help') }}</small>
+        </label>
+        <ul class="property-doc-previews" data-property-doc-previews hidden></ul>
+        <div class="page-actions">
+            <a
+                href="{{ url_for('properties_detail', property_id=property_data.id) }}"
+                class="btn btn-secondary"
+            >{{ t('cancel') }}</a>
+            <button type="submit" class="btn btn-primary">{{ t('property_docs_save') }}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

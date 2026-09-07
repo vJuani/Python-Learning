@@ -338,6 +338,10 @@ def register_contact_routes(app, helpers):
                     property_id=item["property_id"],
                 )
                 card["view_url"] = card["internal_url"]
+                card["brochure_url"] = url_for(
+                    "property_brochure",
+                    property_id=item["property_id"],
+                )
                 card["share_url"] = url_for(
                     "contacts_property_matches_share",
                     contact_id=contact_id,

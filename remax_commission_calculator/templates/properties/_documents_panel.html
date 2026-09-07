@@ -1,0 +1,73 @@
+<section class="panel property-docs-panel">
+    <div class="panel-header">
+        <h3>{{ t('property_docs_title') }}</h3>
+        {% if can_edit_property %}
+        <a
+            href="{{ url_for('property_document_new', property_id=property_data.id) }}"
+            class="btn btn-small btn-primary"
+        >{{ t('property_docs_upload') }}</a>
+        {% endif %}
+    </div>
+    <p class="field-help">{{ t('property_docs_help') }}</p>
+
+    {% if property_documents %}
+    <ul class="property-docs-list">
+        {% for document in property_documents %}
+        <li class="property-docs-item">
+            <div class="property-docs-item__main">
+                <strong>{{ document.title }}</strong>
+                <p>
+                    {{ t('property_doc_type_' ~ document.document_type) }}
+                    {% if document.status == 'error' %}
+                    · {{ t('property_doc_status_error') }}
+                    {% endif %}
+                </p>
+                {% if document.description %}
+                <p class="field-help">{{ document.description }}</p>
+                {% endif %}
+            </div>
+            <div class="property-docs-item__actions">
+                {% if document.has_normalized_pdf or document.original_count == 1 %}
+                <a
+                    class="btn btn-small btn-primary"
+                    href="{{ url_for('property_document_download', property_id=property_data.id, document_id=document.id) }}?download=1"
+                >{{ t('property_docs_download_pdf') }}</a>
+                <a
+                    class="btn btn-small btn-secondary"
+                    href="{{ url_for('property_document_download', property_id=property_data.id, document_id=document.id) }}"
+                >{{ t('view') }}</a>
+                {% endif %}
+                {% if document.files %}
+                <details class="property-docs-originals">
+                    <summary>{{ t('property_docs_originals') }}</summary>
+                    <ul>
+                        {% for file in document.files %}
+                        <li>
+                            <a
+                                href="{{ url_for('property_document_file_download', property_id=property_data.id, document_id=document.id, file_id=file.id) }}"
+                            >{{ file.original_filename }}</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
+                {% if can_edit_property %}
+                <form
+                    method="post"
+                    action="{{ url_for('property_document_archive', property_id=property_data.id, document_id=document.id) }}"
+                >
+                    <button type="submit" class="btn btn-small btn-secondary">
+                        {{ t('property_docs_archive') }}
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">
+        <p class="empty-state-text">{{ t('property_docs_empty') }}</p>
+    </div>
+    {% endif %}
+</section>

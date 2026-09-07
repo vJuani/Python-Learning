@@ -169,6 +169,9 @@
                 {% endif %}
                 {% else %}
                 <a class="btn btn-small btn-secondary" href="{{ match.view_url or match.internal_url }}">{{ t('matches_view') }}</a>
+                {% if match.brochure_url %}
+                <a class="btn btn-small btn-primary" href="{{ match.brochure_url }}">{{ t('property_brochure_download') }}</a>
+                {% endif %}
                 {% endif %}
                 {% if contact.whatsapp_url %}
                 <a class="btn btn-small btn-secondary" href="{{ match.share_url }}">{{ t('matches_share') }}</a>

@@ -276,6 +276,22 @@ from .operation_documents_repository import (
     upsert_vat_document,
 )
 
+from .property_documents_repository import (
+    DOCUMENT_TYPE_LABEL_KEYS,
+    DOCUMENT_TYPES,
+    STATUS_ACTIVE as PROPERTY_DOCUMENT_STATUS_ACTIVE,
+    STATUS_ARCHIVED as PROPERTY_DOCUMENT_STATUS_ARCHIVED,
+    STATUS_ERROR as PROPERTY_DOCUMENT_STATUS_ERROR,
+    add_property_document_file,
+    archive_property_document,
+    create_property_document,
+    get_property_document,
+    get_property_document_file,
+    list_property_document_files,
+    list_property_documents,
+    update_property_document_fields,
+)
+
 from .property_external_listings_repository import (
     ListingPersistenceError,
     create_property_external_listing,

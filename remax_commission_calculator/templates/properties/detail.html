@@ -37,6 +37,13 @@
     </div>
 
     <div class="page-actions">
+        {% if can_use_property_media %}
+        <button
+            type="button"
+            class="btn btn-primary"
+            data-brochure-open
+        >{{ t('property_brochure_download') }}</button>
+        {% endif %}
         {% if can_edit_property %}
         <a
             href="{{ url_for('properties_edit', property_id=property_data.id) }}"
@@ -177,6 +184,10 @@
 </section>
 {% endif %}
 
+{% if can_use_property_media %}
+{% include "properties/_documents_panel.html" %}
+{% endif %}
+
 {% include "properties/_publications_panel.html" %}
 
 {% include "agenda/_entity_tasks.html" %}
@@ -244,4 +255,34 @@
     </div>
     {% endif %}
 </section>
+
+{% if can_use_property_media %}
+<dialog class="aa-dialog property-brochure-dialog" data-brochure-dialog>
+    <form
+        method="post"
+        action="{{ url_for('property_brochure', property_id=property_data.id) }}"
+        class="property-brochure-form"
+    >
+        <div class="aa-dialog__header">
+            <h2>{{ t('property_brochure_download') }}</h2>
+            <button type="button" class="aa-dialog__close" data-brochure-close>×</button>
+        </div>
+        <div class="property-brochure-options">
+            <label class="property-brochure-option">
+                <input type="radio" name="include_agent_contact" value="1" checked>
+                <span>{{ t('property_brochure_with_agent') }}</span>
+            </label>
+            <label class="property-brochure-option">
+                <input type="radio" name="include_agent_contact" value="0">
+                <span>{{ t('property_brochure_without_agent') }}</span>
+            </label>
+        </div>
+        <footer class="aa-dialog__footer">
+            <button type="button" class="btn btn-secondary" data-brochure-close>{{ t('cancel') }}</button>
+            <button type="submit" class="btn btn-primary">{{ t('property_brochure_generate') }}</button>
+        </footer>
+    </form>
+</dialog>
+<script src="{{ url_for('static', filename='js/property-documents.js') }}" defer></script>
+{% endif %}
 {% endblock %}

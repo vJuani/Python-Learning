@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('property_brochure_download') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/properties-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('property_brochure_download') }}</h2>
+        <p class="field-help">{{ property_data.address }}</p>
+    </div>
+    <div class="page-actions">
+        <a
+            href="{{ url_for('properties_detail', property_id=property_data.id) }}"
+            class="btn btn-secondary btn-back"
+        ><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <form
+        method="post"
+        action="{{ url_for('property_brochure', property_id=property_data.id) }}"
+        class="property-brochure-form"
+    >
+        <div class="property-brochure-options">
+            <label class="property-brochure-option">
+                <input type="radio" name="include_agent_contact" value="1" checked>
+                <span>{{ t('property_brochure_with_agent') }}</span>
+            </label>
+            <label class="property-brochure-option">
+                <input type="radio" name="include_agent_contact" value="0">
+                <span>{{ t('property_brochure_without_agent') }}</span>
+            </label>
+        </div>
+        <div class="page-actions">
+            <a
+                href="{{ url_for('properties_detail', property_id=property_data.id) }}"
+                class="btn btn-secondary"
+            >{{ t('cancel') }}</a>
+            <button type="submit" class="btn btn-primary">{{ t('property_brochure_generate') }}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

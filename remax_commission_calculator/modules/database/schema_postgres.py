@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v18"
+POSTGRES_SCHEMA_VERSION = "postgres_v19"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -1527,6 +1527,85 @@ SCHEMA_STATEMENTS = (
         id
     )
     """,
+    f"""
+    CREATE TABLE IF NOT EXISTS property_documents (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        property_id BIGINT NOT NULL,
+        document_type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_by_user_id BIGINT,
+        archived_by_user_id BIGINT,
+        archived_at TEXT,
+        normalized_pdf_stored_name TEXT,
+        normalized_pdf_size INTEGER,
+        normalize_error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+
+        FOREIGN KEY (property_id)
+            REFERENCES properties(id)
+            ON DELETE RESTRICT,
+
+        FOREIGN KEY (created_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+
+        FOREIGN KEY (archived_by_user_id)
+            REFERENCES users(id)
+            ON DELETE SET NULL,
+
+        CHECK (
+            status IN ('active', 'archived', 'error')
+        )
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_property_documents_org_property
+    ON property_documents (
+        organization_id,
+        property_id,
+        status
+    )
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS property_document_files (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        document_id BIGINT NOT NULL,
+        original_filename TEXT NOT NULL,
+        stored_name TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_original {_FLAG} NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE RESTRICT,
+
+        FOREIGN KEY (document_id)
+            REFERENCES property_documents(id)
+            ON DELETE RESTRICT
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_property_document_files_document
+    ON property_document_files (
+        organization_id,
+        document_id,
+        sort_order
+    )
+    """,
 )
 
 
@@ -1561,6 +1640,8 @@ POSTGRES_TABLES = (
     "contacts",
     "external_listings",
     "arca_connections",
+    "property_documents",
+    "property_document_files",
 )
 
 

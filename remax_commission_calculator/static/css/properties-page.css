@@ -690,8 +690,118 @@ html[data-theme="dark"] .property-feature-chip {
     background: rgba(148, 163, 184, 0.08);
 }
 
+.property-brochure-dialog {
+    width: min(24rem, calc(100vw - 1.25rem));
+    padding: 0;
+    border: 0;
+    border-radius: 1rem;
+}
+
+.property-brochure-options {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0 1rem 0.25rem;
+}
+
+.property-brochure-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    min-height: 2.75rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--border-soft, #e5e7eb);
+    border-radius: 0.85rem;
+    background: var(--surface, #fff);
+}
+
+.property-docs-list {
+    display: grid;
+    gap: 0.85rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.property-docs-item {
+    display: grid;
+    gap: 0.7rem;
+    padding: 0.85rem 0 0;
+    border-top: 1px solid var(--border-soft, #e5e7eb);
+}
+
+.property-docs-item:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.property-docs-item__main p {
+    margin: 0.2rem 0 0;
+}
+
+.property-docs-item__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+}
+
+.property-docs-originals {
+    width: 100%;
+}
+
+.property-docs-originals ul {
+    margin: 0.4rem 0 0;
+    padding-left: 1.1rem;
+}
+
+.property-doc-form,
+.property-brochure-form {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.property-doc-previews {
+    display: grid;
+    gap: 0.65rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.property-doc-preview {
+    display: grid;
+    grid-template-columns: 4.5rem 1fr auto;
+    gap: 0.65rem;
+    align-items: center;
+    padding: 0.55rem;
+    border: 1px solid var(--border-soft, #e5e7eb);
+    border-radius: 0.8rem;
+}
+
+.property-doc-preview img {
+    width: 4.5rem;
+    height: 4.5rem;
+    object-fit: cover;
+    border-radius: 0.55rem;
+}
+
+.property-doc-preview__actions {
+    display: flex;
+    gap: 0.3rem;
+}
+
 @media (max-width: 768px) {
     .property-form-grid {
         grid-template-columns: 1fr;
+    }
+
+    .page-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .page-actions .btn {
+        min-height: 2.75rem;
     }
 }

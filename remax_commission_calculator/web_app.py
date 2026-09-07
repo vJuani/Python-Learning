@@ -332,6 +332,7 @@ from modules.agent_tasks import (
 
 from modules.agenda_routes import register_agenda_routes
 from modules.contact_routes import register_contact_routes
+from modules.property_media_routes import register_property_media_routes
 from modules.arca_routes import register_arca_routes
 from modules.jrh_routes import register_jrh_routes
 
@@ -5037,6 +5038,24 @@ def properties_detail(property_id):
         get_guest_access() is None
         and can_write(get_current_user())
     )
+    can_use_property_media = (
+        get_guest_access() is None
+        and get_current_user() is not None
+    )
+    property_documents = []
+    if can_use_property_media:
+        from modules.property_documents import list_documents_for_property
+        from modules.property_media_access import PropertyMediaError
+
+        try:
+            property_documents = list_documents_for_property(
+                property_data["id"],
+                organization_id,
+                get_current_user(),
+                is_guest=False,
+            )
+        except PropertyMediaError:
+            can_use_property_media = False
 
     return render_template(
         "properties/detail.html",
@@ -5051,6 +5070,8 @@ def properties_detail(property_id):
         related_operations=related_operations,
         pending_change=pending_change,
         can_manage_listings=can_manage_listings,
+        can_use_property_media=can_use_property_media,
+        property_documents=property_documents,
         entity_tasks=_entity_tasks_for_property(
             property_data,
             agent_id=agent_id,
@@ -8103,6 +8124,15 @@ register_agenda_routes(
 )
 
 register_contact_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+    },
+)
+
+register_property_media_routes(
     app,
     helpers={
         "require_user_organization": require_user_organization,

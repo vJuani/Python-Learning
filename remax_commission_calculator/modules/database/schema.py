@@ -808,6 +808,95 @@ def _migrate_operation_documents(cursor):
         )
 
 
+def _migrate_property_documents(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS property_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            property_id INTEGER NOT NULL,
+            document_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_by_user_id INTEGER,
+            archived_by_user_id INTEGER,
+            archived_at TEXT,
+            normalized_pdf_stored_name TEXT,
+            normalized_pdf_size INTEGER,
+            normalize_error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (property_id)
+                REFERENCES properties(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (created_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (archived_by_user_id)
+                REFERENCES users(id)
+                ON DELETE SET NULL,
+
+            CHECK (
+                status IN ('active', 'archived', 'error')
+            )
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS property_document_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            document_id INTEGER NOT NULL,
+            original_filename TEXT NOT NULL,
+            stored_name TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            file_size INTEGER NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_original INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+
+            FOREIGN KEY (organization_id)
+                REFERENCES organizations(id)
+                ON DELETE RESTRICT,
+            FOREIGN KEY (document_id)
+                REFERENCES property_documents(id)
+                ON DELETE RESTRICT
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_property_documents_org_property
+        ON property_documents (
+            organization_id,
+            property_id,
+            status
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_property_document_files_document
+        ON property_document_files (
+            organization_id,
+            document_id,
+            sort_order
+        )
+        """
+    )
+
+
 PROPERTY_EXTERNAL_LISTINGS_CREATE_SQL = """
     CREATE TABLE property_external_listings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3623,6 +3712,7 @@ def migrate_schema(create_backup=True):
         _migrate_agent_account(cursor)
         _migrate_treasury_accounts(cursor)
         _migrate_agent_payment_ai(cursor)
+        _migrate_property_documents(cursor)
 
         _validate_migration(
             cursor,
