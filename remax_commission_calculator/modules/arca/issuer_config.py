@@ -88,5 +88,9 @@ def test_arca_connection(
             user_id=user_id,
         )
         return "connected", None
-    except Exception:
-        return "error", "invoice_err_arca_auth_failed"
+    except Exception as error:
+        from modules.arca.wsaa import USER_AUTH_ERROR_KEY, WsaaAuthError
+
+        if isinstance(error, WsaaAuthError):
+            return "error", error.user_key
+        return "error", USER_AUTH_ERROR_KEY

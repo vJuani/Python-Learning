@@ -12,7 +12,7 @@ import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from email.utils import format_datetime
+from urllib.error import HTTPError, URLError
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -28,6 +28,29 @@ from modules.arca.secrets import ArcaCredentials
 
 logger = logging.getLogger(__name__)
 
+# WSAA schema expects xs:dateTime. AFIP examples use GMT-3.
+ARCA_TRA_TZ = timezone(timedelta(hours=-3))
+TRA_GENERATION_SKEW = timedelta(minutes=1)
+TRA_EXPIRATION_WINDOW = timedelta(minutes=10)
+_FAULT_TEXT_MAX = 240
+_BASE64ISH = re.compile(r"(?:[A-Za-z0-9+/]{40,}={0,2})")
+_PEM_BLOCK = re.compile(
+    r"-----BEGIN [A-Z ]+-----.*?-----END [A-Z ]+-----",
+    re.DOTALL,
+)
+_RFC2822_WEEKDAY = re.compile(
+    r"\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),",
+)
+
+USER_AUTH_ERROR_KEY = "invoice_err_arca_auth_failed"
+DEBUG_WSAA_SCHEMA = "arca_err_wsaa_schema"
+DEBUG_WSAA_CMS = "arca_err_wsaa_cms"
+DEBUG_WSAA_UNAUTHORIZED = "arca_err_wsaa_unauthorized"
+DEBUG_WSAA_CERTIFICATE = "arca_err_wsaa_certificate"
+DEBUG_WSAA_CLOCK = "arca_err_wsaa_clock"
+DEBUG_WSAA_TA_EXISTS = "arca_err_wsaa_ta_exists"
+DEBUG_WSAA_UNAVAILABLE = "arca_err_wsaa_unavailable"
+
 
 @dataclass(frozen=True)
 class TicketAcceso:
@@ -39,22 +62,57 @@ class TicketAcceso:
     environment: str
 
 
+class WsaaAuthError(ValueError):
+    """WSAA login failed. Exception message stays user-facing; details are logs-only."""
+
+    def __init__(
+        self,
+        *,
+        debug_key=USER_AUTH_ERROR_KEY,
+        http_status=None,
+        faultcode="",
+        faultstring="",
+    ):
+        super().__init__(USER_AUTH_ERROR_KEY)
+        self.user_key = USER_AUTH_ERROR_KEY
+        self.debug_key = debug_key or USER_AUTH_ERROR_KEY
+        self.http_status = http_status
+        self.faultcode = faultcode or ""
+        self.faultstring = faultstring or ""
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _tra_now() -> datetime:
+    return datetime.now(ARCA_TRA_TZ)
+
+
+def format_tra_datetime(value: datetime) -> str:
+    """Format a WSAA TRA timestamp as xs:dateTime with an explicit offset."""
+    if value.tzinfo is None:
+        aware = value.replace(tzinfo=ARCA_TRA_TZ)
+    else:
+        aware = value.astimezone(ARCA_TRA_TZ)
+    formatted = aware.replace(microsecond=0).isoformat()
+    if _RFC2822_WEEKDAY.search(formatted) or "GMT" in formatted:
+        raise ValueError("TRA datetime must be ISO 8601, not RFC 2822")
+    return formatted
+
+
 def build_tra_xml(service: str) -> bytes:
-    now = _utc_now()
-    generation = now - timedelta(minutes=1)
-    expiration = now + timedelta(minutes=10)
+    now = _tra_now()
+    generation = now - TRA_GENERATION_SKEW
+    expiration = now + TRA_EXPIRATION_WINDOW
     unique_id = int(time.time())
 
     tra = f"""<?xml version="1.0" encoding="UTF-8"?>
 <loginTicketRequest version="1.0">
 <header>
     <uniqueId>{unique_id}</uniqueId>
-    <generationTime>{format_datetime(generation, usegmt=True)}</generationTime>
-    <expirationTime>{format_datetime(expiration, usegmt=True)}</expirationTime>
+    <generationTime>{format_tra_datetime(generation)}</generationTime>
+    <expirationTime>{format_tra_datetime(expiration)}</expirationTime>
 </header>
 <service>{service}</service>
 </loginTicketRequest>"""
@@ -92,7 +150,7 @@ def parse_login_ticket_response(xml_text: str) -> TicketAcceso:
     credentials = root.find("credentials")
     header = root.find("header")
     if credentials is None or header is None:
-        raise ValueError("invoice_err_arca_auth_failed")
+        raise WsaaAuthError()
 
     token = (credentials.findtext("token") or "").strip()
     sign = (credentials.findtext("sign") or "").strip()
@@ -100,7 +158,7 @@ def parse_login_ticket_response(xml_text: str) -> TicketAcceso:
         header.findtext("expirationTime") or ""
     ).strip()
     if not token or not sign or not expiration_text:
-        raise ValueError("invoice_err_arca_auth_failed")
+        raise WsaaAuthError()
 
     expires_at = datetime.fromisoformat(
         expiration_text.replace("Z", "+00:00")
@@ -115,6 +173,107 @@ def parse_login_ticket_response(xml_text: str) -> TicketAcceso:
         service=service,
         cuit=cuit,
         environment=get_arca_environment(),
+    )
+
+
+def sanitize_wsaa_fault_text(value: str) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    text = _PEM_BLOCK.sub("[redacted]", text)
+    text = _BASE64ISH.sub("[redacted]", text)
+    return text[:_FAULT_TEXT_MAX]
+
+
+def _local_xml_text(root: ET.Element, local_name: str) -> str:
+    wanted = local_name.lower()
+    for element in root.iter():
+        tag = element.tag.split("}")[-1].lower()
+        if tag == wanted and (element.text or "").strip():
+            return (element.text or "").strip()
+    return ""
+
+
+def parse_wsaa_soap_fault(body: str) -> tuple[str, str]:
+    """Return sanitized (faultcode, faultstring) from a SOAP envelope."""
+    raw = str(body or "").strip()
+    if not raw:
+        return "", ""
+    faultcode = ""
+    faultstring = ""
+    try:
+        root = ET.fromstring(raw)
+        faultcode = _local_xml_text(root, "faultcode")
+        faultstring = _local_xml_text(root, "faultstring")
+    except ET.ParseError:
+        code_match = re.search(
+            r"<(?:[\w.-]+:)?faultcode[^>]*>(.*?)</(?:[\w.-]+:)?faultcode>",
+            raw,
+            re.DOTALL | re.IGNORECASE,
+        )
+        string_match = re.search(
+            r"<(?:[\w.-]+:)?faultstring[^>]*>(.*?)</(?:[\w.-]+:)?faultstring>",
+            raw,
+            re.DOTALL | re.IGNORECASE,
+        )
+        faultcode = re.sub(r"<[^>]+>", " ", code_match.group(1)).strip() if code_match else ""
+        faultstring = (
+            re.sub(r"<[^>]+>", " ", string_match.group(1)).strip()
+            if string_match
+            else ""
+        )
+    return (
+        sanitize_wsaa_fault_text(faultcode),
+        sanitize_wsaa_fault_text(faultstring),
+    )
+
+
+def map_wsaa_fault(faultcode: str, faultstring: str) -> str:
+    blob = f"{faultcode} {faultstring}".lower()
+    if not blob.strip():
+        return USER_AUTH_ERROR_KEY
+    if "schema" in blob or "interpretar el xml" in blob:
+        return DEBUG_WSAA_SCHEMA
+    if "cms.sign" in blob or "firma inválida" in blob or "firma invalida" in blob:
+        return DEBUG_WSAA_CMS
+    if "cms.bad" in blob or "algoritmo no soportado" in blob:
+        return DEBUG_WSAA_CMS
+    if "no autorizado" in blob or "autorizaci" in blob:
+        return DEBUG_WSAA_UNAUTHORIZED
+    if "certificado no emitido" in blob or "ac de confianza" in blob:
+        return DEBUG_WSAA_CERTIFICATE
+    if "generationtime" in blob or "expirationtime" in blob or "clock" in blob:
+        return DEBUG_WSAA_CLOCK
+    if "ya posee un ta" in blob or "ta valido" in blob or "ta válido" in blob:
+        return DEBUG_WSAA_TA_EXISTS
+    if "unavailable" in blob or "timeout" in blob:
+        return DEBUG_WSAA_UNAVAILABLE
+    return USER_AUTH_ERROR_KEY
+
+
+def _log_arca_auth_failed(*, http_status=None, faultcode="", faultstring="", debug_key=""):
+    logger.error(
+        "arca_auth_failed environment=%s http_status=%s faultcode=%s faultstring=%s debug_key=%s",
+        get_arca_environment(),
+        http_status if http_status is not None else "",
+        sanitize_wsaa_fault_text(faultcode),
+        sanitize_wsaa_fault_text(faultstring),
+        debug_key or USER_AUTH_ERROR_KEY,
+    )
+
+
+def _raise_wsaa_auth_failed(*, http_status=None, body="", debug_key=None):
+    faultcode, faultstring = parse_wsaa_soap_fault(body)
+    mapped = debug_key or map_wsaa_fault(faultcode, faultstring)
+    _log_arca_auth_failed(
+        http_status=http_status,
+        faultcode=faultcode,
+        faultstring=faultstring,
+        debug_key=mapped,
+    )
+    raise WsaaAuthError(
+        debug_key=mapped,
+        http_status=http_status,
+        faultcode=faultcode,
+        faultstring=faultstring,
     )
 
 
@@ -149,12 +308,33 @@ def wsaa_login_cms(
         },
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        body = response.read().decode("utf-8", errors="replace")
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            http_status = getattr(response, "status", None) or response.getcode()
+            body = response.read().decode("utf-8", errors="replace")
+    except HTTPError as error:
+        fault_body = ""
+        try:
+            fault_body = (error.read() or b"").decode("utf-8", errors="replace")
+        except Exception:
+            fault_body = ""
+        _raise_wsaa_auth_failed(http_status=error.code, body=fault_body)
+    except URLError as error:
+        _log_arca_auth_failed(
+            http_status="unavailable",
+            debug_key=DEBUG_WSAA_UNAVAILABLE,
+        )
+        raise WsaaAuthError(
+            debug_key=DEBUG_WSAA_UNAVAILABLE,
+            http_status="unavailable",
+        ) from error
 
     if "<loginCmsReturn>" not in body:
-        logger.error("arca_auth_failed: empty wsaa response")
-        raise ValueError("invoice_err_arca_auth_failed")
+        _raise_wsaa_auth_failed(
+            http_status=http_status,
+            body=body,
+            debug_key=DEBUG_WSAA_UNAVAILABLE if not body.strip() else None,
+        )
 
     start = body.index("<loginCmsReturn>") + len(
         "<loginCmsReturn>"
