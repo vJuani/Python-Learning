@@ -36,6 +36,7 @@ from modules.jrh_ai_intents import (
     START_INVOICE,
     START_AGENT_PAYMENT,
 )
+from modules.jrh_ai_classify import normalize_location, parse_price_amount
 from modules.jrh_ai_provider import (
     MockAIIntentProvider,
     get_intent_provider,
@@ -197,6 +198,16 @@ class JrhAiTests(unittest.TestCase):
             neighborhood="Belgrano",
             rooms=2,
             listing_price=400000,
+            property_type="apartment",
+        )
+        add_property(
+            "Foreign Capital 100",
+            "CABA",
+            cls.other_org,
+            agent_id=cls.foreign_barreiro,
+            neighborhood="Palermo",
+            rooms=3,
+            listing_price=180000,
             property_type="apartment",
         )
 
@@ -553,6 +564,91 @@ class JrhAiTests(unittest.TestCase):
         self.assertEqual(result["intent"], QUERY_PROPERTIES)
         self.assertGreaterEqual(len(result["cards"]), 1)
         self.assertLessEqual(calls["count"], 8)
+
+    def test_21_inventory_phrases_are_query_properties(self):
+        phrases = (
+            "mostrame que propiedades disponibles tengo en capital",
+            "qué propiedades tengo en CABA",
+            "mostrame lo disponible",
+            "buscame deptos en Núñez",
+            "hay casas en zona norte?",
+            "departamentos hasta 250 mil",
+            "qué alquileres tenemos en capital",
+        )
+        for phrase in phrases:
+            parsed = interpret_with_rules(phrase)
+            self.assertEqual(
+                parsed["intent"],
+                QUERY_PROPERTIES,
+                phrase,
+            )
+
+    def test_22_agenda_query_is_not_create(self):
+        for phrase in (
+            "qué visitas tengo mañana",
+            "qué tengo agendado hoy",
+        ):
+            parsed = interpret_with_rules(phrase)
+            self.assertEqual(parsed["intent"], QUERY_AGENDA, phrase)
+
+    def test_23_create_task_needs_explicit_signal(self):
+        for phrase in (
+            "agendame una visita mañana a las 18",
+            "recordame llamar a Juan",
+        ):
+            parsed = interpret_with_rules(phrase)
+            self.assertEqual(parsed["intent"], CREATE_TASK, phrase)
+
+    def test_24_unclear_prompt_is_fallback_not_agenda(self):
+        for phrase in ("haceme algo con Juan", "asdfgh qwerty"):
+            parsed = interpret_with_rules(phrase)
+            self.assertEqual(parsed["intent"], FALLBACK, phrase)
+            result = self._ask(phrase)
+            self.assertEqual(result["intent"], FALLBACK)
+            self.assertFalse(result["wrote"])
+
+    def test_25_capital_aliases_normalize_to_caba(self):
+        for raw in ("capital", "CABA", "Capital Federal"):
+            location = normalize_location(raw)
+            self.assertEqual(location.get("jurisdiction"), "CABA", raw)
+        parsed = interpret_with_rules(
+            "mostrame que propiedades disponibles tengo en capital"
+        )
+        self.assertEqual(parsed["entities"].get("jurisdiction"), "CABA")
+        self.assertEqual(parsed["entities"].get("availability"), "available")
+        result = self._ask(
+            "mostrame que propiedades disponibles tengo en capital",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        self.assertEqual(result["intent"], QUERY_PROPERTIES)
+        titles = " ".join(card["title"] for card in result["cards"])
+        self.assertIn("Libertador", titles)
+        self.assertNotIn("Foreign Capital", titles)
+
+    def test_26_price_aliases_and_agent_scope(self):
+        self.assertEqual(parse_price_amount("hasta 250 mil"), 250000)
+        self.assertEqual(parse_price_amount("250k"), 250000)
+        self.assertEqual(parse_price_amount("250 lucas"), 250000)
+        self.assertEqual(parse_price_amount("250.000"), 250000)
+        other_agent_property = add_property(
+            "Privada Otras Manos 9",
+            "CABA",
+            self.org,
+            agent_id=self.barreiro,
+            neighborhood="Núñez",
+            rooms=3,
+            listing_price=190000,
+            property_type="apartment",
+        )
+        result = self._ask(
+            "qué propiedades tengo en CABA",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        titles = " ".join(card["title"] for card in result["cards"])
+        self.assertNotIn("Privada Otras Manos", titles)
+        self.assertNotEqual(result.get("entity", {}).get("id"), other_agent_property)
 
 
 if __name__ == "__main__":

@@ -39,6 +39,8 @@ def attach_intent_urls(result):
             contact_id = data.get("contact_id")
             if contact_id:
                 href = url_for("contacts_property_matches", contact_id=contact_id)
+            elif data.get("inventory"):
+                href = url_for("properties_list")
             elif data.get("candidates"):
                 href = url_for("contacts_index")
             else:
@@ -172,6 +174,18 @@ def register_jrh_routes(app, helpers):
             row["href"] = href
             actions.append(row)
         attached["actions"] = actions
+        cards = []
+        for card in attached.get("cards") or []:
+            row = dict(card)
+            name = row.get("href_name")
+            args = row.get("href_args") or {}
+            if name:
+                try:
+                    row["href"] = url_for(name, **args)
+                except Exception:
+                    row["href"] = ""
+            cards.append(row)
+        attached["cards"] = cards
         return attached
 
     def _can_ask(user, agent_id, scope_blocked):

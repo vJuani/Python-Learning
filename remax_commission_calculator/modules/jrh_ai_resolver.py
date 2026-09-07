@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from modules.auth import is_admin, is_agent
+from modules.auth import is_agent
 from modules.contacts import match_contacts
 from modules.database.tenant import require_organization_id
-from modules.search import search_agents, search_operations, search_properties
+from modules.search import search_agents, search_operations
 
 
 def _viewer_agent_id(user, agent_id):
@@ -74,50 +74,111 @@ def resolve_properties(
     agent_id=None,
     address="",
     neighborhood="",
+    jurisdiction="",
+    location_group="",
     property_type="",
+    listing_purpose="",
+    availability="",
     max_price=None,
+    min_price=None,
+    currency="",
     rooms=None,
+    bedrooms=None,
+    bathrooms=None,
+    min_area=None,
+    parking=None,
+    balcony=None,
+    terrace=None,
+    garden=None,
     limit=8,
 ):
     from modules.database.properties_repository import filter_properties
-    from modules.property_types import normalize_property_type
+    from modules.jrh_ai_classify import location_group_matches, normalize_location
+    from modules.property_types import (
+        normalize_listing_purpose,
+        normalize_property_type,
+    )
 
     organization_id = require_organization_id(organization_id)
     scoped = _viewer_agent_id(user, agent_id)
+    location = {}
+    if not jurisdiction and not neighborhood and (address or location_group):
+        location = {}
+    if not jurisdiction or not neighborhood:
+        location = normalize_location(neighborhood or jurisdiction or "")
+    resolved_jurisdiction = jurisdiction or location.get("jurisdiction")
+    resolved_neighborhood = neighborhood or location.get("neighborhood")
+    resolved_group = location_group or location.get("location_group")
     normalized_type = (
         normalize_property_type(property_type) if property_type else None
+    )
+    normalized_purpose = (
+        normalize_listing_purpose(listing_purpose) if listing_purpose else None
     )
     rows = filter_properties(
         organization_id,
         agent_id=scoped,
         address=address or None,
-        neighborhood=neighborhood or None,
+        neighborhood=resolved_neighborhood or None,
+        jurisdiction=resolved_jurisdiction or None,
         property_type=normalized_type or None,
+        listing_purpose=normalized_purpose or None,
+        commercial_status=availability or None,
         max_listing_price=max_price,
+        min_listing_price=min_price,
+        listing_currency=currency or None,
         include_all_statuses=False,
     )
-    if rooms:
-        filtered = []
-        for row in rows:
-            value = row.get("rooms") or row.get("bedrooms")
-            try:
-                if int(value or 0) == int(rooms):
-                    filtered.append(row)
-            except (TypeError, ValueError):
+
+    def _keep(row):
+        if resolved_group and not location_group_matches(
+            row.get("neighborhood"),
+            resolved_group,
+        ):
+            return False
+        checks = (
+            ("rooms", rooms),
+            ("bedrooms", bedrooms),
+            ("bathrooms", bathrooms),
+        )
+        for field, expected in checks:
+            if expected in (None, ""):
                 continue
-        rows = filtered
-    if not rows and (address or neighborhood):
-        rows = search_properties(address or neighborhood, organization_id)
-        if scoped is not None:
-            rows = [row for row in rows if row.get("agent_id") == scoped]
+            try:
+                if int(row.get(field) or 0) != int(expected):
+                    return False
+            except (TypeError, ValueError):
+                return False
+        if min_area not in (None, ""):
+            area = row.get("covered_m2") or row.get("total_m2") or 0
+            try:
+                if float(area or 0) < float(min_area):
+                    return False
+            except (TypeError, ValueError):
+                return False
+        features = row.get("features") or {}
+        if parking and not (row.get("parking_spaces") or features.get("parking")):
+            return False
+        if balcony and not features.get("balcony"):
+            return False
+        if terrace and not features.get("terrace"):
+            return False
+        if garden and not features.get("garden"):
+            return False
+        return True
+
+    rows = [row for row in rows if _keep(row)]
     return [
         {
             "id": row.get("id") or row.get("db_id"),
             "name": row.get("address") or row.get("name") or "",
             "kind": "property",
             "neighborhood": row.get("neighborhood") or "",
+            "jurisdiction": row.get("jurisdiction") or "",
+            "property_type": row.get("property_type") or "",
             "listing_price": row.get("listing_price"),
             "listing_currency": row.get("listing_currency") or "",
+            "rooms": row.get("rooms"),
         }
         for row in rows[:limit]
     ]

@@ -410,25 +410,82 @@ def _handle_properties(
         agent_id=agent_id,
         address=entities.get("address") or "",
         neighborhood=entities.get("neighborhood") or "",
+        jurisdiction=entities.get("jurisdiction") or "",
+        location_group=entities.get("location_group") or "",
         property_type=entities.get("property_type") or "",
+        listing_purpose=entities.get("listing_purpose")
+        or entities.get("operation_type")
+        or "",
+        availability=entities.get("availability") or "",
         max_price=entities.get("max_price"),
+        min_price=entities.get("min_price"),
+        currency=entities.get("currency") or "",
         rooms=entities.get("rooms"),
+        bedrooms=entities.get("bedrooms"),
+        bathrooms=entities.get("bathrooms"),
+        min_area=entities.get("min_area"),
+        parking=entities.get("parking"),
+        balcony=entities.get("balcony"),
+        terrace=entities.get("terrace"),
+        garden=entities.get("garden"),
+        limit=5,
     )
-    cards = [
-        {
-            "title": item.get("name") or "",
-            "subtitle": item.get("neighborhood") or "",
-        }
-        for item in matches[:8]
+    cards = []
+    for item in matches[:5]:
+        type_label = ""
+        if item.get("property_type"):
+            type_label = _t(
+                f"property_type_{item['property_type']}",
+                language,
+            )
+        price = ""
+        if item.get("listing_price") not in (None, ""):
+            amount = item.get("listing_price")
+            currency = item.get("listing_currency") or ""
+            price = f"{currency} {amount}".strip()
+        rooms_label = (
+            f"{item.get('rooms')} amb" if item.get("rooms") else ""
+        )
+        zone = item.get("neighborhood") or item.get("jurisdiction") or ""
+        subtitle = " · ".join(
+            part for part in (zone, type_label, price, rooms_label) if part
+        )
+        cards.append(
+            {
+                "title": item.get("name") or "",
+                "subtitle": subtitle,
+                "href_name": "properties_detail",
+                "href_args": {"property_id": item.get("id")},
+            }
+        )
+    actions = [
+        {"label_key": "jrh_cta_view_all", "href_name": "properties_list"},
     ]
+    if not matches:
+        actions.extend(
+            [
+                {"label_key": "jrh_ai_suggest_widen", "href_name": "properties_list"},
+                {"label_key": "jrh_ai_suggest_budget", "href_name": "properties_list"},
+            ]
+        )
     return _result(
         QUERY_PROPERTIES,
         "ready" if matches else "needs_attention",
         language=language,
-        message_key="jrh_ai_properties_count" if matches else "jrh_ai_properties_empty",
-        data={"count": len(matches)},
+        message_key=(
+            "jrh_ai_properties_count"
+            if matches
+            else "jrh_ai_properties_empty"
+        ),
+        data={
+            "count": len(matches),
+            "empty_hint": "" if matches else _t(
+                "jrh_ai_properties_empty_hint",
+                language,
+            ),
+        },
         cards=cards,
-        actions=[{"label_key": "jrh_cta_open", "href_name": "properties_list"}],
+        actions=actions,
         candidates=matches if len(matches) > 1 else [],
         confidence=confidence,
         entity=matches[0] if len(matches) == 1 else {},

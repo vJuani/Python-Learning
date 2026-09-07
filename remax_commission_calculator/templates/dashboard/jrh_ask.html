@@ -45,6 +45,9 @@
         {% if jrh_ask.message %}
         <p class="jrh-ask__message">{{ jrh_ask.message }}</p>
         {% endif %}
+        {% if jrh_ask.data and jrh_ask.data.empty_hint %}
+        <p class="jrh-ask__hint">{{ jrh_ask.data.empty_hint }}</p>
+        {% endif %}
         {% if jrh_ask.summary and jrh_ask.summary != jrh_ask.message %}
         <p class="jrh-ask__summary">{{ jrh_ask.summary }}</p>
         {% endif %}
@@ -52,8 +55,10 @@
         <ul class="jrh-ask__cards">
             {% for card in jrh_ask.cards %}
             <li>
+                {% if card.href %}<a href="{{ card.href }}">{% endif %}
                 <strong>{{ card.title }}</strong>
                 {% if card.subtitle %}<span>{{ card.subtitle }}</span>{% endif %}
+                {% if card.href %}</a>{% endif %}
             </li>
             {% endfor %}
         </ul>

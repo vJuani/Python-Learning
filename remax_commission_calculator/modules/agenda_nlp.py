@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 
 TASK_TYPE_HINTS = (
-    ("visit", ("visita", "visitar", "mostrame", "mostrar", "ir a ver", "vamos a ver")),
+    ("visit", ("visita", "visitar", "ir a ver", "vamos a ver")),
     ("call", ("llamar", "llamada", "llamen", "llamo", "llama")),
     ("meeting", ("reunion", "reunión", "meeting")),
     ("follow_up", ("seguimiento", "seguir")),

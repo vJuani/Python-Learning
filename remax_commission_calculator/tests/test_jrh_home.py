@@ -233,7 +233,7 @@ class JrhHomeTests(unittest.TestCase):
 
     def test_needs_attention_which_contact(self):
         result = interpret_jrh_request(
-            "Buscame propiedades",
+            "Buscame propiedades para",
             organization_id=self.org,
             agent_id=self.agent_id,
             user_id=self.agent_user,
@@ -241,6 +241,24 @@ class JrhHomeTests(unittest.TestCase):
         intent = result["intents"][0]
         self.assertEqual(intent["status"], STATUS_NEEDS_ATTENTION)
         self.assertEqual(intent["message_key"], "jrh_msg_which_contact")
+
+    def test_inventory_query_is_not_agenda(self):
+        self.assertEqual(
+            classify_jrh_segment(
+                "mostrame que propiedades disponibles tengo en capital"
+            ),
+            INTENT_PROPERTY_SEARCH,
+        )
+        result = interpret_jrh_request(
+            "mostrame que propiedades disponibles tengo en capital",
+            organization_id=self.org,
+            agent_id=self.agent_id,
+            user_id=self.agent_user,
+        )
+        intent = result["intents"][0]
+        self.assertEqual(intent["type"], INTENT_PROPERTY_SEARCH)
+        self.assertNotEqual(intent["message_key"], "jrh_msg_agenda_attention")
+        self.assertTrue(intent["data"].get("inventory"))
 
     def test_no_write_without_confirmation(self):
         before = _task_count(self.org)

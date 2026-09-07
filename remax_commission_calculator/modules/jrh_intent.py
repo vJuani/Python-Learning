@@ -11,6 +11,12 @@ import unicodedata
 
 from modules.agenda_ai import interpret_agenda_input
 from modules.agenda_nlp import detect_task_type, parse_agenda_prompt
+from modules.jrh_ai_classify import (
+    has_agenda_query_signal,
+    has_create_task_signal,
+    has_property_inventory_signal,
+    has_property_need_signal,
+)
 from modules.contacts import FILTER_NO_NEXT, list_contact_cards, match_contacts
 from modules.database.operations_repository import filter_operations
 from modules.database.tenant import require_organization_id
@@ -54,9 +60,12 @@ _PROPERTY_HINTS = (
     "buscame propiedad",
     "buscame depto",
     "mostrame propiedades",
+    "mostrame que propiedades",
+    "propiedades disponibles",
     "propiedades para",
     "propiedades de",
     "match de propiedades",
+    "lo disponible",
 )
 _PENDING_HINTS = (
     "que tengo pendiente",
@@ -175,7 +184,11 @@ def split_jrh_segments(prompt):
 
 def classify_jrh_segment(text):
     folded = _fold(text)
-    if any(hint in folded for hint in _PROPERTY_HINTS):
+    if has_property_need_signal(text) or any(
+        hint in folded for hint in _PROPERTY_HINTS
+    ):
+        return INTENT_PROPERTY_SEARCH
+    if has_property_inventory_signal(text):
         return INTENT_PROPERTY_SEARCH
     if any(hint in folded for hint in _PENDING_HINTS):
         return INTENT_PENDING
@@ -187,10 +200,11 @@ def classify_jrh_segment(text):
         return INTENT_OPERATION
     if any(hint in folded for hint in _NAV_HINTS):
         return INTENT_NAVIGATION
-    if detect_task_type(text) != "other" or any(
-        hint in folded for hint in _AGENDA_HINTS
-    ):
+    if has_create_task_signal(text) or has_agenda_query_signal(text):
         return INTENT_AGENDA
+    if detect_task_type(text) != "other" and not has_property_inventory_signal(text):
+        if any(hint in folded for hint in _AGENDA_HINTS):
+            return INTENT_AGENDA
     return INTENT_UNKNOWN
 
 
@@ -282,6 +296,19 @@ def _agenda_intent(segment, organization_id, agent_id, language, now):
 
 
 def _property_search_intent(segment, organization_id, agent_id, language):
+    if has_property_inventory_signal(segment) and not has_property_need_signal(segment):
+        return _intent(
+            INTENT_PROPERTY_SEARCH,
+            STATUS_READY,
+            language=language,
+            summary=segment,
+            message_key="jrh_msg_property_inventory",
+            data={
+                "source_prompt": segment,
+                "inventory": True,
+                "candidates": [],
+            },
+        )
     name = extract_person_name(segment)
     if not name:
         return _intent(

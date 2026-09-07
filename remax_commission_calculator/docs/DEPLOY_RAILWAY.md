@@ -102,10 +102,18 @@ upload a `.env` file.
 
 ### JRH AI (Preguntale a JRH)
 
-| Variable | Staging value |
-|----------|----------------|
-| `JRH_AI_PROVIDER` | `mock` (deterministic rules). Set `openai` only when `OPENAI_API_KEY` is configured |
-| `JRH_AI_MODEL` | `gpt-4o-mini` (used only if `JRH_AI_PROVIDER=openai`) |
+| Variable | Local / tests | Production (Railway) |
+|----------|----------------|----------------------|
+| `JRH_AI_PROVIDER` | `mock` | `openai` |
+| `JRH_AI_MODEL` | unused with mock | `gpt-4o-mini` |
+| `OPENAI_API_KEY` | unset | the same Railway secret already used by Cash AI |
+
+If `JRH_AI_PROVIDER` is omitted:
+- tests set `mock` themselves
+- the app uses `openai` only when `OPENAI_API_KEY` is already present
+- otherwise it stays on `mock` and logs a warning
+
+Do not leave production on an implicit mock. Add `JRH_AI_PROVIDER=openai` in Railway Variables. Do not commit API keys.
 
 The assistant interprets intent, then existing services resolve real records. It never writes money or issues invoices by itself.
 
