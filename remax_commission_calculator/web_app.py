@@ -414,6 +414,10 @@ def require_authenticated_user():
     if request.endpoint in PUBLIC_ENDPOINTS:
         return None
 
+    # Agent-only ACM: never leak the tool via a login redirect.
+    if request.endpoint and str(request.endpoint).startswith("acm"):
+        return None
+
     if get_current_user() is not None:
         return None
 
@@ -8134,6 +8138,17 @@ register_contact_routes(
 )
 
 register_property_media_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+    },
+)
+
+from modules.acm_routes import register_acm_routes
+
+register_acm_routes(
     app,
     helpers={
         "require_user_organization": require_user_organization,

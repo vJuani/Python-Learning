@@ -29,6 +29,7 @@ from modules.jrh_ai_intents import (
     QUERY_PENDINGS,
     QUERY_PROPERTIES,
     QUERY_PROPERTY_NEEDS,
+    START_ACM,
     START_AGENT_PAYMENT,
     START_INVOICE,
     WRITE_ACTIONS,
@@ -188,6 +189,7 @@ def ask_jrh(
         CREATE_TASK: _handle_create_task,
         START_INVOICE: _handle_start_invoice,
         START_AGENT_PAYMENT: _handle_start_payment,
+        START_ACM: _handle_start_acm,
     }
     handler = handlers.get(intent, lambda **_kwargs: _fallback(language, confidence))
     result = handler(
@@ -1221,6 +1223,142 @@ def _invoice_charge_preview(
             "label": (charge or {}).get("name") or "",
         },
         data=draft,
+    )
+
+
+def _handle_start_acm(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    prompt,
+    confidence,
+    **_kwargs,
+):
+    if not is_agent(user) or not agent_id:
+        return _result(
+            START_ACM,
+            "needs_attention",
+            language=language,
+            message_key="acm_err_agent_only",
+            confidence=confidence,
+        )
+    property_id = None
+    if entities.get("previous_kind") == "property" and entities.get("previous_id"):
+        property_id = entities.get("previous_id")
+    matches = []
+    if property_id:
+        from modules.database.properties_repository import get_property_record
+
+        row = get_property_record(property_id, organization_id)
+        if row and (
+            not is_agent(user) or int(row.get("agent_id") or 0) == int(agent_id)
+        ):
+            matches = [
+                {
+                    "id": row["id"],
+                    "name": row.get("address") or "",
+                    "kind": "property",
+                    "address": row.get("address"),
+                    "neighborhood": row.get("neighborhood"),
+                }
+            ]
+    if not matches:
+        query = (
+            entities.get("address")
+            or entities.get("property_text")
+            or entities.get("location_text")
+            or ""
+        )
+        if not query:
+            import re
+
+            query = re.sub(
+                r"(haceme un acm de|armame un acm de|armame un comparativo|"
+                r"quiero tasar|tasame|cuanto puede valer|cuánto puede valer|"
+                r"esta propiedad|el depto de|el departamento de)",
+                " ",
+                prompt,
+                flags=re.IGNORECASE,
+            )
+            query = " ".join(query.split())
+        resolved = resolve_properties(
+            organization_id,
+            user=user,
+            agent_id=agent_id,
+            address=query,
+            neighborhood=entities.get("neighborhood") or "",
+            jurisdiction=entities.get("jurisdiction") or "",
+            property_type=entities.get("property_type") or "",
+            listing_purpose=entities.get("listing_purpose") or "",
+        )
+        matches = resolved[0] if isinstance(resolved, tuple) else resolved
+        if isinstance(matches, dict):
+            matches = matches.get("items") or matches.get("matches") or []
+    if not matches:
+        return _result(
+            START_ACM,
+            "needs_attention",
+            language=language,
+            message_key="acm_err_property_missing",
+            confidence=confidence,
+        )
+    if len(matches) > 1:
+        return _result(
+            START_ACM,
+            "needs_attention",
+            language=language,
+            message_key="acm_err_property_ambiguous",
+            candidates=[
+                {
+                    "id": item.get("id"),
+                    "name": item.get("address") or item.get("name") or "",
+                    "kind": "property",
+                }
+                for item in matches[:8]
+            ],
+            cards=[
+                {
+                    "title": item.get("address") or item.get("name") or "",
+                    "subtitle": item.get("neighborhood") or "",
+                    "href_name": "acm_new",
+                    "href_args": {"property_id": item.get("id")},
+                }
+                for item in matches[:5]
+            ],
+            confidence=confidence,
+            data={"count": len(matches)},
+        )
+    chosen = matches[0]
+    return _result(
+        START_ACM,
+        "ready",
+        language=language,
+        summary=chosen.get("address") or chosen.get("name") or prompt,
+        message_key="acm_jrh_preview",
+        cards=[
+            {
+                "title": chosen.get("address") or chosen.get("name") or "",
+                "subtitle": chosen.get("neighborhood") or "",
+            }
+        ],
+        actions=[
+            {
+                "label_key": "acm_create",
+                "href_name": "acm_new",
+                "href_args": {"property_id": chosen.get("id")},
+            }
+        ],
+        confirm_required=False,
+        confidence=confidence,
+        entity={
+            "kind": "property",
+            "id": chosen.get("id"),
+            "label": chosen.get("address") or chosen.get("name") or "",
+        },
+        data={"source_prompt": prompt, "wrote": False},
     )
 
 

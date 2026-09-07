@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('acm_new') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('acm_new') }}</h2>
+        <p class="field-help">{{ t('acm_new_help') }}</p>
+    </div>
+    <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">{{ t('nav_my_properties') }}</a>
+</section>
+{% endblock %}

@@ -37,6 +37,12 @@
     </div>
 
     <div class="page-actions">
+        {% if is_agent() %}
+        <a
+            href="{{ url_for('acm_new', property_id=property_data.id) }}"
+            class="btn btn-primary"
+        >{{ t('acm_create') }}</a>
+        {% endif %}
         {% if can_use_property_media %}
         <button
             type="button"

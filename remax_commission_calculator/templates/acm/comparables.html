@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('acm_comparables') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/acm.css') }}">
+{% endblock %}
+
+{% block content %}
+{% set acm = view.acm %}
+{% set subject = view.subject %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="acm-step">{{ t('acm_step_2') }}</p>
+        <h2>{{ t('acm_comparables') }} · {{ view.comparables|length }}</h2>
+        <p>{{ subject.address }} · {{ subject.neighborhood or subject.jurisdiction }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('acm_detail', acm_id=acm.id) }}" class="btn btn-primary">{{ t('acm_see_results') }}</a>
+        <a href="{{ url_for('acm_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>{{ t('acm_suggested') }}</h3>
+        {% if acm.status != 'finalized' %}
+        <form method="post">
+            <input type="hidden" name="action" value="refresh">
+            <button type="submit" class="btn btn-small">{{ t('acm_refresh') }}</button>
+        </form>
+        {% endif %}
+    </div>
+    <ul class="acm-comp-list">
+        {% for row in view.comparables %}
+        <li class="acm-comp{% if row.is_outlier %} acm-comp--outlier{% endif %}">
+            <div>
+                <strong>{{ row.external_reference or row.snapshot_location or '—' }}</strong>
+                <p>
+                    {{ row.snapshot_currency }} {{ row.snapshot_price }}
+                    · {{ row.snapshot_covered_area or row.snapshot_total_area or '—' }} m²
+                    · {% if row.snapshot_price_per_m2 %}{{ row.snapshot_currency }} {{ row.snapshot_price_per_m2 }}/m²{% else %}—{% endif %}
+                    · {{ (row.score or '0')|string }}%
+                </p>
+                <p class="field-help">
+                    {% if row.source_type == 'manual_external' %}{{ t('acm_source_manual') }}
+                    {% elif row.source_type == 'closed_operation' %}{{ t('acm_source_closing') }}
+                    {% else %}{{ t('acm_source_listing') }}{% endif %}
+                    {% if row.is_outlier %} · {{ t('acm_outlier_label') }}{% endif %}
+                    {% if row.snapshot_price_kind == 'closing' %} · {{ t('acm_price_closing') }}
+                    {% elif row.snapshot_price_kind == 'listing' %} · {{ t('acm_price_listing') }}{% endif %}
+                </p>
+            </div>
+            {% if acm.status != 'finalized' %}
+            <form method="post">
+                <input type="hidden" name="action" value="toggle">
+                <input type="hidden" name="comparable_id" value="{{ row.id }}">
+                <input type="hidden" name="selected" value="{{ 0 if row.selected else 1 }}">
+                <button type="submit" class="btn btn-small">{{ t('acm_exclude') if row.selected else t('acm_include') }}</button>
+            </form>
+            {% endif %}
+            {% if row.comparable_property_id %}
+            <a href="{{ url_for('properties_detail', property_id=row.comparable_property_id) }}">{{ t('acm_review_property') }}</a>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+
+{% if acm.status != 'finalized' %}
+<section class="panel">
+    <h3>{{ t('acm_add_manual') }}</h3>
+    <p class="field-help">{{ t('acm_manual_help') }}</p>
+    <form method="post" class="acm-manual-form">
+        <input type="hidden" name="action" value="manual">
+        <label>{{ t('acm_manual_reference') }}<input type="text" name="reference" required></label>
+        <label>{{ t('acm_manual_location') }}<input type="text" name="location"></label>
+        <label>{{ t('acm_manual_price') }}<input type="text" name="price" required></label>
+        <label>{{ t('acm_manual_currency') }}<input type="text" name="currency" value="{{ acm.currency or 'USD' }}"></label>
+        <label>{{ t('acm_manual_area') }}<input type="text" name="area"></label>
+        <label>{{ t('property_rooms') }}<input type="number" name="rooms" min="0"></label>
+        <label>{{ t('property_bedrooms') }}<input type="number" name="bedrooms" min="0"></label>
+        <label>{{ t('acm_manual_notes') }}<input type="text" name="notes"></label>
+        <button type="submit" class="btn btn-primary">{{ t('acm_add_manual') }}</button>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

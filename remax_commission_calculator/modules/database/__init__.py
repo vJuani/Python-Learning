@@ -85,6 +85,18 @@ from .agent_payment_ai_drafts_repository import (
     update_agent_payment_ai_draft,
 )
 
+from .property_acm_repository import (
+    STATUS_ARCHIVED as ACM_STATUS_ARCHIVED,
+    STATUS_DRAFT as ACM_STATUS_DRAFT,
+    STATUS_FINALIZED as ACM_STATUS_FINALIZED,
+    STATUS_READY as ACM_STATUS_READY,
+    add_comparable,
+    create_acm,
+    get_acm,
+    list_acms,
+    list_comparables,
+)
+
 from .properties_repository import (
     STATUS_APPROVED as PROPERTY_STATUS_APPROVED,
     STATUS_PENDING as PROPERTY_STATUS_PENDING,

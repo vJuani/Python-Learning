@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v19"
+POSTGRES_SCHEMA_VERSION = "postgres_v20"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -1606,6 +1606,84 @@ SCHEMA_STATEMENTS = (
         sort_order
     )
     """,
+    f"""
+    CREATE TABLE IF NOT EXISTS property_acms (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        agent_id BIGINT NOT NULL,
+        property_id BIGINT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        currency TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        finalized_at TEXT,
+        created_by_user_id BIGINT,
+        estimated_value {_MONEY},
+        suggested_min_value {_MONEY},
+        suggested_max_value {_MONEY},
+        median_price_per_m2 {_MONEY},
+        average_price_per_m2 {_MONEY},
+        notes TEXT,
+        explanation TEXT,
+        area_basis TEXT,
+        metrics_json TEXT,
+        subject_snapshot_json TEXT,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id) ON DELETE RESTRICT,
+        FOREIGN KEY (agent_id)
+            REFERENCES agents(id) ON DELETE RESTRICT,
+        FOREIGN KEY (property_id)
+            REFERENCES properties(id) ON DELETE RESTRICT,
+        FOREIGN KEY (created_by_user_id)
+            REFERENCES users(id) ON DELETE SET NULL
+    )
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS property_acm_comparables (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        acm_id BIGINT NOT NULL,
+        comparable_property_id BIGINT,
+        source_type TEXT NOT NULL,
+        external_reference TEXT,
+        selected {_FLAG} NOT NULL DEFAULT 1,
+        exclusion_reason TEXT,
+        snapshot_price {_MONEY},
+        snapshot_currency TEXT,
+        snapshot_total_area {_MONEY},
+        snapshot_covered_area {_MONEY},
+        snapshot_rooms INTEGER,
+        snapshot_bedrooms INTEGER,
+        snapshot_property_type TEXT,
+        snapshot_location TEXT,
+        snapshot_price_per_m2 {_MONEY},
+        snapshot_listing_purpose TEXT,
+        snapshot_price_kind TEXT,
+        snapshot_operation_id BIGINT,
+        snapshot_operation_date TEXT,
+        score {_MONEY},
+        is_outlier {_FLAG} NOT NULL DEFAULT 0,
+        distance_meters {_MONEY},
+        notes TEXT,
+        created_at TEXT NOT NULL,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id) ON DELETE RESTRICT,
+        FOREIGN KEY (acm_id)
+            REFERENCES property_acms(id) ON DELETE RESTRICT,
+        FOREIGN KEY (comparable_property_id)
+            REFERENCES properties(id) ON DELETE SET NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_property_acms_agent
+    ON property_acms (organization_id, agent_id, status, created_at)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_property_acm_comparables_acm
+    ON property_acm_comparables (organization_id, acm_id, selected)
+    """,
 )
 
 
@@ -1642,6 +1720,8 @@ POSTGRES_TABLES = (
     "arca_connections",
     "property_documents",
     "property_document_files",
+    "property_acms",
+    "property_acm_comparables",
 )
 
 

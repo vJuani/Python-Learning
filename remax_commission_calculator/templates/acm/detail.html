@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('acm_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/acm.css') }}">
+{% endblock %}
+
+{% block content %}
+{% set acm = view.acm %}
+{% set subject = view.subject %}
+{% set metrics = view.metrics %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="acm-step">{{ t('acm_step_3') }}</p>
+        <h2>{{ t('acm_title') }}</h2>
+        <p>{{ subject.address }}</p>
+        <p class="field-help">{{ subject.neighborhood or '' }} {% if subject.jurisdiction %}· {{ subject.jurisdiction }}{% endif %}</p>
+        <p>
+            {% if subject.rooms %}{{ subject.rooms }} {{ t('acm_rooms_short') }} · {% endif %}
+            {% if subject.covered_m2 or subject.total_m2 %}{{ subject.covered_m2 or subject.total_m2 }} m² · {% endif %}
+            {% if subject.bedrooms %}{{ subject.bedrooms }} {{ t('acm_bedrooms_short') }} · {% endif %}
+            {% if subject.parking_spaces %}{{ t('acm_parking') }}{% endif %}
+        </p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('acm_comparables', acm_id=acm.id) }}" class="btn btn-secondary">{{ t('acm_review_comparables') }}</a>
+        {% if acm.status != 'finalized' %}
+        <form method="post" action="{{ url_for('acm_finalize', acm_id=acm.id) }}">
+            <button type="submit" class="btn btn-primary">{{ t('acm_finalize') }}</button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ url_for('acm_duplicate', acm_id=acm.id) }}">
+            <button type="submit" class="btn btn-secondary">{{ t('acm_duplicate') }}</button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('acm_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="acm-metrics">
+    <article>
+        <span>{{ t('acm_used_count') }}</span>
+        <strong>{{ metrics.used_count or 0 }}</strong>
+    </article>
+    <article>
+        <span>{{ t('acm_ppm2_min') }}</span>
+        <strong>{{ acm.currency }} {{ metrics.min_ppm2 or '—' }}</strong>
+    </article>
+    <article>
+        <span>{{ t('acm_ppm2_median') }}</span>
+        <strong>{{ acm.currency }} {{ acm.median_price_per_m2 or '—' }}</strong>
+    </article>
+    <article>
+        <span>{{ t('acm_ppm2_avg') }}</span>
+        <strong>{{ acm.currency }} {{ acm.average_price_per_m2 or '—' }}</strong>
+    </article>
+    <article>
+        <span>{{ t('acm_ppm2_max') }}</span>
+        <strong>{{ acm.currency }} {{ metrics.max_ppm2 or '—' }}</strong>
+    </article>
+</section>
+
+<section class="panel acm-result">
+    <p class="acm-step">{{ t('acm_reference_value') }}</p>
+    <p class="acm-value">{{ acm.currency }} {{ acm.estimated_value or '—' }}</p>
+    <p class="acm-step">{{ t('acm_suggested_range') }}</p>
+    <p class="acm-range">{{ acm.currency }} {{ acm.suggested_min_value or '—' }} – {{ acm.suggested_max_value or '—' }}</p>
+    {% if acm.explanation %}
+    <p>{{ acm.explanation }}</p>
+    {% endif %}
+    <p class="field-help">{{ view.disclaimer }}</p>
+    <div class="page-actions">
+        <a href="{{ url_for('acm_pdf', acm_id=acm.id, include_agent=1) }}" class="btn btn-primary">{{ t('acm_pdf_with_agent') }}</a>
+        <a href="{{ url_for('acm_pdf', acm_id=acm.id, include_agent=0) }}" class="btn btn-secondary">{{ t('acm_pdf_without_agent') }}</a>
+    </div>
+</section>
+{% endblock %}

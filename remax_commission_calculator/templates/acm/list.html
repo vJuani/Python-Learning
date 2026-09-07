@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('acm_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/acm.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('acm_title') }}</h2>
+        <p class="field-help">{{ t('acm_subtitle') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('properties_list') }}" class="btn btn-primary">{{ t('acm_from_property') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    {% if items %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>{{ t('acm_col_property') }}</th>
+                <th>{{ t('acm_status') }}</th>
+                <th>{{ t('acm_reference_value') }}</th>
+                <th>{{ t('acm_date') }}</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.address or item.property_id }}</td>
+                <td>{{ t('acm_status_' ~ item.status) }}</td>
+                <td>{% if item.estimated_value %}{{ item.currency }} {{ item.estimated_value }}{% else %}—{% endif %}</td>
+                <td>{{ (item.created_at or '')[:10] }}</td>
+                <td><a href="{{ url_for('acm_detail', acm_id=item.id) }}">{{ t('acm_open') }}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="field-help">{{ t('acm_empty') }}</p>
+    {% endif %}
+</section>
+{% endblock %}

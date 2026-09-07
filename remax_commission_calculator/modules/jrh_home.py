@@ -192,5 +192,10 @@ def build_agent_home(
                 "label_key": "jrh_quick_billing",
                 "endpoint": "billing_list",
             },
+            {
+                "key": "acm",
+                "label_key": "nav_acm",
+                "endpoint": "acm_list",
+            },
         ),
     }

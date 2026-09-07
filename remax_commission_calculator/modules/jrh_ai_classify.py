@@ -23,6 +23,7 @@ from modules.jrh_ai_intents import (
     QUERY_PROPERTIES,
     QUERY_PROPERTY_NEEDS,
     START_AGENT_PAYMENT,
+    START_ACM,
     START_INVOICE,
 )
 
@@ -157,6 +158,7 @@ EXPLICIT_NEW_INTENTS = frozenset(
         QUERY_INVOICES,
         CREATE_TASK,
         START_AGENT_PAYMENT,
+        START_ACM,
     }
 )
 
@@ -931,6 +933,30 @@ def classify_intent(prompt, *, context=None):
     if has_create_task_signal(text):
         scores[CREATE_TASK] = 0.88
         entities["title"] = text
+    if any(
+        phrase in folded
+        for phrase in (
+            "haceme un acm",
+            "armame un acm",
+            "hacer un acm",
+            "armame un comparativo",
+            "analisis comparativo",
+            "análisis comparativo",
+            "quiero tasar",
+            "tasame",
+            "tasar esta",
+            "tasar el",
+            "cuanto puede valer",
+            "cuánto puede valer",
+            "haceme un acm de",
+        )
+    ) or re.search(r"\bacm\b", folded):
+        scores[START_ACM] = 0.96
+        last = (context or {}).get("last_entity") or {}
+        if last.get("kind") == "property" and last.get("id"):
+            entities["previous_kind"] = "property"
+            entities["previous_id"] = last.get("id")
+            entities["refers_to_previous"] = True
 
     if (
         not scores
@@ -988,7 +1014,14 @@ def apply_intent_guards(parsed, prompt, context=None):
     merged = dict(entities)
     merged.update({key: value for key, value in incoming.items() if value not in (None, "")})
     result["entities"] = merged
-    if rule_intent == START_INVOICE and result.get("intent") in {FALLBACK}:
+    if rule_intent == START_ACM and result.get("intent") in {
+        QUERY_PROPERTIES,
+        FALLBACK,
+    }:
+        result["intent"] = START_ACM
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.9)
+        result["guard"] = "acm_request"
+    elif rule_intent == START_INVOICE and result.get("intent") in {FALLBACK}:
         result["intent"] = START_INVOICE
         result["confidence"] = max(float(result.get("confidence") or 0), 0.86)
         result["guard"] = "invoice_slot"

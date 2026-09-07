@@ -3802,6 +3802,12 @@ def migrate_schema(create_backup=True):
     migrate_external_listings_sqlite()
     _migrate_document_storage_folders()
 
+    from .property_acm_migration import (
+        migrate_property_acm_sqlite,
+    )
+
+    migrate_property_acm_sqlite()
+
     return backup_path
 
 

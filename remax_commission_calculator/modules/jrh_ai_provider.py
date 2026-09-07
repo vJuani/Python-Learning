@@ -99,6 +99,13 @@ QUERY_AGENT_ACCOUNT = balances / pending charges.
 Agent saying "debo fee?" or "q debo de fee?" is self + fee.
 Staff "qué debe Barreiro de fee?" is that agent + fee.
 
+START_ACM = comparative market analysis for an Agent. Never invent prices.
+Examples:
+- haceme un ACM de Libertador
+- quiero tasar el depto de Núñez
+- armame un comparativo de esta propiedad
+- cuánto puede valer esta propiedad
+
 START_INVOICE = prepare invoice preview, never emit.
 "facturame lo que tengo" lists billable charges or opens preview.
 "facturame eso" uses previous charge context.
