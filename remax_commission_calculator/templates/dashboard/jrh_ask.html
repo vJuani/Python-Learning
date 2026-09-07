@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page is-jrh-ask-page{% if is_mobile %} is-mobile{% endif %} {% endblock %}
+
+{% block title %}{{ t('jrh_ask_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-one.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/jrh-voice.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<section class="jrh-ask" data-jrh-ask>
+    <p class="agenda-hero__kicker">{{ t('jrh_ia_label') }}</p>
+    <h1>{{ t('jrh_ask_title') }}</h1>
+    <form class="jrh-ask__form" method="post" action="{{ url_for('jrh_ask') }}" data-jrh-interpret>
+        <label class="sr-only" for="jrh-ask-prompt">{{ t('jrh_ask_placeholder') }}</label>
+        <input
+            id="jrh-ask-prompt"
+            class="jrh-hero__input"
+            type="text"
+            name="prompt"
+            placeholder="{{ t('jrh_ask_placeholder') }}"
+            value="{{ (jrh_ask.data.source_prompt if jrh_ask and jrh_ask.data else '') }}"
+            autocomplete="off"
+            required
+        >
+        <button type="submit" class="btn btn-primary">{{ t('jrh_hero_submit') }}</button>
+    </form>
+    <ul class="jrh-hero__examples">
+        <li><button type="button" data-jrh-example="{{ t('jrh_ask_ex_pending') }}">{{ t('jrh_ask_ex_pending') }}</button></li>
+        <li><button type="button" data-jrh-example="{{ t('jrh_ask_ex_agenda') }}">{{ t('jrh_ask_ex_agenda') }}</button></li>
+        <li><button type="button" data-jrh-example="{{ t('jrh_ask_ex_property') }}">{{ t('jrh_ask_ex_property') }}</button></li>
+        <li><button type="button" data-jrh-example="{{ t('jrh_ask_ex_invoice') }}">{{ t('jrh_ask_ex_invoice') }}</button></li>
+        <li><button type="button" data-jrh-example="{{ t('jrh_ask_ex_account') }}">{{ t('jrh_ask_ex_account') }}</button></li>
+    </ul>
+
+    {% if jrh_ask %}
+    <article class="jrh-ask__result" data-intent="{{ jrh_ask.intent }}" data-status="{{ jrh_ask.status }}">
+        <p class="jrh-ask__intent">{{ jrh_ask.intent }}</p>
+        {% if jrh_ask.message %}
+        <p class="jrh-ask__message">{{ jrh_ask.message }}</p>
+        {% endif %}
+        {% if jrh_ask.summary and jrh_ask.summary != jrh_ask.message %}
+        <p class="jrh-ask__summary">{{ jrh_ask.summary }}</p>
+        {% endif %}
+        {% if jrh_ask.cards %}
+        <ul class="jrh-ask__cards">
+            {% for card in jrh_ask.cards %}
+            <li>
+                <strong>{{ card.title }}</strong>
+                {% if card.subtitle %}<span>{{ card.subtitle }}</span>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if jrh_ask.candidates %}
+        <ul class="jrh-result__candidates">
+            {% for candidate in jrh_ask.candidates %}
+            <li>{{ candidate.name }}{% if candidate.amount %} · {{ candidate.currency }} {{ candidate.amount }}{% endif %}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        <div class="jrh-ask__actions">
+            {% for action in jrh_ask.actions %}
+            {% if action.href %}
+            <a class="btn btn-small btn-primary" href="{{ action.href }}">{{ t(action.label_key) }}</a>
+            {% endif %}
+            {% endfor %}
+            {% if jrh_ask.confirm_required and jrh_ask.intent == 'CREATE_TASK' %}
+            <form method="post" action="{{ url_for('jrh_ask_confirm') }}">
+                <button type="submit" class="btn btn-small btn-primary">{{ t('jrh_ai_confirm_task') }}</button>
+            </form>
+            {% endif %}
+        </div>
+    </article>
+    {% endif %}
+</section>
+{% endblock %}

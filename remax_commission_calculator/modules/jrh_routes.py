@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from flask import abort, render_template, request, url_for
+from flask import abort, render_template, request, session, url_for
 
 from modules.auth import (
     get_current_user,
+    is_admin,
     is_agent,
     is_guest_session,
     login_required,
 )
+from modules.jrh_ai_service import ask_jrh, confirm_jrh_action
 from modules.jrh_intent import (
     INTENT_AGENDA,
     INTENT_CONTACT,
@@ -154,5 +156,90 @@ def register_jrh_routes(app, helpers):
             ),
         )
 
+    def attach_ask_urls(result):
+        attached = dict(result or {})
+        actions = []
+        for action in attached.get("actions") or []:
+            row = dict(action)
+            name = row.get("href_name")
+            args = row.get("href_args") or {}
+            href = ""
+            if name:
+                try:
+                    href = url_for(name, **args)
+                except Exception:
+                    href = ""
+            row["href"] = href
+            actions.append(row)
+        attached["actions"] = actions
+        return attached
+
+    def _can_ask(user, agent_id, scope_blocked):
+        if is_guest_session() or user is None:
+            return False
+        if is_admin(user):
+            return True
+        return is_agent(user) and not scope_blocked and agent_id is not None
+
+    @app.route("/jrh", methods=["GET", "POST"])
+    @login_required
+    def jrh_ask():
+        if is_guest_session():
+            abort(403)
+        user = get_current_user()
+        organization_id = require_user_organization()
+        agent_id, scope_blocked = get_agent_scope()
+        if not _can_ask(user, agent_id, scope_blocked):
+            abort(403)
+        language = get_current_language()
+        result = None
+        if request.method == "POST":
+            prompt = (request.form.get("prompt") or "").strip()
+            try:
+                result = attach_ask_urls(
+                    ask_jrh(
+                        prompt,
+                        organization_id=organization_id,
+                        user=user,
+                        agent_id=agent_id,
+                        language=language,
+                        session=session,
+                    )
+                )
+            except Exception:
+                flash_i18n("jrh_err_generic", "error")
+        return render_template(
+            "dashboard/jrh_ask.html",
+            jrh_ask=result,
+            is_mobile=bool(request.args.get("mobile")),
+        )
+
+    @app.route("/jrh/ask/confirm", methods=["POST"])
+    @login_required
+    def jrh_ask_confirm():
+        if is_guest_session():
+            abort(403)
+        user = get_current_user()
+        organization_id = require_user_organization()
+        agent_id, scope_blocked = get_agent_scope()
+        if not _can_ask(user, agent_id, scope_blocked):
+            abort(403)
+        from flask import session
+
+        result = attach_ask_urls(
+            confirm_jrh_action(
+                organization_id=organization_id,
+                user=user,
+                agent_id=agent_id,
+                session=session,
+                language=get_current_language(),
+            )
+        )
+        return render_template(
+            "dashboard/jrh_ask.html",
+            jrh_ask=result,
+        )
+
     helpers["attach_intent_urls"] = attach_intent_urls
+    helpers["attach_ask_urls"] = attach_ask_urls
     return helpers

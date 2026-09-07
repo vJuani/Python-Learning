@@ -100,6 +100,15 @@ upload a `.env` file.
 | `CASH_AI_MODEL` | `gpt-4o-mini` (or `gpt-4o` for better vision) |
 | `OPENAI_API_KEY` | Railway secret (never commit) |
 
+### JRH AI (Preguntale a JRH)
+
+| Variable | Staging value |
+|----------|----------------|
+| `JRH_AI_PROVIDER` | `mock` (deterministic rules). Set `openai` only when `OPENAI_API_KEY` is configured |
+| `JRH_AI_MODEL` | `gpt-4o-mini` (used only if `JRH_AI_PROVIDER=openai`) |
+
+The assistant interprets intent, then existing services resolve real records. It never writes money or issues invoices by itself.
+
 Receipt images are stored under `PRIVATE_UPLOAD_ROOT/organizations/<org>/cash/receipts/` on the volume.
 
 ### Google Calendar (Agenda, optional)

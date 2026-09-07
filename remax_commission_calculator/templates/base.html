@@ -180,6 +180,9 @@
                     </div>
 
                     <div class="mobile-drawer-section mobile-drawer-prefs">
+                        {% if current_user %}
+                        <a class="header-jrh-ask" href="{{ url_for('jrh_ask') }}">{{ t('jrh_ask_cta') }}</a>
+                        {% endif %}
                         <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
                             <a
                                 href="{{ url_for('set_language', language='es') }}"
@@ -269,6 +272,9 @@
                     </div>
 
                     <div class="header-tools-group header-tools-prefs">
+                        {% if current_user %}
+                        <a class="header-jrh-ask" href="{{ url_for('jrh_ask') }}">{{ t('jrh_ask_cta') }}</a>
+                        {% endif %}
                         <div class="language-switcher" role="group" aria-label="{{ t('language') }}">
                             <a
                                 href="{{ url_for('set_language', language='es') }}"
