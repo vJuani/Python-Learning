@@ -73,6 +73,7 @@ from modules.invoice_ai_service import (
     ParsedInvoiceIntent,
     ResolvedChargeIntent,
     ResolvedInvoiceIntent,
+    build_pending_invoice_context,
     parse_invoice_intent,
     resolve_invoice_intent,
 )
@@ -450,6 +451,7 @@ def register_billing_routes(app, *, helpers):
 
         ai_message = session.pop("billing_ai_message", None)
         ai_options = session.pop("billing_ai_options", None)
+        ai_message_data = session.pop("billing_ai_message_data", None)
         ai_operation = session.pop(
             "billing_ai_operation",
             None,
@@ -466,6 +468,7 @@ def register_billing_routes(app, *, helpers):
             ai_message=ai_message,
             ai_options=ai_options,
             ai_operation=ai_operation,
+            ai_message_data=ai_message_data,
         )
         if chat_messages is not None:
             session["billing_ai_chat"] = ai_workspace["chat_messages"]
@@ -586,6 +589,10 @@ def register_billing_routes(app, *, helpers):
         if isinstance(result, DisambiguationResult):
             session["billing_ai_message"] = result.message_key
             session["billing_ai_options"] = result.options
+            session["billing_ai_message_data"] = result.message_data or {}
+            _set_billing_ai_context(
+                pending_invoice=build_pending_invoice_context(parsed, result),
+            )
             return redirect(url_for("billing_list"))
 
         if isinstance(result, MissingSideResult):
@@ -596,6 +603,7 @@ def register_billing_routes(app, *, helpers):
                     "id": result.operation_id,
                     "label": result.operation_label,
                 },
+                pending_invoice=build_pending_invoice_context(parsed, result),
             )
             session["billing_ai_message"] = (
                 result.message_key

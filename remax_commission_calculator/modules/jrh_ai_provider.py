@@ -146,7 +146,7 @@ class OpenAIAIIntentProvider(AIIntentProvider):
             )
             parsed["provider"] = "openai_fallback"
             parsed["model"] = "rules"
-            return apply_intent_guards(parsed, prompt)
+            return apply_intent_guards(parsed, prompt, context=context)
         intent = parsed.get("intent") or FALLBACK
         if intent not in ALL_INTENTS:
             intent = FALLBACK
@@ -164,6 +164,7 @@ class OpenAIAIIntentProvider(AIIntentProvider):
                 "model": get_jrh_ai_model(),
             },
             prompt,
+            context=context,
         )
         return guarded
 
@@ -182,7 +183,7 @@ def interpret_prompt(prompt, *, context=None, language="es", provider=None):
     started = time.perf_counter()
     adapter = provider or get_intent_provider()
     parsed = adapter.interpret(prompt, context=context, language=language)
-    parsed = apply_intent_guards(parsed, prompt)
+    parsed = apply_intent_guards(parsed, prompt, context=context)
     duration_ms = int((time.perf_counter() - started) * 1000)
     parsed["duration_ms"] = duration_ms
     logger.info(

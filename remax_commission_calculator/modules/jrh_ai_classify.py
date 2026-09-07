@@ -128,6 +128,35 @@ PERSON_STOP = frozenset(
         "caba", "nunez", "nuñez", "belgrano", "palermo",
         "propiedades", "propiedad", "departamentos", "departamento",
         "casas", "casa", "fee", "jueves", "lunes", "martes",
+        "agente", "agentes", "todos", "todas", "mis",
+    }
+)
+
+GENERIC_AGENT_RE = re.compile(
+    r"^(?:de\s+)?(?:"
+    r"los\s+agentes|mis\s+agentes|todos(?:\s+los\s+agentes)?|"
+    r"un\s+agente|una\s+agente|agentes|agente"
+    r")$",
+    re.IGNORECASE,
+)
+NAME_LIKE_RE = re.compile(
+    r"^[A-Za-zÁÉÍÓÚÑÜáéíóúñü.'\-]+(?:\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü.'\-]+){0,3}$"
+)
+CANCEL_INVOICE_RE = re.compile(
+    r"\b(cancelar|cancela|cancelá|olvidalo|olvidá|dejalo|dejá)\b",
+    re.IGNORECASE,
+)
+EXPLICIT_NEW_INTENTS = frozenset(
+    {
+        QUERY_PENDINGS,
+        QUERY_AGENT_ACCOUNT,
+        QUERY_AGENDA,
+        QUERY_PROPERTIES,
+        QUERY_PROPERTY_NEEDS,
+        QUERY_OPERATIONS,
+        QUERY_INVOICES,
+        CREATE_TASK,
+        START_AGENT_PAYMENT,
     }
 )
 
@@ -215,13 +244,35 @@ def parse_price_amount(text):
     return number
 
 
+def is_generic_agent_reference(text):
+    folded = fold_text(text)
+    if not folded:
+        return False
+    return bool(GENERIC_AGENT_RE.match(folded))
+
+
+def looks_like_person_name(text):
+    cleaned = " ".join((text or "").split())
+    if not cleaned or is_generic_agent_reference(cleaned):
+        return False
+    if re.search(r"\d", cleaned):
+        return False
+    if len(cleaned.split()) > 4:
+        return False
+    return bool(NAME_LIKE_RE.fullmatch(cleaned))
+
+
 def _usable_person_name(name):
     parts = [part for part in (name or "").split() if part]
     while parts and fold_text(parts[-1]) in PERSON_STOP:
         parts.pop()
+    while parts and fold_text(parts[0]) in PERSON_STOP:
+        parts.pop(0)
     name = " ".join(parts)
     folded = fold_text(name)
     if not folded or folded in PERSON_STOP:
+        return ""
+    if is_generic_agent_reference(name):
         return ""
     if folded in CABA_ALIASES or folded in NEIGHBORHOOD_ALIASES:
         return ""
@@ -653,6 +704,11 @@ def extract_invoice_entities(text, *, context=None, today=None):
     elif "jrh" in folded:
         entities["charge_category"] = "jrh"
         entities["charge_hint"] = "jrh"
+    if is_generic_agent_reference(text) or re.search(
+        r"\b(los agentes|mis agentes|todos los agentes|un agente|una agente)\b",
+        folded,
+    ):
+        entities["generic_agents"] = True
     address = re.search(
         r"(libertador|santa fe|cabildo|corrientes|madero|hubac|quesada|fitz roy)(?:\s+\d+)?",
         folded,
@@ -683,7 +739,7 @@ def extract_entities(text, *, context=None):
     entities = extract_property_entities(text)
     entities.update(extract_when(text))
     person = extract_person_name(text)
-    if person:
+    if person and not is_generic_agent_reference(person):
         entities["agent_name"] = person
         entities["contact_name"] = person
     invoice = extract_invoice_entities(text, context=context)
@@ -699,6 +755,9 @@ def extract_entities(text, *, context=None):
     )
     if period:
         entities["period"] = period.group(1)
+    if entities.get("generic_agents"):
+        entities.pop("agent_name", None)
+        entities.pop("contact_name", None)
     pronoun = bool(
         re.search(
             r"\b(lo|la|eso|esa|este|esta|el cargo|facturamelo|facturamel[oa])\b",
@@ -710,6 +769,71 @@ def extract_entities(text, *, context=None):
         entities["previous_kind"] = last.get("kind")
         entities["previous_id"] = last.get("id")
     return entities
+
+
+def apply_expected_entity(entities, text, pending):
+    """Fill the slot JRH asked for. Do not re-parse the reply as a new origin."""
+    pending = pending or {}
+    expected = str(pending.get("expected_entity") or "").strip()
+    incoming = dict(entities or {})
+    for key, value in (pending.get("entities") or {}).items():
+        if incoming.get(key) in (None, "") and value not in (None, ""):
+            incoming[key] = value
+    if pending.get("origin_type"):
+        incoming["origin_type"] = pending["origin_type"]
+    category = pending.get("charge_category") or incoming.get("charge_category")
+    if category and not incoming.get("charge_category"):
+        incoming["charge_category"] = category
+        incoming["charge_hint"] = incoming.get("charge_hint") or category
+    if expected:
+        incoming["expected_entity"] = expected
+    raw = " ".join((text or "").split())
+    if expected == "agent":
+        incoming.pop("generic_agents", None)
+        if is_generic_agent_reference(raw):
+            incoming.pop("agent_name", None)
+            incoming["generic_agents"] = True
+        elif not incoming.get("agent_name"):
+            person = extract_person_name(raw)
+            if not person and looks_like_person_name(raw):
+                person = raw
+            if person and not is_generic_agent_reference(person):
+                incoming["agent_name"] = person
+    elif expected == "side":
+        side = extract_invoice_side(raw)
+        if side:
+            incoming["side"] = side
+    elif expected == "operation":
+        if not incoming.get("property_text"):
+            incoming["operation_reference"] = raw
+    elif expected == "property":
+        incoming["property_text"] = incoming.get("property_text") or raw
+    elif expected == "charge":
+        incoming["charge_hint"] = incoming.get("charge_hint") or raw
+    elif expected == "issuer":
+        incoming["issuer"] = raw
+    elif expected == "billing_period":
+        incoming["billing_period"] = incoming.get("billing_period") or normalize_billing_period(raw)
+    elif expected == "currency":
+        if not incoming.get("currency"):
+            folded = fold_text(raw)
+            if any(token in folded for token in ("usd", "dolar", "dolares")):
+                incoming["currency"] = "USD"
+            elif any(token in folded for token in ("ars", "peso", "pesos")):
+                incoming["currency"] = "ARS"
+    return incoming
+
+
+def _has_explicit_intent_change(scores):
+    competing = {
+        intent: confidence
+        for intent, confidence in (scores or {}).items()
+        if intent != START_INVOICE
+    }
+    if not competing:
+        return False
+    intent, confidence = max(competing.items(), key=lambda item: item[1])
+    return intent in EXPLICIT_NEW_INTENTS and confidence >= 0.75
 
 
 def classify_intent(prompt, *, context=None):
@@ -751,6 +875,24 @@ def classify_intent(prompt, *, context=None):
             entities["self"] = True
         if entities.get("origin_type") == ORIGIN_UNKNOWN and entities.get("side"):
             entities["origin_type"] = ORIGIN_OPERATION
+    if START_INVOICE not in scores and not re.search(
+        r"\b(debo|debe|deuda|saldo)\b", folded
+    ):
+        if any(
+            phrase in folded
+            for phrase in (
+                "fee de",
+                "el fee",
+                "un fee",
+                "cargo pendiente",
+                "cargos pendientes",
+            )
+        ):
+            scores[START_INVOICE] = 0.86
+            if "fee" in folded:
+                entities["charge_category"] = entities.get("charge_category") or "fee"
+                entities["charge_hint"] = entities.get("charge_hint") or "fee"
+                entities["origin_type"] = ORIGIN_CHARGE
     if any(
         phrase in folded
         for phrase in ("que debe", "saldo de", "cuenta de", "cuanto debe")
@@ -797,6 +939,24 @@ def classify_intent(prompt, *, context=None):
     ):
         scores[START_INVOICE] = 0.8
 
+    pending = (context or {}).get("pending_invoice") or {}
+    expected = str(pending.get("expected_entity") or "").strip()
+    if expected and CANCEL_INVOICE_RE.search(folded):
+        entities["cancel_pending"] = True
+        return {
+            "intent": FALLBACK,
+            "entities": entities,
+            "confidence": 0.9,
+        }
+    if expected and not _has_explicit_intent_change(scores):
+        origin_now = entities.get("origin_type") or detect_invoice_origin(text, entities)
+        operation_retarget = expected == "agent" and origin_now == ORIGIN_OPERATION and (
+            entities.get("property_text") or entities.get("address")
+        )
+        if not operation_retarget:
+            scores[START_INVOICE] = max(scores.get(START_INVOICE, 0), 0.9)
+            entities = apply_expected_entity(entities, text, pending)
+
     if not scores:
         return {
             "intent": FALLBACK,
@@ -818,17 +978,21 @@ def classify_intent(prompt, *, context=None):
     }
 
 
-def apply_intent_guards(parsed, prompt):
+def apply_intent_guards(parsed, prompt, context=None):
     """Keep Agenda/create from stealing inventory language after an LLM pass."""
     result = dict(parsed or {})
-    classified = classify_intent(prompt, context={"last_entity": {}})
+    classified = classify_intent(prompt, context=context)
     rule_intent = classified["intent"]
     entities = dict(classified.get("entities") or {})
     incoming = result.get("entities") if isinstance(result.get("entities"), dict) else {}
     merged = dict(entities)
     merged.update({key: value for key, value in incoming.items() if value not in (None, "")})
     result["entities"] = merged
-    if rule_intent == QUERY_PROPERTIES and result.get("intent") in {
+    if rule_intent == START_INVOICE and result.get("intent") in {FALLBACK}:
+        result["intent"] = START_INVOICE
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.86)
+        result["guard"] = "invoice_slot"
+    elif rule_intent == QUERY_PROPERTIES and result.get("intent") in {
         QUERY_AGENDA,
         CREATE_TASK,
         FALLBACK,

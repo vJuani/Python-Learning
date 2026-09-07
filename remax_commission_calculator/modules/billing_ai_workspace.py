@@ -28,6 +28,7 @@ def build_billing_ai_workspace(
     ai_message=None,
     ai_options=None,
     ai_operation=None,
+    ai_message_data=None,
 ):
     language = language if language in ("es", "en") else "es"
     chat_messages = chat_messages or []
@@ -61,7 +62,7 @@ def build_billing_ai_workspace(
         chat_messages.append(
             {
                 "role": "assistant",
-                "text": _t(ai_message, language),
+                "text": _t(ai_message, language, **(ai_message_data or {})),
                 "text_key": ai_message,
             }
         )

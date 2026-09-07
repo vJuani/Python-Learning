@@ -39,6 +39,7 @@ from modules.jrh_ai_classify import (
     normalize_user_text,
 )
 from modules.jrh_ai_intents import START_INVOICE
+from modules.jrh_ai_context import sanitize_pending_invoice
 from modules.search import fuzzy_token_match, search_agents_flexible
 
 
@@ -102,6 +103,8 @@ class ResolvedInvoiceIntent:
 class DisambiguationResult:
     message_key: str
     options: list[dict[str, Any]] = field(default_factory=list)
+    expected_entity: str = ""
+    message_data: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -173,12 +176,12 @@ def parse_invoice_intent(text, *, context=None):
     raw = normalize_user_text(text)
     folded = _normalize_text(raw)
     context = context or {}
-    last_entity = context.get("last_entity") or {}
-    classified = classify_intent(raw, context={"last_entity": last_entity})
+    pending = context.get("pending_invoice") or {}
+    classified = classify_intent(raw, context=context)
     entities = dict(classified.get("entities") or extract_entities(raw, context=context))
 
     list_pending = any(kw in folded for kw in PENDING_KEYWORDS)
-    if list_pending and not INVOICE_CREATE_RE.search(folded):
+    if list_pending and not INVOICE_CREATE_RE.search(folded) and not pending.get("expected_entity"):
         return ParsedInvoiceIntent(
             intent=INTENT_LIST_PENDING,
             confidence=0.9,
@@ -187,21 +190,29 @@ def parse_invoice_intent(text, *, context=None):
             entities=entities,
         )
 
+    expected = (
+        pending.get("expected_entity")
+        or entities.get("expected_entity")
+        or ""
+    )
     side = (
-        context.get("side")
+        pending.get("side")
+        or context.get("side")
         or entities.get("side")
         or _detect_side(folded)
         or extract_invoice_side(raw)
     )
-    operation_id = context.get("operation_id")
+    operation_id = pending.get("operation_id") or context.get("operation_id")
     if entities.get("previous_kind") == "operation" and entities.get("previous_id"):
         operation_id = operation_id or entities.get("previous_id")
     operation_reference = (
         entities.get("property_text")
         or entities.get("address")
         or entities.get("operation_reference")
-        or raw
+        or ""
     )
+    if not operation_reference and expected not in {"agent", "charge", "side"}:
+        operation_reference = raw
 
     com_id = _extract_operation_id(raw)
     if com_id is not None:
@@ -209,21 +220,34 @@ def parse_invoice_intent(text, *, context=None):
         operation_reference = f"COM-{com_id:06d}"
         entities["origin_type"] = ORIGIN_OPERATION
 
-    origin = entities.get("origin_type") or ORIGIN_UNKNOWN
+    origin = entities.get("origin_type") or pending.get("origin_type") or ORIGIN_UNKNOWN
+    if expected == "agent":
+        origin = pending.get("origin_type") or ORIGIN_CHARGE
+        operation_reference = ""
+    if expected == "charge":
+        origin = pending.get("origin_type") or ORIGIN_CHARGE
     if origin == ORIGIN_UNKNOWN and operation_id:
         origin = ORIGIN_OPERATION
     if origin == ORIGIN_UNKNOWN and (
         entities.get("charge_hint")
         or entities.get("billing_period")
         or entities.get("self")
+        or entities.get("generic_agents")
     ):
         origin = ORIGIN_CHARGE
+    if pending.get("origin_type") and origin == ORIGIN_UNKNOWN:
+        origin = pending["origin_type"]
+    if expected:
+        entities["expected_entity"] = expected
+    if pending.get("charge_category") and not entities.get("charge_category"):
+        entities["charge_category"] = pending["charge_category"]
+        entities["charge_hint"] = entities.get("charge_hint") or pending["charge_category"]
 
     intent = INTENT_CREATE_DRAFT
     confidence = float(classified.get("confidence") or 0.5)
     if classified.get("intent") == START_INVOICE:
         confidence = max(confidence, 0.86)
-    if operation_id or len(folded) >= 3:
+    if operation_id or len(folded) >= 3 or expected:
         confidence = max(confidence, 0.75)
     if operation_id and side:
         confidence = max(confidence, 0.95)
@@ -400,16 +424,155 @@ def _match_agents(organization_id, query, *, agent_scope=None):
     return matches
 
 
+def _charge_matches_category(charge, category):
+    if not category:
+        return True
+    hint = fold_text(category)
+    blob = fold_text(
+        " ".join(
+            str(charge.get(key) or "")
+            for key in ("name", "description", "charge_category", "period_label")
+        )
+    )
+    return hint in blob
+
+
+def _agents_with_pending_charges(
+    organization_id,
+    *,
+    category="",
+    agent_scope=None,
+):
+    agents = get_agents(organization_id)
+    if agent_scope is not None:
+        agents = [
+            item for item in agents if int(item.get("id") or 0) == int(agent_scope)
+        ]
+    options = []
+    for agent in agents:
+        charges = list_billable_agent_charges(
+            organization_id,
+            agent_id=agent["id"],
+        )
+        matching = [
+            item for item in charges if _charge_matches_category(item, category)
+        ]
+        if not matching:
+            continue
+        first = matching[0]
+        amount = (
+            first.get("gross_amount")
+            or first.get("amount")
+            or first.get("pending_amount")
+            or ""
+        )
+        currency = first.get("currency") or ""
+        options.append(
+            {
+                "id": agent.get("id"),
+                "name": agent.get("name"),
+                "label": " · ".join(
+                    part
+                    for part in (
+                        agent.get("name") or "",
+                        f"{currency} {amount}".strip(),
+                    )
+                    if part
+                ),
+                "kind": "agent",
+                "amount": amount,
+                "currency": currency,
+            }
+        )
+        if len(options) >= 8:
+            break
+    return options
+
+
+def build_pending_invoice_context(parsed, result):
+    """Persist the slot we are waiting for. Keep until resolve, cancel, or new intent."""
+    entities = dict((parsed.entities if parsed else {}) or {})
+    origin = (parsed.origin_type if parsed else "") or entities.get("origin_type") or ""
+    category = entities.get("charge_category") or entities.get("charge_hint") or ""
+    expected = ""
+    operation_id = parsed.operation_id if parsed else None
+    side = parsed.side if parsed else None
+    if isinstance(result, MissingSideResult):
+        expected = "side"
+        origin = ORIGIN_OPERATION
+        operation_id = result.operation_id
+    elif isinstance(result, DisambiguationResult):
+        expected = result.expected_entity
+        if not expected:
+            if result.message_key in {
+                "billing_ai_need_agent",
+                "billing_ai_agent_not_found",
+                "billing_ai_agents_with_fee",
+                "jrh_ai_agent_missing",
+                "jrh_ai_agent_ambiguous",
+            }:
+                expected = "agent"
+            elif result.message_key in {
+                "jrh_ai_invoice_candidates",
+                "jrh_ai_charge_ambiguous",
+                "billing_ai_charge_missing",
+            }:
+                expected = "charge"
+            elif result.message_key in {
+                "billing_ai_disambiguation",
+                "billing_ai_operation_not_found",
+            }:
+                expected = "operation"
+    if not expected:
+        return {}
+    if expected == "agent":
+        origin = origin or ORIGIN_CHARGE
+    return sanitize_pending_invoice(
+        {
+            "intent": START_INVOICE,
+            "origin_type": origin,
+            "expected_entity": expected,
+            "charge_category": category,
+            "operation_id": operation_id,
+            "side": side,
+            "entities": entities,
+        }
+    )
+
+
 def _resolve_charges(parsed, organization_id, *, agent_scope=None, user=None):
     from modules.database.agents_repository import get_agent_record
     from modules.jrh_ai_resolver import resolve_pending_charges
 
     entities = parsed.entities or {}
     query = entities.get("agent_name") or ""
+    generic = bool(entities.get("generic_agents"))
     use_self = bool(entities.get("self")) or (
-        user and user.get("role") == ROLE_AGENT and not query
+        user and user.get("role") == ROLE_AGENT and not query and not generic
     )
     scoped = agent_scope
+    if generic or (not query and not use_self):
+        category = entities.get("charge_category") or entities.get("charge_hint") or ""
+        options = _agents_with_pending_charges(
+            organization_id,
+            category=category,
+            agent_scope=scoped,
+        )
+        if len(options) != 1:
+            message_key = (
+                "billing_ai_agents_with_fee"
+                if options and fold_text(category) == "fee"
+                else "billing_ai_need_agent"
+            )
+            return DisambiguationResult(
+                message_key=message_key,
+                options=options,
+                expected_entity="agent",
+                message_data={"count": len(options), "name": query},
+            )
+        query = options[0].get("name") or ""
+        entities["agent_name"] = query
+        parsed.entities = entities
     if use_self and scoped:
         agents = _match_agents(organization_id, "", agent_scope=scoped)
     elif query:
@@ -418,11 +581,15 @@ def _resolve_charges(parsed, organization_id, *, agent_scope=None, user=None):
         return DisambiguationResult(
             message_key="billing_ai_need_agent",
             options=[],
+            expected_entity="agent",
         )
     if not agents:
+        display = " ".join((query or "").split()).title() or query
         return DisambiguationResult(
-            message_key="jrh_ai_agent_missing",
+            message_key="billing_ai_agent_not_found",
             options=[],
+            expected_entity="agent",
+            message_data={"name": display},
         )
     if len(agents) > 1:
         return DisambiguationResult(
@@ -436,6 +603,7 @@ def _resolve_charges(parsed, organization_id, *, agent_scope=None, user=None):
                 }
                 for item in agents[:8]
             ],
+            expected_entity="agent",
         )
     agent = agents[0]
     agent_row = {
@@ -488,11 +656,13 @@ def _resolve_charges(parsed, organization_id, *, agent_scope=None, user=None):
         return DisambiguationResult(
             message_key="billing_ai_charge_missing",
             options=[],
+            expected_entity="charge",
         )
     if len(charges) > 1:
         return DisambiguationResult(
             message_key="jrh_ai_invoice_candidates",
             options=[_charge_option(item, agent_row) for item in charges[:8]],
+            expected_entity="charge",
         )
     charge = charges[0]
     try:
@@ -664,14 +834,17 @@ def resolve_invoice_intent(
             )
 
     origin = parsed.origin_type or entities.get("origin_type") or ORIGIN_UNKNOWN
+    expected = entities.get("expected_entity") or ""
     if origin == ORIGIN_UNKNOWN and (
         entities.get("charge_hint")
         or entities.get("self")
         or entities.get("billing_period")
         or entities.get("amount")
+        or entities.get("generic_agents")
+        or expected in {"agent", "charge"}
     ):
         origin = ORIGIN_CHARGE
-    if origin == ORIGIN_CHARGE:
+    if origin == ORIGIN_CHARGE or expected == "agent":
         return _resolve_charges(
             parsed,
             organization_id,
@@ -731,6 +904,13 @@ def resolve_invoice_intent(
             ]
 
     if not operations:
+        if expected == "agent" or origin == ORIGIN_CHARGE:
+            return _resolve_charges(
+                parsed,
+                organization_id,
+                agent_scope=agent_scope,
+                user=user,
+            )
         if origin != ORIGIN_OPERATION and (
             entities.get("agent_name") or entities.get("self")
         ):
@@ -743,6 +923,7 @@ def resolve_invoice_intent(
         return DisambiguationResult(
             message_key="billing_ai_operation_not_found",
             options=[],
+            expected_entity="operation",
         )
 
     if len(operations) > 1:
@@ -752,6 +933,7 @@ def resolve_invoice_intent(
                 _operation_label(op)
                 for op in operations[:8]
             ],
+            expected_entity="operation",
         )
 
     operation = operations[0]

@@ -35,6 +35,7 @@ from modules.invoice_ai_service import (
     parse_invoice_intent,
     resolve_invoice_intent,
 )
+from modules.jrh_ai_context import SESSION_KEY as JRH_CONTEXT_KEY
 from modules.invoicing import SIDE_BUYER, SIDE_SELLER, set_party_invoice_amount
 from modules.jrh_ai_classify import (
     ORIGIN_CHARGE,
@@ -383,6 +384,168 @@ class InvoiceAiV2Tests(unittest.TestCase):
     def test_23_fuzzy_distance_helper(self):
         self.assertLessEqual(token_edit_distance("barero", "barreiro"), 2)
         self.assertLessEqual(token_edit_distance("libertado", "libertador"), 1)
+
+    def test_24_fee_chip_then_jose_is_agent_not_operation(self):
+        session = {}
+        first = self._ask("Fee de un agente", session=session)
+        self.assertEqual(first["intent"], START_INVOICE)
+        self.assertNotIn("operación", (first.get("message") or "").lower())
+        pending = (session.get(JRH_CONTEXT_KEY) or {}).get("pending_invoice") or {}
+        self.assertEqual(pending.get("expected_entity"), "agent")
+        self.assertEqual(pending.get("origin_type"), ORIGIN_CHARGE)
+        self.assertEqual((pending.get("charge_category") or "").lower(), "fee")
+        second = self._ask("jose", session=session)
+        self.assertEqual(second["intent"], START_INVOICE)
+        self.assertNotIn("operación", (second.get("message") or "").lower())
+        kinds = {item.get("kind") for item in second.get("candidates") or []}
+        self.assertTrue(
+            second.get("entity", {}).get("kind") == "charge"
+            or kinds <= {"agent", "charge"}
+            or "agente" in (second.get("message") or "").lower()
+        )
+        self.assertNotEqual(second.get("message_key"), "billing_ai_operation_not_found")
+
+    def test_25_jose_barreiro_resolves_full_name(self):
+        parsed, result = self._resolve("facturame el fee de jose barreiro")
+        self.assertEqual(parsed.origin_type, ORIGIN_CHARGE)
+        self.assertIsInstance(result, ResolvedChargeIntent)
+        self.assertEqual(result.agent_id, self.barreiro)
+
+    def test_26_barreiro_alone_resolves_unique(self):
+        _, result = self._resolve("facturame el fee de barreiro")
+        self.assertIsInstance(result, ResolvedChargeIntent)
+        self.assertEqual(result.agent_id, self.barreiro)
+        self.assertEqual(result.charge_id, self.fee["id"])
+
+    def test_27_jose_with_two_matches_asks(self):
+        _, result = self._resolve("facturame el fee de jose")
+        self.assertIsInstance(result, DisambiguationResult)
+        names = " ".join(item.get("name") or "" for item in result.options)
+        self.assertIn("Barreiro", names)
+        self.assertIn("Martínez", names)
+        self.assertEqual(result.expected_entity, "agent")
+
+    def test_28_unknown_agent_message_is_agent_not_operation(self):
+        _, result = self._resolve("facturame el fee de ZetaInexistente")
+        self.assertIsInstance(result, DisambiguationResult)
+        self.assertEqual(result.message_key, "billing_ai_agent_not_found")
+        self.assertNotEqual(result.message_key, "billing_ai_operation_not_found")
+        message = self._ask("facturame el fee de ZetaInexistente")
+        self.assertIn("agente", message["message"].lower())
+        self.assertNotIn("operación", message["message"].lower())
+
+    def test_29_los_agentes_is_not_a_name(self):
+        parsed, result = self._resolve("facturame el fee de los agentes")
+        self.assertTrue(parsed.entities.get("generic_agents"))
+        self.assertFalse(parsed.entities.get("agent_name"))
+        self.assertIsInstance(result, DisambiguationResult)
+        self.assertEqual(result.expected_entity, "agent")
+        names = " ".join(item.get("name") or "" for item in result.options).lower()
+        self.assertNotIn("los agentes", names)
+        self.assertIn("barreiro", names)
+
+    def test_30_fee_quick_action_keeps_category(self):
+        parsed = parse_invoice_intent("Fee de un agente")
+        self.assertEqual(parsed.origin_type, ORIGIN_CHARGE)
+        self.assertEqual((parsed.entities.get("charge_category") or "").lower(), "fee")
+        session = {}
+        result = self._ask("Fee de un agente", session=session)
+        pending = (session.get(JRH_CONTEXT_KEY) or {}).get("pending_invoice") or {}
+        self.assertEqual((pending.get("charge_category") or "").lower(), "fee")
+        self.assertEqual(result["intent"], START_INVOICE)
+
+    def test_31_side_slot_fills_buyer(self):
+        parsed, result = self._resolve(
+            "comprador",
+            context={
+                "pending_invoice": {
+                    "intent": START_INVOICE,
+                    "origin_type": ORIGIN_OPERATION,
+                    "expected_entity": "side",
+                    "operation_id": self.op_lib_a,
+                    "entities": {"origin_type": ORIGIN_OPERATION},
+                },
+                "operation_id": self.op_lib_a,
+            },
+        )
+        self.assertIsInstance(result, ResolvedInvoiceIntent)
+        self.assertEqual(result.side, SIDE_BUYER)
+        self.assertEqual(result.operation_id, self.op_lib_a)
+
+    def test_32_properties_intent_abandons_agent_slot(self):
+        session = {}
+        first = self._ask("Fee de un agente", session=session)
+        self.assertEqual(first["pending_invoice"].get("expected_entity"), "agent")
+        second = self._ask("mejor mostrame mis propiedades", session=session)
+        self.assertEqual(second["intent"], "QUERY_PROPERTIES")
+        pending = (session.get(JRH_CONTEXT_KEY) or {}).get("pending_invoice") or {}
+        self.assertFalse(pending.get("expected_entity"))
+
+    def test_33_context_survives_consecutive_posts(self):
+        session = {}
+        self._ask("Fee de un agente", session=session)
+        first_pending = dict(
+            (session.get(JRH_CONTEXT_KEY) or {}).get("pending_invoice") or {}
+        )
+        self.assertEqual(first_pending.get("expected_entity"), "agent")
+        self._ask("jose", session=session)
+        second_ctx = session.get(JRH_CONTEXT_KEY) or {}
+        self.assertTrue(
+            second_ctx.get("pending_invoice")
+            or second_ctx.get("last_entity")
+        )
+        self.assertEqual(second_ctx.get("last_intent"), START_INVOICE)
+
+    def test_34_other_org_never_in_jose_candidates(self):
+        _, result = self._resolve("facturame el fee de jose")
+        ids = {item.get("id") for item in result.options}
+        self.assertNotIn(self.foreign, ids)
+
+    def test_35_agent_scope_own_records_only(self):
+        _, result = self._resolve(
+            "facturame el fee de jose",
+            user=self.pablo_record,
+            agent_id=self.pablo,
+        )
+        self.assertIsInstance(result, DisambiguationResult)
+        ids = {item.get("id") for item in result.options}
+        self.assertNotIn(self.barreiro, ids)
+        self.assertNotIn(self.jose_martinez, ids)
+        self.assertEqual(result.message_key, "billing_ai_agent_not_found")
+        own = self._ask(
+            "Fee de un agente",
+            user=self.pablo_record,
+            agent_id=self.pablo,
+        )
+        self.assertEqual(own["intent"], START_INVOICE)
+        self.assertNotIn(self.barreiro, {
+            item.get("id") for item in own.get("candidates") or []
+        })
+
+    def test_36_selected_agent_lists_real_charges(self):
+        _, result = self._resolve("facturame lo de Barreiro")
+        self.assertIsInstance(result, DisambiguationResult)
+        charge_ids = {
+            item.get("id") or item.get("charge_id") for item in result.options
+        }
+        self.assertIn(self.fee["id"], charge_ids)
+        self.assertIn(self.jrh_fee["id"], charge_ids)
+        self.assertNotIn(self.pablo_fee["id"], charge_ids)
+
+    def test_37_single_fee_preview(self):
+        _, result = self._resolve("facturame el fee de barreiro")
+        self.assertIsInstance(result, ResolvedChargeIntent)
+        self.assertEqual(result.charge_id, self.fee["id"])
+
+    def test_38_several_fees_need_selection(self):
+        extra = self._charge(self.barreiro, "Fee extra", "fee", "20")
+        _, result = self._resolve("facturame el fee de barreiro")
+        self.assertIsInstance(result, DisambiguationResult)
+        charge_ids = {
+            item.get("id") or item.get("charge_id") for item in result.options
+        }
+        self.assertIn(self.fee["id"], charge_ids)
+        self.assertIn(extra["id"], charge_ids)
 
 
 if __name__ == "__main__":

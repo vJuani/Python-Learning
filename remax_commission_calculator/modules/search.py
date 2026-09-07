@@ -103,29 +103,89 @@ def search_agents(query, organization_id, limit=None):
     return results
 
 
-def search_agents_flexible(query, organization_id, limit=8):
-    """Partial name first, then a light typo fallback."""
-    matches = search_agents(query, organization_id, limit=limit)
-    if matches:
-        return matches
+def score_agent_name(name, query):
+    """Rank a stored agent name against a typed query. Organization-agnostic."""
+    name_folded = fold_text(name)
     query_folded = fold_text(query)
-    if len(query_folded) < 4:
-        return []
+    if not query_folded or not name_folded:
+        return 0
+    name_tokens = name_folded.split()
+    query_tokens = query_folded.split()
+    if name_folded == query_folded:
+        return 100
+    exact = 0
+    prefix = 0
+    fuzzy = 0
+    for qt in query_tokens:
+        if qt in name_tokens:
+            exact += 1
+            continue
+        if any(
+            (nt.startswith(qt) or qt.startswith(nt))
+            for nt in name_tokens
+            if len(qt) >= 3 and len(nt) >= 3
+        ):
+            prefix += 1
+            continue
+        max_dist = 1 if len(qt) <= 5 else 2
+        if len(qt) >= 4 and any(
+            len(nt) >= 4
+            and token_edit_distance(qt, nt, limit=max_dist) <= max_dist
+            for nt in name_tokens
+        ):
+            fuzzy += 1
+    accounted = exact + prefix + fuzzy
+    if accounted == len(query_tokens) and exact == len(query_tokens):
+        return 80 if len(query_tokens) == 1 else 70
+    if accounted == len(query_tokens) and exact:
+        return 60
+    if query_folded in name_folded:
+        return 50
+    if accounted == len(query_tokens) and prefix and not fuzzy:
+        return 50
+    if accounted == len(query_tokens) and fuzzy:
+        return 40
+    if exact or prefix or fuzzy:
+        return min(45, 18 * exact + 10 * prefix + 8 * fuzzy)
+    return 0
+
+
+def rank_agents(query, organization_id, limit=8, *, min_score=20):
+    """Score org agents by name. Never crosses organization_id."""
     scored = []
     for agent in get_agents(organization_id):
-        name = agent.get("name") or ""
-        if not fuzzy_token_match(name, query_folded, max_dist=2):
+        score = score_agent_name(agent.get("name"), query)
+        if score < min_score:
             continue
-        distances = [
-            token_edit_distance(token, query_folded, limit=2)
-            for token in fold_text(name).split()
-            if token
-        ]
-        if not distances:
-            continue
-        scored.append((min(distances), agent))
-    scored.sort(key=lambda item: item[0])
-    return [item[1] for item in scored[:limit]]
+        scored.append((score, fold_text(agent.get("name")), agent))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return scored[: max(int(limit or 8), 1)]
+
+
+def collapse_agent_matches(scored, *, margin=15, unique_min=55):
+    """Keep a unique winner, or everyone still close to the top score."""
+    if not scored:
+        return []
+    normalized = []
+    for item in scored:
+        if len(item) == 3:
+            normalized.append((item[0], item[2]))
+        else:
+            normalized.append((item[0], item[1]))
+    if len(normalized) == 1:
+        return [normalized[0][1]] if normalized[0][0] >= 20 else []
+    top_score = normalized[0][0]
+    second = normalized[1][0]
+    if top_score >= unique_min and top_score - second >= margin:
+        return [normalized[0][1]]
+    floor = max(top_score - margin, 20)
+    return [agent for score, agent in normalized if score >= floor]
+
+
+def search_agents_flexible(query, organization_id, limit=8):
+    """Token / prefix / fuzzy ranking. Does not require a contiguous full name."""
+    ranked = rank_agents(query, organization_id, limit=max(int(limit or 8), 8))
+    return collapse_agent_matches(ranked)[:limit]
 
 
 def suggest_agents(query, organization_id, limit=8):

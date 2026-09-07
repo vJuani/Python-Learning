@@ -73,6 +73,7 @@ def _result(
     entity=None,
     data=None,
     wrote=False,
+    pending_invoice=None,
 ):
     return {
         "intent": intent,
@@ -88,6 +89,7 @@ def _result(
         "entity": entity or {},
         "data": data or {},
         "wrote": wrote,
+        "pending_invoice": pending_invoice or {},
     }
 
 
@@ -139,6 +141,20 @@ def ask_jrh(
     intent = parsed.get("intent") or FALLBACK
     entities = parsed.get("entities") or {}
     confidence = float(parsed.get("confidence") or 0)
+    if entities.get("cancel_pending"):
+        store_context(session, intent=FALLBACK, prompt=text, pending_invoice={})
+        return _fallback(language, confidence=0.9)
+    pending = context.get("pending_invoice") or {}
+    if (
+        (confidence < LOW_CONFIDENCE or intent == FALLBACK)
+        and pending.get("expected_entity")
+        and not entities.get("abandon_invoice_slot")
+    ):
+        intent = START_INVOICE
+        confidence = max(confidence, 0.86)
+        from modules.jrh_ai_classify import apply_expected_entity
+
+        entities = apply_expected_entity(entities, text, pending)
     if confidence < LOW_CONFIDENCE or intent == FALLBACK:
         result = _fallback(language, confidence=confidence)
         if entities.get("agent_name") and confidence >= 0.35:
@@ -190,6 +206,7 @@ def ask_jrh(
         intent=result.get("intent"),
         entity=result.get("entity"),
         prompt=text,
+        pending_invoice=result.get("pending_invoice"),
     )
     logger.info(
         "jrh_ai stage=handled intent=%s status=%s duration_ms=%s "
@@ -971,6 +988,7 @@ def _handle_start_invoice(
         MissingSideResult,
         ResolvedChargeIntent,
         ResolvedInvoiceIntent,
+        build_pending_invoice_context,
         parse_invoice_intent,
         resolve_invoice_intent,
     )
@@ -986,16 +1004,16 @@ def _handle_start_invoice(
             entities = dict(entities)
             entities["agent_name"] = previous_agent.get("name") or ""
 
+    invoice_context = load_context(session)
+    if entities.get("refers_to_previous"):
+        invoice_context = dict(invoice_context)
+        invoice_context["last_entity"] = {
+            "kind": entities.get("previous_kind"),
+            "id": entities.get("previous_id"),
+        }
     parsed = parse_invoice_intent(
         prompt,
-        context={
-            "last_entity": {
-                "kind": entities.get("previous_kind"),
-                "id": entities.get("previous_id"),
-            }
-            if entities.get("refers_to_previous")
-            else {},
-        },
+        context=invoice_context,
     )
     merged = dict(parsed.entities or {})
     merged.update({key: value for key, value in entities.items() if value not in (None, "")})
@@ -1055,6 +1073,7 @@ def _handle_start_invoice(
                 "label": resolved.operation_label,
             },
             data={"source_prompt": prompt},
+            pending_invoice=build_pending_invoice_context(parsed, resolved),
             actions=[
                 {
                     "label_key": "billing_invoice_buyer",
@@ -1085,6 +1104,9 @@ def _handle_start_invoice(
             }
             for item in (resolved.options or [])
         ]
+        message_data = dict(resolved.message_data or {})
+        message_data.setdefault("count", len(options))
+        message_data.setdefault("source_prompt", prompt)
         return _result(
             START_INVOICE,
             "needs_attention",
@@ -1105,7 +1127,8 @@ def _handle_start_invoice(
                 for item in options[:5]
             ],
             confidence=confidence,
-            data={"count": len(options), "source_prompt": prompt},
+            data=message_data,
+            pending_invoice=build_pending_invoice_context(parsed, resolved),
         )
     if isinstance(resolved, ResolvedInvoiceIntent):
         draft = {
