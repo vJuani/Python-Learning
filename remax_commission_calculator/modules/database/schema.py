@@ -3808,6 +3808,12 @@ def migrate_schema(create_backup=True):
 
     migrate_property_acm_sqlite()
 
+    from .agent_goals_migration import (
+        migrate_agent_goals_sqlite,
+    )
+
+    migrate_agent_goals_sqlite()
+
     return backup_path
 
 

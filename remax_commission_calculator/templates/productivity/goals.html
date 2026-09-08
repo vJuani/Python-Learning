@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('prod_configure') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/productivity.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="prod-hero">
+    <div>
+        <p class="prod-kicker">{{ t('prod_title') }}</p>
+        <h2>{{ t('prod_configure') }}</h2>
+        <p class="field-help">{{ t('prod_configure_help') }}</p>
+    </div>
+    <a href="{{ url_for('productivity_home') }}" class="btn btn-secondary">{{ t('back') }}</a>
+</section>
+
+<form method="post" class="prod-form">
+    <label>{{ t('prod_metric') }}
+        <select name="metric_key" required>
+            {% for key in metrics %}
+            <option value="{{ key }}">{{ t('prod_metric_' ~ key) }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>{{ t('prod_period') }}
+        <select name="period_type" required>
+            {% for key in periods %}
+            <option value="{{ key }}">{{ t('prod_period_' ~ key) }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>{{ t('prod_target') }}
+        <input type="text" name="target_value" required>
+    </label>
+    <label>{{ t('prod_currency') }}
+        <select name="currency">
+            <option value="">—</option>
+            <option value="USD">USD</option>
+            <option value="ARS">ARS</option>
+        </select>
+    </label>
+    <button type="submit" class="btn btn-primary">{{ t('prod_save_goal') }}</button>
+</form>
+
+{% if view.goals %}
+<section class="prod-panel">
+    <h3>{{ t('prod_your_goals') }}</h3>
+    <ul class="prod-goal-list">
+        {% for goal in view.goals %}
+        <li>
+            <div>
+                <strong>{{ t('prod_metric_' ~ goal.metric_key) }}</strong>
+                <span>{{ t('prod_period_' ~ goal.period_type) }} · {{ goal.target_value }}{% if goal.currency %} {{ goal.currency }}{% endif %}</span>
+            </div>
+            <form method="post">
+                <input type="hidden" name="action" value="deactivate">
+                <input type="hidden" name="goal_id" value="{{ goal.id }}">
+                <button type="submit" class="btn btn-small">{{ t('prod_remove_goal') }}</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+{% endblock %}

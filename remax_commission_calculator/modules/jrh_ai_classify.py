@@ -31,6 +31,7 @@ from modules.jrh_ai_intents import (
     ACM_FILTER_COMPARABLES,
     ACM_PRICE_SCENARIO,
     DOWNLOAD_ACM,
+    QUERY_PRODUCTIVITY,
 )
 
 ORIGIN_CHARGE = "agent_account_charge"
@@ -165,6 +166,7 @@ EXPLICIT_NEW_INTENTS = frozenset(
         CREATE_TASK,
         START_AGENT_PAYMENT,
         START_ACM,
+        QUERY_PRODUCTIVITY,
     }
 )
 
@@ -1039,6 +1041,36 @@ def classify_intent(prompt, *, context=None):
         )
     ) or re.search(r"\bacm\b", folded):
         scores[START_ACM] = 0.96
+    elif any(
+        phrase in folded
+        for phrase in (
+            "como vengo",
+            "cómo vengo",
+            "que me falta",
+            "qué me falta",
+            "cuantas llamadas",
+            "cuántas llamadas",
+            "cuantas visitas",
+            "cuántas visitas",
+            "cumplí mis metas",
+            "cumpli mis metas",
+            "cumplí mis objetivos",
+            "cumpli mis objetivos",
+            "cuanto cobre",
+            "cuánto cobré",
+            "cuanto cobre este mes",
+            "mi rendimiento",
+            "mis metas",
+            "mis objetivos",
+        )
+    ):
+        scores[QUERY_PRODUCTIVITY] = 0.97
+        if "semana" in folded:
+            entities["period"] = "weekly"
+        elif "mes" in folded:
+            entities["period"] = "monthly"
+        else:
+            entities["period"] = "daily"
 
     if (
         not scores
@@ -1133,6 +1165,14 @@ def apply_intent_guards(parsed, prompt, context=None):
         result["intent"] = QUERY_AGENDA
         result["confidence"] = max(float(result.get("confidence") or 0), 0.86)
         result["guard"] = "agenda_query"
+    elif rule_intent == QUERY_PRODUCTIVITY and result.get("intent") in {
+        QUERY_AGENDA,
+        QUERY_PENDINGS,
+        FALLBACK,
+    }:
+        result["intent"] = QUERY_PRODUCTIVITY
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.9)
+        result["guard"] = "productivity_query"
     elif rule_intent == QUERY_AGENT_ACCOUNT and result.get("intent") in {
         FALLBACK,
         START_INVOICE,

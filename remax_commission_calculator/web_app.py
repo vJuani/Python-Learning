@@ -8157,6 +8157,17 @@ register_acm_routes(
     },
 )
 
+from modules.productivity_routes import register_productivity_routes
+
+register_productivity_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+    },
+)
+
 
 if __name__ == "__main__":
     from modules.database import create_tables

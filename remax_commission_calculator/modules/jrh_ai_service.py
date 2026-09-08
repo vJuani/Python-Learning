@@ -38,6 +38,7 @@ from modules.jrh_ai_intents import (
     ACM_FILTER_COMPARABLES,
     ACM_PRICE_SCENARIO,
     DOWNLOAD_ACM,
+    QUERY_PRODUCTIVITY,
     WRITE_ACTIONS,
 )
 from modules.jrh_ai_provider import interpret_prompt
@@ -202,6 +203,7 @@ def ask_jrh(
         ACM_FILTER_COMPARABLES: _handle_acm_filter,
         ACM_PRICE_SCENARIO: _handle_acm_scenario,
         DOWNLOAD_ACM: _handle_download_acm,
+        QUERY_PRODUCTIVITY: _handle_productivity,
     }
     handler = handlers.get(intent, lambda **_kwargs: _fallback(language, confidence))
     result = handler(
@@ -1723,6 +1725,65 @@ def _handle_download_acm(
         actions=actions,
         confidence=confidence,
         entity={"kind": "acm", "id": acm_id, "label": (view.get("facts") or {}).get("address") or ""},
+    )
+
+
+def _handle_productivity(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    confidence,
+    now=None,
+    **_kwargs,
+):
+    from modules.agent_productivity import (
+        ProductivityError,
+        jrh_productivity_answer,
+    )
+
+    if not is_agent(user) or not agent_id:
+        return _result(
+            QUERY_PRODUCTIVITY,
+            "needs_attention",
+            language=language,
+            message_key="prod_err_agent_only",
+            confidence=confidence,
+        )
+    period = entities.get("period") or "daily"
+    try:
+        answer = jrh_productivity_answer(
+            organization_id,
+            user=user,
+            language=language,
+            period=period,
+            now=now,
+        )
+    except ProductivityError as error:
+        return _result(
+            QUERY_PRODUCTIVITY,
+            "needs_attention",
+            language=language,
+            message_key=error.message_key,
+            confidence=confidence,
+        )
+    return _result(
+        QUERY_PRODUCTIVITY,
+        "ready",
+        language=language,
+        summary=answer["message"],
+        actions=[
+            {
+                "label_key": "prod_title",
+                "href_name": "productivity_home",
+                "href_args": {"period": period},
+            }
+        ],
+        confidence=confidence,
+        data={"period": period, "activity": answer["view"]["activity"]},
+        entity={"kind": "productivity", "label": period},
     )
 
 

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('prod_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/productivity.css') }}">
+{% endblock %}
+
+{% block content %}
+{% set activity = view.activity %}
+<section class="prod-hero">
+    <div>
+        <p class="prod-kicker">{{ t('prod_title') }}</p>
+        <h2>{{ t('prod_progress') }}</h2>
+        <p class="field-help">{{ t('prod_period_tz', tz=view.timezone) }}</p>
+    </div>
+    <a href="{{ url_for('productivity_goals') }}" class="btn btn-secondary">{{ t('prod_configure') }}</a>
+</section>
+
+<nav class="prod-tabs">
+    <a href="{{ url_for('productivity_home', period='daily') }}" class="{% if view.period == 'daily' %}is-active{% endif %}">{{ t('prod_tab_today') }}</a>
+    <a href="{{ url_for('productivity_home', period='weekly') }}" class="{% if view.period == 'weekly' %}is-active{% endif %}">{{ t('prod_tab_week') }}</a>
+    <a href="{{ url_for('productivity_home', period='monthly') }}" class="{% if view.period == 'monthly' %}is-active{% endif %}">{{ t('prod_tab_month') }}</a>
+</nav>
+
+{% if not view.has_goals %}
+<section class="prod-empty">
+    <p>{{ t('prod_empty_goals') }}</p>
+    <a href="{{ url_for('productivity_goals') }}" class="btn btn-primary">{{ t('prod_configure') }}</a>
+</section>
+{% endif %}
+
+<section class="prod-cards">
+    {% for row in view.rows %}
+    <article class="prod-card{% if row.done %} prod-card--done{% endif %}">
+        <span>{{ row.label }}</span>
+        <strong>{{ row.current_label }} / {{ row.target_label }}</strong>
+        <p class="prod-pct">{{ row.percent }}%</p>
+        <div class="prod-bar" aria-hidden="true"><i style="width: {{ row.bar_percent }}%"></i></div>
+    </article>
+    {% endfor %}
+</section>
+
+<section class="prod-activity">
+    <h3>{{ t('prod_activity_real') }}</h3>
+    <ul class="prod-activity-grid">
+        <li><span>{{ t('prod_metric_contacts_called') }}</span><strong>{{ activity.contacts_called }}</strong></li>
+        <li><span>{{ t('prod_metric_followups_completed') }}</span><strong>{{ activity.followups_completed }}</strong></li>
+        <li><span>{{ t('prod_metric_visits_completed') }}</span><strong>{{ activity.visits_completed }}</strong></li>
+        <li><span>{{ t('prod_metric_meetings_completed') }}</span><strong>{{ activity.meetings_completed }}</strong></li>
+        <li><span>{{ t('prod_metric_tasks_completed') }}</span><strong>{{ activity.tasks_completed }}</strong></li>
+        <li><span>{{ t('prod_metric_new_contacts') }}</span><strong>{{ activity.new_contacts }}</strong></li>
+        <li><span>{{ t('prod_metric_acms_created') }}</span><strong>{{ activity.acms_created }}</strong></li>
+        {% if view.period != 'daily' %}
+        <li><span>{{ t('prod_metric_properties_captured') }}</span><strong>{{ activity.properties_captured }}</strong></li>
+        <li><span>{{ t('prod_metric_operations_closed') }}</span><strong>{{ activity.operations_closed }}</strong></li>
+        <li><span>{{ t('prod_ops_active') }}</span><strong>{{ view.operations_active }}</strong></li>
+        {% endif %}
+    </ul>
+    {% if view.period == 'monthly' %}
+    <div class="prod-money">
+        <p><span>{{ t('prod_metric_commissions_credited') }}</span> {% if view.money.commissions %}{{ view.money.commissions|join(' · ') }}{% else %}—{% endif %}</p>
+        <p><span>{{ t('prod_metric_invoiced_amount') }}</span> {% if view.money.invoiced %}{{ view.money.invoiced|join(' · ') }}{% else %}—{% endif %}</p>
+        <p><span>{{ t('prod_metric_collected_amount') }}</span> {% if view.money.collected %}{{ view.money.collected|join(' · ') }}{% else %}—{% endif %}</p>
+    </div>
+    {% endif %}
+</section>
+
+{% if view.period == 'daily' %}
+<p class="prod-mobile-jump hide-desktop"><a href="#prod-gaps">{{ t('prod_missing_today') }}</a></p>
+<section class="prod-panel" id="prod-gaps">
+    <h3>{{ t('prod_missing_today') }}</h3>
+    {% if view.gaps %}
+    <ul class="prod-gaps">
+        {% for item in view.gaps %}
+        <li>{{ item }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="field-help">{{ t('prod_day_complete') }}</p>
+    {% endif %}
+    {% if view.streak %}
+    <p class="prod-streak">{{ view.streak.label }}</p>
+    {% endif %}
+</section>
+{% endif %}
+
+{% if view.period == 'weekly' and view.week_series %}
+<section class="prod-panel">
+    <h3>{{ t('prod_week_chart') }}</h3>
+    <div class="prod-chart">
+        {% for point in view.week_series %}
+        <div class="prod-chart__col">
+            <div class="prod-chart__bars">
+                <i class="prod-chart__call" style="height: {{ point.call_h }}%"></i>
+                <i class="prod-chart__follow" style="height: {{ point.follow_h }}%"></i>
+            </div>
+            <span>{{ point.label }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    <p class="field-help">{{ t('prod_week_chart_help') }}</p>
+</section>
+{% endif %}
+
+<section class="prod-actions">
+    <a href="{{ url_for('contacts_index') }}" class="btn btn-secondary">{{ t('prod_action_followup') }}</a>
+    <a href="{{ url_for('agenda_index') }}" class="btn btn-secondary">{{ t('prod_action_tasks') }}</a>
+    <a href="{{ url_for('acm_list') }}" class="btn btn-secondary">{{ t('prod_action_acm') }}</a>
+    <a href="{{ url_for('contacts_index') }}" class="btn btn-secondary">{{ t('prod_action_needs') }}</a>
+</section>
+{% endblock %}

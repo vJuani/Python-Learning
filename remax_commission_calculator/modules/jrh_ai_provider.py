@@ -114,6 +114,15 @@ Examples:
 - solo cierres reales
 - qué pasa si publico en 360 mil
 
+QUERY_PRODUCTIVITY = agent personal goals and real activity (calls, follow-ups, visits, commissions). Never invent numbers. Period: today / week / month from the prompt.
+Examples:
+- cómo vengo hoy?
+- qué me falta hacer?
+- cuántas llamadas hice?
+- cumplí mis metas?
+- cuántas visitas hice esta semana?
+- cuánto cobré este mes?
+
 START_INVOICE = prepare invoice preview, never emit.
 "facturame lo que tengo" lists billable charges or opens preview.
 "facturame eso" uses previous charge context.

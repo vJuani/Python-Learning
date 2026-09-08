@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v21"
+POSTGRES_SCHEMA_VERSION = "postgres_v22"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -1691,6 +1691,31 @@ SCHEMA_STATEMENTS = (
     CREATE INDEX IF NOT EXISTS idx_property_acm_comparables_acm
     ON property_acm_comparables (organization_id, acm_id, selected)
     """,
+    f"""
+    CREATE TABLE IF NOT EXISTS agent_goals (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        agent_id BIGINT NOT NULL,
+        metric_key TEXT NOT NULL,
+        period_type TEXT NOT NULL,
+        target_value TEXT NOT NULL,
+        currency TEXT,
+        start_date TEXT,
+        end_date TEXT,
+        is_active {_FLAG} NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id) ON DELETE RESTRICT,
+        FOREIGN KEY (agent_id)
+            REFERENCES agents(id) ON DELETE RESTRICT
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_goals_owner
+    ON agent_goals (organization_id, agent_id, is_active, period_type)
+    """,
 )
 
 
@@ -1730,6 +1755,7 @@ POSTGRES_TABLES = (
     "property_document_files",
     "property_acms",
     "property_acm_comparables",
+    "agent_goals",
 )
 
 
