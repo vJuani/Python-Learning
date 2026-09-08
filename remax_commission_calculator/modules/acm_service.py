@@ -18,6 +18,7 @@ from modules.acm_engine import (
     choose_area_basis,
     comparable_area,
     compute_metrics,
+    compute_price_scenario,
     default_selected,
     display_area,
     explain_score,
@@ -28,6 +29,18 @@ from modules.acm_engine import (
     score_comparable,
     subject_quality,
     to_decimal,
+)
+from modules.acm_explain import (
+    build_acm_facts,
+    explain_acm,
+    fallback_market_highlights,
+    most_similar_comparable,
+)
+from modules.acm_sources import (
+    format_diff_label,
+    format_match_label,
+    source_catalog,
+    source_label,
 )
 from modules.auth import ROLE_AGENT
 from modules.database.property_acm_repository import (
@@ -403,19 +416,15 @@ def _enrich_comparable(row, subject, language="es"):
     reasons = item.get("score_reasons") or explain_score(subject, item)
     item["score_reasons"] = reasons
     item["match_labels"] = [
-        translate(f"acm_match_{key}", language=language)
+        format_match_label(key, language=language)
         for key in reasons.get("matches") or []
         if isinstance(key, str)
     ]
-    diff_labels = []
-    for diff in reasons.get("diffs") or []:
-        if isinstance(diff, tuple):
-            diff_labels.append(
-                translate(f"acm_diff_{diff[0]}", language=language, value=diff[1])
-            )
-        else:
-            diff_labels.append(translate(f"acm_diff_{diff}", language=language))
-    item["diff_labels"] = diff_labels
+    item["diff_labels"] = [
+        format_diff_label(diff, language=language)
+        for diff in reasons.get("diffs") or []
+    ]
+    item["source_label"] = source_label(item.get("source_type"), language=language)
     score = to_decimal(item.get("score")) or reasons.get("score")
     item["score_int"] = int(round(float(score or 0)))
     return item
@@ -447,20 +456,94 @@ def get_acm_view(acm_id, organization_id, *, user, language="es"):
             }
         )
     subject_ppm2 = price_per_m2(subject.get("listing_price"), display_area(subject))
-    return {
+    source_counts = {}
+    for row in enriched:
+        key = row.get("source_type") or "other_external"
+        source_counts[key] = source_counts.get(key, 0) + 1
+    source_chart = [
+        {"label": source_label(key, language=language), "count": count, "id": key}
+        for key, count in source_counts.items()
+    ]
+    checks = quality.get("checks") or {}
+    key_fields = (
+        "property_type",
+        "price",
+        "currency",
+        "location",
+        "area",
+        "rooms",
+    )
+    quality_complete = sum(1 for key in key_fields if checks.get(key) == "ok")
+    view = {
         "acm": acm,
         "property": property_data,
         "subject": subject,
         "quality": quality,
+        "quality_summary": {
+            "subject_complete": quality_complete,
+            "subject_total": len(key_fields),
+            "valid": int(metrics.get("valuation_count") or 0),
+            "found": int(metrics.get("found_count") or len(enriched)),
+            "closings": int(metrics.get("closing_count") or 0),
+            "geo_available": False,
+            "confidence": metrics.get("confidence") or "low",
+        },
         "comparables": enriched,
         "table_rows": table_rows,
         "chart_points": chart_points,
+        "source_chart": source_chart,
         "subject_ppm2": str(subject_ppm2) if subject_ppm2 is not None else None,
         "metrics": metrics,
         "can_finalize": bool(metrics.get("can_finalize")),
         "min_valid_required": MIN_VALID_COMPS,
         "disclaimer": translate("acm_disclaimer", language=language),
+        "source_catalog": source_catalog(language=language),
+        "map": {
+            "available": False,
+            "message_key": "acm_map_placeholder",
+        },
+        "best_comparable": most_similar_comparable(enriched),
+        "photo_url": None,
     }
+    facts = build_acm_facts(view, language=language)
+    explained = explain_acm(facts, language=language)
+    view["facts"] = facts
+    view["market_highlights"] = fallback_market_highlights(facts, language=language)
+    view["ai_explanation"] = explained
+    return view
+
+
+def preview_exclude_comparable(acm_id, organization_id, *, user, comparable_id, language="es"):
+    view = get_acm_view(acm_id, organization_id, user=user, language=language)
+    row = next(
+        (
+            item
+            for item in view["comparables"]
+            if int(item.get("id") or 0) == int(comparable_id)
+        ),
+        None,
+    )
+    if row is None:
+        raise AcmError("acm_err_comparable_missing", 404)
+    return {
+        "acm_id": acm_id,
+        "comparable": row,
+        "confirm_required": True,
+        "locked": view["acm"]["status"] == STATUS_FINALIZED,
+    }
+
+
+def simulate_list_price(acm_id, organization_id, *, user, proposed_price, language="es"):
+    view = get_acm_view(acm_id, organization_id, user=user, language=language)
+    acm = view["acm"]
+    scenario = compute_price_scenario(
+        proposed_price,
+        acm.get("estimated_value"),
+        acm.get("suggested_min_value"),
+        acm.get("suggested_max_value"),
+    )
+    view["scenario"] = scenario
+    return view
 
 
 def recalculate_acm(acm_id, organization_id, *, user, language="es"):

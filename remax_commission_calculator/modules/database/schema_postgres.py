@@ -1790,6 +1790,33 @@ def create_postgres_schema():
             )
 
         for column_name, column_sql in (
+            ("external_source", "TEXT"),
+            ("external_updated_at", "TEXT"),
+            ("sync_status", "TEXT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE properties
+                ADD COLUMN IF NOT EXISTS {column_name} {column_sql}
+                """
+            )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_properties_org_source_external
+            ON properties (
+                organization_id,
+                external_source,
+                external_id
+            )
+            WHERE external_source IS NOT NULL
+              AND BTRIM(external_source) != ''
+              AND external_id IS NOT NULL
+              AND BTRIM(external_id) != ''
+            """
+        )
+
+        for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),
             ("snapshot_parking", "INTEGER"),
             ("snapshot_url", "TEXT"),

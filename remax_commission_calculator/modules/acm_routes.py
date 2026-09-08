@@ -26,6 +26,7 @@ from modules.acm_service import (
     refresh_draft,
     require_acm_agent,
     set_comparable_selected,
+    simulate_list_price,
 )
 from modules.auth import get_current_user, is_guest_session
 from modules.pdf_acm_report import generate_acm_pdf_bytes
@@ -118,6 +119,25 @@ def register_acm_routes(app, helpers):
             return _handle(error)
         return render_template("acm/detail.html", view=view)
 
+    @app.route("/acm/<int:acm_id>/scenario", methods=["POST"])
+    def acm_scenario(acm_id):
+        user = _agent_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        language = get_current_language()
+        try:
+            view = simulate_list_price(
+                acm_id,
+                organization_id,
+                user=user,
+                proposed_price=request.form.get("proposed_price"),
+                language=language,
+            )
+        except AcmError as error:
+            return _handle(error)
+        return render_template("acm/detail.html", view=view)
+
     @app.route("/acm/<int:acm_id>/comparables", methods=["GET", "POST"])
     def acm_comparables(acm_id):
         user = _agent_user()
@@ -163,13 +183,18 @@ def register_acm_routes(app, helpers):
                         area=request.form.get("area"),
                         language=language,
                     )
-                elif request.form.get("action") == "toggle":
+                elif request.form.get("action") in {"toggle", "exclude", "include"}:
+                    selected = request.form.get("selected") == "1"
+                    if request.form.get("action") == "exclude":
+                        selected = False
+                    if request.form.get("action") == "include":
+                        selected = True
                     set_comparable_selected(
                         acm_id,
                         organization_id,
                         user=user,
                         comparable_id=int(request.form.get("comparable_id")),
-                        selected=request.form.get("selected") == "1",
+                        selected=selected,
                         language=language,
                     )
                 elif request.form.get("action") == "refresh":
@@ -206,7 +231,22 @@ def register_acm_routes(app, helpers):
             )
         except AcmError as error:
             return _handle(error)
-        return render_template("acm/comparables.html", view=view)
+        confirm_id = request.args.get("confirm_exclude", type=int)
+        confirm_row = None
+        if confirm_id:
+            confirm_row = next(
+                (
+                    row
+                    for row in view["comparables"]
+                    if int(row.get("id") or 0) == confirm_id
+                ),
+                None,
+            )
+        return render_template(
+            "acm/comparables.html",
+            view=view,
+            confirm_exclude=confirm_row,
+        )
 
     @app.route("/acm/<int:acm_id>/finalize", methods=["POST"])
     def acm_finalize(acm_id):

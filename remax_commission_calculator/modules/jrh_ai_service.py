@@ -32,6 +32,11 @@ from modules.jrh_ai_intents import (
     START_ACM,
     START_AGENT_PAYMENT,
     START_INVOICE,
+    QUERY_ACM,
+    ACM_EXPLAIN,
+    ACM_REMOVE_COMPARABLE,
+    ACM_FILTER_COMPARABLES,
+    ACM_PRICE_SCENARIO,
     WRITE_ACTIONS,
 )
 from modules.jrh_ai_provider import interpret_prompt
@@ -190,6 +195,11 @@ def ask_jrh(
         START_INVOICE: _handle_start_invoice,
         START_AGENT_PAYMENT: _handle_start_payment,
         START_ACM: _handle_start_acm,
+        QUERY_ACM: _handle_query_acm,
+        ACM_EXPLAIN: _handle_acm_explain,
+        ACM_REMOVE_COMPARABLE: _handle_acm_remove,
+        ACM_FILTER_COMPARABLES: _handle_acm_filter,
+        ACM_PRICE_SCENARIO: _handle_acm_scenario,
     }
     handler = handlers.get(intent, lambda **_kwargs: _fallback(language, confidence))
     result = handler(
@@ -1396,6 +1406,381 @@ def _handle_start_acm(
             "label": chosen.get("address") or chosen.get("name") or "",
         },
         data={"source_prompt": prompt, "wrote": False},
+    )
+
+
+def _require_acm_agent_result(intent, language, confidence):
+    return _result(
+        intent,
+        "needs_attention",
+        language=language,
+        message_key="acm_err_agent_only",
+        confidence=confidence,
+    )
+
+
+_ACM_REMOVE_STOPWORDS = frozenset(
+    {
+        "saca",
+        "exclui",
+        "excluir",
+        "este",
+        "esta",
+        "esto",
+        "comparable",
+        "del",
+        "los",
+        "las",
+        "por",
+        "favor",
+        "solo",
+    }
+)
+
+
+def _latest_acm_view(organization_id, user, language="es", session=None):
+    from modules.acm_service import AcmError, get_acm_view, list_agent_acms
+
+    context = load_context(session)
+    last = context.get("last_entity") or {}
+    if last.get("kind") == "acm" and last.get("id"):
+        try:
+            return get_acm_view(
+                last["id"],
+                organization_id,
+                user=user,
+                language=language,
+            )
+        except AcmError:
+            pass
+    items = list_agent_acms(organization_id, user=user)
+    if not items:
+        return None
+    return get_acm_view(
+        items[0]["id"],
+        organization_id,
+        user=user,
+        language=language,
+    )
+
+
+def _match_acm_comparable(prompt, rows):
+    tokens = [
+        part
+        for part in fold_text(prompt or "").split()
+        if len(part) > 2 and part not in _ACM_REMOVE_STOPWORDS
+    ]
+    if not tokens:
+        return None
+    best = None
+    best_score = 0
+    for row in rows or []:
+        label = fold_text(
+            f"{row.get('external_reference') or ''} {row.get('snapshot_location') or ''}"
+        )
+        if not label:
+            continue
+        hits = sum(1 for token in tokens if token in label)
+        score = hits
+        if hits == len(tokens):
+            score += 2
+        if score > best_score:
+            best = row
+            best_score = score
+    return best if best_score else None
+
+
+def _handle_query_acm(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    confidence,
+    session=None,
+    **_kwargs,
+):
+    if not is_agent(user) or not agent_id:
+        return _require_acm_agent_result(QUERY_ACM, language, confidence)
+    view = _latest_acm_view(organization_id, user, language, session=session)
+    if view is None:
+        return _result(
+            QUERY_ACM,
+            "needs_attention",
+            language=language,
+            message_key="acm_jrh_no_acm",
+            confidence=confidence,
+        )
+    acm = view["acm"]
+    facts = view.get("facts") or {}
+    return _result(
+        QUERY_ACM,
+        "ready",
+        language=language,
+        message_key="acm_jrh_query",
+        summary=facts.get("estimated_label") or "",
+        cards=[
+            {
+                "title": facts.get("address") or "",
+                "subtitle": facts.get("estimated_label") or "",
+                "href_name": "acm_detail",
+                "href_args": {"acm_id": acm["id"]},
+            }
+        ],
+        confidence=confidence,
+        entity={"kind": "acm", "id": acm["id"], "label": facts.get("address") or ""},
+        data={
+            "estimated": facts.get("estimated"),
+            "range_min": facts.get("range_min"),
+            "range_max": facts.get("range_max"),
+        },
+    )
+
+
+def _handle_acm_explain(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    confidence,
+    session=None,
+    **_kwargs,
+):
+    if not is_agent(user) or not agent_id:
+        return _require_acm_agent_result(ACM_EXPLAIN, language, confidence)
+    view = _latest_acm_view(organization_id, user, language, session=session)
+    if view is None:
+        return _result(
+            ACM_EXPLAIN,
+            "needs_attention",
+            language=language,
+            message_key="acm_jrh_no_acm",
+            confidence=confidence,
+        )
+    explained = view.get("ai_explanation") or {}
+    facts = view.get("facts") or {}
+    return _result(
+        ACM_EXPLAIN,
+        "ready",
+        language=language,
+        message_key="acm_jrh_explain",
+        summary=explained.get("text") or "",
+        cards=[
+            {
+                "title": facts.get("address") or "",
+                "subtitle": facts.get("estimated_label") or "",
+                "href_name": "acm_detail",
+                "href_args": {"acm_id": view["acm"]["id"]},
+            }
+        ],
+        confidence=confidence,
+        entity={"kind": "acm", "id": view["acm"]["id"]},
+        data={
+            "estimated": facts.get("estimated"),
+            "source": explained.get("source"),
+        },
+    )
+
+
+def _handle_acm_remove(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    prompt,
+    confidence,
+    session=None,
+    **_kwargs,
+):
+    if not is_agent(user) or not agent_id:
+        return _require_acm_agent_result(ACM_REMOVE_COMPARABLE, language, confidence)
+    from modules.acm_service import set_comparable_selected
+
+    view = _latest_acm_view(organization_id, user, language, session=session)
+    if view is None:
+        return _result(
+            ACM_REMOVE_COMPARABLE,
+            "needs_attention",
+            language=language,
+            message_key="acm_jrh_no_acm",
+            confidence=confidence,
+        )
+    match = _match_acm_comparable(prompt, view.get("comparables") or [])
+    if match is None and view.get("comparables"):
+        match = view.get("best_comparable") or view["comparables"][0]
+    if match is None:
+        return _result(
+            ACM_REMOVE_COMPARABLE,
+            "needs_attention",
+            language=language,
+            message_key="acm_err_comparable_missing",
+            confidence=confidence,
+        )
+    name = match.get("external_reference") or match.get("snapshot_location") or ""
+    if not entities.get("confirmed"):
+        return _result(
+            ACM_REMOVE_COMPARABLE,
+            "needs_attention",
+            language=language,
+            message_key="acm_jrh_exclude_preview",
+            confirm_required=True,
+            data={"name": name, "comparable_id": match.get("id")},
+            entity={"kind": "acm", "id": view["acm"]["id"]},
+            confidence=confidence,
+            actions=[
+                {
+                    "label_key": "acm_exclude_confirm_yes",
+                    "href_name": "acm_comparables",
+                    "href_args": {
+                        "acm_id": view["acm"]["id"],
+                        "confirm_exclude": match.get("id"),
+                    },
+                }
+            ],
+        )
+    set_comparable_selected(
+        view["acm"]["id"],
+        organization_id,
+        user=user,
+        comparable_id=match["id"],
+        selected=False,
+        language=language,
+    )
+    return _result(
+        ACM_REMOVE_COMPARABLE,
+        "ready",
+        language=language,
+        message_key="acm_jrh_excluded",
+        wrote=True,
+        confidence=confidence,
+        entity={"kind": "acm", "id": view["acm"]["id"]},
+    )
+
+
+def _handle_acm_filter(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    confidence,
+    session=None,
+    **_kwargs,
+):
+    if not is_agent(user) or not agent_id:
+        return _require_acm_agent_result(ACM_FILTER_COMPARABLES, language, confidence)
+    from modules.acm_service import refresh_draft
+
+    view = _latest_acm_view(organization_id, user, language, session=session)
+    if view is None:
+        return _result(
+            ACM_FILTER_COMPARABLES,
+            "needs_attention",
+            language=language,
+            message_key="acm_jrh_no_acm",
+            confidence=confidence,
+        )
+    refresh_draft(
+        view["acm"]["id"],
+        organization_id,
+        user=user,
+        language=language,
+        filters={"include_closing": True, "include_listing": False},
+    )
+    return _result(
+        ACM_FILTER_COMPARABLES,
+        "ready",
+        language=language,
+        message_key="acm_jrh_filter_closings",
+        wrote=True,
+        confidence=confidence,
+        entity={"kind": "acm", "id": view["acm"]["id"]},
+        actions=[
+            {
+                "label_key": "acm_see_results",
+                "href_name": "acm_detail",
+                "href_args": {"acm_id": view["acm"]["id"]},
+            }
+        ],
+    )
+
+
+def _handle_acm_scenario(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    prompt,
+    confidence,
+    session=None,
+    **_kwargs,
+):
+    if not is_agent(user) or not agent_id:
+        return _require_acm_agent_result(ACM_PRICE_SCENARIO, language, confidence)
+    from modules.acm_engine import compute_price_scenario
+    from modules.formatting import format_money
+
+    view = _latest_acm_view(organization_id, user, language, session=session)
+    if view is None:
+        return _result(
+            ACM_PRICE_SCENARIO,
+            "needs_attention",
+            language=language,
+            message_key="acm_jrh_no_acm",
+            confidence=confidence,
+        )
+    proposed = entities.get("proposed_price") or ""
+    if not proposed:
+        import re
+
+        found = re.search(r"(\d[\d.\s]{2,})", prompt or "")
+        proposed = found.group(1) if found else ""
+    cleaned = proposed.replace(" ", "").replace(".", "")
+    if "mil" in fold_text(prompt or "") and cleaned.isdigit() and int(cleaned) < 10000:
+        cleaned = str(int(cleaned) * 1000)
+    acm = view["acm"]
+    scenario = compute_price_scenario(
+        cleaned,
+        acm.get("estimated_value"),
+        acm.get("suggested_min_value"),
+        acm.get("suggested_max_value"),
+    )
+    if scenario is None:
+        return _result(
+            ACM_PRICE_SCENARIO,
+            "needs_attention",
+            language=language,
+            message_key="acm_err_manual_price",
+            confidence=confidence,
+        )
+    band_key = (
+        "acm_scenario_in"
+        if scenario["in_range"]
+        else (
+            "acm_scenario_out_below"
+            if scenario["band"] == "below"
+            else "acm_scenario_out_above"
+        )
+    )
+    currency = acm.get("currency") or "USD"
+    return _result(
+        ACM_PRICE_SCENARIO,
+        "ready",
+        language=language,
+        message_key="acm_jrh_scenario",
+        data={
+            "price": format_money(scenario["proposed"], currency=currency, language=language),
+            "band": translate(band_key, language=language),
+            "delta": str(scenario["delta_vs_market_pct"]),
+            "estimated": acm.get("estimated_value"),
+        },
+        confidence=confidence,
+        entity={"kind": "acm", "id": acm["id"]},
     )
 
 

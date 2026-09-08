@@ -27,6 +27,34 @@
     </div>
 </section>
 
+{% if confirm_exclude %}
+<section class="panel acm-warn">
+    <p>{{ t('acm_exclude_confirm') }} · <strong>{{ confirm_exclude.external_reference or confirm_exclude.snapshot_location }}</strong></p>
+    {% if acm.status != 'finalized' %}
+    <form method="post">
+        <input type="hidden" name="action" value="exclude">
+        <input type="hidden" name="comparable_id" value="{{ confirm_exclude.id }}">
+        <button type="submit" class="btn btn-primary">{{ t('acm_exclude_confirm_yes') }}</button>
+        <a href="{{ url_for('acm_comparables', acm_id=acm.id) }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </form>
+    {% endif %}
+</section>
+{% endif %}
+
+<section class="panel">
+    <p class="acm-step">{{ t('acm_col_source') }}</p>
+    <div class="acm-source-chips">
+        <span class="acm-badge acm-badge--ok">{{ t('acm_filter_all_sources') }}</span>
+        {% for source in view.source_catalog %}
+        {% if source.connected %}
+        <span class="acm-badge">{{ source.label }}</span>
+        {% else %}
+        <span class="acm-badge acm-badge--mute" title="{{ t('acm_source_coming_soon') }}">{{ source.label }} · {{ t('acm_source_coming_soon') }}</span>
+        {% endif %}
+        {% endfor %}
+    </div>
+</section>
+
 {% if acm.status != 'finalized' %}
 <section class="panel">
     <form method="post" class="acm-filters">
@@ -83,9 +111,7 @@
                 </p>
                 <p>
                     <span class="acm-score">{{ row.score_int }}% {{ t('acm_comparable_adj') }}</span>
-                    {% if row.snapshot_price_kind == 'closing' %}<span class="acm-badge">{{ t('acm_price_closing') }}</span>
-                    {% elif row.source_type == 'manual_external' %}<span class="acm-badge">{{ t('acm_source_manual') }}</span>
-                    {% else %}<span class="acm-badge acm-badge--mute">{{ t('acm_price_listing') }}</span>{% endif %}
+                    <span class="acm-badge">{{ row.source_label }}</span>
                     {% if row.valuation_valid %}<span class="acm-badge acm-badge--ok">{{ t('acm_valid_for_calc') }}</span>
                     {% else %}<span class="acm-badge acm-badge--mute">{{ t('acm_reference_only') }}</span>{% endif %}
                     {% if row.area_source == 'manual_acm' %}<span class="acm-badge">{{ t('acm_area_manual') }}</span>{% endif %}
@@ -101,12 +127,15 @@
             </div>
             <div class="acm-comp-actions">
                 {% if acm.status != 'finalized' %}
+                {% if row.selected %}
+                <a href="{{ url_for('acm_comparables', acm_id=acm.id, confirm_exclude=row.id) }}" class="btn btn-small">{{ t('acm_exclude') }}</a>
+                {% else %}
                 <form method="post">
-                    <input type="hidden" name="action" value="toggle">
+                    <input type="hidden" name="action" value="include">
                     <input type="hidden" name="comparable_id" value="{{ row.id }}">
-                    <input type="hidden" name="selected" value="{{ 0 if row.selected else 1 }}">
-                    <button type="submit" class="btn btn-small">{{ t('acm_include') if not row.selected else t('acm_included') }}</button>
+                    <button type="submit" class="btn btn-small">{{ t('acm_include') }}</button>
                 </form>
+                {% endif %}
                 {% if not row.display_area %}
                 <form method="post" class="acm-complete-form">
                     <input type="hidden" name="action" value="complete">

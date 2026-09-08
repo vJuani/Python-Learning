@@ -139,6 +139,30 @@ def migrate_property_acm_sqlite():
                 )
         for statement in ACM_INDEXES:
             cursor.execute(statement)
+        for column_name, column_sql in (
+            ("external_source", "TEXT"),
+            ("external_updated_at", "TEXT"),
+            ("sync_status", "TEXT"),
+        ):
+            if not _column_exists(cursor, "properties", column_name):
+                cursor.execute(
+                    f"ALTER TABLE properties ADD COLUMN {column_name} {column_sql}"
+                )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_properties_org_source_external
+            ON properties (
+                organization_id,
+                external_source,
+                external_id
+            )
+            WHERE external_source IS NOT NULL
+              AND TRIM(external_source) != ''
+              AND external_id IS NOT NULL
+              AND TRIM(external_id) != ''
+            """
+        )
         connection.commit()
     except Exception:
         connection.rollback()

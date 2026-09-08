@@ -55,7 +55,16 @@ from modules.database.properties_repository import (
 )
 from modules.database.property_acm_migration import migrate_property_acm_sqlite
 from modules.database.property_acm_repository import get_acm, list_comparables
-from modules.jrh_ai_intents import START_ACM
+from modules.acm_explain import build_acm_facts, explain_acm
+from modules.acm_engine import compute_price_scenario
+from modules.acm_sources import format_diff_label
+from modules.jrh_ai_intents import (
+    ACM_EXPLAIN,
+    ACM_FILTER_COMPARABLES,
+    ACM_PRICE_SCENARIO,
+    ACM_REMOVE_COMPARABLE,
+    START_ACM,
+)
 from modules.jrh_ai_service import ask_jrh
 from web_app import app
 
@@ -795,6 +804,187 @@ class AcmTests(unittest.TestCase):
         response = client.get(f"/acm/new?property_id={self.target}")
         self.assertEqual(response.status_code, 200)
         self.assertIn("Datos necesarios", response.get_data(as_text=True))
+
+    def test_49_hero_uses_backend_values(self):
+        view = self._create()
+        facts = build_acm_facts(view, language="es")
+        self.assertEqual(facts["estimated"], view["acm"]["estimated_value"])
+        self.assertEqual(facts["range_min"], view["acm"]["suggested_min_value"])
+        client = self._login(self.agent_user, ROLE_AGENT, self.org)
+        html = client.get(f"/acm/{view['acm']['id']}").get_data(as_text=True)
+        self.assertIn("Valor de mercado estimado", html)
+        self.assertNotIn("acm_diff_[", html)
+
+    def test_50_ai_explanation_does_not_change_numbers(self):
+        view = self._create()
+        facts = view["facts"]
+        explained = explain_acm(
+            facts,
+            narrative=f"El valor es {facts['estimated_label']} según el motor.",
+            language="es",
+        )
+        self.assertEqual(view["acm"]["estimated_value"], facts["estimated"])
+        if explained["source"] == "ai":
+            self.assertIn(str(facts["estimated"])[:3], explained["text"])
+
+    def test_51_fallback_deterministic(self):
+        view = self._create()
+        self.assertEqual(view["ai_explanation"]["source"], "fallback")
+        self.assertTrue(view["market_highlights"])
+
+    def test_52_human_diff_in_ui(self):
+        label = format_diff_label(("area_delta", "-19.8"), language="es")
+        self.assertIn("menos superficie", label)
+        view = self._create()
+        html = self._login(self.agent_user, ROLE_AGENT, self.org).get(
+            f"/acm/{view['acm']['id']}"
+        ).get_data(as_text=True)
+        self.assertNotIn("acm_diff_['area_delta'", html)
+
+    def test_53_price_scenario_route(self):
+        view = self._create()
+        client = self._login(self.agent_user, ROLE_AGENT, self.org)
+        response = client.post(
+            f"/acm/{view['acm']['id']}/scenario",
+            data={"proposed_price": "360000"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertTrue("rango" in body.lower())
+        scenario = compute_price_scenario(
+            360000,
+            view["acm"]["estimated_value"],
+            view["acm"]["suggested_min_value"],
+            view["acm"]["suggested_max_value"],
+        )
+        self.assertIsNotNone(scenario)
+
+    def test_54_exclude_requires_confirm(self):
+        view = self._create()
+        row = next(item for item in view["comparables"] if item.get("selected"))
+        client = self._login(self.agent_user, ROLE_AGENT, self.org)
+        preview = client.get(
+            f"/acm/{view['acm']['id']}/comparables?confirm_exclude={row['id']}"
+        )
+        self.assertEqual(preview.status_code, 200)
+        self.assertIn("¿Excluir este comparable", preview.get_data(as_text=True))
+        still = get_acm_view(
+            view["acm"]["id"], self.org, user=self.agent_record, language="es"
+        )
+        self.assertTrue(
+            any(item["id"] == row["id"] and item["selected"] for item in still["comparables"])
+        )
+
+    def test_55_finalized_not_modified(self):
+        view = self._create()
+        finalize_acm(view["acm"]["id"], self.org, user=self.agent_record, language="es")
+        row = next(item for item in view["comparables"] if item.get("selected"))
+        with self.assertRaises(AcmError):
+            set_comparable_selected(
+                view["acm"]["id"],
+                self.org,
+                user=self.agent_record,
+                comparable_id=row["id"],
+                selected=False,
+                language="es",
+            )
+
+    def test_56_source_type_visible(self):
+        view = self._create()
+        html = self._login(self.agent_user, ROLE_AGENT, self.org).get(
+            f"/acm/{view['acm']['id']}"
+        ).get_data(as_text=True)
+        self.assertTrue(
+            "Publicación JRH" in html or "Cierre" in html or "manual" in html.lower()
+        )
+        self.assertTrue(all(row.get("source_label") for row in view["comparables"]))
+
+    def test_57_agent_only_still_valid(self):
+        client = self._login(self.admin, ROLE_ADMIN, self.org)
+        view = self._create()
+        self.assertEqual(client.get(f"/acm/{view['acm']['id']}").status_code, 403)
+        self.assertEqual(client.post(f"/acm/{view['acm']['id']}/scenario", data={"proposed_price": "1"}).status_code, 403)
+
+    def test_58_pdf_with_and_without_agent(self):
+        from modules.pdf_acm_report import generate_acm_pdf_bytes
+
+        view = self._create()
+        view["agent_contact"] = agent_contact_for_acm(view)
+        with_agent = generate_acm_pdf_bytes(view, include_agent=True, language="es").read()
+        without = generate_acm_pdf_bytes(view, include_agent=False, language="es").read()
+        self.assertIn(b"Ana ACM", _pdf_haystack(with_agent))
+        self.assertNotIn(b"Ana ACM", _pdf_haystack(without))
+
+    def test_59_mobile_detail_200(self):
+        view = self._create()
+        client = self._login(self.agent_user, ROLE_AGENT, self.org)
+        response = client.get(f"/acm/{view['acm']['id']}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("acm-hero", response.get_data(as_text=True))
+
+    def test_60_min_comps_still_blocks(self):
+        view = create_acm_for_property(
+            self.org,
+            user=self.agent_record,
+            property_id=self.house,
+            language="es",
+        )
+        if view.get("can_finalize"):
+            return
+        with self.assertRaises(AcmError):
+            finalize_acm(view["acm"]["id"], self.org, user=self.agent_record)
+
+    def test_61_jrh_explain_and_scenario(self):
+        view = self._create()
+        session = {
+            "jrh_ai_context": {
+                "last_intent": "QUERY_ACM",
+                "last_entity": {"kind": "acm", "id": view["acm"]["id"]},
+                "last_prompt": "",
+                "pending_invoice": {},
+            }
+        }
+        explain = ask_jrh(
+            "por qué me da ese valor",
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            language="es",
+            session=session,
+        )
+        self.assertEqual(explain["intent"], ACM_EXPLAIN)
+        preview = ask_jrh(
+            "sacá Libertador 4300",
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            language="es",
+            session=session,
+        )
+        self.assertEqual(preview["intent"], ACM_REMOVE_COMPARABLE)
+        self.assertFalse(preview.get("wrote"))
+        self.assertTrue(preview.get("confirm_required"))
+        self.assertEqual(preview.get("message_key"), "acm_jrh_exclude_preview")
+        self.assertTrue(preview.get("actions"))
+        self.assertIn("4300", str(preview.get("data") or {}))
+        scenario = ask_jrh(
+            "qué pasa si publico en 360000",
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            language="es",
+            session=session,
+        )
+        self.assertEqual(scenario["intent"], ACM_PRICE_SCENARIO)
+        filtered = ask_jrh(
+            "solo cierres reales",
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            language="es",
+            session=session,
+        )
+        self.assertEqual(filtered["intent"], ACM_FILTER_COMPARABLES)
 
 
 if __name__ == "__main__":

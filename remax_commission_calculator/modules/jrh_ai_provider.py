@@ -99,12 +99,19 @@ QUERY_AGENT_ACCOUNT = balances / pending charges.
 Agent saying "debo fee?" or "q debo de fee?" is self + fee.
 Staff "qué debe Barreiro de fee?" is that agent + fee.
 
-START_ACM = comparative market analysis for an Agent. Never invent prices.
+START_ACM = start a comparative market analysis for an Agent. Never invent prices.
+QUERY_ACM = show the latest ACM.
+ACM_EXPLAIN = explain already calculated ACM numbers. Never invent a new price.
+ACM_REMOVE_COMPARABLE = preview excluding a comparable; require confirmation.
+ACM_FILTER_COMPARABLES = filter to real closings.
+ACM_PRICE_SCENARIO = what-if list price using existing range.
 Examples:
 - haceme un ACM de Libertador
 - quiero tasar el depto de Núñez
-- armame un comparativo de esta propiedad
-- cuánto puede valer esta propiedad
+- por qué me da ese valor
+- sacá La Rioja 1490
+- solo cierres reales
+- qué pasa si publico en 360 mil
 
 START_INVOICE = prepare invoice preview, never emit.
 "facturame lo que tengo" lists billable charges or opens preview.

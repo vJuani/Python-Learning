@@ -1,15 +1,16 @@
-"""Professional ACM PDF. Reuses brochure branding colors."""
+"""Commercial ACM PDF. Branding from organization. No invented numbers."""
 
 from __future__ import annotations
 
 import io
 from pathlib import Path
 
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
+    KeepTogether,
     PageBreak,
     Paragraph,
     SimpleDocTemplate,
@@ -17,19 +18,12 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from reportlab.platypus import Image as RLImage
 
 from modules.formatting import format_money
 from modules.i18n import translate
 from modules.operation_summary import _brand_logo_path
-from modules.pdf_property_brochure import (
-    ACCENT,
-    LINE,
-    MUTED,
-    NAVY,
-    SOFT,
-    WHITE,
-)
-from reportlab.platypus import Image as RLImage
+from modules.pdf_property_brochure import ACCENT, LINE, MUTED, NAVY, SOFT, WHITE
 
 
 def _money(currency, value, language="es"):
@@ -40,76 +34,34 @@ def _money(currency, value, language="es"):
 
 def _styles():
     styles = getSampleStyleSheet()
-    styles.add(
-        ParagraphStyle(
-            name="AcmTitle",
-            parent=styles["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=18,
-            textColor=NAVY,
-            leading=22,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="AcmZone",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=10,
-            textColor=MUTED,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="AcmSection",
-            parent=styles["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=11,
-            textColor=NAVY,
-            spaceBefore=10,
-            spaceAfter=4,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="AcmBody",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=9.5,
-            textColor=NAVY,
-            leading=13,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="AcmPrice",
-            parent=styles["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=16,
-            textColor=ACCENT,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="AcmFooter",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=8,
-            textColor=MUTED,
-            alignment=TA_CENTER,
-            leading=11,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="AcmSmall",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=8,
-            textColor=NAVY,
-        )
-    )
+    styles.add(ParagraphStyle(name="AcmKicker", parent=styles["Normal"], fontName="Helvetica", fontSize=9, textColor=MUTED))
+    styles.add(ParagraphStyle(name="AcmTitle", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=20, textColor=NAVY, leading=24))
+    styles.add(ParagraphStyle(name="AcmZone", parent=styles["Normal"], fontName="Helvetica", fontSize=11, textColor=MUTED))
+    styles.add(ParagraphStyle(name="AcmSection", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=12, textColor=NAVY, spaceBefore=8, spaceAfter=4))
+    styles.add(ParagraphStyle(name="AcmBody", parent=styles["Normal"], fontName="Helvetica", fontSize=10, textColor=NAVY, leading=14))
+    styles.add(ParagraphStyle(name="AcmPrice", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=22, textColor=ACCENT, alignment=TA_LEFT))
+    styles.add(ParagraphStyle(name="AcmFooter", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=MUTED, alignment=TA_CENTER, leading=11))
+    styles.add(ParagraphStyle(name="AcmSmall", parent=styles["Normal"], fontName="Helvetica", fontSize=9, textColor=NAVY, leading=12))
     return styles
+
+
+def _chip_table(pairs):
+    table = Table(pairs, colWidths=[55 * mm, 115 * mm])
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), SOFT),
+                ("TEXTCOLOR", (0, 0), (-1, -1), NAVY),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica"),
+                ("FONTNAME", (1, 0), (1, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("PADDING", (0, 0), (-1, -1), 7),
+                ("BOX", (0, 0), (-1, -1), 0.3, LINE),
+                ("LINEBELOW", (0, 0), (-1, -2), 0.2, LINE),
+            ]
+        )
+    )
+    return table
 
 
 def build_acm_pdf(
@@ -135,36 +87,27 @@ def build_acm_pdf(
         doc.compress = 0
     acm = view["acm"]
     subject = view.get("subject") or {}
+    metrics = view.get("metrics") or {}
     currency = acm.get("currency") or subject.get("listing_currency") or "USD"
     language = language if language in ("es", "en") else "es"
     story = []
     if logo_path:
         try:
-            story.append(RLImage(str(logo_path), width=28 * mm, height=10 * mm))
-            story.append(Spacer(1, 4 * mm))
+            story.append(RLImage(str(logo_path), width=32 * mm, height=11 * mm))
+            story.append(Spacer(1, 3 * mm))
         except Exception:
             pass
-    story.append(Paragraph(brand_name or "JRH One", styles["AcmZone"]))
-    story.append(Paragraph(translate("acm_pdf_title", language=language), styles["AcmTitle"]))
+    story.append(Paragraph(brand_name or "JRH One", styles["AcmKicker"]))
+    story.append(Paragraph(translate("acm_pdf_cover", language=language), styles["AcmTitle"]))
     if acm.get("status") != "finalized":
         story.append(Paragraph(translate("acm_pdf_draft", language=language), styles["AcmZone"]))
+    story.append(Spacer(1, 3 * mm))
     story.append(Paragraph(subject.get("address") or "", styles["AcmSection"]))
     loc = " · ".join(
         part for part in (subject.get("neighborhood"), subject.get("jurisdiction")) if part
     )
     if loc:
         story.append(Paragraph(loc, styles["AcmZone"]))
-    chips = []
-    if subject.get("rooms"):
-        chips.append(f"{subject['rooms']} amb.")
-    if subject.get("covered_m2") or subject.get("total_m2"):
-        chips.append(f"{subject.get('covered_m2') or subject.get('total_m2')} m²")
-    if subject.get("bedrooms"):
-        chips.append(f"{subject['bedrooms']} dorm.")
-    if subject.get("parking_spaces"):
-        chips.append(translate("acm_parking", language=language))
-    if chips:
-        story.append(Paragraph(" · ".join(chips), styles["AcmBody"]))
     date_label = acm.get("finalized_at") or acm.get("updated_at") or acm.get("created_at") or ""
     story.append(
         Paragraph(
@@ -172,160 +115,175 @@ def build_acm_pdf(
             styles["AcmZone"],
         )
     )
+    story.append(Spacer(1, 6 * mm))
+    story.append(Paragraph(translate("acm_hero_title", language=language), styles["AcmKicker"]))
+    story.append(Paragraph(_money(currency, acm.get("estimated_value"), language), styles["AcmPrice"]))
+    story.append(Paragraph(translate("acm_hero_range", language=language), styles["AcmKicker"]))
+    story.append(
+        Paragraph(
+            f"{_money(currency, acm.get('suggested_min_value'), language)} — {_money(currency, acm.get('suggested_max_value'), language)}",
+            styles["AcmBody"],
+        )
+    )
+    if include_agent:
+        contact = view.get("agent_contact") or {}
+        if contact.get("name"):
+            story.append(Spacer(1, 6 * mm))
+            story.append(Paragraph(translate("acm_agent_block", language=language), styles["AcmKicker"]))
+            story.append(
+                Paragraph(
+                    " · ".join(
+                        part
+                        for part in (
+                            contact.get("name"),
+                            contact.get("phone"),
+                            contact.get("email"),
+                        )
+                        if part
+                    ),
+                    styles["AcmSmall"],
+                )
+            )
+
     story.append(PageBreak())
-    story.append(Paragraph(translate("acm_step_1", language=language), styles["AcmSection"]))
+    story.append(Paragraph(translate("acm_pdf_subject", language=language), styles["AcmSection"]))
+    chips = []
+    if subject.get("property_type"):
+        chips.append(str(subject["property_type"]))
+    if subject.get("rooms"):
+        chips.append(f"{subject['rooms']} amb.")
+    if subject.get("covered_m2") or subject.get("total_m2"):
+        chips.append(f"{subject.get('covered_m2') or subject.get('total_m2')} m²")
+    if subject.get("bedrooms"):
+        chips.append(f"{subject['bedrooms']} dorm.")
+    if subject.get("bathrooms"):
+        chips.append(f"{subject['bathrooms']} baños")
+    if subject.get("parking_spaces"):
+        chips.append(translate("acm_parking", language=language))
+    if chips:
+        story.append(Paragraph(" · ".join(chips), styles["AcmBody"]))
     story.append(
         Paragraph(
             f"{translate('acm_current_price', language=language)}: {_money(currency, subject.get('listing_price'), language)}",
             styles["AcmBody"],
         )
     )
+    positioning = metrics.get("positioning") or {}
+    if positioning.get("band"):
+        story.append(
+            Paragraph(
+                translate(f"acm_position_{positioning['band']}", language=language),
+                styles["AcmBody"],
+            )
+        )
+    highlights = view.get("market_highlights") or []
+    if highlights:
+        story.append(Paragraph(translate("acm_highlights_title", language=language), styles["AcmSection"]))
+        for item in highlights:
+            story.append(Paragraph(f"• {item}", styles["AcmBody"]))
+
     story.append(PageBreak())
     story.append(Paragraph(translate("acm_pdf_market", language=language), styles["AcmSection"]))
-    metrics = view.get("metrics") or {}
-    metric_table = Table(
-        [
+    quality = view.get("quality_summary") or {}
+    story.append(
+        _chip_table(
             [
-                translate("acm_found_label", language=language),
-                str(metrics.get("found_count") or 0),
-            ],
-            [
-                translate("acm_valid_label", language=language),
-                str(metrics.get("valuation_count") or metrics.get("used_count") or 0),
-            ],
-            [
-                translate("acm_closings_label", language=language),
-                str(metrics.get("closing_count") or 0),
-            ],
-            [
-                translate("acm_ppm2_median", language=language),
-                _money(currency, acm.get("median_price_per_m2"), language),
-            ],
-            [
-                translate("acm_ppm2_avg", language=language),
-                _money(currency, acm.get("average_price_per_m2"), language),
-            ],
-            [
-                translate("acm_confidence", language=language),
-                translate(
-                    f"acm_confidence_{metrics.get('confidence') or 'low'}",
-                    language=language,
-                ),
-            ],
-        ],
-        colWidths=[90 * mm, 70 * mm],
-    )
-    metric_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), SOFT),
-                ("TEXTCOLOR", (0, 0), (-1, -1), NAVY),
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica"),
-                ("FONTNAME", (1, 0), (1, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("PADDING", (0, 0), (-1, -1), 6),
-                ("BOX", (0, 0), (-1, -1), 0.4, LINE),
+                [translate("acm_found_label", language=language), str(metrics.get("found_count") or 0)],
+                [
+                    translate("acm_valid_label", language=language),
+                    str(metrics.get("valuation_count") or metrics.get("used_count") or 0),
+                ],
+                [translate("acm_closings_label", language=language), str(metrics.get("closing_count") or 0)],
+                [
+                    translate("acm_ppm2_median", language=language),
+                    _money(currency, acm.get("median_price_per_m2"), language),
+                ],
+                [
+                    translate("acm_confidence", language=language),
+                    translate(
+                        f"acm_confidence_{metrics.get('confidence') or 'low'}",
+                        language=language,
+                    ),
+                ],
+                [
+                    translate("acm_quality_block", language=language),
+                    f"{quality.get('subject_complete') or 0}/{quality.get('subject_total') or 6}",
+                ],
             ]
-        )
-    )
-    story.append(metric_table)
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph(translate("acm_reference_value", language=language), styles["AcmZone"]))
-    story.append(
-        Paragraph(_money(currency, acm.get("estimated_value"), language), styles["AcmPrice"])
-    )
-    story.append(Paragraph(translate("acm_suggested_range", language=language), styles["AcmZone"]))
-    story.append(
-        Paragraph(
-            f"{_money(currency, acm.get('suggested_min_value'), language)} – {_money(currency, acm.get('suggested_max_value'), language)}",
-            styles["AcmBody"],
         )
     )
     scenarios = metrics.get("scenarios") or {}
     if scenarios:
-        story.append(Paragraph(translate("acm_scenario_agile", language=language) + ": " + _money(currency, scenarios.get("agile"), language), styles["AcmBody"]))
-        story.append(Paragraph(translate("acm_scenario_market", language=language) + ": " + _money(currency, scenarios.get("market"), language), styles["AcmBody"]))
-        story.append(Paragraph(translate("acm_scenario_aspirational", language=language) + ": " + _money(currency, scenarios.get("aspirational"), language), styles["AcmBody"]))
-    story.append(PageBreak())
-    story.append(Paragraph(translate("acm_comparables", language=language), styles["AcmSection"]))
-    header = [
-        translate("acm_col_property", language=language),
-        translate("acm_col_price", language=language),
-        "m²",
-        translate("acm_col_ppm2", language=language),
-        translate("acm_col_source", language=language),
-    ]
-    data = [header]
-    selected_rows = [row for row in (view.get("comparables") or []) if row.get("selected")]
-    appendix = selected_rows[5:]
-    for row in selected_rows[:5]:
-        source = row.get("source_type") or ""
-        if source == "manual_external":
-            source_label = translate("acm_source_manual", language=language)
-        elif source == "closed_operation" or row.get("snapshot_price_kind") == "closing":
-            source_label = translate("acm_source_closing", language=language)
-        else:
-            source_label = translate("acm_source_listing", language=language)
-        data.append(
-            [
-                Paragraph(
-                    row.get("external_reference") or row.get("snapshot_location") or "—",
-                    styles["AcmSmall"],
-                ),
-                _money(row.get("snapshot_currency") or currency, row.get("snapshot_price"), language),
-                str(row.get("display_area") or row.get("snapshot_covered_area") or row.get("snapshot_total_area") or "—"),
-                _money(row.get("snapshot_currency") or currency, row.get("snapshot_price_per_m2"), language),
-                source_label,
-            ]
+        story.append(Spacer(1, 4 * mm))
+        story.append(
+            Paragraph(
+                f"{translate('acm_scenario_agile', language=language)}: {_money(currency, scenarios.get('agile'), language)}",
+                styles["AcmBody"],
+            )
         )
-    table = Table(data, colWidths=[55 * mm, 32 * mm, 20 * mm, 32 * mm, 33 * mm])
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-                ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("TEXTCOLOR", (0, 1), (-1, -1), NAVY),
-                ("GRID", (0, 0), (-1, -1), 0.3, LINE),
-                ("PADDING", (0, 0), (-1, -1), 4),
-            ]
+        story.append(
+            Paragraph(
+                f"{translate('acm_scenario_market', language=language)}: {_money(currency, scenarios.get('market'), language)}",
+                styles["AcmBody"],
+            )
+        )
+        story.append(
+            Paragraph(
+                f"{translate('acm_scenario_aspirational', language=language)}: {_money(currency, scenarios.get('aspirational'), language)}",
+                styles["AcmBody"],
+            )
+        )
+
+    selected_rows = [row for row in (view.get("comparables") or []) if row.get("selected")]
+    for row in selected_rows:
+        block = []
+        block.append(Paragraph(row.get("external_reference") or row.get("snapshot_location") or "—", styles["AcmSection"]))
+        block.append(
+            Paragraph(
+                f"{_money(row.get('snapshot_currency') or currency, row.get('snapshot_price'), language)} · "
+                f"{row.get('display_area') or row.get('snapshot_covered_area') or row.get('snapshot_total_area') or '—'} m² · "
+                f"{_money(row.get('snapshot_currency') or currency, row.get('snapshot_price_per_m2'), language)}/m²",
+                styles["AcmBody"],
+            )
+        )
+        source = row.get("source_label") or row.get("source_type") or ""
+        block.append(Paragraph(f"{translate('acm_col_source', language=language)}: {source}", styles["AcmSmall"]))
+        diffs = " · ".join(row.get("diff_labels") or [])
+        matches = " · ".join(row.get("match_labels") or [])
+        if matches:
+            block.append(Paragraph(matches, styles["AcmSmall"]))
+        if diffs:
+            block.append(Paragraph(diffs, styles["AcmSmall"]))
+        story.append(KeepTogether(block + [Spacer(1, 3 * mm)]))
+
+    story.append(PageBreak())
+    story.append(Paragraph(translate("acm_pdf_conclusion", language=language), styles["AcmSection"]))
+    story.append(Paragraph(_money(currency, acm.get("estimated_value"), language), styles["AcmPrice"]))
+    story.append(
+        Paragraph(
+            f"{_money(currency, acm.get('suggested_min_value'), language)} — {_money(currency, acm.get('suggested_max_value'), language)}",
+            styles["AcmBody"],
         )
     )
-    story.append(table)
-    story.append(PageBreak())
-    story.append(Paragraph(translate("acm_pdf_analysis", language=language), styles["AcmSection"]))
-    if acm.get("explanation"):
-        story.append(Paragraph(translate("acm_explanation_title", language=language), styles["AcmSection"]))
-        story.append(Paragraph(acm["explanation"], styles["AcmBody"]))
-    if appendix:
-        story.append(Paragraph("Apéndice", styles["AcmSection"]))
-        for row in appendix:
-            story.append(
-                Paragraph(
-                    f"{row.get('external_reference') or ''} · {_money(row.get('snapshot_currency') or currency, row.get('snapshot_price'), language)}",
-                    styles["AcmSmall"],
-                )
-            )
+    explained = (view.get("ai_explanation") or {}).get("text") or acm.get("explanation")
+    if explained:
+        story.append(Paragraph(explained, styles["AcmBody"]))
     if include_agent:
         contact = view.get("agent_contact") or {}
         if contact:
             story.append(Paragraph(translate("acm_agent_block", language=language), styles["AcmSection"]))
-            parts = [
-                contact.get("name"),
-                contact.get("phone"),
-                contact.get("email"),
-            ]
             story.append(
-                Paragraph(" · ".join(part for part in parts if part), styles["AcmBody"])
+                Paragraph(
+                    " · ".join(
+                        part
+                        for part in (contact.get("name"), contact.get("phone"), contact.get("email"))
+                        if part
+                    ),
+                    styles["AcmBody"],
+                )
             )
-    story.append(Spacer(1, 6 * mm))
-    story.append(
-        Paragraph(
-            translate("acm_disclaimer", language=language),
-            styles["AcmFooter"],
-        )
-    )
+    story.append(Spacer(1, 8 * mm))
+    story.append(Paragraph(translate("acm_disclaimer", language=language), styles["AcmFooter"]))
     doc.build(story)
     buffer.seek(0)
     return buffer

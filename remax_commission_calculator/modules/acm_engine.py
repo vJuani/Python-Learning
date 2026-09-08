@@ -436,6 +436,34 @@ def compute_positioning(listing_price, estimated, suggested_min, suggested_max):
     return {"band": band, "delta_pct": delta_pct, "listing_price": round_money(listing)}
 
 
+def compute_price_scenario(proposed_price, estimated, suggested_min, suggested_max):
+    """Deterministic 'what if I list at X'. No time-to-sell promise."""
+    proposed = to_decimal(proposed_price)
+    ref = to_decimal(estimated)
+    low = to_decimal(suggested_min)
+    high = to_decimal(suggested_max)
+    if proposed is None or proposed <= 0 or ref is None or ref <= 0:
+        return None
+    delta_pct = ((proposed - ref) / ref * Decimal("100")).quantize(
+        Decimal("0.1"), rounding=ROUND_HALF_UP
+    )
+    if low is not None and proposed < low:
+        band = "below"
+    elif high is not None and proposed > high:
+        band = "above"
+    else:
+        band = "inside"
+    return {
+        "proposed": round_money(proposed),
+        "estimated": round_money(ref),
+        "suggested_min": round_money(low) if low is not None else None,
+        "suggested_max": round_money(high) if high is not None else None,
+        "band": band,
+        "in_range": band == "inside",
+        "delta_vs_market_pct": delta_pct,
+    }
+
+
 def compute_scenarios(suggested_min, estimated, suggested_max):
     """Agile = low range, market = median reference, aspirational = high range."""
     low = round_money(suggested_min)

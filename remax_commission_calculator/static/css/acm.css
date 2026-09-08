@@ -32,7 +32,35 @@
 .acm-complete-form input { width: 5rem; }
 .acm-table th:first-child { text-align: left; }
 .acm-preview-actions { margin-top: 1rem; }
+.acm-hero { background: #001838; color: #fff; border-radius: 16px; padding: 1.4rem 1.5rem; margin-bottom: 1.2rem; }
+.acm-hero h2 { margin: 0.15rem 0 0.8rem; color: #fff; }
+.acm-hero .acm-step, .acm-hero .acm-hero__label { color: #9bb8d4; }
+.acm-hero .acm-value { color: #fff; font-size: 2.2rem; }
+.acm-hero .acm-range { color: #d7e6f5; }
+.acm-hero__meta { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.7rem; color: #d7e6f5; }
+.acm-hero__pos { color: #fff; }
+.acm-hero__actions { margin-top: 1rem; flex-wrap: wrap; }
+.acm-highlights ul { margin: 0; padding-left: 1.1rem; }
+.acm-range-scale { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+.acm-range-scale div { background: #eef3f9; border-radius: 12px; padding: 0.9rem; }
+.acm-range-scale__mid { border: 2px solid #0860c8; }
+.acm-range-scale span { display: block; font-size: 0.8rem; color: #5b6b7c; }
+.acm-range-scale__now { grid-column: 1 / -1; margin: 0; font-weight: 600; }
+.acm-simulator { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; }
+.acm-comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.9rem; margin: 1rem 0; }
+.acm-card { border: 1px solid #c9d6e5; border-radius: 14px; padding: 1rem; background: #fff; }
+.acm-card__price { font-size: 1.2rem; font-weight: 700; color: #001838; margin: 0.3rem 0; }
+.acm-card__actions { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+.acm-quality-grid { list-style: none; padding: 0; display: grid; gap: 0.4rem; }
+.acm-map { min-height: 8rem; background: #eef3f9; }
+.acm-source-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.acm-charts h3 { margin-top: 1.2rem; }
 @media (max-width: 720px) {
     .acm-scenarios { grid-template-columns: 1fr; }
     .acm-comp { grid-template-columns: 1fr; }
+    .acm-range-scale { grid-template-columns: 1fr; }
+    .acm-table-wrap { display: none; }
+    .acm-hero__meta { flex-direction: column; gap: 0.25rem; }
+    .acm-hero__actions { flex-direction: column; align-items: stretch; }
+    .acm-hero__actions .btn, .acm-hero__actions form { width: 100%; }
 }

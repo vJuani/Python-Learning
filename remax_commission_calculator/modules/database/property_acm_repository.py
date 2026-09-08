@@ -196,7 +196,7 @@ def list_acms(organization_id, *, agent_id, limit=50):
             ACM_SELECT
             + " WHERE organization_id = ? AND agent_id = ?"
             + " AND status != ?"
-            + " ORDER BY created_at DESC LIMIT ?",
+            + " ORDER BY created_at DESC, id DESC LIMIT ?",
             (organization_id, agent_id, STATUS_ARCHIVED, int(limit)),
         ).fetchall()
         return [_acm_dict(row) for row in rows]

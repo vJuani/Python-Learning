@@ -25,6 +25,11 @@ from modules.jrh_ai_intents import (
     START_AGENT_PAYMENT,
     START_ACM,
     START_INVOICE,
+    QUERY_ACM,
+    ACM_EXPLAIN,
+    ACM_REMOVE_COMPARABLE,
+    ACM_FILTER_COMPARABLES,
+    ACM_PRICE_SCENARIO,
 )
 
 ORIGIN_CHARGE = "agent_account_charge"
@@ -933,7 +938,61 @@ def classify_intent(prompt, *, context=None):
     if has_create_task_signal(text):
         scores[CREATE_TASK] = 0.88
         entities["title"] = text
+    last = (context or {}).get("last_entity") or {}
+    if last.get("kind") in {"property", "acm"} and last.get("id"):
+        entities["previous_kind"] = last.get("kind")
+        entities["previous_id"] = last.get("id")
+        entities["refers_to_previous"] = True
     if any(
+        phrase in folded
+        for phrase in (
+            "solo cierres",
+            "solo operaciones cerradas",
+            "mostrame solo cierres",
+        )
+    ):
+        scores[ACM_FILTER_COMPARABLES] = 0.98
+        entities["filter"] = "closings"
+    elif any(
+        phrase in folded
+        for phrase in ("saca ", "sacá ", "exclui ", "excluì ", "excluì", "excluir ")
+    ):
+        scores[ACM_REMOVE_COMPARABLE] = 0.97
+        entities["confirmed"] = any(
+            token in folded for token in ("confirma", "confirmá", "si, ", "sí,", "sacalo")
+        )
+    elif any(
+        phrase in folded
+        for phrase in (
+            "que pasa si publico",
+            "qué pasa si publico",
+            "si publico en",
+            "publico en",
+        )
+    ):
+        scores[ACM_PRICE_SCENARIO] = 0.97
+        money = re.search(r"(\d[\d.\s]{2,})", folded)
+        if money:
+            entities["proposed_price"] = money.group(1)
+    elif any(
+        phrase in folded
+        for phrase in (
+            "por que me da",
+            "por qué me da",
+            "explica el acm",
+            "por que da",
+            "por qué da",
+            "cual comparable es mas parecido",
+            "cuál comparable es más parecido",
+        )
+    ):
+        scores[ACM_EXPLAIN] = 0.97
+    elif any(
+        phrase in folded
+        for phrase in ("mostrame el acm", "como va el acm", "cómo va el acm")
+    ):
+        scores[QUERY_ACM] = 0.96
+    elif any(
         phrase in folded
         for phrase in (
             "haceme un acm",
@@ -952,11 +1011,6 @@ def classify_intent(prompt, *, context=None):
         )
     ) or re.search(r"\bacm\b", folded):
         scores[START_ACM] = 0.96
-        last = (context or {}).get("last_entity") or {}
-        if last.get("kind") == "property" and last.get("id"):
-            entities["previous_kind"] = "property"
-            entities["previous_id"] = last.get("id")
-            entities["refers_to_previous"] = True
 
     if (
         not scores
@@ -1014,13 +1068,23 @@ def apply_intent_guards(parsed, prompt, context=None):
     merged = dict(entities)
     merged.update({key: value for key, value in incoming.items() if value not in (None, "")})
     result["entities"] = merged
-    if rule_intent == START_ACM and result.get("intent") in {
+    acm_followups = {
+        QUERY_ACM,
+        ACM_EXPLAIN,
+        ACM_REMOVE_COMPARABLE,
+        ACM_FILTER_COMPARABLES,
+        ACM_PRICE_SCENARIO,
+        START_ACM,
+    }
+    if rule_intent in acm_followups and result.get("intent") in {
         QUERY_PROPERTIES,
         FALLBACK,
+        START_ACM,
     }:
-        result["intent"] = START_ACM
-        result["confidence"] = max(float(result.get("confidence") or 0), 0.9)
-        result["guard"] = "acm_request"
+        if rule_intent != START_ACM or result.get("intent") != START_ACM:
+            result["intent"] = rule_intent
+            result["confidence"] = max(float(result.get("confidence") or 0), 0.9)
+            result["guard"] = "acm_request"
     elif rule_intent == START_INVOICE and result.get("intent") in {FALLBACK}:
         result["intent"] = START_INVOICE
         result["confidence"] = max(float(result.get("confidence") or 0), 0.86)
