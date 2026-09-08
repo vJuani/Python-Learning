@@ -524,6 +524,7 @@ def _activity_log(organization_id, agent_id, bounds, tz, language):
         )
         rows.append(
             {
+                "id": task["id"],
                 "time": local.strftime("%H:%M") if local else "",
                 "contact": task.get("contact_name") or "—",
                 "channel": translate(
@@ -547,11 +548,32 @@ def _parse_contact_name(text):
     return match.group(1).strip() if match else ""
 
 
+def build_proposal(channel, *, contact_name="", purpose="", language="es"):
+    if channel not in LOG_CHANNELS and channel != "follow_up":
+        return None
+    purpose = purpose if purpose in LOG_PURPOSES else ""
+    contact_name = (contact_name or "").strip()
+    return {
+        "channel": channel,
+        "task_type": CHANNEL_TO_TASK.get(channel, "other"),
+        "contact_name": contact_name,
+        "purpose": purpose,
+        "title": (
+            f"{translate(f'prod_channel_{channel}', language=language)}"
+            + (f" · {contact_name}" if contact_name else "")
+        ),
+        "purpose_label": (
+            translate(f"prod_purpose_{purpose}", language=language) if purpose else ""
+        ),
+    }
+
+
 def propose_logged_activity(text, *, channels=None, purposes=None, language="es"):
     """Map the agent's own words/pills to real task types. No invented contacts."""
     text = (text or "").strip()
     selected = [item for item in (channels or []) if item in LOG_CHANNELS]
-    purpose = next((item for item in (purposes or []) if item in LOG_PURPOSES), "")
+    purpose_list = [item for item in (purposes or []) if item in LOG_PURPOSES]
+    purpose = purpose_list[0] if purpose_list else ""
     contact = _parse_contact_name(text)
     if not selected and text:
         folded = text.lower()
@@ -565,26 +587,32 @@ def propose_logged_activity(text, *, channels=None, purposes=None, language="es"
             selected.append("whatsapp")
         if any(word in folded for word in ("email", "mail")):
             selected.append("email")
+        if "seguim" in folded and "follow_up" not in purpose_list:
+            purpose = "follow_up"
     proposals = []
-    for channel in selected:
-        proposals.append(
-            {
-                "channel": channel,
-                "task_type": CHANNEL_TO_TASK[channel],
-                "contact_name": contact,
-                "purpose": purpose,
-                "title": (
-                    f"{translate(f'prod_channel_{channel}', language=language)}"
-                    + (f" · {contact}" if contact else "")
-                ),
-                "purpose_label": (
-                    translate(f"prod_purpose_{purpose}", language=language)
-                    if purpose
-                    else ""
-                ),
-            }
+    for index, channel in enumerate(selected):
+        item_purpose = purpose_list[index] if index < len(purpose_list) else purpose
+        item = build_proposal(
+            channel, contact_name=contact, purpose=item_purpose, language=language
         )
+        if item:
+            proposals.append(item)
     return proposals
+
+
+def edit_logged_activity(proposals, index, *, channel, contact_name, purpose, language="es"):
+    updated = list(proposals or [])
+    if index < 0 or index >= len(updated):
+        return updated
+    item = build_proposal(
+        channel or updated[index].get("channel"),
+        contact_name=contact_name if contact_name is not None else updated[index].get("contact_name"),
+        purpose=purpose if purpose is not None else updated[index].get("purpose"),
+        language=language,
+    )
+    if item:
+        updated[index] = item
+    return updated
 
 
 def confirm_logged_activity(

@@ -18,6 +18,7 @@ os.environ.pop("OPENAI_API_KEY", None)
 from modules.agent_productivity import (  # noqa: E402
     ProductivityError,
     build_productivity_view,
+    edit_logged_activity,
     jrh_productivity_answer,
     progress_ratio,
     propose_logged_activity,
@@ -448,6 +449,9 @@ class AgentProductivityTests(unittest.TestCase):
         self.assertIn("prod-hero", html)
         self.assertIn("Hoy", html)
         self.assertIn("prod-gauges", html)
+        self.assertIn("prod-progress-wide", html)
+        self.assertIn("prod-send", html)
+        self.assertIn("prod-identify", html)
         self.assertIn("Contale a JRH", html)
         self.assertIn("Qué te falta hoy", html)
 
@@ -460,6 +464,16 @@ class AgentProductivityTests(unittest.TestCase):
         self.assertIn("call", channels)
         self.assertIn("meeting", channels)
         self.assertTrue(all(item["contact_name"] == "Ro" for item in proposals))
+        edited = edit_logged_activity(
+            proposals,
+            0,
+            channel="visit",
+            contact_name="Ro",
+            purpose="follow_up",
+            language="es",
+        )
+        self.assertEqual(edited[0]["channel"], "visit")
+        self.assertEqual(edited[0]["purpose"], "follow_up")
 
     def test_23_migration_idempotent(self):
         migrate_agent_goals_sqlite()

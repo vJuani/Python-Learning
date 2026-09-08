@@ -13,6 +13,7 @@ from modules.agent_productivity import (
     build_productivity_view,
     confirm_logged_activity,
     disable_goal,
+    edit_logged_activity,
     propose_logged_activity,
     require_productivity_agent,
     save_goals,
@@ -20,6 +21,25 @@ from modules.agent_productivity import (
 from modules.auth import get_current_user, is_guest_session
 
 DRAFT_KEY = "prod_log_draft"
+
+
+def _empty_draft():
+    return {
+        "note": "",
+        "channels": [],
+        "purposes": [],
+        "proposals": [],
+        "edit_index": None,
+    }
+
+
+def _draft():
+    data = session.get(DRAFT_KEY)
+    if not isinstance(data, dict):
+        return _empty_draft()
+    merged = _empty_draft()
+    merged.update(data)
+    return merged
 
 
 def register_productivity_routes(app, helpers):
@@ -63,14 +83,16 @@ def register_productivity_routes(app, helpers):
                 on_date = date.fromisoformat(request.args.get("day"))
         except ValueError:
             on_date = None
+        draft = _draft()
         view = build_productivity_view(
             organization_id,
             user=user,
             language=get_current_language(),
             period=period,
             on_date=on_date,
-            proposals=session.get(DRAFT_KEY) or [],
+            proposals=draft.get("proposals") or [],
         )
+        view["draft"] = draft
         return render_template("productivity/dashboard.html", view=view)
 
     @app.route("/productivity/log", methods=["POST"])
@@ -85,20 +107,50 @@ def register_productivity_routes(app, helpers):
             return _forbidden()
         language = get_current_language()
         action = request.form.get("action")
+        draft = _draft()
         if action == "parse":
-            session[DRAFT_KEY] = propose_logged_activity(
-                request.form.get("note"),
-                channels=request.form.getlist("channel"),
-                purposes=request.form.getlist("purpose"),
+            draft["note"] = request.form.get("note") or ""
+            draft["channels"] = request.form.getlist("channel")
+            draft["purposes"] = request.form.getlist("purpose")
+            draft["proposals"] = propose_logged_activity(
+                draft["note"],
+                channels=draft["channels"],
+                purposes=draft["purposes"],
                 language=language,
             )
-            if not session[DRAFT_KEY]:
+            draft["edit_index"] = None
+            session[DRAFT_KEY] = draft
+            if not draft["proposals"]:
                 flash_i18n("prod_identified_empty", "error")
+        elif action == "edit":
+            try:
+                draft["edit_index"] = int(request.form.get("index") or -1)
+            except ValueError:
+                draft["edit_index"] = None
+            session[DRAFT_KEY] = draft
+        elif action == "save_edit":
+            try:
+                index = int(request.form.get("index") or -1)
+            except ValueError:
+                index = -1
+            draft["proposals"] = edit_logged_activity(
+                draft.get("proposals") or [],
+                index,
+                channel=request.form.get("channel"),
+                contact_name=request.form.get("contact_name"),
+                purpose=request.form.get("purpose"),
+                language=language,
+            )
+            draft["edit_index"] = None
+            session[DRAFT_KEY] = draft
+        elif action == "review":
+            draft["edit_index"] = None
+            session[DRAFT_KEY] = draft
         elif action == "confirm":
             created = confirm_logged_activity(
                 organization_id,
                 user=user,
-                proposals=session.get(DRAFT_KEY) or [],
+                proposals=draft.get("proposals") or [],
                 language=language,
             )
             session.pop(DRAFT_KEY, None)

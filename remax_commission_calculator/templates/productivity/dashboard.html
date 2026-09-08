@@ -7,7 +7,9 @@
 {% endblock %}
 
 {% block content %}
-{% set activity = view.activity %}
+{% set draft = view.draft or {} %}
+{% set selected_channels = draft.channels or [] %}
+{% set selected_purposes = draft.purposes or [] %}
 <section class="prod-hero">
     <div>
         <p class="prod-kicker">{{ t('prod_title') }}</p>
@@ -16,12 +18,12 @@
     </div>
     <div class="prod-toolbar">
         <div class="prod-date">
-            {% if view.prev_date %}
             <a class="prod-date__nav" href="{{ url_for('productivity_home', period=view.period, day=view.prev_date) }}" aria-label="{{ t('prod_prev') }}">‹</a>
-            {% endif %}
             <span>{{ view.date_label }}</span>
             {% if view.next_date %}
             <a class="prod-date__nav" href="{{ url_for('productivity_home', period=view.period, day=view.next_date) }}" aria-label="{{ t('prod_next') }}">›</a>
+            {% else %}
+            <span class="prod-date__nav is-disabled">›</span>
             {% endif %}
         </div>
         <nav class="prod-tabs">
@@ -45,42 +47,91 @@
         <input type="hidden" name="period" value="{{ view.period }}">
         <input type="hidden" name="day" value="{{ view.focus_date }}">
         <h3>{{ t('prod_tell_jrh') }}</h3>
-        <textarea name="note" rows="3" placeholder="{{ t('prod_tell_placeholder') }}">{{ request.form.note or '' }}</textarea>
+        <div class="prod-composer">
+            <textarea name="note" rows="3" placeholder="{{ t('prod_tell_placeholder') }}">{{ draft.note or '' }}</textarea>
+            <button type="submit" class="prod-send" aria-label="{{ t('prod_identify') }}">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+        </div>
         <p class="prod-pills-label">{{ t('prod_channel') }}</p>
         <div class="prod-pills">
             {% for key in view.log_channels %}
-            <label class="prod-pill">
-                <input type="checkbox" name="channel" value="{{ key }}">
-                <span>{{ t('prod_channel_' ~ key) }}</span>
+            <label class="prod-pill prod-pill--{{ key }}">
+                <input type="checkbox" name="channel" value="{{ key }}" {% if key in selected_channels %}checked{% endif %}>
+                <span>
+                    <i class="prod-ico prod-ico--{{ key }}"></i>
+                    {{ t('prod_channel_' ~ key) }}
+                </span>
             </label>
             {% endfor %}
         </div>
         <p class="prod-pills-label">{{ t('prod_purpose') }}</p>
         <div class="prod-pills">
             {% for key in view.log_purposes %}
-            <label class="prod-pill">
-                <input type="checkbox" name="purpose" value="{{ key }}">
+            <label class="prod-pill prod-pill--purpose-{{ key }}">
+                <input type="checkbox" name="purpose" value="{{ key }}" {% if key in selected_purposes %}checked{% endif %}>
                 <span>{{ t('prod_purpose_' ~ key) }}</span>
             </label>
             {% endfor %}
         </div>
-        <button type="submit" class="btn btn-secondary">{{ t('prod_identify') }}</button>
     </form>
 
     <section class="prod-card prod-identify">
-        <h3>{{ t('prod_identified') }}</h3>
+        <div class="prod-identify__head">
+            <h3>{{ t('prod_identified') }}</h3>
+            <span class="prod-bot" aria-hidden="true"></span>
+        </div>
         {% if view.proposals %}
         <ul class="prod-proposals">
             {% for item in view.proposals %}
             <li>
-                <strong>{{ item.title }}</strong>
-                {% if item.purpose_label %}<span>{{ t('prod_purpose') }}: {{ item.purpose_label }}</span>{% endif %}
+                {% if draft.edit_index == loop.index0 %}
+                <form method="post" action="{{ url_for('productivity_log') }}" class="prod-edit">
+                    <input type="hidden" name="action" value="save_edit">
+                    <input type="hidden" name="index" value="{{ loop.index0 }}">
+                    <input type="hidden" name="period" value="{{ view.period }}">
+                    <input type="hidden" name="day" value="{{ view.focus_date }}">
+                    <label>{{ t('prod_col_contact') }}
+                        <input type="text" name="contact_name" value="{{ item.contact_name }}">
+                    </label>
+                    <label>{{ t('prod_channel') }}
+                        <select name="channel">
+                            {% for key in view.log_channels %}
+                            <option value="{{ key }}" {% if item.channel == key %}selected{% endif %}>{{ t('prod_channel_' ~ key) }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>{{ t('prod_purpose') }}
+                        <select name="purpose">
+                            <option value="">—</option>
+                            {% for key in view.log_purposes %}
+                            <option value="{{ key }}" {% if item.purpose == key %}selected{% endif %}>{{ t('prod_purpose_' ~ key) }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <button type="submit" class="btn btn-primary">{{ t('prod_save_edit') }}</button>
+                </form>
+                {% else %}
+                <div class="prod-proposal">
+                    <div>
+                        <strong>{{ item.title }}</strong>
+                        {% if item.purpose_label %}<span>{{ t('prod_purpose') }}: {{ item.purpose_label }}</span>{% endif %}
+                    </div>
+                    <form method="post" action="{{ url_for('productivity_log') }}">
+                        <input type="hidden" name="action" value="edit">
+                        <input type="hidden" name="index" value="{{ loop.index0 }}">
+                        <input type="hidden" name="period" value="{{ view.period }}">
+                        <input type="hidden" name="day" value="{{ view.focus_date }}">
+                        <button type="submit" class="prod-edit-link">{{ t('prod_edit') }}</button>
+                    </form>
+                </div>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>
         <div class="prod-identify__actions">
             <form method="post" action="{{ url_for('productivity_log') }}">
-                <input type="hidden" name="action" value="clear">
+                <input type="hidden" name="action" value="review">
                 <input type="hidden" name="period" value="{{ view.period }}">
                 <input type="hidden" name="day" value="{{ view.focus_date }}">
                 <button type="submit" class="btn btn-secondary">{{ t('prod_review') }}</button>
@@ -98,30 +149,39 @@
     </section>
 </section>
 
-<section class="prod-row prod-row--mid">
-    <section class="prod-card">
+<section class="prod-card prod-progress-wide">
+    <div class="prod-card__head">
         <h3>{{ t('prod_progress_today') }}</h3>
-        <div class="prod-gauges">
-            {% for ring in view.gauges %}
-            <article class="prod-gauge prod-gauge--{{ ring.metric_key }}">
-                <div class="prod-ring" style="--pct: {{ ring.bar_percent }}">
-                    <svg viewBox="0 0 36 36" aria-hidden="true">
-                        <circle class="prod-ring__track" cx="18" cy="18" r="15.5" pathLength="100"></circle>
-                        <circle class="prod-ring__value" cx="18" cy="18" r="15.5" pathLength="100"></circle>
-                    </svg>
-                    <strong>{{ ring.fraction }}</strong>
-                </div>
-                <span>{{ ring.label }}</span>
-            </article>
-            {% endfor %}
-        </div>
-    </section>
+        <a href="#prod-log">{{ t('prod_see_detail') }}</a>
+    </div>
+    <div class="prod-gauges">
+        {% for ring in view.gauges %}
+        <article class="prod-gauge prod-gauge--{{ ring.metric_key }}">
+            <div class="prod-ring" style="--pct: {{ ring.bar_percent }}">
+                <svg viewBox="0 0 36 36" aria-hidden="true">
+                    <circle class="prod-ring__track" cx="18" cy="18" r="15.5" pathLength="100"></circle>
+                    <circle class="prod-ring__value" cx="18" cy="18" r="15.5" pathLength="100"></circle>
+                </svg>
+                <strong>{{ ring.fraction }}</strong>
+            </div>
+            <span>{{ ring.label }}</span>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="prod-row prod-row--mid">
     <section class="prod-card" id="prod-gaps">
         <h3>{{ t('prod_missing_title') }}</h3>
         {% if view.gaps %}
         <ul class="prod-gaps">
             {% for item in view.gaps %}
-            <li>{{ item }}</li>
+            <li>
+                <a href="{{ url_for('agenda_index') }}">
+                    <span>{{ item }}</span>
+                    <i>›</i>
+                </a>
+            </li>
             {% endfor %}
         </ul>
         {% else %}
@@ -131,10 +191,7 @@
         <p class="prod-streak">{{ view.streak.label }}</p>
         {% endif %}
     </section>
-</section>
-
-<section class="prod-row prod-row--bottom">
-    <section class="prod-card prod-log">
+    <section class="prod-card prod-log" id="prod-log">
         <h3>{{ t('prod_activity_today') }}</h3>
         {% if view.activity_log %}
         <div class="prod-table-wrap">
@@ -146,6 +203,7 @@
                         <th>{{ t('prod_col_channel') }}</th>
                         <th>{{ t('prod_col_purpose') }}</th>
                         <th>{{ t('prod_col_result') }}</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -153,9 +211,15 @@
                     <tr>
                         <td>{{ row.time }}</td>
                         <td>{{ row.contact }}</td>
-                        <td><span class="prod-channel prod-channel--{{ row.channel_key }}">{{ row.channel }}</span></td>
+                        <td><span class="prod-chip prod-chip--{{ row.channel_key }}"><i class="prod-ico prod-ico--{{ row.channel_key }}"></i>{{ row.channel }}</span></td>
                         <td><span class="prod-purpose">{{ row.purpose }}</span></td>
                         <td><span class="prod-result">{{ row.result }}</span></td>
+                        <td>
+                            <details class="prod-more">
+                                <summary aria-label="{{ t('prod_row_menu') }}">⋯</summary>
+                                <a href="{{ url_for('agenda_edit', task_id=row.id) }}">{{ t('prod_open_agenda') }}</a>
+                            </details>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -167,6 +231,7 @@
                 <strong>{{ row.time }} · {{ row.contact }}</strong>
                 <span>{{ row.channel }} · {{ row.purpose }}</span>
                 <em>{{ row.result }}</em>
+                <a href="{{ url_for('agenda_edit', task_id=row.id) }}">{{ t('prod_open_agenda') }}</a>
             </li>
             {% endfor %}
         </ul>
@@ -181,8 +246,9 @@
         </div>
         {% endif %}
     </section>
+</section>
 
-    <div class="prod-stack">
+<section class="prod-row prod-row--bottom">
         <section class="prod-card">
             <div class="prod-card__head">
                 <h3>{{ t('prod_active_goals') }}</h3>
@@ -220,6 +286,5 @@
             <p class="prod-delta{% if not view.week_delta.up %} is-down{% endif %}">{{ view.week_delta.label }}</p>
             {% endif %}
         </section>
-    </div>
 </section>
 {% endblock %}
