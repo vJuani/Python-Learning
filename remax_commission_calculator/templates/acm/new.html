@@ -9,10 +9,9 @@
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <p class="acm-step">{{ t('acm_step_1') }}</p>
         <h2>{{ t('acm_new') }}</h2>
         {% if not preview %}
-        <p class="field-help">{{ t('acm_new_help') }}</p>
+        <p class="field-help">{{ t('acm_one_click_help') }}</p>
         {% endif %}
     </div>
     <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">{{ t('nav_my_properties') }}</a>
@@ -20,31 +19,15 @@
 
 {% if preview %}
 {% set subject = preview.subject %}
-{% set quality = preview.quality %}
 <section class="panel">
     <h3>{{ subject.address }}</h3>
-    <p class="field-help">
-        {{ subject.neighborhood or '' }}
-        {% if subject.neighborhood and subject.jurisdiction %} · {% endif %}
-        {{ subject.jurisdiction or '' }}
-    </p>
-    <h4>{{ t('acm_quality_title') }}</h4>
-    <ul class="acm-quality">
-        {% for key, state in quality.checks.items() %}
-        <li class="acm-quality__{{ state }}">
-            {% if state == 'ok' %}✓
-            {% elif state == 'weak' %}?
-            {% else %}✕{% endif %}
-            {{ t('acm_quality_' ~ key) }}
-        </li>
-        {% endfor %}
-    </ul>
-    {% if not quality.can_valuate %}
-    <p class="field-help">{{ t('acm_quality_no_area') }}</p>
-    <a class="btn btn-secondary" href="{{ url_for('properties_edit', property_id=preview.property.id) }}">{{ t('acm_complete_property') }}</a>
-    {% endif %}
-    <form method="post" action="{{ url_for('acm_new', property_id=preview.property.id) }}" class="acm-preview-actions">
-        <button type="submit" class="btn btn-primary">{{ t('acm_create') }}</button>
+    <p class="field-help">{{ subject.neighborhood or '' }}</p>
+    <p>{{ t('acm_jrh_missing_area') }}</p>
+    <form method="post" action="{{ url_for('acm_new', property_id=preview.property.id) }}" class="acm-missing-area">
+        <label>{{ t('acm_area_total') }}
+            <input type="number" name="total_m2" min="1" step="0.01" required>
+        </label>
+        <button type="submit" class="btn btn-primary">{{ t('acm_continue') }}</button>
     </form>
 </section>
 {% endif %}

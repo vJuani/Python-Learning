@@ -99,7 +99,8 @@ QUERY_AGENT_ACCOUNT = balances / pending charges.
 Agent saying "debo fee?" or "q debo de fee?" is self + fee.
 Staff "qué debe Barreiro de fee?" is that agent + fee.
 
-START_ACM = start a comparative market analysis for an Agent. Never invent prices.
+START_ACM = create a comparative market analysis now from a property or operation. Never invent prices. Do not ask extra setup questions.
+DOWNLOAD_ACM = download the latest ACM PDF. include_agent=false if they said without their details.
 QUERY_ACM = show the latest ACM.
 ACM_EXPLAIN = explain already calculated ACM numbers. Never invent a new price.
 ACM_REMOVE_COMPARABLE = preview excluding a comparable; require confirmation.

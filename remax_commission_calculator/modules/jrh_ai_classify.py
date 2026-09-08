@@ -30,6 +30,7 @@ from modules.jrh_ai_intents import (
     ACM_REMOVE_COMPARABLE,
     ACM_FILTER_COMPARABLES,
     ACM_PRICE_SCENARIO,
+    DOWNLOAD_ACM,
 )
 
 ORIGIN_CHARGE = "agent_account_charge"
@@ -939,11 +940,38 @@ def classify_intent(prompt, *, context=None):
         scores[CREATE_TASK] = 0.88
         entities["title"] = text
     last = (context or {}).get("last_entity") or {}
-    if last.get("kind") in {"property", "acm"} and last.get("id"):
+    if last.get("kind") in {"property", "acm", "operation"} and last.get("id"):
         entities["previous_kind"] = last.get("kind")
         entities["previous_id"] = last.get("id")
         entities["refers_to_previous"] = True
+    com_match = re.search(r"\bcom[- ]?0*(\d+)\b", folded)
+    if com_match:
+        entities["operation_reference"] = f"COM-{int(com_match.group(1)):06d}"
     if any(
+        phrase in folded
+        for phrase in (
+            "descargame el acm",
+            "descarga el acm",
+            "descargalo",
+            "bajame el acm",
+            "bajame el informe",
+            "descargame el informe",
+            "pdf del acm",
+            "sin mis datos",
+            "con mis datos",
+        )
+    ) and (
+        "acm" in folded
+        or "informe" in folded
+        or "pdf" in folded
+        or last.get("kind") == "acm"
+    ):
+        scores[DOWNLOAD_ACM] = 0.99
+        if "sin mis" in folded:
+            entities["include_agent"] = False
+        elif "con mis" in folded:
+            entities["include_agent"] = True
+    elif any(
         phrase in folded
         for phrase in (
             "solo cierres",
@@ -1075,6 +1103,7 @@ def apply_intent_guards(parsed, prompt, context=None):
         ACM_FILTER_COMPARABLES,
         ACM_PRICE_SCENARIO,
         START_ACM,
+        DOWNLOAD_ACM,
     }
     if rule_intent in acm_followups and result.get("intent") in {
         QUERY_PROPERTIES,

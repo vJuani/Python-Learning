@@ -37,6 +37,7 @@ from modules.jrh_ai_intents import (
     ACM_REMOVE_COMPARABLE,
     ACM_FILTER_COMPARABLES,
     ACM_PRICE_SCENARIO,
+    DOWNLOAD_ACM,
     WRITE_ACTIONS,
 )
 from modules.jrh_ai_provider import interpret_prompt
@@ -200,6 +201,7 @@ def ask_jrh(
         ACM_REMOVE_COMPARABLE: _handle_acm_remove,
         ACM_FILTER_COMPARABLES: _handle_acm_filter,
         ACM_PRICE_SCENARIO: _handle_acm_scenario,
+        DOWNLOAD_ACM: _handle_download_acm,
     }
     handler = handlers.get(intent, lambda **_kwargs: _fallback(language, confidence))
     result = handler(
@@ -1236,6 +1238,217 @@ def _invoice_charge_preview(
     )
 
 
+def _operation_db_id(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, int):
+        return value
+    import re
+
+    match = re.search(r"(?:com[- ]?)?(\d+)$", str(value).strip(), flags=re.I)
+    return int(match.group(1)) if match else None
+
+
+def _acm_query_from_prompt(prompt, entities):
+    import re
+
+    query = (
+        entities.get("operation_reference")
+        or entities.get("address")
+        or entities.get("property_text")
+        or entities.get("location_text")
+        or ""
+    )
+    if query:
+        return " ".join(str(query).split())
+    cleaned = re.sub(
+        r"(haceme un acm de la operacion de|haceme un acm de la operación de|"
+        r"haceme el acm de la operacion de|haceme el acm de la operación de|"
+        r"haceme un acm de|haceme el acm de|armame un acm de|"
+        r"haceme un acm|haceme el acm|armame un acm|armame un comparativo|"
+        r"quiero tasar|tasame|cuanto puede valer|cuánto puede valer|"
+        r"esta propiedad|el depto de|el departamento de|de la operacion de|"
+        r"de la operación de|la operacion de|la operación de)",
+        " ",
+        prompt or "",
+        flags=re.IGNORECASE,
+    )
+    return " ".join(cleaned.split())
+
+
+def _owned_property_match(organization_id, property_id, agent_id):
+    from modules.database.properties_repository import get_property_record
+
+    row = get_property_record(property_id, organization_id)
+    if not row:
+        return None
+    if int(row.get("agent_id") or 0) != int(agent_id):
+        return None
+    return {
+        "id": row["id"],
+        "name": row.get("address") or "",
+        "kind": "property",
+        "address": row.get("address"),
+        "neighborhood": row.get("neighborhood"),
+        "covered_m2": row.get("covered_m2"),
+        "total_m2": row.get("total_m2"),
+    }
+
+
+def _hydrate_operation_match(organization_id, raw, agent_id):
+    from modules.database.operations_repository import get_operation_record
+
+    db_id = raw.get("db_id") if isinstance(raw, dict) else raw
+    if db_id in (None, "") and isinstance(raw, dict):
+        db_id = raw.get("id")
+    db_id = _operation_db_id(db_id)
+    if db_id is None:
+        return None
+    row = raw if isinstance(raw, dict) and raw.get("property_db_id") else get_operation_record(
+        db_id, organization_id
+    )
+    if not row:
+        return None
+    if int(row.get("agent_db_id") or row.get("agent_id") or 0) != int(agent_id):
+        return None
+    property_id = row.get("property_db_id")
+    if not property_id:
+        return None
+    return {
+        "operation_id": row.get("db_id") or db_id,
+        "operation_ref": row.get("id") if str(row.get("id", "")).startswith("COM-") else f"COM-{int(db_id):06d}",
+        "property_id": property_id,
+        "id": property_id,
+        "name": row.get("property") or row.get("property_address") or "",
+        "address": row.get("property") or row.get("property_address") or "",
+        "kind": "operation",
+    }
+
+
+def _resolve_acm_operations(organization_id, query, *, user, agent_id):
+    import re
+
+    from modules.database.operations_repository import (
+        get_operation_record,
+        search_operations_by_id,
+    )
+
+    matches = []
+    ref = _operation_db_id(query)
+    if ref is not None and re.search(r"com", fold_text(query or ""), flags=re.I):
+        row = get_operation_record(ref, organization_id)
+        item = _hydrate_operation_match(organization_id, row, agent_id) if row else None
+        if item:
+            return [item]
+        by_id = search_operations_by_id(query, organization_id)
+        for row in by_id:
+            item = _hydrate_operation_match(organization_id, row, agent_id)
+            if item:
+                matches.append(item)
+        if matches:
+            return matches
+    if not query:
+        return []
+    resolved = resolve_operations(
+        organization_id,
+        query,
+        user=user,
+        agent_id=agent_id,
+        limit=8,
+    )
+    for raw in resolved or []:
+        item = _hydrate_operation_match(organization_id, raw, agent_id)
+        if item:
+            matches.append(item)
+    return matches
+
+
+def _resolve_acm_properties(organization_id, query, *, user, agent_id, entities):
+    if not query:
+        return []
+    resolved = resolve_properties(
+        organization_id,
+        user=user,
+        agent_id=agent_id,
+        address=query,
+        neighborhood=entities.get("neighborhood") or "",
+        jurisdiction=entities.get("jurisdiction") or "",
+        property_type=entities.get("property_type") or "",
+        listing_purpose=entities.get("listing_purpose") or "",
+    )
+    matches = resolved[0] if isinstance(resolved, tuple) else resolved
+    if isinstance(matches, dict):
+        matches = matches.get("items") or matches.get("matches") or []
+    return matches or []
+
+
+def _acm_ready_result(view, *, language, confidence, prompt=""):
+    from modules.i18n import translate
+
+    facts = view.get("facts") or {}
+    acm = view["acm"]
+    used = facts.get("used") or 0
+    confidence_label = translate(
+        f"acm_confidence_{facts.get('confidence') or 'low'}",
+        language=language,
+    )
+    return _result(
+        START_ACM,
+        "ready",
+        language=language,
+        summary=facts.get("estimated_label") or "",
+        message_key="acm_jrh_ready",
+        cards=[
+            {
+                "title": facts.get("address") or "",
+                "subtitle": facts.get("estimated_label") or "",
+                "href_name": "acm_detail",
+                "href_args": {"acm_id": acm["id"]},
+            }
+        ],
+        actions=[
+            {
+                "label_key": "acm_see_results",
+                "href_name": "acm_detail",
+                "href_args": {"acm_id": acm["id"]},
+            },
+            {
+                "label_key": "acm_download_report",
+                "href_name": "acm_detail",
+                "href_args": {"acm_id": acm["id"]},
+            },
+            {
+                "label_key": "acm_download_with_me",
+                "href_name": "acm_pdf",
+                "href_args": {"acm_id": acm["id"], "include_agent": 1},
+            },
+            {
+                "label_key": "acm_download_without_me",
+                "href_name": "acm_pdf",
+                "href_args": {"acm_id": acm["id"], "include_agent": 0},
+            },
+        ],
+        confirm_required=False,
+        wrote=True,
+        confidence=confidence,
+        entity={
+            "kind": "acm",
+            "id": acm["id"],
+            "label": facts.get("address") or "",
+        },
+        data={
+            "source_prompt": prompt,
+            "wrote": True,
+            "used": used,
+            "address": facts.get("address") or "",
+            "estimated": facts.get("estimated_label") or "",
+            "range_min": facts.get("range_min_label") or "",
+            "range_max": facts.get("range_max_label") or "",
+            "confidence": confidence_label,
+        },
+    )
+
+
 def _handle_start_acm(
     *,
     organization_id,
@@ -1245,96 +1458,123 @@ def _handle_start_acm(
     entities,
     prompt,
     confidence,
+    session=None,
     **_kwargs,
 ):
+    import re
+
     if not is_agent(user) or not agent_id:
-        return _result(
-            START_ACM,
-            "needs_attention",
-            language=language,
-            message_key="acm_err_agent_only",
-            confidence=confidence,
-        )
-    property_id = None
-    if entities.get("previous_kind") == "property" and entities.get("previous_id"):
-        property_id = entities.get("previous_id")
+        return _require_acm_agent_result(START_ACM, language, confidence)
+    from modules.acm_engine import display_area
+    from modules.acm_service import AcmError, create_acm_for_property, get_acm_view
+    from modules.database.properties_repository import get_property_record
+
+    query = _acm_query_from_prompt(prompt, entities)
+    wants_operation = bool(
+        entities.get("operation_reference")
+        or re.search(r"operacion|operación|com[- ]?\d+", fold_text(prompt or ""))
+        or entities.get("previous_kind") == "operation"
+    )
     matches = []
-    if property_id:
-        from modules.database.properties_repository import get_property_record
-
-        row = get_property_record(property_id, organization_id)
-        if row and (
-            not is_agent(user) or int(row.get("agent_id") or 0) == int(agent_id)
-        ):
-            matches = [
-                {
-                    "id": row["id"],
-                    "name": row.get("address") or "",
-                    "kind": "property",
-                    "address": row.get("address"),
-                    "neighborhood": row.get("neighborhood"),
-                }
-            ]
-    if not matches:
-        query = (
-            entities.get("address")
-            or entities.get("property_text")
-            or entities.get("location_text")
-            or ""
-        )
-        if not query:
-            import re
-
-            query = re.sub(
-                r"(haceme un acm de|armame un acm de|armame un comparativo|"
-                r"quiero tasar|tasame|cuanto puede valer|cuánto puede valer|"
-                r"esta propiedad|el depto de|el departamento de)",
-                " ",
-                prompt,
-                flags=re.IGNORECASE,
+    if (
+        not query
+        and entities.get("previous_kind") == "acm"
+        and entities.get("previous_id")
+    ):
+        try:
+            existing = get_acm_view(
+                entities["previous_id"],
+                organization_id,
+                user=user,
+                language=language,
             )
-            query = " ".join(query.split())
-        resolved = resolve_properties(
+        except AcmError:
+            existing = None
+        if existing:
+            ready = _acm_ready_result(
+                existing, language=language, confidence=confidence, prompt=prompt
+            )
+            ready["wrote"] = False
+            ready["data"]["wrote"] = False
+            return ready
+    if (
+        not query
+        and entities.get("previous_kind") == "operation"
+        and entities.get("previous_id")
+    ):
+        item = _hydrate_operation_match(
+            organization_id, entities.get("previous_id"), agent_id
+        )
+        if item:
+            matches = [item]
+    if not matches and entities.get("operation_reference"):
+        matches = _resolve_acm_operations(
             organization_id,
+            entities.get("operation_reference"),
             user=user,
             agent_id=agent_id,
-            address=query,
-            neighborhood=entities.get("neighborhood") or "",
-            jurisdiction=entities.get("jurisdiction") or "",
-            property_type=entities.get("property_type") or "",
-            listing_purpose=entities.get("listing_purpose") or "",
         )
-        matches = resolved[0] if isinstance(resolved, tuple) else resolved
-        if isinstance(matches, dict):
-            matches = matches.get("items") or matches.get("matches") or []
+    if not matches and wants_operation and query:
+        matches = _resolve_acm_operations(
+            organization_id, query, user=user, agent_id=agent_id
+        )
+    if (
+        not matches
+        and not query
+        and entities.get("previous_kind") == "property"
+        and entities.get("previous_id")
+    ):
+        owned = _owned_property_match(
+            organization_id, entities.get("previous_id"), agent_id
+        )
+        if owned:
+            matches = [owned]
+    if not matches:
+        matches = _resolve_acm_properties(
+            organization_id,
+            query,
+            user=user,
+            agent_id=agent_id,
+            entities=entities,
+        )
+    if not matches and query and not wants_operation:
+        matches = _resolve_acm_operations(
+            organization_id, query, user=user, agent_id=agent_id
+        )
     if not matches:
         return _result(
             START_ACM,
             "needs_attention",
             language=language,
-            message_key="acm_err_property_missing",
+            message_key=(
+                "acm_err_operation_missing" if wants_operation else "acm_err_property_missing"
+            ),
             confidence=confidence,
         )
     if len(matches) > 1:
+        from_ops = all(item.get("operation_ref") or item.get("kind") == "operation" for item in matches)
         return _result(
             START_ACM,
             "needs_attention",
             language=language,
-            message_key="acm_err_property_ambiguous",
+            message_key=(
+                "acm_err_operation_ambiguous" if from_ops else "acm_err_property_ambiguous"
+            ),
             candidates=[
                 {
-                    "id": item.get("id"),
+                    "id": item.get("property_id") or item.get("id"),
                     "name": item.get("address") or item.get("name") or "",
-                    "kind": "property",
+                    "kind": "operation" if item.get("operation_ref") else "property",
+                    "label": item.get("operation_ref") or "",
                 }
                 for item in matches[:8]
             ],
             cards=[
                 {
-                    "title": item.get("address") or item.get("name") or "",
-                    "subtitle": item.get("neighborhood") or "",
+                    "title": item.get("operation_ref") or item.get("address") or item.get("name") or "",
+                    "subtitle": item.get("address") or item.get("name") or "",
                     "href_name": "acm_new",
-                    "href_args": {"property_id": item.get("id")},
+                    "href_args": {"property_id": item.get("property_id") or item.get("id")},
                 }
                 for item in matches[:5]
             ],
@@ -1342,13 +1582,17 @@ def _handle_start_acm(
             data={"count": len(matches)},
         )
     chosen = matches[0]
-    from modules.database.properties_repository import get_property_record
-    from modules.acm_engine import display_area
-
-    chosen_row = chosen if chosen.get("covered_m2") or chosen.get("total_m2") else get_property_record(
-        chosen.get("id"), organization_id
-    )
-    if chosen_row and not display_area(chosen_row):
+    property_id = chosen.get("property_id") or chosen.get("id")
+    chosen_row = get_property_record(property_id, organization_id)
+    if chosen_row is None:
+        return _result(
+            START_ACM,
+            "needs_attention",
+            language=language,
+            message_key="acm_err_property_missing",
+            confidence=confidence,
+        )
+    if not display_area(chosen_row):
         return _result(
             START_ACM,
             "needs_attention",
@@ -1356,56 +1600,98 @@ def _handle_start_acm(
             message_key="acm_jrh_missing_area",
             cards=[
                 {
-                    "title": chosen.get("address") or chosen.get("name") or "",
-                    "subtitle": chosen.get("neighborhood") or "",
+                    "title": chosen_row.get("address") or "",
+                    "subtitle": chosen_row.get("neighborhood") or "",
                 }
             ],
             actions=[
                 {
-                    "label_key": "acm_complete_property",
-                    "href_name": "properties_edit",
-                    "href_args": {"property_id": chosen.get("id")},
-                },
-                {
-                    "label_key": "acm_create",
+                    "label_key": "acm_continue",
                     "href_name": "acm_new",
-                    "href_args": {"property_id": chosen.get("id")},
-                },
+                    "href_args": {"property_id": property_id},
+                }
             ],
             confidence=confidence,
             entity={
                 "kind": "property",
-                "id": chosen.get("id"),
-                "label": chosen.get("address") or chosen.get("name") or "",
+                "id": property_id,
+                "label": chosen_row.get("address") or "",
             },
         )
+    view = create_acm_for_property(
+        organization_id,
+        user=user,
+        property_id=property_id,
+        language=language,
+    )
+    return _acm_ready_result(view, language=language, confidence=confidence, prompt=prompt)
+
+
+def _handle_download_acm(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    confidence,
+    session=None,
+    **_kwargs,
+):
+    if not is_agent(user) or not agent_id:
+        return _require_acm_agent_result(DOWNLOAD_ACM, language, confidence)
+    view = _latest_acm_view(organization_id, user, language, session=session)
+    if view is None:
+        return _result(
+            DOWNLOAD_ACM,
+            "needs_attention",
+            language=language,
+            message_key="acm_jrh_no_acm",
+            confidence=confidence,
+        )
+    acm_id = view["acm"]["id"]
+    include_agent = entities.get("include_agent")
+    actions = []
+    if include_agent is False:
+        actions = [
+            {
+                "label_key": "acm_download_without_me",
+                "href_name": "acm_pdf",
+                "href_args": {"acm_id": acm_id, "include_agent": 0},
+            }
+        ]
+        message_key = "acm_jrh_download"
+    elif include_agent is True:
+        actions = [
+            {
+                "label_key": "acm_download_with_me",
+                "href_name": "acm_pdf",
+                "href_args": {"acm_id": acm_id, "include_agent": 1},
+            }
+        ]
+        message_key = "acm_jrh_download"
+    else:
+        actions = [
+            {
+                "label_key": "acm_download_with_me",
+                "href_name": "acm_pdf",
+                "href_args": {"acm_id": acm_id, "include_agent": 1},
+            },
+            {
+                "label_key": "acm_download_without_me",
+                "href_name": "acm_pdf",
+                "href_args": {"acm_id": acm_id, "include_agent": 0},
+            },
+        ]
+        message_key = "acm_jrh_download_choice"
     return _result(
-        START_ACM,
+        DOWNLOAD_ACM,
         "ready",
         language=language,
-        summary=chosen.get("address") or chosen.get("name") or prompt,
-        message_key="acm_jrh_preview",
-        cards=[
-            {
-                "title": chosen.get("address") or chosen.get("name") or "",
-                "subtitle": chosen.get("neighborhood") or "",
-            }
-        ],
-        actions=[
-            {
-                "label_key": "acm_create",
-                "href_name": "acm_new",
-                "href_args": {"property_id": chosen.get("id")},
-            }
-        ],
-        confirm_required=False,
+        message_key=message_key,
+        actions=actions,
         confidence=confidence,
-        entity={
-            "kind": "property",
-            "id": chosen.get("id"),
-            "label": chosen.get("address") or chosen.get("name") or "",
-        },
-        data={"source_prompt": prompt, "wrote": False},
+        entity={"kind": "acm", "id": acm_id, "label": (view.get("facts") or {}).get("address") or ""},
     )
 
 

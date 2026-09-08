@@ -388,7 +388,43 @@ def create_acm_for_property(
         add_comparable(organization_id, acm_id, row)
     stored = list_comparables(acm_id, organization_id)
     _persist_metrics(acm_id, organization_id, subject, stored, language=language)
-    return get_acm_view(acm_id, organization_id, user=user)
+    return get_acm_view(acm_id, organization_id, user=user, language=language)
+
+
+def complete_property_area_and_create(
+    organization_id,
+    *,
+    user,
+    property_id,
+    area,
+    language="es",
+):
+    user = require_acm_agent(user)
+    property_data = get_property_record(property_id, organization_id)
+    if property_data is None:
+        raise AcmError("acm_err_property_missing", 404)
+    if int(property_data.get("agent_id") or 0) != int(user["agent_id"]):
+        raise AcmError("acm_err_forbidden", 403)
+    value = to_decimal(area)
+    if value is None or value <= 0:
+        raise AcmError("acm_err_manual_area", 400)
+    from modules.database.properties_repository import update_property
+
+    update_property(
+        property_id,
+        property_data.get("address") or "",
+        property_data.get("jurisdiction") or "",
+        organization_id,
+        agent_id=property_data.get("agent_id"),
+        covered_m2=str(value),
+        total_m2=str(value),
+    )
+    return create_acm_for_property(
+        organization_id,
+        user=user,
+        property_id=property_id,
+        language=language,
+    )
 
 
 def get_owned_acm(acm_id, organization_id, user):

@@ -63,6 +63,7 @@ from modules.jrh_ai_intents import (
     ACM_FILTER_COMPARABLES,
     ACM_PRICE_SCENARIO,
     ACM_REMOVE_COMPARABLE,
+    DOWNLOAD_ACM,
     START_ACM,
 )
 from modules.jrh_ai_service import ask_jrh
@@ -179,6 +180,23 @@ class AcmTests(unittest.TestCase):
             agent_id=cls.foreign_agent,
         )
         cls.closed_prop = cls._prop("Libertador Cierre 10", "Núñez", 210000, 73, 3, 2)
+        cls.target_op = add_operation(
+            "02/08/2026",
+            cls.agent_id,
+            cls.target,
+            "no",
+            0,
+            228000,
+            3,
+            6800,
+            6800,
+            0,
+            0,
+            0,
+            0,
+            0,
+            cls.org,
+        )
         cls.no_area = add_property(
             "Santa Fe 410",
             "CABA",
@@ -579,8 +597,9 @@ class AcmTests(unittest.TestCase):
             session={},
         )
         self.assertEqual(result["intent"], START_ACM)
-        self.assertEqual(result["entity"].get("id"), self.target)
-        self.assertFalse(result.get("wrote"))
+        self.assertTrue(result.get("wrote"))
+        self.assertEqual(result["entity"].get("kind"), "acm")
+        self.assertTrue(result.get("actions"))
 
     def test_28_jrh_staff_start_acm_blocked(self):
         result = ask_jrh(
@@ -628,7 +647,8 @@ class AcmTests(unittest.TestCase):
             session=session,
         )
         self.assertEqual(result["intent"], START_ACM)
-        self.assertEqual(result["entity"].get("id"), self.target)
+        self.assertTrue(result.get("wrote"))
+        self.assertIn("Libertador 4200", result.get("data", {}).get("address") or result.get("message") or "")
 
     def test_31_migration_idempotent(self):
         migrate_property_acm_sqlite()
@@ -802,8 +822,8 @@ class AcmTests(unittest.TestCase):
     def test_48_quality_preview_render(self):
         client = self._login(self.agent_user, ROLE_AGENT, self.org)
         response = client.get(f"/acm/new?property_id={self.target}")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("Datos necesarios", response.get_data(as_text=True))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/acm/", response.headers.get("Location", ""))
 
     def test_49_hero_uses_backend_values(self):
         view = self._create()
@@ -812,7 +832,7 @@ class AcmTests(unittest.TestCase):
         self.assertEqual(facts["range_min"], view["acm"]["suggested_min_value"])
         client = self._login(self.agent_user, ROLE_AGENT, self.org)
         html = client.get(f"/acm/{view['acm']['id']}").get_data(as_text=True)
-        self.assertIn("Valor de mercado estimado", html)
+        self.assertIn("Valor de referencia", html)
         self.assertNotIn("acm_diff_[", html)
 
     def test_50_ai_explanation_does_not_change_numbers(self):
@@ -986,6 +1006,131 @@ class AcmTests(unittest.TestCase):
         )
         self.assertEqual(filtered["intent"], ACM_FILTER_COMPARABLES)
 
+    def test_62_jrh_start_from_operation_reference(self):
+        com = f"COM-{int(self.target_op):06d}"
+        result = ask_jrh(
+            f"haceme un ACM de {com}",
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            language="es",
+            session={},
+        )
+        self.assertEqual(result["intent"], START_ACM)
+        self.assertTrue(result.get("wrote"))
+        self.assertEqual(result["entity"].get("kind"), "acm")
+        self.assertIn("Libertador 4200", result.get("data", {}).get("address") or "")
+
+    def test_63_jrh_start_from_operation_address(self):
+        result = ask_jrh(
+            "haceme un ACM de la operación de Av. Libertador 4200",
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            language="es",
+            session={},
+        )
+        self.assertEqual(result["intent"], START_ACM)
+        self.assertTrue(result.get("wrote"))
+        self.assertIn("Libertador 4200", result.get("data", {}).get("address") or "")
+
+    def test_64_jrh_ambiguous_operations(self):
+        result = ask_jrh(
+            "haceme un ACM de la operación de Libertador",
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            language="es",
+            session={},
+        )
+        self.assertEqual(result["intent"], START_ACM)
+        self.assertFalse(result.get("wrote"))
+        self.assertGreaterEqual(len(result.get("candidates") or result.get("cards") or []), 2)
+
+    def test_65_missing_area_asks_only_area(self):
+        client = self._login(self.agent_user, ROLE_AGENT, self.org)
+        response = client.get(f"/acm/new?property_id={self.no_area}")
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        self.assertIn("superficie", html.lower())
+        self.assertIn("total_m2", html)
+        created = client.post(
+            f"/acm/new?property_id={self.no_area}",
+            data={"total_m2": "85"},
+            follow_redirects=False,
+        )
+        self.assertEqual(created.status_code, 302)
+        self.assertIn("/acm/", created.headers.get("Location", ""))
+
+    def test_66_exclude_recalculates_from_detail(self):
+        view = self._create()
+        selected = next(row for row in view["comparables"] if row.get("selected"))
+        client = self._login(self.agent_user, ROLE_AGENT, self.org)
+        response = client.post(
+            f"/acm/{view['acm']['id']}/exclude",
+            data={"comparable_id": selected["id"]},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f"/acm/{view['acm']['id']}", response.headers.get("Location", ""))
+
+    def test_67_download_uses_acm_context(self):
+        view = self._create()
+        session = {
+            "jrh_ai_context": {
+                "last_intent": START_ACM,
+                "last_entity": {"kind": "acm", "id": view["acm"]["id"]},
+                "last_prompt": "",
+                "pending_invoice": {},
+            }
+        }
+        choice = ask_jrh(
+            "descargame el ACM",
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            language="es",
+            session=session,
+        )
+        self.assertEqual(choice["intent"], DOWNLOAD_ACM)
+        self.assertGreaterEqual(len(choice.get("actions") or []), 2)
+        without = ask_jrh(
+            "descargalo sin mis datos",
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            language="es",
+            session=session,
+        )
+        self.assertEqual(without["intent"], DOWNLOAD_ACM)
+        self.assertTrue(without.get("actions"))
+        self.assertEqual(without["actions"][0]["href_args"].get("include_agent"), 0)
+
+    def test_68_pdf_contains_range_and_money(self):
+        from modules.pdf_acm_report import generate_acm_pdf_bytes
+
+        view = self._create()
+        view["agent_contact"] = agent_contact_for_acm(view)
+        payload = generate_acm_pdf_bytes(view, include_agent=True, language="es").read()
+        haystack = _pdf_haystack(payload)
+        from modules.formatting import format_money
+
+        text = haystack.decode("latin-1", "ignore")
+        self.assertIn("USD", text)
+        estimated = format_money(view["acm"]["estimated_value"], currency="USD", language="es")
+        self.assertTrue(
+            estimated in text or estimated.replace("USD ", "") in text
+        )
+
+    def test_69_review_comparables_is_optional(self):
+        view = self._create()
+        client = self._login(self.agent_user, ROLE_AGENT, self.org)
+        html = client.get(f"/acm/{view['acm']['id']}").get_data(as_text=True)
+        self.assertIn("Revisar comparables", html)
+        self.assertIn("acm-hero", html)
+        self.assertNotIn("acm_diff_[", html)
+
 
 if __name__ == "__main__":
     unittest.main()
+

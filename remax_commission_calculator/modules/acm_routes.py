@@ -15,6 +15,7 @@ from modules.acm_service import (
     AcmError,
     add_manual_comparable,
     agent_contact_for_acm,
+    complete_property_area_and_create,
     create_acm_for_property,
     duplicate_acm,
     finalize_acm,
@@ -90,17 +91,38 @@ def register_acm_routes(app, helpers):
                 )
             except AcmError as error:
                 return _handle(error)
+            if (preview.get("quality") or {}).get("can_valuate"):
+                try:
+                    view = create_acm_for_property(
+                        organization_id,
+                        user=user,
+                        property_id=property_id,
+                        language=language,
+                    )
+                except AcmError as error:
+                    return _handle(error)
+                return redirect(url_for("acm_detail", acm_id=view["acm"]["id"]))
             return render_template("acm/new.html", preview=preview)
         try:
-            view = create_acm_for_property(
-                organization_id,
-                user=user,
-                property_id=property_id,
-                language=language,
-            )
+            area = request.form.get("total_m2") or request.form.get("area")
+            if area:
+                view = complete_property_area_and_create(
+                    organization_id,
+                    user=user,
+                    property_id=property_id,
+                    area=area,
+                    language=language,
+                )
+            else:
+                view = create_acm_for_property(
+                    organization_id,
+                    user=user,
+                    property_id=property_id,
+                    language=language,
+                )
         except AcmError as error:
             return _handle(error)
-        return redirect(url_for("acm_comparables", acm_id=view["acm"]["id"]))
+        return redirect(url_for("acm_detail", acm_id=view["acm"]["id"]))
 
     @app.route("/acm/<int:acm_id>")
     def acm_detail(acm_id):
@@ -281,7 +303,26 @@ def register_acm_routes(app, helpers):
             )
         except AcmError as error:
             return _handle(error)
-        return redirect(url_for("acm_comparables", acm_id=view["acm"]["id"]))
+        return redirect(url_for("acm_detail", acm_id=view["acm"]["id"]))
+
+    @app.route("/acm/<int:acm_id>/exclude", methods=["POST"])
+    def acm_exclude(acm_id):
+        user = _agent_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            set_comparable_selected(
+                acm_id,
+                organization_id,
+                user=user,
+                comparable_id=int(request.form.get("comparable_id")),
+                selected=False,
+                language=get_current_language(),
+            )
+        except AcmError as error:
+            return _handle(error)
+        return redirect(url_for("acm_detail", acm_id=acm_id))
 
     @app.route("/acm/<int:acm_id>/pdf")
     def acm_pdf(acm_id):
