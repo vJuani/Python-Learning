@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
-from flask import redirect, render_template, request, url_for
+from datetime import date
+
+from flask import redirect, render_template, request, session, url_for
 
 from modules.agent_productivity import (
     ProductivityError,
     PERIOD_TYPES,
     SUPPORTED_METRICS,
     build_productivity_view,
+    confirm_logged_activity,
     disable_goal,
+    propose_logged_activity,
     require_productivity_agent,
     save_goals,
 )
 from modules.auth import get_current_user, is_guest_session
+
+DRAFT_KEY = "prod_log_draft"
 
 
 def register_productivity_routes(app, helpers):
@@ -51,13 +57,58 @@ def register_productivity_routes(app, helpers):
         period = request.args.get("period") or "daily"
         if period not in PERIOD_TYPES:
             period = "daily"
+        on_date = None
+        try:
+            if request.args.get("day"):
+                on_date = date.fromisoformat(request.args.get("day"))
+        except ValueError:
+            on_date = None
         view = build_productivity_view(
             organization_id,
             user=user,
             language=get_current_language(),
             period=period,
+            on_date=on_date,
+            proposals=session.get(DRAFT_KEY) or [],
         )
         return render_template("productivity/dashboard.html", view=view)
+
+    @app.route("/productivity/log", methods=["POST"])
+    def productivity_log():
+        user = _agent_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            require_productivity_agent(user, organization_id)
+        except ProductivityError:
+            return _forbidden()
+        language = get_current_language()
+        action = request.form.get("action")
+        if action == "parse":
+            session[DRAFT_KEY] = propose_logged_activity(
+                request.form.get("note"),
+                channels=request.form.getlist("channel"),
+                purposes=request.form.getlist("purpose"),
+                language=language,
+            )
+            if not session[DRAFT_KEY]:
+                flash_i18n("prod_identified_empty", "error")
+        elif action == "confirm":
+            created = confirm_logged_activity(
+                organization_id,
+                user=user,
+                proposals=session.get(DRAFT_KEY) or [],
+                language=language,
+            )
+            session.pop(DRAFT_KEY, None)
+            if created:
+                flash_i18n("prod_activity_saved", "success")
+        else:
+            session.pop(DRAFT_KEY, None)
+        period = request.form.get("period") or "daily"
+        day = request.form.get("day") or None
+        return redirect(url_for("productivity_home", period=period, day=day))
 
     @app.route("/productivity/goals", methods=["GET", "POST"])
     def productivity_goals():

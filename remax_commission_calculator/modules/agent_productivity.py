@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from modules.agent_tasks import count_overdue_tasks
+from modules.agent_tasks import complete_task, count_overdue_tasks, create_task
+from modules.database.agent_tasks_repository import list_visits_missing_outcome
 from modules.auth import ROLE_AGENT
 from modules.database.agent_goals_repository import (
     deactivate_agent_goal,
@@ -65,6 +68,47 @@ TASK_TYPE_BY_METRIC = {
     "visits_completed": "visit",
     "meetings_completed": "meeting",
 }
+GAUGE_METRICS = (
+    "contacts_called",
+    "followups_completed",
+    "visits_completed",
+    "meetings_completed",
+    "acms_created",
+    "tasks_completed",
+)
+LOG_CHANNELS = ("call", "meeting", "whatsapp", "visit", "email")
+LOG_PURPOSES = (
+    "follow_up",
+    "prospecting",
+    "valuation",
+    "negotiation",
+    "capture",
+)
+CHANNEL_TO_TASK = {
+    "call": "call",
+    "meeting": "meeting",
+    "visit": "visit",
+    "follow_up": "follow_up",
+    "whatsapp": "other",
+    "email": "other",
+}
+MONTHS_ES = (
+    "",
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+)
+WEEKDAYS_ES = ("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
+WEEKDAYS_EN = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 METRIC_SOURCES = {
     "contacts_called": "agent_tasks.task_type=call AND status=completed, counted on completed_at",
     "followups_completed": "agent_tasks.task_type=follow_up AND status=completed, counted on completed_at",
@@ -359,29 +403,232 @@ def _streak(organization_id, agent_id, daily_goals, tz, now, language):
     }
 
 
-def _week_series(organization_id, agent_id, tz, now):
+def _week_series(organization_id, agent_id, tz, now, language="es"):
     today = _local_today(tz, now)
+    names = WEEKDAYS_ES if language == "es" else WEEKDAYS_EN
     points = []
     for offset in range(6, -1, -1):
         day = today - timedelta(days=offset)
         bounds = period_bounds("daily", tz, now=now, on_date=day)
         activity = collect_activity(organization_id, agent_id, bounds)
+        total = (
+            int(activity["contacts_called"])
+            + int(activity["followups_completed"])
+            + int(activity["visits_completed"])
+            + int(activity["meetings_completed"])
+        )
         points.append(
             {
                 "date": day.isoformat(),
-                "label": day.strftime("%d/%m"),
+                "label": names[day.weekday()],
+                "total": total,
                 "contacts_called": int(activity["contacts_called"]),
                 "followups_completed": int(activity["followups_completed"]),
             }
         )
-    peak = max(
-        (item["contacts_called"] + item["followups_completed"] for item in points),
-        default=0,
-    ) or 1
+    peak = max((item["total"] for item in points), default=0) or 1
     for item in points:
+        item["bar_h"] = int(round(item["total"] / peak * 100))
         item["call_h"] = int(round(item["contacts_called"] / peak * 100))
         item["follow_h"] = int(round(item["followups_completed"] / peak * 100))
     return points
+
+
+def _week_delta(organization_id, agent_id, tz, now, language):
+    today = _local_today(tz, now)
+    this_start = today - timedelta(days=today.weekday())
+    prev_start = this_start - timedelta(days=7)
+    this_week = collect_activity(
+        organization_id, agent_id, period_bounds("weekly", tz, now=now, on_date=this_start)
+    )
+    last_week = collect_activity(
+        organization_id, agent_id, period_bounds("weekly", tz, now=now, on_date=prev_start)
+    )
+    this_total = int(this_week["tasks_completed"])
+    last_total = int(last_week["tasks_completed"])
+    if last_total <= 0:
+        return None
+    pct = int(round((this_total - last_total) / last_total * 100))
+    key = "prod_week_up" if pct >= 0 else "prod_week_down"
+    return {
+        "percent": abs(pct),
+        "up": pct >= 0,
+        "label": translate(key, language=language, n=abs(pct)),
+    }
+
+
+def _date_label(day, language, *, is_today):
+    if language == "es":
+        prefix = "Hoy, " if is_today else ""
+        return f"{prefix}{day.day} de {MONTHS_ES[day.month]} de {day.year}"
+    prefix = "Today, " if is_today else ""
+    return f"{prefix}{day.strftime('%B %d, %Y')}"
+
+
+def _gauges(activity, goals, period, language):
+    period_goals = [goal for goal in goals if goal["period_type"] == period]
+    rows = []
+    for key in GAUGE_METRICS:
+        match = next((goal for goal in period_goals if goal["metric_key"] == key), None)
+        if match is None:
+            match = next((goal for goal in goals if goal["metric_key"] == key), None)
+        current = _as_decimal(activity.get(key))
+        target = _as_decimal(match["target_value"]) if match else Decimal("0")
+        pct = progress_ratio(current, target) if target > 0 else Decimal("0")
+        rows.append(
+            {
+                "metric_key": key,
+                "label": translate(f"prod_metric_{key}", language=language),
+                "current": int(current),
+                "target": int(target) if target > 0 else None,
+                "fraction": (
+                    f"{int(current)}/{int(target)}" if target > 0 else str(int(current))
+                ),
+                "percent": pct,
+                "bar_percent": min(int(pct), 100) if target > 0 else 0,
+            }
+        )
+    return rows
+
+
+def _activity_log(organization_id, agent_id, bounds, tz, language):
+    tasks = list_agent_tasks(
+        organization_id,
+        agent_id=agent_id,
+        statuses=["completed"],
+        limit=80,
+    )
+    start = bounds["start_utc"]
+    end = bounds["end_utc"]
+    rows = []
+    for task in tasks:
+        completed = task.get("completed_at") or ""
+        if not (start <= completed < end):
+            continue
+        local = to_local(completed, tz)
+        try:
+            outcome = json.loads(task.get("outcome_json") or "{}")
+        except (TypeError, ValueError):
+            outcome = {}
+        if not isinstance(outcome, dict):
+            outcome = {}
+        purpose = (
+            outcome.get("purpose")
+            or (task.get("description") or "").strip()
+            or "—"
+        )
+        result = (
+            outcome.get("result")
+            or outcome.get("interest")
+            or translate("agent_task_status_completed", language=language)
+        )
+        rows.append(
+            {
+                "time": local.strftime("%H:%M") if local else "",
+                "contact": task.get("contact_name") or "—",
+                "channel": translate(
+                    f"agent_task_type_{task['task_type']}", language=language
+                ),
+                "channel_key": task["task_type"],
+                "purpose": purpose,
+                "result": result,
+            }
+        )
+    rows.sort(key=lambda item: item["time"] or "99:99")
+    return rows
+
+
+def _parse_contact_name(text):
+    match = re.search(
+        r"\bcon\s+([A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ'-]+)",
+        text or "",
+        flags=re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else ""
+
+
+def propose_logged_activity(text, *, channels=None, purposes=None, language="es"):
+    """Map the agent's own words/pills to real task types. No invented contacts."""
+    text = (text or "").strip()
+    selected = [item for item in (channels or []) if item in LOG_CHANNELS]
+    purpose = next((item for item in (purposes or []) if item in LOG_PURPOSES), "")
+    contact = _parse_contact_name(text)
+    if not selected and text:
+        folded = text.lower()
+        if any(word in folded for word in ("llam", "habl")):
+            selected.append("call")
+        if any(word in folded for word in ("reun", "junt", "café", "cafe")):
+            selected.append("meeting")
+        if "visita" in folded:
+            selected.append("visit")
+        if any(word in folded for word in ("whatsapp", "wsp")):
+            selected.append("whatsapp")
+        if any(word in folded for word in ("email", "mail")):
+            selected.append("email")
+    proposals = []
+    for channel in selected:
+        proposals.append(
+            {
+                "channel": channel,
+                "task_type": CHANNEL_TO_TASK[channel],
+                "contact_name": contact,
+                "purpose": purpose,
+                "title": (
+                    f"{translate(f'prod_channel_{channel}', language=language)}"
+                    + (f" · {contact}" if contact else "")
+                ),
+                "purpose_label": (
+                    translate(f"prod_purpose_{purpose}", language=language)
+                    if purpose
+                    else ""
+                ),
+            }
+        )
+    return proposals
+
+
+def confirm_logged_activity(
+    organization_id,
+    *,
+    user,
+    proposals,
+    language="es",
+    now=None,
+):
+    organization_id = require_organization_id(organization_id)
+    user = require_productivity_agent(user, organization_id)
+    tz = organization_timezone(organization_id)
+    instant = now or now_utc()
+    local = instant.astimezone(tz)
+    created = []
+    for item in proposals or []:
+        task_type = CHANNEL_TO_TASK.get(item.get("channel"))
+        if task_type not in ("call", "meeting", "visit", "follow_up", "other"):
+            continue
+        task = create_task(
+            organization_id,
+            user["agent_id"],
+            {
+                "title": item.get("title") or translate(
+                    f"prod_channel_{item.get('channel')}", language=language
+                ),
+                "task_type": task_type,
+                "priority": "normal",
+                "due_date": local.date().isoformat(),
+                "due_time": local.strftime("%H:%M"),
+                "description": item.get("purpose_label") or item.get("purpose") or "",
+                "contact_name": item.get("contact_name") or "",
+            },
+            created_by_user_id=user.get("id"),
+        )
+        complete_task(
+            organization_id,
+            task["id"],
+            agent_id=user["agent_id"],
+            actor_user_id=user.get("id"),
+        )
+        created.append(task)
+    return created
 
 
 def build_productivity_view(
@@ -391,6 +638,8 @@ def build_productivity_view(
     language="es",
     period="daily",
     now=None,
+    on_date=None,
+    proposals=None,
 ):
     organization_id = require_organization_id(organization_id)
     user = require_productivity_agent(user, organization_id)
@@ -399,15 +648,16 @@ def build_productivity_view(
     period = period if period in PERIOD_TYPES else "daily"
     instant = now or now_utc()
     tz = organization_timezone(organization_id)
-    bounds = period_bounds(period, tz, now=instant)
+    today = _local_today(tz, instant)
+    focus = on_date or today
+    bounds = period_bounds(period, tz, now=instant, on_date=focus)
     activity = collect_activity(organization_id, agent_id, bounds)
     goals = list_agent_goals(organization_id, agent_id, active_only=True)
     period_goals = [goal for goal in goals if goal["period_type"] == period]
     rows = [_progress_row(goal, activity, language) for goal in period_goals]
     overdue_count = count_overdue_tasks(organization_id, agent_id=agent_id, now=instant)
-    today = _local_today(tz, instant)
     next_visit = _next_visit_today(organization_id, agent_id, tz, today)
-    daily_bounds = period_bounds("daily", tz, now=instant)
+    daily_bounds = period_bounds("daily", tz, now=instant, on_date=focus if period == "daily" else today)
     daily_activity = activity if period == "daily" else collect_activity(
         organization_id, agent_id, daily_bounds
     )
@@ -417,6 +667,13 @@ def build_productivity_view(
         if goal["period_type"] == "daily"
     ]
     gaps = _gaps_for_period(daily_rows, overdue_count, next_visit, language)
+    missing_visits = list_visits_missing_outcome(
+        organization_id, agent_id=agent_id, limit=5
+    )
+    if missing_visits:
+        gaps.append(
+            translate("prod_gap_visit_confirm", language=language, n=len(missing_visits))
+        )
     suggestions = list(gaps)
     visits_week = [
         row
@@ -433,14 +690,31 @@ def build_productivity_view(
             suggestions.append(
                 translate("prod_tip_visits_done", language=language)
             )
+    step = {"daily": 1, "weekly": 7, "monthly": 31}[period]
+    if period == "monthly":
+        prev_day = (focus.replace(day=1) - timedelta(days=1)).replace(day=1)
+        if focus.month == 12:
+            next_day = focus.replace(year=focus.year + 1, month=1, day=1)
+        else:
+            next_day = focus.replace(month=focus.month + 1, day=1)
+    else:
+        prev_day = focus - timedelta(days=step)
+        next_day = focus + timedelta(days=step)
     return {
         "period": period,
         "bounds": bounds,
         "timezone": str(tz),
+        "focus_date": focus.isoformat(),
+        "is_today": focus == today,
+        "date_label": _date_label(focus, language, is_today=focus == today),
+        "prev_date": prev_day.isoformat(),
+        "next_date": next_day.isoformat() if next_day <= today else "",
         "has_goals": bool(goals),
         "goals": goals,
         "rows": rows,
+        "gauges": _gauges(activity, goals, period, language),
         "activity": activity,
+        "activity_log": _activity_log(organization_id, agent_id, bounds, tz, language),
         "activity_labels": {
             key: translate(f"prod_metric_{key}", language=language)
             for key in COUNT_METRICS
@@ -455,6 +729,7 @@ def build_productivity_view(
         "next_visit": next_visit,
         "gaps": gaps,
         "suggestions": suggestions,
+        "proposals": proposals or [],
         "streak": _streak(
             organization_id,
             agent_id,
@@ -463,13 +738,16 @@ def build_productivity_view(
             instant,
             language,
         ),
-        "week_series": _week_series(organization_id, agent_id, tz, instant),
+        "week_series": _week_series(organization_id, agent_id, tz, instant, language),
+        "week_delta": _week_delta(organization_id, agent_id, tz, instant, language),
         "unfollowed_contacts": {
             "available": False,
             "reason": "prod_contacts_followup_hook",
         },
         "sources": METRIC_SOURCES,
         "supported_metrics": SUPPORTED_METRICS,
+        "log_channels": LOG_CHANNELS,
+        "log_purposes": LOG_PURPOSES,
     }
 
 

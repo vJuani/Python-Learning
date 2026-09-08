@@ -11,17 +11,26 @@
 <section class="prod-hero">
     <div>
         <p class="prod-kicker">{{ t('prod_title') }}</p>
-        <h2>{{ t('prod_progress') }}</h2>
-        <p class="field-help">{{ t('prod_period_tz', tz=view.timezone) }}</p>
+        <h2>{{ t('prod_headline') }}</h2>
+        <p class="prod-tagline">{{ t('prod_tagline') }}</p>
     </div>
-    <a href="{{ url_for('productivity_goals') }}" class="btn btn-secondary">{{ t('prod_configure') }}</a>
+    <div class="prod-toolbar">
+        <div class="prod-date">
+            {% if view.prev_date %}
+            <a class="prod-date__nav" href="{{ url_for('productivity_home', period=view.period, day=view.prev_date) }}" aria-label="{{ t('prod_prev') }}">‹</a>
+            {% endif %}
+            <span>{{ view.date_label }}</span>
+            {% if view.next_date %}
+            <a class="prod-date__nav" href="{{ url_for('productivity_home', period=view.period, day=view.next_date) }}" aria-label="{{ t('prod_next') }}">›</a>
+            {% endif %}
+        </div>
+        <nav class="prod-tabs">
+            <a href="{{ url_for('productivity_home', period='daily', day=view.focus_date) }}" class="{% if view.period == 'daily' %}is-active{% endif %}">{{ t('prod_tab_today') }}</a>
+            <a href="{{ url_for('productivity_home', period='weekly', day=view.focus_date) }}" class="{% if view.period == 'weekly' %}is-active{% endif %}">{{ t('prod_tab_week') }}</a>
+            <a href="{{ url_for('productivity_home', period='monthly', day=view.focus_date) }}" class="{% if view.period == 'monthly' %}is-active{% endif %}">{{ t('prod_tab_month') }}</a>
+        </nav>
+    </div>
 </section>
-
-<nav class="prod-tabs">
-    <a href="{{ url_for('productivity_home', period='daily') }}" class="{% if view.period == 'daily' %}is-active{% endif %}">{{ t('prod_tab_today') }}</a>
-    <a href="{{ url_for('productivity_home', period='weekly') }}" class="{% if view.period == 'weekly' %}is-active{% endif %}">{{ t('prod_tab_week') }}</a>
-    <a href="{{ url_for('productivity_home', period='monthly') }}" class="{% if view.period == 'monthly' %}is-active{% endif %}">{{ t('prod_tab_month') }}</a>
-</nav>
 
 {% if not view.has_goals %}
 <section class="prod-empty">
@@ -30,83 +39,187 @@
 </section>
 {% endif %}
 
-<section class="prod-cards">
-    {% for row in view.rows %}
-    <article class="prod-card{% if row.done %} prod-card--done{% endif %}">
-        <span>{{ row.label }}</span>
-        <strong>{{ row.current_label }} / {{ row.target_label }}</strong>
-        <p class="prod-pct">{{ row.percent }}%</p>
-        <div class="prod-bar" aria-hidden="true"><i style="width: {{ row.bar_percent }}%"></i></div>
-    </article>
-    {% endfor %}
-</section>
-
-<section class="prod-activity">
-    <h3>{{ t('prod_activity_real') }}</h3>
-    <ul class="prod-activity-grid">
-        <li><span>{{ t('prod_metric_contacts_called') }}</span><strong>{{ activity.contacts_called }}</strong></li>
-        <li><span>{{ t('prod_metric_followups_completed') }}</span><strong>{{ activity.followups_completed }}</strong></li>
-        <li><span>{{ t('prod_metric_visits_completed') }}</span><strong>{{ activity.visits_completed }}</strong></li>
-        <li><span>{{ t('prod_metric_meetings_completed') }}</span><strong>{{ activity.meetings_completed }}</strong></li>
-        <li><span>{{ t('prod_metric_tasks_completed') }}</span><strong>{{ activity.tasks_completed }}</strong></li>
-        <li><span>{{ t('prod_metric_new_contacts') }}</span><strong>{{ activity.new_contacts }}</strong></li>
-        <li><span>{{ t('prod_metric_acms_created') }}</span><strong>{{ activity.acms_created }}</strong></li>
-        {% if view.period != 'daily' %}
-        <li><span>{{ t('prod_metric_properties_captured') }}</span><strong>{{ activity.properties_captured }}</strong></li>
-        <li><span>{{ t('prod_metric_operations_closed') }}</span><strong>{{ activity.operations_closed }}</strong></li>
-        <li><span>{{ t('prod_ops_active') }}</span><strong>{{ view.operations_active }}</strong></li>
-        {% endif %}
-    </ul>
-    {% if view.period == 'monthly' %}
-    <div class="prod-money">
-        <p><span>{{ t('prod_metric_commissions_credited') }}</span> {% if view.money.commissions %}{{ view.money.commissions|join(' · ') }}{% else %}—{% endif %}</p>
-        <p><span>{{ t('prod_metric_invoiced_amount') }}</span> {% if view.money.invoiced %}{{ view.money.invoiced|join(' · ') }}{% else %}—{% endif %}</p>
-        <p><span>{{ t('prod_metric_collected_amount') }}</span> {% if view.money.collected %}{{ view.money.collected|join(' · ') }}{% else %}—{% endif %}</p>
-    </div>
-    {% endif %}
-</section>
-
-{% if view.period == 'daily' %}
-<p class="prod-mobile-jump hide-desktop"><a href="#prod-gaps">{{ t('prod_missing_today') }}</a></p>
-<section class="prod-panel" id="prod-gaps">
-    <h3>{{ t('prod_missing_today') }}</h3>
-    {% if view.gaps %}
-    <ul class="prod-gaps">
-        {% for item in view.gaps %}
-        <li>{{ item }}</li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p class="field-help">{{ t('prod_day_complete') }}</p>
-    {% endif %}
-    {% if view.streak %}
-    <p class="prod-streak">{{ view.streak.label }}</p>
-    {% endif %}
-</section>
-{% endif %}
-
-{% if view.period == 'weekly' and view.week_series %}
-<section class="prod-panel">
-    <h3>{{ t('prod_week_chart') }}</h3>
-    <div class="prod-chart">
-        {% for point in view.week_series %}
-        <div class="prod-chart__col">
-            <div class="prod-chart__bars">
-                <i class="prod-chart__call" style="height: {{ point.call_h }}%"></i>
-                <i class="prod-chart__follow" style="height: {{ point.follow_h }}%"></i>
-            </div>
-            <span>{{ point.label }}</span>
+<section class="prod-row prod-row--jrh">
+    <form method="post" action="{{ url_for('productivity_log') }}" class="prod-card prod-jrh">
+        <input type="hidden" name="action" value="parse">
+        <input type="hidden" name="period" value="{{ view.period }}">
+        <input type="hidden" name="day" value="{{ view.focus_date }}">
+        <h3>{{ t('prod_tell_jrh') }}</h3>
+        <textarea name="note" rows="3" placeholder="{{ t('prod_tell_placeholder') }}">{{ request.form.note or '' }}</textarea>
+        <p class="prod-pills-label">{{ t('prod_channel') }}</p>
+        <div class="prod-pills">
+            {% for key in view.log_channels %}
+            <label class="prod-pill">
+                <input type="checkbox" name="channel" value="{{ key }}">
+                <span>{{ t('prod_channel_' ~ key) }}</span>
+            </label>
+            {% endfor %}
         </div>
-        {% endfor %}
-    </div>
-    <p class="field-help">{{ t('prod_week_chart_help') }}</p>
-</section>
-{% endif %}
+        <p class="prod-pills-label">{{ t('prod_purpose') }}</p>
+        <div class="prod-pills">
+            {% for key in view.log_purposes %}
+            <label class="prod-pill">
+                <input type="checkbox" name="purpose" value="{{ key }}">
+                <span>{{ t('prod_purpose_' ~ key) }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-secondary">{{ t('prod_identify') }}</button>
+    </form>
 
-<section class="prod-actions">
-    <a href="{{ url_for('contacts_index') }}" class="btn btn-secondary">{{ t('prod_action_followup') }}</a>
-    <a href="{{ url_for('agenda_index') }}" class="btn btn-secondary">{{ t('prod_action_tasks') }}</a>
-    <a href="{{ url_for('acm_list') }}" class="btn btn-secondary">{{ t('prod_action_acm') }}</a>
-    <a href="{{ url_for('contacts_index') }}" class="btn btn-secondary">{{ t('prod_action_needs') }}</a>
+    <section class="prod-card prod-identify">
+        <h3>{{ t('prod_identified') }}</h3>
+        {% if view.proposals %}
+        <ul class="prod-proposals">
+            {% for item in view.proposals %}
+            <li>
+                <strong>{{ item.title }}</strong>
+                {% if item.purpose_label %}<span>{{ t('prod_purpose') }}: {{ item.purpose_label }}</span>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="prod-identify__actions">
+            <form method="post" action="{{ url_for('productivity_log') }}">
+                <input type="hidden" name="action" value="clear">
+                <input type="hidden" name="period" value="{{ view.period }}">
+                <input type="hidden" name="day" value="{{ view.focus_date }}">
+                <button type="submit" class="btn btn-secondary">{{ t('prod_review') }}</button>
+            </form>
+            <form method="post" action="{{ url_for('productivity_log') }}">
+                <input type="hidden" name="action" value="confirm">
+                <input type="hidden" name="period" value="{{ view.period }}">
+                <input type="hidden" name="day" value="{{ view.focus_date }}">
+                <button type="submit" class="btn btn-primary">{{ t('prod_confirm_n', n=view.proposals|length) }}</button>
+            </form>
+        </div>
+        {% else %}
+        <p class="field-help">{{ t('prod_identified_empty') }}</p>
+        {% endif %}
+    </section>
+</section>
+
+<section class="prod-row prod-row--mid">
+    <section class="prod-card">
+        <h3>{{ t('prod_progress_today') }}</h3>
+        <div class="prod-gauges">
+            {% for ring in view.gauges %}
+            <article class="prod-gauge prod-gauge--{{ ring.metric_key }}">
+                <div class="prod-ring" style="--pct: {{ ring.bar_percent }}">
+                    <svg viewBox="0 0 36 36" aria-hidden="true">
+                        <circle class="prod-ring__track" cx="18" cy="18" r="15.5" pathLength="100"></circle>
+                        <circle class="prod-ring__value" cx="18" cy="18" r="15.5" pathLength="100"></circle>
+                    </svg>
+                    <strong>{{ ring.fraction }}</strong>
+                </div>
+                <span>{{ ring.label }}</span>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    <section class="prod-card" id="prod-gaps">
+        <h3>{{ t('prod_missing_title') }}</h3>
+        {% if view.gaps %}
+        <ul class="prod-gaps">
+            {% for item in view.gaps %}
+            <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="field-help">{{ t('prod_day_complete') }}</p>
+        {% endif %}
+        {% if view.streak %}
+        <p class="prod-streak">{{ view.streak.label }}</p>
+        {% endif %}
+    </section>
+</section>
+
+<section class="prod-row prod-row--bottom">
+    <section class="prod-card prod-log">
+        <h3>{{ t('prod_activity_today') }}</h3>
+        {% if view.activity_log %}
+        <div class="prod-table-wrap">
+            <table class="prod-table">
+                <thead>
+                    <tr>
+                        <th>{{ t('prod_col_time') }}</th>
+                        <th>{{ t('prod_col_contact') }}</th>
+                        <th>{{ t('prod_col_channel') }}</th>
+                        <th>{{ t('prod_col_purpose') }}</th>
+                        <th>{{ t('prod_col_result') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in view.activity_log %}
+                    <tr>
+                        <td>{{ row.time }}</td>
+                        <td>{{ row.contact }}</td>
+                        <td><span class="prod-channel prod-channel--{{ row.channel_key }}">{{ row.channel }}</span></td>
+                        <td><span class="prod-purpose">{{ row.purpose }}</span></td>
+                        <td><span class="prod-result">{{ row.result }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <ul class="prod-log-cards">
+            {% for row in view.activity_log %}
+            <li>
+                <strong>{{ row.time }} · {{ row.contact }}</strong>
+                <span>{{ row.channel }} · {{ row.purpose }}</span>
+                <em>{{ row.result }}</em>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="field-help">{{ t('prod_log_empty') }}</p>
+        {% endif %}
+        {% if view.period == 'monthly' %}
+        <div class="prod-money">
+            <p><span>{{ t('prod_metric_commissions_credited') }}</span> {% if view.money.commissions %}{{ view.money.commissions|join(' · ') }}{% else %}—{% endif %}</p>
+            <p><span>{{ t('prod_metric_invoiced_amount') }}</span> {% if view.money.invoiced %}{{ view.money.invoiced|join(' · ') }}{% else %}—{% endif %}</p>
+            <p><span>{{ t('prod_metric_collected_amount') }}</span> {% if view.money.collected %}{{ view.money.collected|join(' · ') }}{% else %}—{% endif %}</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <div class="prod-stack">
+        <section class="prod-card">
+            <div class="prod-card__head">
+                <h3>{{ t('prod_active_goals') }}</h3>
+                <a href="{{ url_for('productivity_goals') }}">{{ t('prod_configure') }}</a>
+            </div>
+            {% if view.rows %}
+            <ul class="prod-goal-bars">
+                {% for row in view.rows %}
+                <li>
+                    <div>
+                        <span>{{ row.label }}</span>
+                        <strong>{{ row.current_label }}/{{ row.target_label }}</strong>
+                    </div>
+                    <div class="prod-bar" aria-hidden="true"><i style="width: {{ row.bar_percent }}%"></i></div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="field-help">{{ t('prod_empty_goals') }}</p>
+            {% endif %}
+        </section>
+        <section class="prod-card">
+            <h3>{{ t('prod_week_chart') }}</h3>
+            <div class="prod-chart">
+                {% for point in view.week_series %}
+                <div class="prod-chart__col">
+                    <div class="prod-chart__bars">
+                        <i class="prod-chart__total" style="height: {{ point.bar_h }}%"></i>
+                    </div>
+                    <span>{{ point.label }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% if view.week_delta %}
+            <p class="prod-delta{% if not view.week_delta.up %} is-down{% endif %}">{{ view.week_delta.label }}</p>
+            {% endif %}
+        </section>
+    </div>
 </section>
 {% endblock %}

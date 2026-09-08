@@ -20,6 +20,7 @@ from modules.agent_productivity import (  # noqa: E402
     build_productivity_view,
     jrh_productivity_answer,
     progress_ratio,
+    propose_logged_activity,
     require_productivity_agent,
     save_goals,
 )
@@ -446,6 +447,19 @@ class AgentProductivityTests(unittest.TestCase):
         html = response.get_data(as_text=True)
         self.assertIn("prod-hero", html)
         self.assertIn("Hoy", html)
+        self.assertIn("prod-gauges", html)
+        self.assertIn("Contale a JRH", html)
+        self.assertIn("Qué te falta hoy", html)
+
+    def test_25_jrh_log_parses_real_channels(self):
+        proposals = propose_logged_activity(
+            "Hoy hablé con Ro y me junté a tomar un café con ella",
+            language="es",
+        )
+        channels = {item["channel"] for item in proposals}
+        self.assertIn("call", channels)
+        self.assertIn("meeting", channels)
+        self.assertTrue(all(item["contact_name"] == "Ro" for item in proposals))
 
     def test_23_migration_idempotent(self):
         migrate_agent_goals_sqlite()
