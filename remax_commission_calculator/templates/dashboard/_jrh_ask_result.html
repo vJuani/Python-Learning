@@ -1,47 +1,70 @@
 {% if jrh_ask %}
-<article class="jrh-ask__result" data-status="{{ jrh_ask.status }}">
-    {% if jrh_ask.message %}
-    <p class="jrh-ask__message">{{ jrh_ask.message }}</p>
+{% set prompt = (jrh_ask.data.source_prompt if jrh_ask.data else '') %}
+{% set initials = ((current_user.first_name or current_user.username or 'U')[0:1])|upper %}
+<div class="jrh-chat">
+    {% if prompt %}
+    <article class="jrh-chat__row is-user">
+        <div class="jrh-chat__avatar is-user" aria-hidden="true">{{ initials }}</div>
+        <div>
+            <p class="jrh-chat__meta">{{ t('jrh_ask_you') }}{% if jrh_now_label %} · {{ jrh_now_label }}{% endif %}</p>
+            <div class="jrh-chat__bubble">{{ prompt }}</div>
+        </div>
+    </article>
     {% endif %}
-    {% if jrh_ask.data and jrh_ask.data.empty_hint %}
-    <p class="jrh-ask__hint">{{ jrh_ask.data.empty_hint }}</p>
-    {% endif %}
-    {% if jrh_ask.summary and jrh_ask.summary != jrh_ask.message %}
-    <p class="jrh-ask__summary">{{ jrh_ask.summary }}</p>
-    {% endif %}
-    {% if jrh_ask.cards %}
-    <ul class="jrh-ask__cards">
-        {% for card in jrh_ask.cards %}
-        <li>
-            <strong>{{ card.title }}</strong>
-            {% if card.subtitle %}<span>{{ card.subtitle }}</span>{% endif %}
-            {% if card.meta %}<span>{{ card.meta }}</span>{% endif %}
-            {% if card.detail %}<span>{{ card.detail }}</span>{% endif %}
-            {% if card.href %}
-            <a href="{{ card.href }}">{{ card.cta or (t(card.cta_key) if card.cta_key else t('jrh_ai_view_property')) }}</a>
+    <article class="jrh-chat__row" data-status="{{ jrh_ask.status }}">
+        <div class="jrh-chat__avatar">
+            {% with variant='avatar', width=72, height=72 %}
+            {% include "dashboard/_jrh_mascot.html" %}
+            {% endwith %}
+        </div>
+        <div>
+            <p class="jrh-chat__meta">{{ t('jrh_ia_label') }}{% if jrh_now_label %} · {{ jrh_now_label }}{% endif %}</p>
+            <div class="jrh-chat__bubble">
+                {% if jrh_ask.message %}
+                <p>{{ jrh_ask.message }}</p>
+                {% endif %}
+                {% if jrh_ask.data and jrh_ask.data.empty_hint %}
+                <p>{{ jrh_ask.data.empty_hint }}</p>
+                {% endif %}
+                {% if jrh_ask.summary and jrh_ask.summary != jrh_ask.message %}
+                <p>{{ jrh_ask.summary }}</p>
+                {% endif %}
+            </div>
+            {% if jrh_ask.cards %}
+            <ul class="jrh-chat__cards">
+                {% for card in jrh_ask.cards %}
+                <li>
+                    <strong>{{ card.title }}</strong>
+                    {% if card.subtitle %}<span>{{ card.subtitle }}</span>{% endif %}
+                    {% if card.meta %}<span>{{ card.meta }}</span>{% endif %}
+                    {% if card.detail %}<span>{{ card.detail }}</span>{% endif %}
+                    {% if card.href %}
+                    <a href="{{ card.href }}">{{ card.cta or (t(card.cta_key) if card.cta_key else t('jrh_ai_view_property')) }}</a>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
             {% endif %}
-        </li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-    {% if jrh_ask.candidates %}
-    <ul class="jrh-result__candidates">
-        {% for candidate in jrh_ask.candidates %}
-        <li>{{ candidate.name }}{% if candidate.amount %} · {{ candidate.currency }} {{ candidate.amount }}{% endif %}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-    <div class="jrh-ask__actions">
-        {% for action in jrh_ask.actions %}
-        {% if action.href %}
-        <a class="btn btn-small btn-primary" href="{{ action.href }}">{{ action.label or t(action.label_key) }}</a>
-        {% endif %}
-        {% endfor %}
-        {% if jrh_ask.confirm_required and jrh_ask.intent == 'CREATE_TASK' %}
-        <form method="post" action="{{ url_for('jrh_ask_confirm') }}">
-            <button type="submit" class="btn btn-small btn-primary">{{ t('jrh_ai_confirm_task') }}</button>
-        </form>
-        {% endif %}
-    </div>
-</article>
+            {% if jrh_ask.candidates %}
+            <ul class="jrh-chat__cards">
+                {% for candidate in jrh_ask.candidates %}
+                <li>{{ candidate.name }}{% if candidate.amount %} · {{ candidate.currency }} {{ candidate.amount }}{% endif %}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            <div class="jrh-chat__actions jrh-ask__actions">
+                {% for action in jrh_ask.actions %}
+                {% if action.href %}
+                <a class="btn btn-small btn-primary" href="{{ action.href }}">{{ action.label or t(action.label_key) }}</a>
+                {% endif %}
+                {% endfor %}
+                {% if jrh_ask.confirm_required %}
+                <form method="post" action="{{ url_for('jrh_ask_confirm') }}">
+                    <button type="submit" class="btn btn-small btn-primary">{{ t('jrh_ai_confirm_task') }}</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </article>
+</div>
 {% endif %}

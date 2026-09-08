@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 420" fill="none" role="img" aria-label="JRH">
+  <defs>
+    <linearGradient id="jrhHeroBody" x1="80" y1="40" x2="260" y2="390">
+      <stop offset="0" stop-color="#16325C"/>
+      <stop offset="1" stop-color="#0A1633"/>
+    </linearGradient>
+    <linearGradient id="jrhHeroVisor" x1="90" y1="130" x2="230" y2="190">
+      <stop offset="0" stop-color="#4C8DFF"/>
+      <stop offset="1" stop-color="#0D47FF"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="160" cy="392" rx="78" ry="12" fill="#0D47FF" opacity=".12"/>
+  <rect x="108" y="28" width="104" height="18" rx="9" fill="#0A1633"/>
+  <circle cx="160" cy="22" r="10" fill="#0D47FF"/>
+  <rect x="62" y="58" width="196" height="250" rx="48" fill="url(#jrhHeroBody)"/>
+  <rect x="86" y="118" width="148" height="62" rx="31" fill="url(#jrhHeroVisor)"/>
+  <circle cx="128" cy="149" r="8" fill="#E8F0FF"/>
+  <circle cx="192" cy="149" r="8" fill="#E8F0FF"/>
+  <rect x="118" y="214" width="84" height="8" rx="4" fill="#33415C"/>
+  <rect x="36" y="168" width="28" height="86" rx="14" fill="#111F3D"/>
+  <rect x="256" y="168" width="28" height="86" rx="14" fill="#111F3D"/>
+  <rect x="92" y="318" width="56" height="58" rx="18" fill="#0A1633"/>
+  <rect x="172" y="318" width="56" height="58" rx="18" fill="#0A1633"/>
+</svg>

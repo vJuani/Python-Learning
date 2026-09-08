@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="JRH">
+  <defs>
+    <linearGradient id="jrhAvBody" x1="20" y1="8" x2="110" y2="120">
+      <stop offset="0" stop-color="#16325C"/>
+      <stop offset="1" stop-color="#0A1633"/>
+    </linearGradient>
+  </defs>
+  <rect x="22" y="18" width="84" height="92" rx="28" fill="url(#jrhAvBody)"/>
+  <rect x="50" y="8" width="28" height="12" rx="6" fill="#0A1633"/>
+  <circle cx="64" cy="8" r="6" fill="#0D47FF"/>
+  <rect x="36" y="42" width="56" height="24" rx="12" fill="#0D47FF"/>
+  <circle cx="50" cy="54" r="4" fill="#E8F0FF"/>
+  <circle cx="78" cy="54" r="4" fill="#E8F0FF"/>
+</svg>

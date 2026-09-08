@@ -556,6 +556,46 @@ class JrhAiTests(unittest.TestCase):
         self.assertIn("is-mobile", body)
         self.assertIn("Preguntale a JRH", body)
 
+    def test_19b_legacy_interpret_get_uses_new_ui(self):
+        client = self._login("jrh_ai_agent")
+        page = client.get("/jrh/interpret", follow_redirects=True)
+        body = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("jrh-studio", body)
+        self.assertNotIn("jrh-ask__form", body)
+        self.assertNotIn("QUERY_", body)
+
+    def test_19c_agent_sees_acm_quick_action(self):
+        client = self._login("jrh_ai_agent")
+        body = client.get("/jrh").get_data(as_text=True)
+        self.assertIn("data-jrh-acm", body)
+        self.assertIn("Crear ACM", body)
+
+    def test_19d_staff_does_not_see_acm_action(self):
+        client = self._login("jrh_ai_admin")
+        body = client.get("/jrh").get_data(as_text=True)
+        self.assertNotIn("data-jrh-acm", body)
+        self.assertIn("jrh-studio", body)
+
+    def test_19e_conversation_and_dark_motion_hooks(self):
+        client = self._login("jrh_ai_agent")
+        page = client.get("/jrh")
+        body = page.get_data(as_text=True)
+        self.assertIn("jrh-ask-page.css", body)
+        css = Path(__file__).resolve().parents[1].joinpath("static", "css", "jrh-ask-page.css").read_text(encoding="utf-8")
+        self.assertIn("prefers-reduced-motion", css)
+        self.assertIn("[data-theme=\"dark\"]", css)
+        asked = client.post(
+            "/jrh",
+            data={"prompt": "mostrame qué propiedades disponibles tengo en capital"},
+        )
+        asked_body = asked.get_data(as_text=True)
+        self.assertEqual(asked.status_code, 200)
+        self.assertIn("jrh-chat", asked_body)
+        self.assertIn("Libertador", asked_body)
+        self.assertNotIn("QUERY_PROPERTIES", asked_body)
+        self.assertNotIn("Intent detected", asked_body)
+
     def test_20_no_obvious_n_plus_one(self):
         for index in range(6):
             add_property(

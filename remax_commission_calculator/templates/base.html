@@ -505,6 +505,21 @@
     </footer>
     </div>
 
+    {% if current_user and not is_guest_session() %}
+    <a class="jrh-float" href="{{ url_for('jrh_ask') }}#jrh-ask-prompt" data-jrh-float>
+        <img
+            src="{{ url_for('static', filename='branding/jrh-ai/jrh-bot-floating.svg') }}"
+            alt=""
+            width="48"
+            height="48"
+        >
+        <div>
+            <strong>{{ t('jrh_float_need') }}</strong>
+            <span>{{ t('jrh_ask_online') }}</span>
+        </div>
+    </a>
+    {% endif %}
+
     {% include "_mobile_bottom_nav.html" %}
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>

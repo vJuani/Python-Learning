@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from flask import abort, render_template, request, session, url_for
+from flask import abort, redirect, render_template, request, session, url_for
 
 from modules.auth import (
     get_current_user,
@@ -122,9 +122,40 @@ def register_jrh_routes(app, helpers):
     get_agent_home_context = helpers["get_agent_home_context"]
     flash_i18n = helpers["flash_i18n"]
 
-    @app.route("/jrh/interpret", methods=["POST"])
+    def _ask_page(user, organization_id, agent_id, *, jrh_ask=None, jrh_result=None, is_mobile=False):
+        from modules.jrh_home import build_agent_home
+        from modules.organization_time import now_utc, organization_timezone
+
+        home = None
+        if is_agent(user) and agent_id:
+            home = build_agent_home(
+                organization_id,
+                user=user,
+                agent_id=agent_id,
+                language=get_current_language(),
+            )
+        first_name = (
+            (user or {}).get("first_name")
+            or ((user or {}).get("username") or "")
+        ).strip().split(" ")[0]
+        tz = organization_timezone(organization_id)
+        now_label = now_utc().astimezone(tz).strftime("%H:%M")
+        return render_template(
+            "dashboard/jrh_ask.html",
+            jrh_ask=jrh_ask,
+            jrh_result=jrh_result,
+            is_mobile=is_mobile,
+            jrh_home=home,
+            jrh_first_name=first_name,
+            jrh_can_acm=bool(is_agent(user) and agent_id),
+            jrh_now_label=now_label,
+        )
+
+    @app.route("/jrh/interpret", methods=["GET", "POST"])
     @login_required
     def jrh_interpret():
+        if request.method == "GET":
+            return redirect(url_for("jrh_ask"))
         if is_guest_session():
             abort(403)
         user = get_current_user()
@@ -146,13 +177,11 @@ def register_jrh_routes(app, helpers):
                         session=session,
                     )
                 )
-                return render_template(
-                    "dashboard/home_agent.html",
-                    **get_agent_home_context(
-                        organization_id,
-                        agent_id,
-                        jrh_ask=result,
-                    ),
+                return _ask_page(
+                    user,
+                    organization_id,
+                    agent_id,
+                    jrh_ask=result,
                 )
             result = attach_intent_urls(
                 interpret_jrh_request(
@@ -169,13 +198,11 @@ def register_jrh_routes(app, helpers):
         except Exception:
             flash_i18n("jrh_err_generic", "error")
             result = None
-        return render_template(
-            "dashboard/home_agent.html",
-            **get_agent_home_context(
-                organization_id,
-                agent_id,
-                jrh_result=result,
-            ),
+        return _ask_page(
+            user,
+            organization_id,
+            agent_id,
+            jrh_result=result,
         )
 
     def attach_ask_urls(result):
@@ -242,8 +269,10 @@ def register_jrh_routes(app, helpers):
                 )
             except Exception:
                 flash_i18n("jrh_err_generic", "error")
-        return render_template(
-            "dashboard/jrh_ask.html",
+        return _ask_page(
+            user,
+            organization_id,
+            agent_id,
             jrh_ask=result,
             is_mobile=bool(request.args.get("mobile")),
         )
@@ -269,8 +298,10 @@ def register_jrh_routes(app, helpers):
                 language=get_current_language(),
             )
         )
-        return render_template(
-            "dashboard/jrh_ask.html",
+        return _ask_page(
+            user,
+            organization_id,
+            agent_id,
             jrh_ask=result,
         )
 

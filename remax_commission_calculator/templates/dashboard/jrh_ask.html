@@ -1,44 +1,182 @@
 {% extends "base.html" %}
 
-{% block body_class %}is-settings-page is-jrh-ask-page{% if is_mobile %} is-mobile{% endif %} {% endblock %}
+{% block body_class %}is-jrh-ask-page{% if is_mobile %} is-mobile{% endif %} {% endblock %}
 
 {% block title %}{{ t('jrh_ask_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-one.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-ask-page.css') }}">
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/jrh-voice.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/jrh-ask-page.js') }}" defer></script>
 {% endblock %}
 
 {% block content %}
-<section class="jrh-ask" data-jrh-ask>
-    <p class="agenda-hero__kicker">{{ t('jrh_ia_label') }}</p>
-    <h1>{{ t('jrh_ask_title') }}</h1>
-    <form class="jrh-ask__form" method="post" action="{{ url_for('jrh_ask') }}" data-jrh-interpret>
-        <label class="sr-only" for="jrh-ask-prompt">{{ t('jrh_ask_placeholder') }}</label>
-        <input
-            id="jrh-ask-prompt"
-            class="jrh-hero__input"
-            type="text"
-            name="prompt"
-            placeholder="{{ t('jrh_ask_placeholder') }}"
-            value="{{ (jrh_ask.data.source_prompt if jrh_ask and jrh_ask.data else '') }}"
-            autocomplete="off"
-            required
-        >
-        <button type="submit" class="btn btn-primary">{{ t('jrh_hero_submit') }}</button>
-    </form>
-    <ul class="jrh-hero__examples">
-        <li><button type="button" data-jrh-example="{{ t('jrh_ask_ex_pending') }}">{{ t('jrh_ask_ex_pending') }}</button></li>
-        <li><button type="button" data-jrh-example="{{ t('jrh_ask_ex_agenda') }}">{{ t('jrh_ask_ex_agenda') }}</button></li>
-        <li><button type="button" data-jrh-example="{{ t('jrh_ask_ex_property') }}">{{ t('jrh_ask_ex_property') }}</button></li>
-        <li><button type="button" data-jrh-example="{{ t('jrh_ask_ex_invoice') }}">{{ t('jrh_ask_ex_invoice') }}</button></li>
-        <li><button type="button" data-jrh-example="{{ t('jrh_ask_ex_account') }}">{{ t('jrh_ask_ex_account') }}</button></li>
-    </ul>
+{% set home = jrh_home or {} %}
+{% set today = home.today or {} %}
+{% set first = jrh_first_name or (current_user.first_name if current_user else '') or '' %}
+<section
+    class="jrh-studio"
+    data-jrh-ask
+    data-jrh-studio
+    data-placeholders="{{ t('jrh_ask_ph_acm') }}|{{ t('jrh_ask_ph_properties') }}|{{ t('jrh_ask_ph_pending') }}|{{ t('jrh_ask_ph_invoice') }}|{{ t('jrh_ask_ph_agenda') }}"
+>
+    <header class="jrh-studio__hero">
+        <div>
+            <p class="jrh-studio__kicker">{{ t('jrh_ia_label') }}</p>
+            <h1 class="jrh-studio__title">{{ t('jrh_ask_title') }}</h1>
+            <p class="jrh-studio__lead">{{ t('jrh_ask_subtitle') }}</p>
+            <ul class="jrh-studio__badges">
+                <li>{{ t('jrh_ask_badge_data') }}</li>
+                <li>{{ t('jrh_ask_badge_live') }}</li>
+                <li>{{ t('jrh_ask_badge_confirm') }}</li>
+            </ul>
+            <form class="jrh-studio__form" method="post" action="{{ url_for('jrh_ask') }}" data-jrh-interpret>
+                <label class="sr-only" for="jrh-ask-prompt">{{ t('jrh_ask_placeholder') }}</label>
+                <div class="jrh-studio__field">
+                    <input
+                        id="jrh-ask-prompt"
+                        class="jrh-studio__input"
+                        type="text"
+                        name="prompt"
+                        data-jrh-ask-input
+                        placeholder="{{ t('jrh_ask_ph_acm') }}"
+                        value="{{ (jrh_ask.data.source_prompt if jrh_ask and jrh_ask.data else (jrh_result.prompt if jrh_result else '')) }}"
+                        autocomplete="off"
+                        required
+                    >
+                    <button
+                        type="button"
+                        class="jrh-studio__mic"
+                        data-jrh-voice
+                        aria-label="{{ t('jrh_voice_talk') }}"
+                    >🎙</button>
+                    <button type="submit" class="jrh-studio__ask" data-jrh-type-submit>{{ t('jrh_ask_submit') }}</button>
+                </div>
+                <p
+                    class="jrh-studio__status"
+                    data-jrh-voice-status
+                    data-listening="{{ t('jrh_voice_listening') }}"
+                    data-transcribing="{{ t('jrh_voice_transcribing') }}"
+                    data-heard="{{ t('jrh_voice_heard') }}"
+                    hidden
+                ></p>
+                <p class="jrh-studio__unsupported" data-jrh-voice-unsupported hidden>{{ t('jrh_voice_unsupported') }}</p>
+                <p class="jrh-studio__processing" data-jrh-processing data-agenda-processing hidden>{{ t('jrh_ask_analyzing') }}</p>
+                <div class="jrh-hero__review" data-jrh-voice-review hidden>
+                    <p>{{ t('jrh_voice_heard') }}</p>
+                    <blockquote data-jrh-transcript></blockquote>
+                    <div class="jrh-hero__review-actions">
+                        <button type="submit" class="btn btn-primary">{{ t('jrh_ask_submit') }}</button>
+                        <button type="button" class="btn btn-secondary" data-jrh-rerecord>{{ t('jrh_voice_rerecord') }}</button>
+                    </div>
+                </div>
+            </form>
+            <div class="jrh-studio__actions" role="group" aria-label="{{ t('jrh_quick_title') }}">
+                <button type="button" class="jrh-studio__chip" data-jrh-example="{{ t('jrh_ask_ex_property') }}">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20H4v-9.5Z" stroke="currentColor" stroke-width="1.7"/></svg>
+                    {{ t('jrh_quick_search') }}
+                </button>
+                <button type="button" class="jrh-studio__chip" data-jrh-example="{{ t('jrh_ask_ex_invoice') }}">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h10v16H7V4Z" stroke="currentColor" stroke-width="1.7"/><path d="M10 8h4M10 12h4" stroke="currentColor" stroke-width="1.7"/></svg>
+                    {{ t('jrh_ask_quick_invoice') }}
+                </button>
+                {% if jrh_can_acm %}
+                <button type="button" class="jrh-studio__chip" data-jrh-acm data-jrh-example="{{ t('jrh_ask_ex_acm') }}">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19V5h16v14H4Z" stroke="currentColor" stroke-width="1.7"/><path d="M7 15h4l2-4 2 3 2-5" stroke="currentColor" stroke-width="1.7"/></svg>
+                    {{ t('jrh_ask_quick_acm') }}
+                </button>
+                {% endif %}
+                <button type="button" class="jrh-studio__chip" data-jrh-example="{{ t('jrh_ask_ex_agenda') }}">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.7"/></svg>
+                    {{ t('jrh_ask_quick_agenda') }}
+                </button>
+                <button type="button" class="jrh-studio__chip" data-jrh-example="{{ t('jrh_ask_ex_account') }}">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.7"/><path d="M12 8v8M9 10h4.5a2 2 0 0 1 0 4H9" stroke="currentColor" stroke-width="1.7"/></svg>
+                    {{ t('jrh_ask_ex_account') }}
+                </button>
+                <a class="jrh-studio__chip" href="{{ url_for('pendings_center') }}">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 7h12M6 12h12M6 17h8" stroke="currentColor" stroke-width="1.7"/></svg>
+                    {{ t('jrh_ask_quick_more') }}
+                </a>
+            </div>
+        </div>
+        <div class="jrh-studio__mascot-wrap">
+            <span class="jrh-studio__glow" aria-hidden="true"></span>
+            <div class="jrh-studio__mascot">
+                {% with variant='hero', width=320, height=420 %}
+                {% include "dashboard/_jrh_mascot.html" %}
+                {% endwith %}
+            </div>
+            <div class="jrh-studio__bubble">
+                <p>{{ t('jrh_ask_hello', name=first or t('jrh_ask_hello_fallback')) }}</p>
+                <p>{{ t('jrh_ask_hello_help') }}</p>
+                <span class="jrh-studio__online"><i></i>{{ t('jrh_ask_online') }}</span>
+            </div>
+        </div>
+    </header>
 
-    {% include "dashboard/_jrh_ask_result.html" %}
+    <div class="jrh-studio__layout">
+        <section class="jrh-studio__thread" aria-label="{{ t('jrh_ask_conversation') }}">
+            {% include "dashboard/_jrh_ask_result.html" %}
+            {% include "dashboard/_jrh_result.html" %}
+            {% if not jrh_ask and not jrh_result %}
+            <p class="jrh-studio__lead">{{ t('jrh_ask_empty') }}</p>
+            {% endif %}
+        </section>
+        <aside>
+            {% if today %}
+            <section class="jrh-studio__side-card">
+                <h2>{{ t('jrh_ask_today_title') }}</h2>
+                <ul class="jrh-studio__today">
+                    {% if today.visits %}
+                    <li><span>{{ t('jrh_today_visits') }}</span><strong>{{ today.visits }}</strong></li>
+                    {% endif %}
+                    {% if today.calls %}
+                    <li><span>{{ t('jrh_today_calls') }}</span><strong>{{ today.calls }}</strong></li>
+                    {% endif %}
+                    {% if today.pending %}
+                    <li><span>{{ t('jrh_today_pending') }}</span><strong>{{ today.pending }}</strong></li>
+                    {% endif %}
+                    {% if today.overdue %}
+                    <li><span>{{ t('jrh_ask_today_overdue') }}</span><strong>{{ today.overdue }}</strong></li>
+                    {% endif %}
+                    {% if today.tasks and not today.visits and not today.calls %}
+                    <li><span>{{ t('jrh_ask_today_tasks') }}</span><strong>{{ today.tasks }}</strong></li>
+                    {% endif %}
+                    {% if not today.visits and not today.calls and not today.pending and not today.overdue %}
+                    <li><span>{{ t('jrh_ask_today_empty') }}</span></li>
+                    {% endif %}
+                </ul>
+            </section>
+            {% endif %}
+            <section class="jrh-studio__side-card">
+                <h2>{{ t('jrh_integrations_title') }}</h2>
+                <div class="jrh-studio__integrations">
+                    {% set calendar = home.calendar or {"state": "unconfigured"} %}
+                    <a href="{{ url_for('settings_integrations') }}">
+                        <span>{{ t('agenda_calendar_google') }}</span>
+                        {% if calendar.state == 'synced' %}
+                        <strong>{{ t('jrh_integrations_connected') }}</strong>
+                        {% else %}
+                        <strong>{{ t('jrh_ask_disconnected') }}</strong>
+                        {% endif %}
+                    </a>
+                    {% set arca = home.arca or {"state": "not_configured"} %}
+                    <a href="{{ url_for('settings_arca') }}">
+                        <span>{{ t('arca_title') }}</span>
+                        {% if arca.connected %}
+                        <strong>{{ t('jrh_integrations_connected') }}</strong>
+                        {% else %}
+                        <strong>{{ t('jrh_ask_disconnected') }}</strong>
+                        {% endif %}
+                    </a>
+                </div>
+            </section>
+        </aside>
+    </div>
 </section>
 {% endblock %}

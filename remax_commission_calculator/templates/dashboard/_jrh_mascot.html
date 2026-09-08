@@ -1,0 +1,12 @@
+{% set jrh_mascot_name = variant or 'hero' %}
+{% set jrh_mascot_file = 'jrh-bot-' ~ jrh_mascot_name %}
+<picture>
+    <source srcset="{{ url_for('static', filename='branding/jrh-ai/' ~ jrh_mascot_file ~ '.webp') }}" type="image/webp">
+    <img
+        src="{{ url_for('static', filename='branding/jrh-ai/' ~ jrh_mascot_file ~ '.svg') }}"
+        alt="{{ t('jrh_ia_label') }}"
+        width="{{ width or 320 }}"
+        height="{{ height or 420 }}"
+        decoding="async"
+    >
+</picture>
