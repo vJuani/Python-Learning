@@ -1332,6 +1332,43 @@ def _handle_start_acm(
             data={"count": len(matches)},
         )
     chosen = matches[0]
+    from modules.database.properties_repository import get_property_record
+    from modules.acm_engine import display_area
+
+    chosen_row = chosen if chosen.get("covered_m2") or chosen.get("total_m2") else get_property_record(
+        chosen.get("id"), organization_id
+    )
+    if chosen_row and not display_area(chosen_row):
+        return _result(
+            START_ACM,
+            "needs_attention",
+            language=language,
+            message_key="acm_jrh_missing_area",
+            cards=[
+                {
+                    "title": chosen.get("address") or chosen.get("name") or "",
+                    "subtitle": chosen.get("neighborhood") or "",
+                }
+            ],
+            actions=[
+                {
+                    "label_key": "acm_complete_property",
+                    "href_name": "properties_edit",
+                    "href_args": {"property_id": chosen.get("id")},
+                },
+                {
+                    "label_key": "acm_create",
+                    "href_name": "acm_new",
+                    "href_args": {"property_id": chosen.get("id")},
+                },
+            ],
+            confidence=confidence,
+            entity={
+                "kind": "property",
+                "id": chosen.get("id"),
+                "label": chosen.get("address") or chosen.get("name") or "",
+            },
+        )
     return _result(
         START_ACM,
         "ready",

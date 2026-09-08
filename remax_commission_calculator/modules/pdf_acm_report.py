@@ -10,6 +10,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -17,6 +18,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from modules.formatting import format_money
 from modules.i18n import translate
 from modules.operation_summary import _brand_logo_path
 from modules.pdf_property_brochure import (
@@ -30,10 +32,10 @@ from modules.pdf_property_brochure import (
 from reportlab.platypus import Image as RLImage
 
 
-def _money(currency, value):
+def _money(currency, value, language="es"):
     if value in (None, ""):
         return "—"
-    return f"{currency} {value}"
+    return format_money(value, currency=currency or "USD", language=language)
 
 
 def _styles():
@@ -144,12 +146,14 @@ def build_acm_pdf(
             pass
     story.append(Paragraph(brand_name or "JRH One", styles["AcmZone"]))
     story.append(Paragraph(translate("acm_pdf_title", language=language), styles["AcmTitle"]))
+    if acm.get("status") != "finalized":
+        story.append(Paragraph(translate("acm_pdf_draft", language=language), styles["AcmZone"]))
     story.append(Paragraph(subject.get("address") or "", styles["AcmSection"]))
-    zone = " · ".join(
+    loc = " · ".join(
         part for part in (subject.get("neighborhood"), subject.get("jurisdiction")) if part
     )
-    if zone:
-        story.append(Paragraph(zone, styles["AcmZone"]))
+    if loc:
+        story.append(Paragraph(loc, styles["AcmZone"]))
     chips = []
     if subject.get("rooms"):
         chips.append(f"{subject['rooms']} amb.")
@@ -161,29 +165,52 @@ def build_acm_pdf(
         chips.append(translate("acm_parking", language=language))
     if chips:
         story.append(Paragraph(" · ".join(chips), styles["AcmBody"]))
-    story.append(Paragraph(translate("acm_results", language=language), styles["AcmSection"]))
+    date_label = acm.get("finalized_at") or acm.get("updated_at") or acm.get("created_at") or ""
+    story.append(
+        Paragraph(
+            translate("acm_pdf_date", language=language, date=str(date_label)[:10]),
+            styles["AcmZone"],
+        )
+    )
+    story.append(PageBreak())
+    story.append(Paragraph(translate("acm_step_1", language=language), styles["AcmSection"]))
+    story.append(
+        Paragraph(
+            f"{translate('acm_current_price', language=language)}: {_money(currency, subject.get('listing_price'), language)}",
+            styles["AcmBody"],
+        )
+    )
+    story.append(PageBreak())
+    story.append(Paragraph(translate("acm_pdf_market", language=language), styles["AcmSection"]))
     metrics = view.get("metrics") or {}
     metric_table = Table(
         [
             [
-                translate("acm_used_count", language=language),
-                str(metrics.get("used_count") or 0),
+                translate("acm_found_label", language=language),
+                str(metrics.get("found_count") or 0),
             ],
             [
-                translate("acm_ppm2_min", language=language),
-                _money(currency, metrics.get("min_ppm2") or acm.get("median_price_per_m2")),
+                translate("acm_valid_label", language=language),
+                str(metrics.get("valuation_count") or metrics.get("used_count") or 0),
+            ],
+            [
+                translate("acm_closings_label", language=language),
+                str(metrics.get("closing_count") or 0),
             ],
             [
                 translate("acm_ppm2_median", language=language),
-                _money(currency, acm.get("median_price_per_m2")),
+                _money(currency, acm.get("median_price_per_m2"), language),
             ],
             [
                 translate("acm_ppm2_avg", language=language),
-                _money(currency, acm.get("average_price_per_m2")),
+                _money(currency, acm.get("average_price_per_m2"), language),
             ],
             [
-                translate("acm_ppm2_max", language=language),
-                _money(currency, metrics.get("max_ppm2")),
+                translate("acm_confidence", language=language),
+                translate(
+                    f"acm_confidence_{metrics.get('confidence') or 'low'}",
+                    language=language,
+                ),
             ],
         ],
         colWidths=[90 * mm, 70 * mm],
@@ -205,15 +232,21 @@ def build_acm_pdf(
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph(translate("acm_reference_value", language=language), styles["AcmZone"]))
     story.append(
-        Paragraph(_money(currency, acm.get("estimated_value")), styles["AcmPrice"])
+        Paragraph(_money(currency, acm.get("estimated_value"), language), styles["AcmPrice"])
     )
     story.append(Paragraph(translate("acm_suggested_range", language=language), styles["AcmZone"]))
     story.append(
         Paragraph(
-            f"{_money(currency, acm.get('suggested_min_value'))} – {_money(currency, acm.get('suggested_max_value'))}",
+            f"{_money(currency, acm.get('suggested_min_value'), language)} – {_money(currency, acm.get('suggested_max_value'), language)}",
             styles["AcmBody"],
         )
     )
+    scenarios = metrics.get("scenarios") or {}
+    if scenarios:
+        story.append(Paragraph(translate("acm_scenario_agile", language=language) + ": " + _money(currency, scenarios.get("agile"), language), styles["AcmBody"]))
+        story.append(Paragraph(translate("acm_scenario_market", language=language) + ": " + _money(currency, scenarios.get("market"), language), styles["AcmBody"]))
+        story.append(Paragraph(translate("acm_scenario_aspirational", language=language) + ": " + _money(currency, scenarios.get("aspirational"), language), styles["AcmBody"]))
+    story.append(PageBreak())
     story.append(Paragraph(translate("acm_comparables", language=language), styles["AcmSection"]))
     header = [
         translate("acm_col_property", language=language),
@@ -223,13 +256,13 @@ def build_acm_pdf(
         translate("acm_col_source", language=language),
     ]
     data = [header]
-    for row in view.get("comparables") or []:
-        if not row.get("selected"):
-            continue
+    selected_rows = [row for row in (view.get("comparables") or []) if row.get("selected")]
+    appendix = selected_rows[5:]
+    for row in selected_rows[:5]:
         source = row.get("source_type") or ""
         if source == "manual_external":
             source_label = translate("acm_source_manual", language=language)
-        elif source == "closed_operation":
+        elif source == "closed_operation" or row.get("snapshot_price_kind") == "closing":
             source_label = translate("acm_source_closing", language=language)
         else:
             source_label = translate("acm_source_listing", language=language)
@@ -239,13 +272,13 @@ def build_acm_pdf(
                     row.get("external_reference") or row.get("snapshot_location") or "—",
                     styles["AcmSmall"],
                 ),
-                _money(row.get("snapshot_currency") or currency, row.get("snapshot_price")),
-                str(row.get("snapshot_covered_area") or row.get("snapshot_total_area") or "—"),
-                _money(row.get("snapshot_currency") or currency, row.get("snapshot_price_per_m2")),
+                _money(row.get("snapshot_currency") or currency, row.get("snapshot_price"), language),
+                str(row.get("display_area") or row.get("snapshot_covered_area") or row.get("snapshot_total_area") or "—"),
+                _money(row.get("snapshot_currency") or currency, row.get("snapshot_price_per_m2"), language),
                 source_label,
             ]
         )
-    table = Table(data, colWidths=[55 * mm, 30 * mm, 20 * mm, 32 * mm, 35 * mm])
+    table = Table(data, colWidths=[55 * mm, 32 * mm, 20 * mm, 32 * mm, 33 * mm])
     table.setStyle(
         TableStyle(
             [
@@ -260,9 +293,20 @@ def build_acm_pdf(
         )
     )
     story.append(table)
+    story.append(PageBreak())
+    story.append(Paragraph(translate("acm_pdf_analysis", language=language), styles["AcmSection"]))
     if acm.get("explanation"):
         story.append(Paragraph(translate("acm_explanation_title", language=language), styles["AcmSection"]))
         story.append(Paragraph(acm["explanation"], styles["AcmBody"]))
+    if appendix:
+        story.append(Paragraph("Apéndice", styles["AcmSection"]))
+        for row in appendix:
+            story.append(
+                Paragraph(
+                    f"{row.get('external_reference') or ''} · {_money(row.get('snapshot_currency') or currency, row.get('snapshot_price'), language)}",
+                    styles["AcmSmall"],
+                )
+            )
     if include_agent:
         contact = view.get("agent_contact") or {}
         if contact:
@@ -279,13 +323,6 @@ def build_acm_pdf(
     story.append(
         Paragraph(
             translate("acm_disclaimer", language=language),
-            styles["AcmFooter"],
-        )
-    )
-    date_label = acm.get("finalized_at") or acm.get("updated_at") or acm.get("created_at") or ""
-    story.append(
-        Paragraph(
-            translate("acm_pdf_date", language=language, date=date_label[:10]),
             styles["AcmFooter"],
         )
     )

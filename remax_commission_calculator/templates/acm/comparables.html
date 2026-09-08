@@ -9,11 +9,17 @@
 {% block content %}
 {% set acm = view.acm %}
 {% set subject = view.subject %}
+{% set metrics = view.metrics %}
 <section class="page-header">
     <div class="page-header-text">
         <p class="acm-step">{{ t('acm_step_2') }}</p>
-        <h2>{{ t('acm_comparables') }} · {{ view.comparables|length }}</h2>
-        <p>{{ subject.address }} · {{ subject.neighborhood or subject.jurisdiction }}</p>
+        <h2>{{ t('acm_comparables') }}</h2>
+        <p>{{ subject.address }} · {{ (view.subject.neighborhood or view.subject.jurisdiction) }}</p>
+        <p class="field-help">
+            {{ t('acm_found_count', n=metrics.found_count or view.comparables|length) }}
+            · {{ t('acm_valid_count', n=metrics.valuation_count or 0) }}
+            · {{ t('acm_reference_only_count', n=metrics.reference_count or 0) }}
+        </p>
     </div>
     <div class="page-actions">
         <a href="{{ url_for('acm_detail', acm_id=acm.id) }}" class="btn btn-primary">{{ t('acm_see_results') }}</a>
@@ -21,47 +27,99 @@
     </div>
 </section>
 
+{% if acm.status != 'finalized' %}
+<section class="panel">
+    <form method="post" class="acm-filters">
+        <input type="hidden" name="action" value="refresh">
+        <label><input type="checkbox" name="same_zone" value="1" checked> {{ t('acm_filter_same_zone') }}</label>
+        <label>{{ t('acm_filter_area') }} ±
+            <select name="area_pct">
+                <option value="0.10">10%</option>
+                <option value="0.20" selected>20%</option>
+                <option value="0.40">40%</option>
+            </select>
+        </label>
+        <label>{{ t('acm_filter_rooms') }} ±
+            <select name="rooms_delta">
+                <option value="0">0</option>
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+            </select>
+        </label>
+        <label>{{ t('acm_filter_age') }}
+            <select name="max_age_months">
+                <option value="">{{ t('acm_filter_any') }}</option>
+                <option value="6">6</option>
+                <option value="12" selected>12</option>
+                <option value="24">24</option>
+            </select>
+        </label>
+        <label><input type="checkbox" name="include_closing" value="1" checked> {{ t('acm_source_closing') }}</label>
+        <label><input type="checkbox" name="include_listing" value="1" checked> {{ t('acm_source_listing') }}</label>
+        <button type="submit" class="btn btn-small">{{ t('acm_refresh') }}</button>
+    </form>
+</section>
+{% endif %}
+
 <section class="panel">
     <div class="panel-header">
         <h3>{{ t('acm_suggested') }}</h3>
-        {% if acm.status != 'finalized' %}
-        <form method="post">
-            <input type="hidden" name="action" value="refresh">
-            <button type="submit" class="btn btn-small">{{ t('acm_refresh') }}</button>
-        </form>
-        {% endif %}
     </div>
     <ul class="acm-comp-list">
         {% for row in view.comparables %}
-        <li class="acm-comp{% if row.is_outlier %} acm-comp--outlier{% endif %}">
+        <li class="acm-comp{% if row.selected %} acm-comp--in{% endif %}{% if row.is_outlier %} acm-comp--outlier{% endif %}{% if not row.valuation_valid %} acm-comp--ref{% endif %}">
             <div>
                 <strong>{{ row.external_reference or row.snapshot_location or '—' }}</strong>
+                <p class="field-help">{{ row.location.primary }}{% if row.location.secondary %} · {{ row.location.secondary }}{% endif %}</p>
                 <p>
-                    {{ row.snapshot_currency }} {{ row.snapshot_price }}
-                    · {{ row.snapshot_covered_area or row.snapshot_total_area or '—' }} m²
-                    · {% if row.snapshot_price_per_m2 %}{{ row.snapshot_currency }} {{ row.snapshot_price_per_m2 }}/m²{% else %}—{% endif %}
-                    · {{ (row.score or '0')|string }}%
+                    {{ (row.snapshot_price)|money(row.snapshot_currency or acm.currency or 'USD') }}
+                    · {% if row.display_area %}{{ row.display_area }} m²{% else %}{{ t('acm_area_unknown') }}{% endif %}
+                    · {% if row.snapshot_price_per_m2 %}{{ row.snapshot_price_per_m2|money(row.snapshot_currency or acm.currency or 'USD') }}/m²{% else %}—{% endif %}
                 </p>
                 <p class="field-help">
-                    {% if row.source_type == 'manual_external' %}{{ t('acm_source_manual') }}
-                    {% elif row.source_type == 'closed_operation' %}{{ t('acm_source_closing') }}
-                    {% else %}{{ t('acm_source_listing') }}{% endif %}
-                    {% if row.is_outlier %} · {{ t('acm_outlier_label') }}{% endif %}
-                    {% if row.snapshot_price_kind == 'closing' %} · {{ t('acm_price_closing') }}
-                    {% elif row.snapshot_price_kind == 'listing' %} · {{ t('acm_price_listing') }}{% endif %}
+                    {% if row.snapshot_rooms %}{{ row.snapshot_rooms }} {{ t('acm_rooms_short') }} · {% endif %}
+                    {% if row.snapshot_bedrooms %}{{ row.snapshot_bedrooms }} {{ t('acm_bedrooms_short') }} · {% endif %}
+                    {% if row.snapshot_parking %}{{ t('acm_parking') }}{% endif %}
                 </p>
+                <p>
+                    <span class="acm-score">{{ row.score_int }}% {{ t('acm_comparable_adj') }}</span>
+                    {% if row.snapshot_price_kind == 'closing' %}<span class="acm-badge">{{ t('acm_price_closing') }}</span>
+                    {% elif row.source_type == 'manual_external' %}<span class="acm-badge">{{ t('acm_source_manual') }}</span>
+                    {% else %}<span class="acm-badge acm-badge--mute">{{ t('acm_price_listing') }}</span>{% endif %}
+                    {% if row.valuation_valid %}<span class="acm-badge acm-badge--ok">{{ t('acm_valid_for_calc') }}</span>
+                    {% else %}<span class="acm-badge acm-badge--mute">{{ t('acm_reference_only') }}</span>{% endif %}
+                    {% if row.area_source == 'manual_acm' %}<span class="acm-badge">{{ t('acm_area_manual') }}</span>{% endif %}
+                    {% if row.area_source == 'catalog' %}<span class="acm-badge">{{ t('acm_area_catalog') }}</span>{% endif %}
+                </p>
+                {% if row.match_labels %}
+                <p class="acm-matches">✓ {{ row.match_labels|join(' · ') }}</p>
+                {% endif %}
+                {% if row.diff_labels %}
+                <p class="acm-diffs">⚠ {{ row.diff_labels|join(' · ') }}</p>
+                {% endif %}
+                {% if row.is_outlier %}<p class="field-help">{{ t('acm_outlier_label') }}</p>{% endif %}
             </div>
-            {% if acm.status != 'finalized' %}
-            <form method="post">
-                <input type="hidden" name="action" value="toggle">
-                <input type="hidden" name="comparable_id" value="{{ row.id }}">
-                <input type="hidden" name="selected" value="{{ 0 if row.selected else 1 }}">
-                <button type="submit" class="btn btn-small">{{ t('acm_exclude') if row.selected else t('acm_include') }}</button>
-            </form>
-            {% endif %}
-            {% if row.comparable_property_id %}
-            <a href="{{ url_for('properties_detail', property_id=row.comparable_property_id) }}">{{ t('acm_review_property') }}</a>
-            {% endif %}
+            <div class="acm-comp-actions">
+                {% if acm.status != 'finalized' %}
+                <form method="post">
+                    <input type="hidden" name="action" value="toggle">
+                    <input type="hidden" name="comparable_id" value="{{ row.id }}">
+                    <input type="hidden" name="selected" value="{{ 0 if row.selected else 1 }}">
+                    <button type="submit" class="btn btn-small">{{ t('acm_include') if not row.selected else t('acm_included') }}</button>
+                </form>
+                {% if not row.display_area %}
+                <form method="post" class="acm-complete-form">
+                    <input type="hidden" name="action" value="complete">
+                    <input type="hidden" name="comparable_id" value="{{ row.id }}">
+                    <input type="text" name="area" placeholder="m²" required>
+                    <button type="submit" class="btn btn-small">{{ t('acm_complete_comp') }}</button>
+                </form>
+                {% endif %}
+                {% endif %}
+                {% if row.comparable_property_id %}
+                <a href="{{ url_for('properties_detail', property_id=row.comparable_property_id) }}">{{ t('acm_review_property') }}</a>
+                {% endif %}
+            </div>
         </li>
         {% endfor %}
     </ul>
@@ -74,12 +132,25 @@
     <form method="post" class="acm-manual-form">
         <input type="hidden" name="action" value="manual">
         <label>{{ t('acm_manual_reference') }}<input type="text" name="reference" required></label>
+        <label>{{ t('acm_manual_address') }}<input type="text" name="address"></label>
         <label>{{ t('acm_manual_location') }}<input type="text" name="location"></label>
+        <label>{{ t('acm_manual_url') }}<input type="url" name="url"></label>
         <label>{{ t('acm_manual_price') }}<input type="text" name="price" required></label>
         <label>{{ t('acm_manual_currency') }}<input type="text" name="currency" value="{{ acm.currency or 'USD' }}"></label>
         <label>{{ t('acm_manual_area') }}<input type="text" name="area"></label>
-        <label>{{ t('property_rooms') }}<input type="number" name="rooms" min="0"></label>
-        <label>{{ t('property_bedrooms') }}<input type="number" name="bedrooms" min="0"></label>
+        <label>{{ t('property_covered_m2') }}<input type="text" name="covered_m2"></label>
+        <label>{{ t('property_total_m2') }}<input type="text" name="total_m2"></label>
+        <label>{{ t('acm_rooms_short') }}<input type="number" name="rooms" min="0"></label>
+        <label>{{ t('acm_bedrooms_short') }}<input type="number" name="bedrooms" min="0"></label>
+        <label>{{ t('property_bathrooms') }}<input type="number" name="bathrooms" min="0"></label>
+        <label>{{ t('acm_parking') }}<input type="number" name="parking_spaces" min="0"></label>
+        <label>{{ t('acm_manual_date') }}<input type="text" name="observed_at" placeholder="YYYY-MM-DD"></label>
+        <label>{{ t('acm_col_source') }}
+            <select name="price_kind">
+                <option value="manual">{{ t('acm_source_manual') }}</option>
+                <option value="closing">{{ t('acm_price_closing') }}</option>
+            </select>
+        </label>
         <label>{{ t('acm_manual_notes') }}<input type="text" name="notes"></label>
         <button type="submit" class="btn btn-primary">{{ t('acm_add_manual') }}</button>
     </form>

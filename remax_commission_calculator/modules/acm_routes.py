@@ -20,6 +20,8 @@ from modules.acm_service import (
     finalize_acm,
     get_acm_view,
     list_agent_acms,
+    override_comparable_area,
+    preview_acm_property,
     recalculate_acm,
     refresh_draft,
     require_acm_agent,
@@ -77,6 +79,17 @@ def register_acm_routes(app, helpers):
         if not property_id:
             flash_i18n("acm_err_property_missing", "error")
             return redirect(url_for("acm_list"))
+        if request.method == "GET":
+            try:
+                preview = preview_acm_property(
+                    organization_id,
+                    user=user,
+                    property_id=property_id,
+                    language=language,
+                )
+            except AcmError as error:
+                return _handle(error)
+            return render_template("acm/new.html", preview=preview)
         try:
             view = create_acm_for_property(
                 organization_id,
@@ -121,15 +134,33 @@ def register_acm_routes(app, helpers):
                         user=user,
                         payload={
                             "reference": request.form.get("reference"),
+                            "address": request.form.get("address"),
                             "location": request.form.get("location"),
+                            "neighborhood": request.form.get("neighborhood"),
+                            "url": request.form.get("url"),
                             "price": request.form.get("price"),
                             "currency": request.form.get("currency") or "USD",
                             "area": request.form.get("area"),
+                            "covered_m2": request.form.get("covered_m2"),
+                            "total_m2": request.form.get("total_m2"),
                             "rooms": request.form.get("rooms"),
                             "bedrooms": request.form.get("bedrooms"),
+                            "bathrooms": request.form.get("bathrooms"),
+                            "parking_spaces": request.form.get("parking_spaces"),
                             "property_type": request.form.get("property_type"),
+                            "price_kind": request.form.get("price_kind"),
+                            "observed_at": request.form.get("observed_at"),
                             "notes": request.form.get("notes"),
                         },
+                        language=language,
+                    )
+                elif request.form.get("action") == "complete":
+                    override_comparable_area(
+                        acm_id,
+                        organization_id,
+                        user=user,
+                        comparable_id=int(request.form.get("comparable_id")),
+                        area=request.form.get("area"),
                         language=language,
                     )
                 elif request.form.get("action") == "toggle":
@@ -147,6 +178,14 @@ def register_acm_routes(app, helpers):
                         organization_id,
                         user=user,
                         language=language,
+                        filters={
+                            "same_zone": request.form.get("same_zone") == "1",
+                            "area_pct": request.form.get("area_pct") or "0.20",
+                            "rooms_delta": request.form.get("rooms_delta") or "1",
+                            "max_age_months": request.form.get("max_age_months") or None,
+                            "include_closing": request.form.get("include_closing") == "1",
+                            "include_listing": request.form.get("include_listing") == "1",
+                        },
                     )
                 else:
                     recalculate_acm(

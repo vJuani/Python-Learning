@@ -106,6 +106,13 @@ COMPARABLE_EXTRA_COLUMNS = (
     ("is_outlier", "INTEGER NOT NULL DEFAULT 0"),
     ("distance_meters", "TEXT"),
     ("notes", "TEXT"),
+    ("snapshot_bathrooms", "INTEGER"),
+    ("snapshot_parking", "INTEGER"),
+    ("snapshot_url", "TEXT"),
+    ("snapshot_observed_at", "TEXT"),
+    ("area_source", "TEXT"),
+    ("area_override_by_user_id", "INTEGER"),
+    ("score_reasons_json", "TEXT"),
 )
 
 

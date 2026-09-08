@@ -10,12 +10,17 @@
 {% set acm = view.acm %}
 {% set subject = view.subject %}
 {% set metrics = view.metrics %}
+{% set quality = view.quality %}
+{% set currency = acm.currency or subject.listing_currency or 'USD' %}
 <section class="page-header">
     <div class="page-header-text">
         <p class="acm-step">{{ t('acm_step_3') }}</p>
-        <h2>{{ t('acm_title') }}</h2>
-        <p>{{ subject.address }}</p>
-        <p class="field-help">{{ subject.neighborhood or '' }} {% if subject.jurisdiction %}· {{ subject.jurisdiction }}{% endif %}</p>
+        <h2>{{ t('acm_title') }} · {{ subject.address }}</h2>
+        <p class="field-help">
+            {{ subject.neighborhood or '' }}
+            {% if subject.neighborhood and subject.jurisdiction %} · {% endif %}
+            {{ subject.jurisdiction or '' }}
+        </p>
         <p>
             {% if subject.rooms %}{{ subject.rooms }} {{ t('acm_rooms_short') }} · {% endif %}
             {% if subject.covered_m2 or subject.total_m2 %}{{ subject.covered_m2 or subject.total_m2 }} m² · {% endif %}
@@ -27,7 +32,7 @@
         <a href="{{ url_for('acm_comparables', acm_id=acm.id) }}" class="btn btn-secondary">{{ t('acm_review_comparables') }}</a>
         {% if acm.status != 'finalized' %}
         <form method="post" action="{{ url_for('acm_finalize', acm_id=acm.id) }}">
-            <button type="submit" class="btn btn-primary">{{ t('acm_finalize') }}</button>
+            <button type="submit" class="btn btn-primary" {% if not view.can_finalize %}disabled{% endif %}>{{ t('acm_finalize') }}</button>
         </form>
         {% else %}
         <form method="post" action="{{ url_for('acm_duplicate', acm_id=acm.id) }}">
@@ -38,41 +43,206 @@
     </div>
 </section>
 
+{% if not view.can_finalize and acm.status != 'finalized' %}
+<section class="panel acm-warn">
+    <p>{{ t('acm_not_ready', n=view.min_valid_required) }}</p>
+    {% if not quality.can_valuate %}
+    <a class="btn btn-secondary" href="{{ url_for('properties_edit', property_id=acm.property_id) }}">{{ t('acm_complete_property') }}</a>
+    {% endif %}
+    <a class="btn btn-secondary" href="{{ url_for('acm_comparables', acm_id=acm.id) }}">{{ t('acm_add_manual') }}</a>
+</section>
+{% endif %}
+
 <section class="acm-metrics">
     <article>
-        <span>{{ t('acm_used_count') }}</span>
-        <strong>{{ metrics.used_count or 0 }}</strong>
+        <span>{{ t('acm_found_label') }}</span>
+        <strong>{{ metrics.found_count or view.comparables|length }}</strong>
     </article>
     <article>
+        <span>{{ t('acm_valid_label') }}</span>
+        <strong>{{ metrics.valuation_count or 0 }}</strong>
+    </article>
+    <article>
+        <span>{{ t('acm_closings_label') }}</span>
+        <strong>{{ metrics.closing_count or 0 }}</strong>
+    </article>
+    <article>
+        <span>{{ t('acm_listings_label') }}</span>
+        <strong>{{ metrics.listing_count or 0 }}</strong>
+    </article>
+    <article>
+        <span>{{ t('acm_confidence') }}</span>
+        <strong>{{ t('acm_confidence_' ~ (metrics.confidence or 'low')) }}</strong>
+    </article>
+</section>
+
+<section class="acm-metrics">
+    <article>
         <span>{{ t('acm_ppm2_min') }}</span>
-        <strong>{{ acm.currency }} {{ metrics.min_ppm2 or '—' }}</strong>
+        <strong>{% if metrics.min_ppm2 %}{{ metrics.min_ppm2|money(currency) }}{% else %}—{% endif %}</strong>
     </article>
     <article>
         <span>{{ t('acm_ppm2_median') }}</span>
-        <strong>{{ acm.currency }} {{ acm.median_price_per_m2 or '—' }}</strong>
+        <strong>{% if acm.median_price_per_m2 %}{{ acm.median_price_per_m2|money(currency) }}{% else %}—{% endif %}</strong>
     </article>
     <article>
         <span>{{ t('acm_ppm2_avg') }}</span>
-        <strong>{{ acm.currency }} {{ acm.average_price_per_m2 or '—' }}</strong>
+        <strong>{% if acm.average_price_per_m2 %}{{ acm.average_price_per_m2|money(currency) }}{% else %}—{% endif %}</strong>
     </article>
     <article>
         <span>{{ t('acm_ppm2_max') }}</span>
-        <strong>{{ acm.currency }} {{ metrics.max_ppm2 or '—' }}</strong>
+        <strong>{% if metrics.max_ppm2 %}{{ metrics.max_ppm2|money(currency) }}{% else %}—{% endif %}</strong>
     </article>
 </section>
 
 <section class="panel acm-result">
     <p class="acm-step">{{ t('acm_reference_value') }}</p>
-    <p class="acm-value">{{ acm.currency }} {{ acm.estimated_value or '—' }}</p>
+    <p class="acm-value">{% if acm.estimated_value %}{{ acm.estimated_value|money(currency) }}{% else %}—{% endif %}</p>
     <p class="acm-step">{{ t('acm_suggested_range') }}</p>
-    <p class="acm-range">{{ acm.currency }} {{ acm.suggested_min_value or '—' }} – {{ acm.suggested_max_value or '—' }}</p>
+    <p class="acm-range">
+        {% if acm.suggested_min_value and acm.suggested_max_value %}
+        {{ acm.suggested_min_value|money(currency) }} – {{ acm.suggested_max_value|money(currency) }}
+        {% else %}—{% endif %}
+    </p>
+    {% if metrics.positioning %}
+    <p class="acm-step">{{ t('acm_positioning') }}</p>
+    <p>
+        {{ t('acm_current_price') }}:
+        {{ metrics.positioning.listing_price|money(currency) }}
+        ({{ metrics.positioning.delta_pct }}%)
+    </p>
+    <p>{{ t('acm_position_' ~ metrics.positioning.band) }}</p>
+    {% endif %}
+    {% if metrics.scenarios %}
+    <div class="acm-scenarios">
+        <article>
+            <span>{{ t('acm_scenario_agile') }}</span>
+            <strong>{{ metrics.scenarios.agile|money(currency) }}</strong>
+        </article>
+        <article>
+            <span>{{ t('acm_scenario_market') }}</span>
+            <strong>{{ metrics.scenarios.market|money(currency) }}</strong>
+        </article>
+        <article>
+            <span>{{ t('acm_scenario_aspirational') }}</span>
+            <strong>{{ metrics.scenarios.aspirational|money(currency) }}</strong>
+        </article>
+    </div>
+    {% endif %}
     {% if acm.explanation %}
     <p>{{ acm.explanation }}</p>
     {% endif %}
     <p class="field-help">{{ view.disclaimer }}</p>
+    {% if view.can_finalize or acm.status == 'finalized' %}
     <div class="page-actions">
         <a href="{{ url_for('acm_pdf', acm_id=acm.id, include_agent=1) }}" class="btn btn-primary">{{ t('acm_pdf_with_agent') }}</a>
         <a href="{{ url_for('acm_pdf', acm_id=acm.id, include_agent=0) }}" class="btn btn-secondary">{{ t('acm_pdf_without_agent') }}</a>
     </div>
+    {% endif %}
 </section>
+
+{% if view.chart_points %}
+<section class="panel">
+    <h3>{{ t('acm_chart_ppm2') }}</h3>
+    <canvas id="acmPpm2Chart" height="120"></canvas>
+</section>
+{% endif %}
+
+{% if view.table_rows %}
+<section class="panel">
+    <h3>{{ t('acm_compare_table') }}</h3>
+    <div class="table-wrap">
+        <table class="data-table acm-table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>{{ t('acm_subject') }}</th>
+                    {% for row in view.table_rows %}
+                    <th>{{ row.external_reference or row.snapshot_location }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>{{ t('acm_col_price') }}</th>
+                    <td>{{ (subject.listing_price)|money(currency) }}</td>
+                    {% for row in view.table_rows %}
+                    <td>{{ (row.snapshot_price)|money(row.snapshot_currency or currency) }}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>m²</th>
+                    <td>{{ subject.covered_m2 or subject.total_m2 or '—' }}</td>
+                    {% for row in view.table_rows %}
+                    <td>{{ row.display_area or '—' }}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>{{ t('acm_col_ppm2') }}</th>
+                    <td>{% if view.subject_ppm2 %}{{ view.subject_ppm2|money(currency) }}{% else %}—{% endif %}</td>
+                    {% for row in view.table_rows %}
+                    <td>{% if row.snapshot_price_per_m2 %}{{ row.snapshot_price_per_m2|money(row.snapshot_currency or currency) }}{% else %}—{% endif %}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>{{ t('acm_rooms_short') }}</th>
+                    <td>{{ subject.rooms or '—' }}</td>
+                    {% for row in view.table_rows %}<td>{{ row.snapshot_rooms or '—' }}</td>{% endfor %}
+                </tr>
+                <tr>
+                    <th>{{ t('acm_bedrooms_short') }}</th>
+                    <td>{{ subject.bedrooms or '—' }}</td>
+                    {% for row in view.table_rows %}<td>{{ row.snapshot_bedrooms or '—' }}</td>{% endfor %}
+                </tr>
+                <tr>
+                    <th>{{ t('acm_parking') }}</th>
+                    <td>{{ subject.parking_spaces or '—' }}</td>
+                    {% for row in view.table_rows %}<td>{{ row.snapshot_parking or '—' }}</td>{% endfor %}
+                </tr>
+                <tr>
+                    <th>{{ t('acm_col_source') }}</th>
+                    <td>{{ t('acm_subject') }}</td>
+                    {% for row in view.table_rows %}
+                    <td>
+                        {% if row.snapshot_price_kind == 'closing' %}{{ t('acm_price_closing') }}
+                        {% elif row.source_type == 'manual_external' %}{{ t('acm_source_manual') }}
+                        {% else %}{{ t('acm_price_listing') }}{% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if view.chart_points %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    var points = {{ view.chart_points | tojson }};
+    var canvas = document.getElementById("acmPpm2Chart");
+    if (!canvas || !window.Chart) return;
+    new Chart(canvas, {
+        type: "bar",
+        data: {
+            labels: points.map(function (item) { return item.label; }),
+            datasets: [{
+                label: "USD/m²",
+                data: points.map(function (item) { return item.ppm2; }),
+                backgroundColor: points.map(function (item) {
+                    return item.kind === "closing" ? "#0860c8" : "#9bb8d4";
+                })
+            }]
+        },
+        options: {
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

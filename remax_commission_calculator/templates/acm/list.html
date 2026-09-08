@@ -25,6 +25,9 @@
                 <th>{{ t('acm_col_property') }}</th>
                 <th>{{ t('acm_status') }}</th>
                 <th>{{ t('acm_reference_value') }}</th>
+                <th>{{ t('acm_suggested_range') }}</th>
+                <th>{{ t('acm_confidence') }}</th>
+                <th>{{ t('acm_comparables') }}</th>
                 <th>{{ t('acm_date') }}</th>
                 <th></th>
             </tr>
@@ -34,8 +37,15 @@
             <tr>
                 <td>{{ item.address or item.property_id }}</td>
                 <td>{{ t('acm_status_' ~ item.status) }}</td>
-                <td>{% if item.estimated_value %}{{ item.currency }} {{ item.estimated_value }}{% else %}—{% endif %}</td>
-                <td>{{ (item.created_at or '')[:10] }}</td>
+                <td>{% if item.estimated_value %}{{ item.estimated_value|money(item.currency or 'USD') }}{% else %}—{% endif %}</td>
+                <td>
+                    {% if item.suggested_min_value and item.suggested_max_value %}
+                    {{ item.suggested_min_value|money(item.currency or 'USD') }} – {{ item.suggested_max_value|money(item.currency or 'USD') }}
+                    {% else %}—{% endif %}
+                </td>
+                <td>{{ t('acm_confidence_' ~ (item.confidence or 'low')) }}</td>
+                <td>{{ item.valuation_count }}/{{ item.found_count }}</td>
+                <td>{{ (item.finalized_at or item.created_at or '')[:10] }}</td>
                 <td><a href="{{ url_for('acm_detail', acm_id=item.id) }}">{{ t('acm_open') }}</a></td>
             </tr>
             {% endfor %}

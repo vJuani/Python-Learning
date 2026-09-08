@@ -2,12 +2,50 @@
 
 {% block title %}{{ t('acm_new') }} | {{ t('app_title') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/acm.css') }}">
+{% endblock %}
+
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
+        <p class="acm-step">{{ t('acm_step_1') }}</p>
         <h2>{{ t('acm_new') }}</h2>
+        {% if not preview %}
         <p class="field-help">{{ t('acm_new_help') }}</p>
+        {% endif %}
     </div>
     <a href="{{ url_for('properties_list') }}" class="btn btn-secondary">{{ t('nav_my_properties') }}</a>
 </section>
+
+{% if preview %}
+{% set subject = preview.subject %}
+{% set quality = preview.quality %}
+<section class="panel">
+    <h3>{{ subject.address }}</h3>
+    <p class="field-help">
+        {{ subject.neighborhood or '' }}
+        {% if subject.neighborhood and subject.jurisdiction %} · {% endif %}
+        {{ subject.jurisdiction or '' }}
+    </p>
+    <h4>{{ t('acm_quality_title') }}</h4>
+    <ul class="acm-quality">
+        {% for key, state in quality.checks.items() %}
+        <li class="acm-quality__{{ state }}">
+            {% if state == 'ok' %}✓
+            {% elif state == 'weak' %}?
+            {% else %}✕{% endif %}
+            {{ t('acm_quality_' ~ key) }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% if not quality.can_valuate %}
+    <p class="field-help">{{ t('acm_quality_no_area') }}</p>
+    <a class="btn btn-secondary" href="{{ url_for('properties_edit', property_id=preview.property.id) }}">{{ t('acm_complete_property') }}</a>
+    {% endif %}
+    <form method="post" action="{{ url_for('acm_new', property_id=preview.property.id) }}" class="acm-preview-actions">
+        <button type="submit" class="btn btn-primary">{{ t('acm_create') }}</button>
+    </form>
+</section>
+{% endif %}
 {% endblock %}

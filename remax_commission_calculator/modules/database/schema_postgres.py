@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v20"
+POSTGRES_SCHEMA_VERSION = "postgres_v21"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -1667,6 +1667,13 @@ SCHEMA_STATEMENTS = (
         distance_meters {_MONEY},
         notes TEXT,
         created_at TEXT NOT NULL,
+        snapshot_bathrooms INTEGER,
+        snapshot_parking INTEGER,
+        snapshot_url TEXT,
+        snapshot_observed_at TEXT,
+        area_source TEXT,
+        area_override_by_user_id BIGINT,
+        score_reasons_json TEXT,
 
         FOREIGN KEY (organization_id)
             REFERENCES organizations(id) ON DELETE RESTRICT,
@@ -1777,6 +1784,22 @@ def create_postgres_schema():
             cursor.execute(
                 f"""
                 ALTER TABLE notifications
+                ADD COLUMN IF NOT EXISTS {column_name} {column_sql}
+                """
+            )
+
+        for column_name, column_sql in (
+            ("snapshot_bathrooms", "INTEGER"),
+            ("snapshot_parking", "INTEGER"),
+            ("snapshot_url", "TEXT"),
+            ("snapshot_observed_at", "TEXT"),
+            ("area_source", "TEXT"),
+            ("area_override_by_user_id", "BIGINT"),
+            ("score_reasons_json", "TEXT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE property_acm_comparables
                 ADD COLUMN IF NOT EXISTS {column_name} {column_sql}
                 """
             )

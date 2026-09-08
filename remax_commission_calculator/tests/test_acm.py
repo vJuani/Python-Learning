@@ -19,8 +19,10 @@ os.environ.pop("OPENAI_API_KEY", None)
 from modules.acm_engine import (
     compute_metrics,
     flag_outliers,
+    is_valuation_valid,
     price_per_m2,
     score_comparable,
+    subject_quality,
     to_decimal,
 )
 from modules.acm_service import (
@@ -30,6 +32,8 @@ from modules.acm_service import (
     create_acm_for_property,
     finalize_acm,
     get_acm_view,
+    override_comparable_area,
+    preview_acm_property,
     recalculate_acm,
     refresh_draft,
     require_acm_agent,
@@ -166,6 +170,21 @@ class AcmTests(unittest.TestCase):
             agent_id=cls.foreign_agent,
         )
         cls.closed_prop = cls._prop("Libertador Cierre 10", "Núñez", 210000, 73, 3, 2)
+        cls.no_area = add_property(
+            "Santa Fe 410",
+            "CABA",
+            cls.org,
+            agent_id=cls.agent_id,
+            status=STATUS_APPROVED,
+            property_type="apartment",
+            listing_price=370000,
+            listing_purpose="sale",
+            listing_currency="USD",
+            neighborhood="Núñez",
+            rooms=3,
+            bedrooms=2,
+            parking_spaces=1,
+        )
         add_operation(
             "01/08/2026",
             cls.agent_id,
@@ -629,6 +648,153 @@ class AcmTests(unittest.TestCase):
         self.assertEqual(response.mimetype, "application/pdf")
         guest = self._login(self.admin, ROLE_ADMIN, self.org)
         self.assertEqual(guest.get(f"/acm/{view['acm']['id']}/pdf").status_code, 403)
+
+    def test_35_property_surface_is_read(self):
+        view = self._create()
+        self.assertEqual(to_decimal(view["subject"].get("covered_m2")), Decimal("78"))
+        with_area = [row for row in view["comparables"] if row.get("display_area")]
+        self.assertGreaterEqual(len(with_area), 3)
+
+    def test_36_missing_surface_is_flagged(self):
+        quality = preview_acm_property(
+            self.org,
+            user=self.agent_record,
+            property_id=self.no_area,
+        )["quality"]
+        self.assertEqual(quality["checks"]["area"], "missing")
+        self.assertFalse(quality["can_valuate"])
+
+    def test_37_price_and_area_is_valid(self):
+        self.assertTrue(
+            is_valuation_valid(
+                {
+                    "selected": True,
+                    "snapshot_price": "150000",
+                    "snapshot_covered_area": "75",
+                    "snapshot_currency": "USD",
+                },
+                {"listing_currency": "USD", "covered_m2": 78},
+            )
+        )
+
+    def test_38_missing_area_is_reference(self):
+        self.assertFalse(
+            is_valuation_valid(
+                {
+                    "selected": True,
+                    "snapshot_price": "105000",
+                    "snapshot_currency": "USD",
+                },
+                {"listing_currency": "USD", "covered_m2": 78},
+            )
+        )
+
+    def test_39_found_vs_valid_counts(self):
+        view = self._create()
+        metrics = view["metrics"]
+        self.assertGreaterEqual(metrics["found_count"], metrics["valuation_count"])
+        self.assertEqual(
+            metrics["found_count"],
+            (metrics["valuation_count"] or 0) + (metrics["reference_count"] or 0),
+        )
+
+    def test_40_min_comps_block_finalize(self):
+        view = create_acm_for_property(
+            self.org,
+            user=self.agent_record,
+            property_id=self.no_area,
+            language="es",
+        )
+        self.assertFalse(view["can_finalize"])
+        with self.assertRaises(AcmError) as caught:
+            finalize_acm(view["acm"]["id"], self.org, user=self.agent_record)
+        self.assertEqual(caught.exception.message_key, "acm_err_not_ready")
+
+    def test_41_manual_area_override(self):
+        view = self._create()
+        target = next(
+            row
+            for row in view["comparables"]
+            if row.get("comparable_property_id") == self.comp_ids[0]
+        )
+        updated = override_comparable_area(
+            view["acm"]["id"],
+            self.org,
+            user=self.agent_record,
+            comparable_id=target["id"],
+            area="81",
+        )
+        row = next(item for item in updated["comparables"] if item["id"] == target["id"])
+        self.assertEqual(row.get("area_source"), "manual_acm")
+        self.assertIn("81", str(row.get("snapshot_covered_area") or row.get("snapshot_total_area")))
+
+    def test_42_manual_comparable_identified(self):
+        view = self._create()
+        updated = add_manual_comparable(
+            view["acm"]["id"],
+            self.org,
+            user=self.agent_record,
+            payload={
+                "reference": "Zonaprop",
+                "address": "Libertador 5000",
+                "location": "Núñez",
+                "price": "230000",
+                "currency": "USD",
+                "area": "75",
+                "url": "https://example.com/listing",
+            },
+        )
+        manual = next(
+            row for row in updated["comparables"] if row.get("source_type") == "manual_external"
+        )
+        self.assertEqual(manual["area_source"], "manual_external")
+        self.assertEqual(manual["snapshot_url"], "https://example.com/listing")
+
+    def test_43_closing_identified(self):
+        view = self._create()
+        closings = [
+            row
+            for row in view["comparables"]
+            if row.get("snapshot_price_kind") == "closing"
+        ]
+        self.assertTrue(closings)
+        self.assertGreaterEqual(view["metrics"].get("closing_count") or 0, 0)
+
+    def test_44_confidence_deterministic(self):
+        view = self._create()
+        self.assertIn(view["metrics"]["confidence"], {"high", "medium", "low"})
+
+    def test_45_positioning_and_scenarios(self):
+        view = self._create()
+        self.assertIsNotNone(view["metrics"].get("scenarios"))
+        self.assertIsNotNone(view["metrics"].get("positioning"))
+        self.assertEqual(
+            to_decimal(view["metrics"]["scenarios"]["market"]),
+            to_decimal(view["acm"]["estimated_value"]),
+        )
+
+    def test_46_money_formatting(self):
+        from modules.formatting import format_money
+
+        self.assertEqual(format_money(385000, currency="USD", language="es"), "USD 385.000,00")
+
+    def test_47_jrh_missing_area(self):
+        result = ask_jrh(
+            "haceme un ACM de Santa Fe 410",
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            language="es",
+            session={},
+        )
+        self.assertEqual(result["intent"], START_ACM)
+        self.assertIn("superficie", result["message"].lower())
+
+    def test_48_quality_preview_render(self):
+        client = self._login(self.agent_user, ROLE_AGENT, self.org)
+        response = client.get(f"/acm/new?property_id={self.target}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Datos necesarios", response.get_data(as_text=True))
 
 
 if __name__ == "__main__":

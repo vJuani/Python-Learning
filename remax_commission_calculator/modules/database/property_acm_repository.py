@@ -94,6 +94,13 @@ def _comp_dict(row):
         "distance_meters": row[23] if len(row) > 23 else None,
         "notes": row[24] if len(row) > 24 else None,
         "created_at": row[25] if len(row) > 25 else None,
+        "snapshot_bathrooms": row[26] if len(row) > 26 else None,
+        "snapshot_parking": row[27] if len(row) > 27 else None,
+        "snapshot_url": row[28] if len(row) > 28 else None,
+        "snapshot_observed_at": row[29] if len(row) > 29 else None,
+        "area_source": row[30] if len(row) > 30 else None,
+        "area_override_by_user_id": row[31] if len(row) > 31 else None,
+        "score_reasons": _json_load(row[32] if len(row) > 32 else None),
     }
 
 
@@ -113,7 +120,9 @@ COMP_SELECT = """
            snapshot_rooms, snapshot_bedrooms, snapshot_property_type,
            snapshot_location, snapshot_price_per_m2, snapshot_listing_purpose,
            snapshot_price_kind, snapshot_operation_id, snapshot_operation_date,
-           score, is_outlier, distance_meters, notes, created_at
+           score, is_outlier, distance_meters, notes, created_at,
+           snapshot_bathrooms, snapshot_parking, snapshot_url, snapshot_observed_at,
+           area_source, area_override_by_user_id, score_reasons_json
     FROM property_acm_comparables
 """
 
@@ -262,9 +271,12 @@ def add_comparable(organization_id, acm_id, payload):
                 snapshot_rooms, snapshot_bedrooms, snapshot_property_type,
                 snapshot_location, snapshot_price_per_m2, snapshot_listing_purpose,
                 snapshot_price_kind, snapshot_operation_id, snapshot_operation_date,
-                score, is_outlier, distance_meters, notes, created_at
+                score, is_outlier, distance_meters, notes, created_at,
+                snapshot_bathrooms, snapshot_parking, snapshot_url, snapshot_observed_at,
+                area_source, area_override_by_user_id, score_reasons_json
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -293,6 +305,13 @@ def add_comparable(organization_id, acm_id, payload):
                 payload.get("distance_meters"),
                 payload.get("notes"),
                 now,
+                payload.get("snapshot_bathrooms"),
+                payload.get("snapshot_parking"),
+                payload.get("snapshot_url"),
+                payload.get("snapshot_observed_at"),
+                payload.get("area_source"),
+                payload.get("area_override_by_user_id"),
+                _json_dump(payload.get("score_reasons")),
             ),
         )
         connection.commit()
@@ -348,10 +367,20 @@ def update_comparable(comp_id, organization_id, **fields):
         "score",
         "is_outlier",
         "notes",
+        "snapshot_bathrooms",
+        "snapshot_parking",
+        "snapshot_url",
+        "snapshot_observed_at",
+        "area_source",
+        "area_override_by_user_id",
+        "score_reasons_json",
     }
     assignments = []
     params = []
     for key, value in fields.items():
+        if key == "score_reasons":
+            key = "score_reasons_json"
+            value = _json_dump(value)
         if key not in allowed:
             continue
         if key in {"selected", "is_outlier"}:
@@ -411,9 +440,9 @@ def list_internal_candidates(
         params.append(currency)
     zone_bits = []
     if neighborhood:
-        zone_bits.append("LOWER(p.neighborhood) = LOWER(?)")
+        zone_bits.append("LOWER(COALESCE(p.neighborhood, '')) = LOWER(?)")
         params.append(neighborhood)
-    if jurisdiction:
+    elif jurisdiction:
         zone_bits.append("p.jurisdiction = ?")
         params.append(jurisdiction)
     if zone_bits:
@@ -430,7 +459,7 @@ def list_internal_candidates(
                p.property_type, p.listing_price, p.listing_purpose,
                p.listing_currency, p.neighborhood, p.rooms, p.bedrooms,
                p.covered_m2, p.total_m2, p.parking_spaces, p.commercial_status,
-               p.features_json, p.last_synced_at
+               p.features_json, p.last_synced_at, p.bathrooms, p.external_id
         FROM properties p
         WHERE {' AND '.join(clauses)}
         LIMIT ?
@@ -460,6 +489,8 @@ def list_internal_candidates(
                     "commercial_status": row[15],
                     "features_json": row[16],
                     "last_synced_at": row[17],
+                    "bathrooms": row[18],
+                    "external_id": row[19],
                 }
             )
         return results
@@ -506,7 +537,8 @@ def list_closed_candidates(
                p.property_type, p.listing_price, p.listing_purpose,
                p.listing_currency, p.neighborhood, p.rooms, p.bedrooms,
                p.covered_m2, p.total_m2, p.parking_spaces, p.commercial_status,
-               p.features_json, o.sale_price, o.currency, o.id, o.operation_date
+               p.features_json, o.sale_price, o.currency, o.id, o.operation_date,
+               p.bathrooms, p.external_id
         FROM operations o
         JOIN properties p ON p.id = o.property_id
         WHERE {' AND '.join(clauses)}
@@ -541,6 +573,8 @@ def list_closed_candidates(
                     "operation_currency": row[18],
                     "operation_id": row[19],
                     "operation_date": row[20],
+                    "bathrooms": row[21],
+                    "external_id": row[22],
                 }
             )
         return results
