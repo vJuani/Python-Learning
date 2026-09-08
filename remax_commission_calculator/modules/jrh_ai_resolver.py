@@ -5,6 +5,13 @@ from __future__ import annotations
 from modules.auth import is_agent
 from modules.contacts import match_contacts
 from modules.database.tenant import require_organization_id
+from modules.entity_match import (
+    RANK_POOL_LIMIT,
+    UNIQUE_MIN,
+    decide_entity_matches,
+    log_entity_match,
+    rank_entity_candidates,
+)
 from modules.search import search_agents_flexible, search_operations
 
 
@@ -118,7 +125,7 @@ def resolve_properties(
     rows = filter_properties(
         organization_id,
         agent_id=scoped,
-        address=address or None,
+        address=None,
         neighborhood=resolved_neighborhood or None,
         jurisdiction=resolved_jurisdiction or None,
         property_type=normalized_type or None,
@@ -168,6 +175,18 @@ def resolve_properties(
         return True
 
     rows = [row for row in rows if _keep(row)]
+    text_query = (address or "").strip()
+    if text_query:
+        ranked = rank_entity_candidates(
+            text_query,
+            rows[:RANK_POOL_LIMIT],
+            text_fields=("address", "neighborhood", "external_id"),
+            code_fields=("external_id", "id"),
+            limit=max(int(limit or 8), 8),
+        )
+        status, chosen, _confidence = decide_entity_matches(ranked)
+        log_entity_match(text_query, ranked, status, kind="property")
+        rows = chosen or ranked
     items = [
         {
             "id": row.get("id") or row.get("db_id"),
@@ -182,6 +201,7 @@ def resolve_properties(
             "bedrooms": row.get("bedrooms"),
             "bathrooms": row.get("bathrooms"),
             "covered_m2": row.get("covered_m2") or row.get("total_m2"),
+            "match_score": row.get("match_score"),
         }
         for row in rows[:limit]
     ]
@@ -204,7 +224,6 @@ def resolve_operations(
 
         rows = filter_operations(
             organization_id,
-            property_address=query,
             agent_id=scoped,
         )
         if not rows:
@@ -213,13 +232,29 @@ def resolve_operations(
                 rows = [
                     row
                     for row in rows
-                    if row.get("agent_id") == scoped
+                    if row.get("agent_id") == scoped or row.get("agent_db_id") == scoped
                 ]
+        ranked = rank_entity_candidates(
+            query,
+            rows[:RANK_POOL_LIMIT],
+            text_fields=("property", "property_address", "address", "id"),
+            code_fields=("id", "db_id", "property_external_id"),
+            limit=max(int(limit or 5), 5),
+        )
+        status, chosen, _confidence = decide_entity_matches(ranked)
+        log_entity_match(query, ranked, status, kind="operation")
+        rows = chosen or ranked
     return [
         {
             "id": row.get("db_id") or row.get("id"),
-            "name": row.get("property_address") or row.get("address") or query,
+            "name": row.get("property")
+            or row.get("property_address")
+            or row.get("address")
+            or row.get("match_label")
+            or query,
             "kind": "operation",
+            "property_id": row.get("property_db_id"),
+            "match_score": row.get("match_score"),
         }
         for row in rows[:limit]
         if row.get("db_id") or row.get("id")
@@ -245,15 +280,17 @@ def resolve_pending_charges(
         charges.extend(
             list_pending_charges(organization_id, agent_id, code)
         )
-    hint_fold = (hint or "").strip().lower()
-    if hint_fold:
-        charges = [
-            item
-            for item in charges
-            if hint_fold in (item.get("description") or "").lower()
-            or hint_fold in (item.get("charge_category") or "").lower()
-            or hint_fold in (item.get("period_label") or "").lower()
-        ]
+    if hint:
+        ranked = rank_entity_candidates(
+            hint,
+            charges[:RANK_POOL_LIMIT],
+            text_fields=("description", "charge_category", "period_label", "name"),
+            code_fields=("id",),
+            limit=12,
+        )
+        status, chosen, _confidence = decide_entity_matches(ranked)
+        log_entity_match(hint, ranked, status, kind="charge")
+        charges = chosen or ranked
     return [
         {
             "id": item.get("id"),
@@ -270,7 +307,17 @@ def resolve_pending_charges(
 def pick_unique(matches, *, confidence=1.0):
     if not matches:
         return "empty", None, matches
+    if any(item.get("match_score") is not None for item in matches):
+        status, chosen, _confidence = decide_entity_matches(matches)
+        if status == "unique":
+            return "unique", chosen[0], matches
+        if status == "empty":
+            return "empty", None, []
+        return "ambiguous", None, chosen or matches
     if len(matches) == 1:
+        score = matches[0].get("match_score")
+        if score is not None and score < UNIQUE_MIN:
+            return "ambiguous", None, matches
         return "unique", matches[0], matches
     if confidence < 0.7:
         return "ambiguous", None, matches

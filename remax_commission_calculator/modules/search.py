@@ -105,49 +105,9 @@ def search_agents(query, organization_id, limit=None):
 
 def score_agent_name(name, query):
     """Rank a stored agent name against a typed query. Organization-agnostic."""
-    name_folded = fold_text(name)
-    query_folded = fold_text(query)
-    if not query_folded or not name_folded:
-        return 0
-    name_tokens = name_folded.split()
-    query_tokens = query_folded.split()
-    if name_folded == query_folded:
-        return 100
-    exact = 0
-    prefix = 0
-    fuzzy = 0
-    for qt in query_tokens:
-        if qt in name_tokens:
-            exact += 1
-            continue
-        if any(
-            (nt.startswith(qt) or qt.startswith(nt))
-            for nt in name_tokens
-            if len(qt) >= 3 and len(nt) >= 3
-        ):
-            prefix += 1
-            continue
-        max_dist = 1 if len(qt) <= 5 else 2
-        if len(qt) >= 4 and any(
-            len(nt) >= 4
-            and token_edit_distance(qt, nt, limit=max_dist) <= max_dist
-            for nt in name_tokens
-        ):
-            fuzzy += 1
-    accounted = exact + prefix + fuzzy
-    if accounted == len(query_tokens) and exact == len(query_tokens):
-        return 80 if len(query_tokens) == 1 else 70
-    if accounted == len(query_tokens) and exact:
-        return 60
-    if query_folded in name_folded:
-        return 50
-    if accounted == len(query_tokens) and prefix and not fuzzy:
-        return 50
-    if accounted == len(query_tokens) and fuzzy:
-        return 40
-    if exact or prefix or fuzzy:
-        return min(45, 18 * exact + 10 * prefix + 8 * fuzzy)
-    return 0
+    from modules.entity_match import score_entity_text
+
+    return score_entity_text(query, name)
 
 
 def rank_agents(query, organization_id, limit=8, *, min_score=20):

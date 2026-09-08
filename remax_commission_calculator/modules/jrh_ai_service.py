@@ -662,7 +662,7 @@ def _handle_properties(
         organization_id,
         user=user,
         agent_id=agent_id,
-        address=entities.get("address") or "",
+        address=entities.get("address") or entities.get("property_text") or "",
         neighborhood=entities.get("neighborhood") or "",
         jurisdiction=entities.get("jurisdiction") or "",
         location_group=entities.get("location_group") or "",
@@ -741,7 +741,13 @@ def _handle_properties(
         "ready" if matches else "needs_attention",
         language=language,
         message_key=(
-            "jrh_ai_properties_found"
+            "jrh_ai_properties_suggest"
+            if matches
+            and all(
+                item.get("match_score") is not None and item.get("match_score") < 70
+                for item in matches
+            )
+            else "jrh_ai_properties_found"
             if matches
             else "jrh_ai_properties_empty"
         ),
@@ -841,7 +847,13 @@ def _handle_operations(
     confidence,
     **_kwargs,
 ):
-    query = entities.get("address") or entities.get("agent_name") or ""
+    query = (
+        entities.get("address")
+        or entities.get("property_text")
+        or entities.get("operation_reference")
+        or entities.get("agent_name")
+        or ""
+    )
     matches = resolve_operations(
         organization_id,
         query,
@@ -1322,6 +1334,7 @@ def _hydrate_operation_match(organization_id, raw, agent_id):
         "name": row.get("property") or row.get("property_address") or "",
         "address": row.get("property") or row.get("property_address") or "",
         "kind": "operation",
+        "match_score": raw.get("match_score") if isinstance(raw, dict) else row.get("match_score"),
     }
 
 
@@ -1468,6 +1481,7 @@ def _handle_start_acm(
     from modules.acm_engine import display_area
     from modules.acm_service import AcmError, create_acm_for_property, get_acm_view
     from modules.database.properties_repository import get_property_record
+    from modules.entity_match import UNIQUE_MIN
 
     query = _acm_query_from_prompt(prompt, entities)
     wants_operation = bool(
@@ -1529,18 +1543,27 @@ def _handle_start_acm(
         )
         if owned:
             matches = [owned]
-    if not matches:
-        matches = _resolve_acm_properties(
+    if not matches and query:
+        prop_hits = _resolve_acm_properties(
             organization_id,
             query,
             user=user,
             agent_id=agent_id,
             entities=entities,
         )
-    if not matches and query and not wants_operation:
-        matches = _resolve_acm_operations(
+        op_hits = _resolve_acm_operations(
             organization_id, query, user=user, agent_id=agent_id
         )
+        merged = list(op_hits or []) + list(prop_hits or [])
+        seen = set()
+        matches = []
+        merged.sort(key=lambda item: item.get("match_score") or 0, reverse=True)
+        for item in merged:
+            key = item.get("property_id") or item.get("id")
+            if key in seen:
+                continue
+            seen.add(key)
+            matches.append(item)
     if not matches:
         return _result(
             START_ACM,
@@ -1551,14 +1574,22 @@ def _handle_start_acm(
             ),
             confidence=confidence,
         )
-    if len(matches) > 1:
+    top_score = matches[0].get("match_score")
+    if len(matches) > 1 or (top_score is not None and top_score < UNIQUE_MIN):
         from_ops = all(item.get("operation_ref") or item.get("kind") == "operation" for item in matches)
+        near = top_score is not None and top_score < UNIQUE_MIN
         return _result(
             START_ACM,
             "needs_attention",
             language=language,
             message_key=(
-                "acm_err_operation_ambiguous" if from_ops else "acm_err_property_ambiguous"
+                "acm_err_property_suggest"
+                if near
+                else (
+                    "acm_err_operation_ambiguous"
+                    if from_ops
+                    else "acm_err_property_ambiguous"
+                )
             ),
             candidates=[
                 {

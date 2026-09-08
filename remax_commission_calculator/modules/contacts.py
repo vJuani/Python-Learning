@@ -302,6 +302,32 @@ def match_contacts(
         if matched:
             return matched
 
+    if query:
+        from modules.entity_match import decide_entity_matches, rank_entity_candidates
+
+        ranked = rank_entity_candidates(
+            query,
+            records,
+            text_fields=("name",),
+            code_fields=("id", "phone"),
+            limit=8,
+        )
+        status, chosen, _confidence = decide_entity_matches(ranked)
+        if status == "unique" and chosen:
+            return {
+                "status": "single",
+                "contact": chosen[0],
+                "candidates": chosen,
+                "clear": True,
+            }
+        if chosen:
+            return {
+                "status": "ambiguous",
+                "contact": None,
+                "candidates": chosen,
+                "clear": False,
+            }
+
     return {
         "status": "none",
         "contact": None,

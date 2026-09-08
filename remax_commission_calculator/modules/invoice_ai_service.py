@@ -735,13 +735,18 @@ def _find_operations_by_reference(
             if op.get("agent_db_id") == agent_id
         ]
 
-    matched = [
-        op
-        for op in operations
-        if _matches_operation_reference(op, reference_folded)
-    ]
-    if matched:
-        return matched
+    from modules.entity_match import decide_entity_matches, rank_entity_candidates
+
+    ranked_ops = rank_entity_candidates(
+        reference,
+        operations,
+        text_fields=("property", "id", "property_external_id"),
+        code_fields=("id", "property_external_id"),
+        limit=8,
+    )
+    status, chosen, _confidence = decide_entity_matches(ranked_ops)
+    if chosen:
+        return chosen if status != "empty" else []
 
     properties = get_properties(organization_id)
     if agent_id is not None:
@@ -751,20 +756,15 @@ def _find_operations_by_reference(
             if p.get("agent_id") == agent_id
         ]
 
-    property_ids = set()
-    for prop in properties:
-        needles = [
-            prop.get("address"),
-            prop.get("external_id"),
-            f"prop-{prop['id']:06d}",
-        ]
-        if any(
-            _reference_contains_value(reference_folded, needle)
-            for needle in needles
-            if needle
-        ):
-            property_ids.add(prop["id"])
-
+    ranked_props = rank_entity_candidates(
+        reference,
+        properties,
+        text_fields=("address", "external_id"),
+        code_fields=("external_id", "id"),
+        limit=8,
+    )
+    _status, prop_hits, _confidence = decide_entity_matches(ranked_props)
+    property_ids = {item.get("id") for item in prop_hits if item.get("id")}
     if not property_ids:
         return []
 
