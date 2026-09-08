@@ -18,13 +18,19 @@ from modules.database.agent_tasks_repository import (
     list_agent_tasks,
 )
 from modules.database.agents_repository import get_agent_record
+from modules.contact_normalize import normalize_email, normalize_phone
 from modules.database.contacts_repository import (
+    CONTACT_TYPES,
     SOURCES,
+    SOURCE_TYPES,
     STATUSES,
     VISIBILITY_PRIVATE,
+    archive_contact as archive_contact_row,
     create_contact,
     get_contact,
     list_contacts,
+    list_property_interactions,
+    restore_contact as restore_contact_row,
     set_task_contact_id,
     update_contact,
 )
@@ -68,12 +74,26 @@ FILTER_ALL = "all"
 FILTER_ACTIVE = "active"
 FILTER_LEADS = "leads"
 FILTER_NO_NEXT = "no_next"
+FILTER_BUYERS = "buyers"
+FILTER_SELLERS = "sellers"
+FILTER_OWNERS = "owners"
+FILTER_STALE = "stale"
 CONTACT_FILTERS = (
     FILTER_ALL,
     FILTER_ACTIVE,
     FILTER_LEADS,
     FILTER_NO_NEXT,
+    FILTER_BUYERS,
+    FILTER_SELLERS,
+    FILTER_OWNERS,
+    FILTER_STALE,
 )
+STALE_DAYS_DEFAULT = 14
+FILTER_TYPE_MAP = {
+    FILTER_BUYERS: "buyer",
+    FILTER_SELLERS: "seller",
+    FILTER_OWNERS: "owner",
+}
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _NAME_STOPWORDS = {"con", "de", "del", "el", "la", "las", "los", "y"}
@@ -137,6 +157,9 @@ def normalize_preferences(raw):
         prefs["features"] = features
     if purpose:
         prefs["purpose"] = purpose
+    client_name = str(raw.get("client_name") or "").strip()
+    if client_name:
+        prefs["client_name"] = client_name[:MAX_NAME]
 
     return prefs
 
@@ -190,8 +213,16 @@ def _name_tokens(text):
 
 
 def _phone_digits(value):
-    digits = re.sub(r"\D", "", value or "")
-    return digits if len(digits) >= 8 else None
+    return normalize_phone(value)
+
+
+def split_display_name(name):
+    parts = [part for part in (name or "").strip().split() if part]
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
 
 
 def _unique_contacts(records):
@@ -611,14 +642,35 @@ def _validate_payload(payload):
     if source not in SOURCES:
         raise ContactError("contacts_err_invalid_source")
 
+    contact_type = (payload.get("contact_type") or "").strip()
+    if contact_type and contact_type not in CONTACT_TYPES:
+        raise ContactError("contacts_err_invalid_type")
+
+    source_type = (payload.get("source_type") or source or "manual").strip()
+    if source_type not in SOURCE_TYPES:
+        source_type = "other" if source == "other" else source
+
+    first_name = _optional(payload.get("first_name"), max_length=MAX_NAME)
+    last_name = _optional(payload.get("last_name"), max_length=MAX_NAME)
+    if not first_name and not last_name:
+        first_name, last_name = split_display_name(name)
+
+    phone = _optional(payload.get("phone"), max_length=MAX_PHONE)
     return {
         "name": name,
-        "phone": _optional(payload.get("phone"), max_length=MAX_PHONE),
+        "phone": phone,
         "email": email,
         "status": status,
         "source": source,
         "notes": _optional(payload.get("notes"), max_length=MAX_NOTES),
         "preferences": normalize_preferences(payload.get("preferences")),
+        "first_name": first_name,
+        "last_name": last_name,
+        "company": _optional(payload.get("company"), max_length=MAX_NAME),
+        "contact_type": contact_type or None,
+        "phone_normalized": normalize_phone(phone),
+        "email_normalized": normalize_email(email),
+        "source_type": source_type,
     }
 
 
@@ -643,6 +695,10 @@ def create_agent_contact(
     validated = _validate_payload(payload)
     prefs = validated["preferences"]
 
+    if prefs and not prefs.get("client_name"):
+        prefs = dict(prefs)
+        prefs["client_name"] = validated["name"]
+
     return create_contact(
         organization_id,
         agent_id,
@@ -654,6 +710,13 @@ def create_agent_contact(
         visibility=VISIBILITY_PRIVATE,
         notes=validated["notes"],
         preferences_json=json.dumps(prefs, ensure_ascii=False) if prefs else None,
+        first_name=validated.get("first_name"),
+        last_name=validated.get("last_name"),
+        company=validated.get("company"),
+        contact_type=validated.get("contact_type"),
+        phone_normalized=validated.get("phone_normalized"),
+        email_normalized=validated.get("email_normalized"),
+        source_type=validated.get("source_type"),
     )
 
 
@@ -704,6 +767,56 @@ def update_agent_contact(
         status=validated["status"],
         source=validated["source"],
         notes=validated["notes"] or "",
+        preferences_json=json.dumps(prefs, ensure_ascii=False) if prefs else "",
+        first_name=validated.get("first_name") or "",
+        last_name=validated.get("last_name") or "",
+        company=validated.get("company") or "",
+        contact_type=validated.get("contact_type") or "",
+        phone_normalized=validated.get("phone_normalized"),
+        email_normalized=validated.get("email_normalized"),
+        source_type=validated.get("source_type"),
+    )
+
+
+def archive_agent_contact(organization_id, contact_id, *, agent_id=None):
+    contact = load_contact(organization_id, contact_id, agent_id=agent_id)
+    return archive_contact_row(contact["id"], organization_id)
+
+
+def restore_agent_contact(organization_id, contact_id, *, agent_id=None):
+    organization_id = require_organization_id(organization_id)
+    contact = get_contact(contact_id, organization_id)
+    if contact is None:
+        raise ContactError("contacts_err_not_found")
+    if agent_id is not None and contact["agent_id"] != agent_id:
+        raise ContactError("contacts_err_forbidden")
+    return restore_contact_row(contact["id"], organization_id)
+
+
+def save_contact_need(
+    organization_id,
+    contact_id,
+    incoming,
+    *,
+    agent_id=None,
+    client_name=None,
+):
+    """Update search preferences. Keeps legacy client_name snapshot."""
+    contact = load_contact(
+        organization_id,
+        contact_id,
+        agent_id=agent_id,
+    )
+    prefs = normalize_preferences(incoming)
+    prefs["client_name"] = (
+        (client_name or "").strip()
+        or prefs.get("client_name")
+        or contact.get("name")
+        or ""
+    )
+    return update_contact(
+        contact["id"],
+        organization_id,
         preferences_json=json.dumps(prefs, ensure_ascii=False) if prefs else "",
     )
 
@@ -870,6 +983,7 @@ def decorate_contact(
         language=language,
     )
     viewed = _viewed_properties(linked)
+    shared = _shared_properties(organization_id, contact)
     last_label, last_task = _last_interaction_label(linked, tz, language)
     recommendation = _contact_recommendation(
         contact,
@@ -883,6 +997,17 @@ def decorate_contact(
         "preferences": prefs,
         "status_label": translate(f"contacts_status_{contact['status']}", language),
         "source_label": translate(f"contacts_source_{contact['source']}", language),
+        "contact_type_label": (
+            translate(f"contacts_type_{contact['contact_type']}", language)
+            if contact.get("contact_type")
+            else ""
+        ),
+        "is_archived": bool(contact.get("archived_at")),
+        "display_name": contact.get("name") or "",
+        "shared_properties": shared,
+        "shared_count": len(shared),
+        "active_need": bool(prefs),
+        "stale": _is_stale(contact, now=now),
         "search_line": _search_line(prefs, language),
         "budget_label": format_budget_label(budget) if budget.get("max") else "",
         "budget_range_label": _budget_range_label(budget),
@@ -979,7 +1104,10 @@ def _history_events(contact, tasks, *, tz, language):
                     f"agent_task_type_{task.get('task_type') or 'other'}",
                     language,
                 ),
-                "detail": task.get("property_address") or task.get("title") or "",
+                "detail": task.get("description")
+                or task.get("property_address")
+                or task.get("title")
+                or "",
                 "status": task.get("status"),
                 "task_id": task.get("id"),
                 "outcome": outcome,
@@ -1126,6 +1254,7 @@ def list_contact_cards(
     contact_filter=None,
     search=None,
     language="es",
+    stale_days=STALE_DAYS_DEFAULT,
 ):
     organization_id = require_organization_id(organization_id)
     contact_filter = (
@@ -1148,10 +1277,58 @@ def list_contact_cards(
             agent_id=agent_id,
             status=status,
             search=search,
+            contact_type=FILTER_TYPE_MAP.get(contact_filter),
         )
     ]
 
     if contact_filter == FILTER_NO_NEXT:
         cards = [card for card in cards if not card["has_next_action"]]
+    if contact_filter == FILTER_STALE:
+        cards = [card for card in cards if card.get("stale")]
 
     return cards
+
+
+def count_stale_contacts(
+    organization_id,
+    *,
+    agent_id=None,
+    stale_days=STALE_DAYS_DEFAULT,
+):
+    cards = list_contact_cards(
+        organization_id,
+        agent_id=agent_id,
+        contact_filter=FILTER_STALE,
+        stale_days=stale_days,
+    )
+    return len(cards)
+
+
+def _shared_properties(organization_id, contact):
+    rows = list_property_interactions(organization_id, contact["id"])
+    items = []
+    seen = set()
+    for row in rows:
+        if row.get("interaction_type") != "shared":
+            continue
+        key = row.get("property_id") or row.get("label")
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(
+            {
+                "property_id": row.get("property_id"),
+                "label": row.get("label") or "",
+                "created_at": row.get("created_at"),
+            }
+        )
+    return items
+
+
+def _is_stale(contact, *, now=None, stale_days=STALE_DAYS_DEFAULT):
+    now = now or now_utc()
+    stamp = contact.get("last_interacted_at") or contact.get("created_at")
+    instant = parse_utc_iso(stamp) if stamp else None
+    if instant is None:
+        return True
+    return (now - instant).days >= int(stale_days)

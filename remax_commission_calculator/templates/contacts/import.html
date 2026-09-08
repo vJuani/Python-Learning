@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-contacts-page {% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/contact-import.js') }}" defer></script>
+{% endblock %}
+
+{% block title %}{{ t('contacts_import') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="contacts-home">
+    <header class="contacts-hero">
+        <div>
+            <p class="contacts-kicker">{{ t('contacts_title') }}</p>
+            <h1>{{ t('contacts_import') }}</h1>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('contacts_index') }}">{{ t('contacts_back') }}</a>
+    </header>
+
+    {% if errors %}
+    <div class="flash-error" role="alert">
+        {% for error in errors %}<p>{{ t(error) }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    <section class="contact-panel" data-picker-available hidden>
+        <p>{{ t('contacts_import_picker_help') }}</p>
+        <form method="post" data-picker-form>
+            <input type="hidden" name="provider" value="browser_picker">
+            <input type="hidden" name="selected_json" value="[]" data-selected-json>
+            <button type="button" class="btn btn-primary" data-pick-contacts>{{ t('contacts_import_from_phone') }}</button>
+        </form>
+    </section>
+
+    <section class="contact-panel" data-picker-fallback>
+        <p>{{ t('contacts_import_unsupported') }}</p>
+    </section>
+
+    <section class="contact-panel">
+        <p>{{ t('contacts_import_vcard_help') }}</p>
+        <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="provider" value="vcard">
+            <label class="contact-field">
+                <span>{{ t('contacts_import_vcard') }}</span>
+                <input type="file" name="vcard" accept=".vcf,text/vcard">
+            </label>
+            <button type="submit" class="btn btn-secondary">{{ t('contacts_import_preview') }}</button>
+        </form>
+    </section>
+
+    <p><a href="{{ url_for('contacts_new') }}">{{ t('contacts_import_manual') }}</a></p>
+</section>
+{% endblock %}

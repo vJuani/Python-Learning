@@ -54,6 +54,9 @@
             <label class="agenda-form__field">
                 <span>{{ t('agent_task_field_person') }}</span>
                 <input type="text" name="contact_name" value="{{ form_values.contact_name }}" maxlength="120">
+                {% if form_values.contact_id %}
+                <input type="hidden" name="contact_id" value="{{ form_values.contact_id }}">
+                {% endif %}
             </label>
         </div>
 

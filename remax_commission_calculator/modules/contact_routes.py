@@ -4,7 +4,7 @@ Agent contacts: list, create, commercial profile and preferences.
 
 from __future__ import annotations
 
-from flask import abort, redirect, render_template, request, url_for
+from flask import abort, redirect, render_template, request, session, url_for
 
 from modules.auth import (
     get_current_user,
@@ -12,17 +12,33 @@ from modules.auth import (
     is_guest_session,
     login_required,
 )
+from modules.contact_import import (
+    BrowserContactPickerProvider,
+    VCardImportProvider,
+    confirm_import,
+    list_provider_capabilities,
+    preview_import,
+)
 from modules.contacts import (
     CONTACT_FILTERS,
+    CONTACT_TYPES,
     ContactError,
+    archive_agent_contact,
+    count_stale_contacts,
     create_agent_contact,
     decorate_contact,
     load_contact,
     list_contact_cards,
     preferences_from_form,
+    restore_agent_contact,
+    save_contact_need,
     update_agent_contact,
 )
-from modules.database.contacts_repository import SOURCES, STATUSES
+from modules.database.contacts_repository import (
+    SOURCES,
+    STATUSES,
+    record_property_interaction,
+)
 from modules.database.properties_repository import get_property_record
 from modules.listings_normalize import listing_from_property
 from modules.property_match import (
@@ -68,6 +84,8 @@ def register_contact_routes(app, helpers):
             "status": request.form.get("status") or "lead",
             "source": request.form.get("source") or "manual",
             "notes": request.form.get("notes"),
+            "company": request.form.get("company"),
+            "contact_type": request.form.get("contact_type"),
             "preferences": preferences_from_form(request.form),
         }
 
@@ -90,6 +108,12 @@ def register_contact_routes(app, helpers):
             search=search,
             language=language,
         )
+        stale_count = 0
+        if can_manage and agent_id is not None:
+            stale_count = count_stale_contacts(
+                organization_id,
+                agent_id=agent_id,
+            )
 
         return render_template(
             "contacts/index.html",
@@ -97,6 +121,8 @@ def register_contact_routes(app, helpers):
             contact_filter=contact_filter,
             search=search,
             can_manage=can_manage,
+            stale_count=stale_count,
+            import_capabilities=list_provider_capabilities() if can_manage else [],
         )
 
     @app.route("/contacts/new", methods=["GET", "POST"])
@@ -141,6 +167,7 @@ def register_contact_routes(app, helpers):
             errors=errors,
             statuses=STATUSES,
             sources=SOURCES,
+            contact_types=CONTACT_TYPES,
         )
 
     @app.route("/contacts/<int:contact_id>")
@@ -205,6 +232,8 @@ def register_contact_routes(app, helpers):
             "status": contact["status"],
             "source": contact.get("source") or "manual",
             "notes": contact.get("notes") or "",
+            "company": contact.get("company") or "",
+            "contact_type": contact.get("contact_type") or "",
             "preferences": card["preferences"],
         }
 
@@ -233,6 +262,7 @@ def register_contact_routes(app, helpers):
             errors=errors,
             statuses=STATUSES,
             sources=SOURCES,
+            contact_types=CONTACT_TYPES,
             contact=card,
         )
 
@@ -249,6 +279,171 @@ def register_contact_routes(app, helpers):
         except ContactError:
             abort(404)
         return user, organization_id, agent_id, can_manage, contact
+
+    IMPORT_SESSION_KEY = "contact_import_preview"
+
+    @app.route("/contacts/import", methods=["GET", "POST"])
+    @login_required
+    def contacts_import():
+        user = _require_user()
+        organization_id = require_user_organization()
+        agent_id, can_manage = _scope(user)
+        if not can_manage or agent_id is None:
+            abort(403)
+        language = get_current_language()
+        errors = []
+        if request.method == "POST":
+            provider_id = (request.form.get("provider") or "").strip()
+            selected = []
+            source_type = "phone_import"
+            if provider_id == BrowserContactPickerProvider.provider_id:
+                raw = request.form.get("selected_json") or "[]"
+                try:
+                    import json
+
+                    selected = json.loads(raw)
+                except (TypeError, ValueError):
+                    selected = []
+                source_type = "phone_import"
+            elif provider_id == VCardImportProvider.provider_id:
+                upload = request.files.get("vcard")
+                text = ""
+                if upload and upload.filename:
+                    text = upload.read().decode("utf-8", errors="ignore")
+                selected = VCardImportProvider().parse_selected(text)
+                source_type = "vcard"
+            else:
+                errors = ["contacts_import_unsupported"]
+            if not errors:
+                if not selected:
+                    errors = ["contacts_import_empty"]
+                else:
+                    preview = preview_import(
+                        organization_id,
+                        agent_id,
+                        selected,
+                        source_type=source_type,
+                        language=language,
+                    )
+                    session[IMPORT_SESSION_KEY] = preview
+                    return redirect(url_for("contacts_import_preview"))
+        return render_template(
+            "contacts/import.html",
+            errors=errors,
+            capabilities=list_provider_capabilities(),
+        )
+
+    @app.route("/contacts/import/preview", methods=["GET", "POST"])
+    @login_required
+    def contacts_import_preview():
+        user = _require_user()
+        organization_id = require_user_organization()
+        agent_id, can_manage = _scope(user)
+        if not can_manage or agent_id is None:
+            abort(403)
+        preview = session.get(IMPORT_SESSION_KEY)
+        if not preview:
+            return redirect(url_for("contacts_import"))
+        if request.method == "POST":
+            token = request.form.get("import_token")
+            if token != preview.get("import_token"):
+                abort(400)
+            decisions = {}
+            for index, _item in enumerate(preview.get("items") or []):
+                action = request.form.get(f"action_{index}") or "skip"
+                decisions[index] = action
+                match_id = request.form.get(f"match_id_{index}")
+                if match_id:
+                    decisions[f"{index}_match_id"] = match_id
+            result = confirm_import(
+                organization_id,
+                agent_id,
+                preview,
+                decisions=decisions,
+                import_token=token,
+            )
+            session.pop(IMPORT_SESSION_KEY, None)
+            flash_i18n("contacts_import_done", "success")
+            if result.get("created"):
+                return redirect(
+                    url_for(
+                        "contacts_detail",
+                        contact_id=result["created"][0]["id"],
+                    )
+                )
+            return redirect(url_for("contacts_index"))
+        return render_template(
+            "contacts/import_preview.html",
+            preview=preview,
+        )
+
+    @app.route("/contacts/<int:contact_id>/archive", methods=["POST"])
+    @login_required
+    def contacts_archive(contact_id):
+        user, organization_id, agent_id, can_manage, _contact = _scoped_contact(
+            contact_id
+        )
+        if not can_manage or agent_id is None:
+            abort(403)
+        archive_agent_contact(organization_id, contact_id, agent_id=agent_id)
+        flash_i18n("contacts_flash_archived", "success")
+        return redirect(url_for("contacts_index"))
+
+    @app.route("/contacts/<int:contact_id>/restore", methods=["POST"])
+    @login_required
+    def contacts_restore(contact_id):
+        user = _require_user()
+        organization_id = require_user_organization()
+        agent_id, can_manage = _scope(user)
+        if not can_manage or agent_id is None:
+            abort(403)
+        restore_agent_contact(organization_id, contact_id, agent_id=agent_id)
+        flash_i18n("contacts_flash_restored", "success")
+        return redirect(url_for("contacts_detail", contact_id=contact_id))
+
+    @app.route("/contacts/<int:contact_id>/need", methods=["GET", "POST"])
+    @login_required
+    def contacts_need(contact_id):
+        user, organization_id, agent_id, can_manage, contact = _scoped_contact(
+            contact_id
+        )
+        if not can_manage or agent_id is None:
+            abort(403)
+        language = get_current_language()
+        card = decorate_contact(
+            contact,
+            organization_id=organization_id,
+            language=language,
+        )
+        form = {
+            "name": contact["name"],
+            "preferences": card["preferences"],
+        }
+        errors = []
+        if request.method == "POST":
+            try:
+                save_contact_need(
+                    organization_id,
+                    contact_id,
+                    preferences_from_form(request.form),
+                    agent_id=agent_id,
+                    client_name=request.form.get("client_name") or contact.get("name"),
+                )
+            except ContactError as error:
+                errors = [error.message_key]
+            else:
+                flash_i18n("contacts_flash_prefs_updated", "success")
+                return redirect(url_for("contacts_detail", contact_id=contact_id))
+        return render_template(
+            "contacts/form.html",
+            mode="need",
+            form=form,
+            errors=errors,
+            statuses=STATUSES,
+            sources=SOURCES,
+            contact_types=CONTACT_TYPES,
+            contact=card,
+        )
 
     def _requested_criteria():
         source = request.form if request.method == "POST" else request.args
@@ -467,6 +662,23 @@ def register_contact_routes(app, helpers):
 
         if not selected:
             abort(404)
+
+        if can_manage and agent_id is not None:
+            for card in selected:
+                listing = card.get("listing") or {}
+                record_property_interaction(
+                    organization_id,
+                    agent_id,
+                    contact_id=contact["id"],
+                    property_id=card.get("property_id") or listing.get("property_id"),
+                    interaction_type="shared",
+                    label=(
+                        listing.get("address")
+                        or listing.get("title")
+                        or card.get("title")
+                        or ""
+                    ),
+                )
 
         message = build_whatsapp_message(
             contact,

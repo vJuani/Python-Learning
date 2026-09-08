@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-contacts-page {% endblock %}
+
+{% block title %}{{ t('contacts_import_preview') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="contacts-home">
+    <header class="contacts-hero">
+        <div>
+            <p class="contacts-kicker">{{ t('contacts_import') }}</p>
+            <h1>{{ t('contacts_import_preview') }}</h1>
+            <p>{{ t('contacts_import_selected', count=preview.counts.selected) }}</p>
+        </div>
+    </header>
+
+    <section class="contact-kpis">
+        <article><p class="contacts-kicker">{{ t('contacts_import_new') }}</p><p>{{ preview.counts.new }}</p></article>
+        <article><p class="contacts-kicker">{{ t('contacts_import_possible') }}</p><p>{{ preview.counts.possible_duplicate }}</p></article>
+        <article><p class="contacts-kicker">{{ t('contacts_import_exists') }}</p><p>{{ preview.counts.exists }}</p></article>
+    </section>
+
+    {% if preview.counts.too_large %}
+    <p class="contacts-stale-banner">{{ t('contacts_import_too_large') }}</p>
+    {% endif %}
+
+    <form method="post">
+        <input type="hidden" name="import_token" value="{{ preview.import_token }}">
+        <div class="contacts-list">
+            {% for item in preview.items %}
+            <article class="contacts-card">
+                <h2>{{ item.name }}</h2>
+                <p>{{ item.phone }}</p>
+                <p>{{ item.email }}</p>
+                <p class="contacts-card__status">
+                    {% if item.status == 'new' %}{{ t('contacts_import_status_new') }}
+                    {% elif item.status == 'exists' %}{{ t('contacts_import_status_exists') }}
+                    {% else %}{{ t('contacts_import_status_possible') }}{% endif %}
+                </p>
+                {% if item.match %}
+                <p>{{ t('contacts_import_existing') }}: {{ item.match.name }} {{ item.match.phone }}</p>
+                <input type="hidden" name="match_id_{{ loop.index0 }}" value="{{ item.match.id }}">
+                {% endif %}
+                <label class="contact-field">
+                    <select name="action_{{ loop.index0 }}">
+                        {% if item.status == 'new' %}
+                        <option value="import" selected>{{ t('contacts_import_action_import') }}</option>
+                        <option value="skip">{{ t('contacts_import_action_skip') }}</option>
+                        {% else %}
+                        <option value="use_existing" {% if item.status == 'exists' %}selected{% endif %}>{{ t('contacts_import_action_use') }}</option>
+                        <option value="update_existing">{{ t('contacts_import_action_update') }}</option>
+                        <option value="create_separate" {% if item.status == 'possible_duplicate' %}selected{% endif %}>{{ t('contacts_import_action_separate') }}</option>
+                        <option value="skip">{{ t('contacts_import_action_skip') }}</option>
+                        {% endif %}
+                    </select>
+                </label>
+            </article>
+            {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary">{{ t('contacts_import_confirm') }}</button>
+    </form>
+</section>
+{% endblock %}

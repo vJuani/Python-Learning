@@ -42,6 +42,19 @@
                 <input type="email" name="email" value="{{ form.email or '' }}">
             </label>
             <label class="contact-field">
+                <span>{{ t('contacts_field_company') }}</span>
+                <input type="text" name="company" value="{{ form.company or '' }}">
+            </label>
+            <label class="contact-field">
+                <span>{{ t('contacts_field_contact_type') }}</span>
+                <select name="contact_type">
+                    <option value="">{{ t('contacts_type_unknown') }}</option>
+                    {% for key in contact_types or [] %}
+                    <option value="{{ key }}" {% if form.contact_type == key %}selected{% endif %}>{{ t('contacts_type_' ~ key) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="contact-field">
                 <span>{{ t('contacts_field_status') }}</span>
                 <select name="status">
                     {% for key in statuses %}
@@ -55,7 +68,7 @@
             </label>
         </section>
 
-        {% if mode == 'edit' %}
+        {% if mode in ['edit', 'need'] %}
         <section class="contact-panel" id="contact-prefs">
             <p class="contacts-kicker">{{ t('contacts_looking_for') }}</p>
 

@@ -32,6 +32,10 @@ from modules.jrh_ai_intents import (
     ACM_PRICE_SCENARIO,
     DOWNLOAD_ACM,
     QUERY_PRODUCTIVITY,
+    QUERY_CONTACT,
+    QUERY_CONTACT_HISTORY,
+    QUERY_CONTACT_PROPERTIES,
+    START_CONTACT_NEED,
 )
 
 ORIGIN_CHARGE = "agent_account_charge"
@@ -129,6 +133,11 @@ PERSON_RE = re.compile(
     r"(?:\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,})?)",
     re.IGNORECASE,
 )
+CONTACT_PERSON_RE = re.compile(
+    r"\b(?:para|de|a|con)\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,}"
+    r"(?:\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,})?)",
+    re.IGNORECASE,
+)
 PERSON_STOP = frozenset(
     {
         "las", "los", "la", "el", "de", "del", "lo", "una", "un", "hoy", "manana", "mañana",
@@ -167,6 +176,10 @@ EXPLICIT_NEW_INTENTS = frozenset(
         START_AGENT_PAYMENT,
         START_ACM,
         QUERY_PRODUCTIVITY,
+        QUERY_CONTACT,
+        QUERY_CONTACT_HISTORY,
+        QUERY_CONTACT_PROPERTIES,
+        START_CONTACT_NEED,
     }
 )
 
@@ -441,9 +454,72 @@ def has_agenda_query_signal(text):
     )
 
 
+def has_contact_need_create_signal(text):
+    folded = fold_text(text)
+    return any(
+        phrase in folded
+        for phrase in (
+            "busqueda para",
+            "necesidad para",
+            "una busqueda",
+            "una necesidad",
+            "creame una busqueda",
+            "crea una busqueda",
+        )
+    )
+
+
+def has_contact_query_signal(text):
+    folded = fold_text(text)
+    return any(
+        phrase in folded
+        for phrase in (
+            "buscame a",
+            "telefono de",
+            "numero de",
+            "el telefono de",
+            "el numero de",
+        )
+    )
+
+
+def has_contact_history_signal(text):
+    folded = fold_text(text)
+    return any(
+        phrase in folded
+        for phrase in (
+            "que hice con",
+            "que hice hoy con",
+            "cuando hable",
+            "cuando hable con",
+            "ultima vez",
+            "última vez",
+            "hable con",
+            "hablé con",
+        )
+    )
+
+
+def has_contact_shared_signal(text):
+    folded = fold_text(text)
+    return any(
+        phrase in folded
+        for phrase in (
+            "que propiedades le mande",
+            "que le mande a",
+            "que le mandé",
+            "propiedades le mande",
+            "propiedades le comparti",
+            "propiedades le compartí",
+        )
+    )
+
+
 def has_create_task_signal(text):
     folded = fold_text(text)
     if _looks_like_agenda_query(folded):
+        return False
+    if has_contact_need_create_signal(text):
         return False
     if has_property_inventory_signal(text) and not CREATE_TASK_RE.search(folded):
         return False
@@ -749,6 +825,15 @@ def extract_entities(text, *, context=None):
     entities = extract_property_entities(text)
     entities.update(extract_when(text))
     person = extract_person_name(text)
+    if not person and (
+        has_contact_query_signal(text)
+        or has_contact_history_signal(text)
+        or has_contact_shared_signal(text)
+        or has_contact_need_create_signal(text)
+    ):
+        match = CONTACT_PERSON_RE.search(text or "")
+        if match:
+            person = _usable_person_name(match.group(1).strip())
     if person and not is_generic_agent_reference(person):
         entities["agent_name"] = person
         entities["contact_name"] = person
@@ -938,11 +1023,19 @@ def classify_intent(prompt, *, context=None):
         scores[QUERY_OPERATIONS] = 0.88
     if "facturas pendientes" in folded or "facturas tengo" in folded:
         scores[QUERY_INVOICES] = 0.9
+    if has_contact_shared_signal(text):
+        scores[QUERY_CONTACT_PROPERTIES] = 0.94
+    if has_contact_history_signal(text):
+        scores[QUERY_CONTACT_HISTORY] = 0.94
+    if has_contact_query_signal(text):
+        scores[QUERY_CONTACT] = 0.93
+    if has_contact_need_create_signal(text):
+        scores[START_CONTACT_NEED] = 0.94
     if has_create_task_signal(text):
         scores[CREATE_TASK] = 0.88
         entities["title"] = text
     last = (context or {}).get("last_entity") or {}
-    if last.get("kind") in {"property", "acm", "operation"} and last.get("id"):
+    if last.get("kind") in {"property", "acm", "operation", "contact"} and last.get("id"):
         entities["previous_kind"] = last.get("kind")
         entities["previous_id"] = last.get("id")
         entities["refers_to_previous"] = True
@@ -1165,6 +1258,22 @@ def apply_intent_guards(parsed, prompt, context=None):
         result["intent"] = QUERY_AGENDA
         result["confidence"] = max(float(result.get("confidence") or 0), 0.86)
         result["guard"] = "agenda_query"
+    elif rule_intent in {
+        QUERY_CONTACT,
+        QUERY_CONTACT_HISTORY,
+        QUERY_CONTACT_PROPERTIES,
+        START_CONTACT_NEED,
+    } and result.get("intent") in {
+        QUERY_AGENDA,
+        QUERY_PROPERTIES,
+        QUERY_PROPERTY_NEEDS,
+        QUERY_PRODUCTIVITY,
+        CREATE_TASK,
+        FALLBACK,
+    }:
+        result["intent"] = rule_intent
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.9)
+        result["guard"] = "contact_query"
     elif rule_intent == QUERY_PRODUCTIVITY and result.get("intent") in {
         QUERY_AGENDA,
         QUERY_PENDINGS,

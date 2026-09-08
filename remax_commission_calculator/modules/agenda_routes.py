@@ -421,6 +421,7 @@ def register_agenda_routes(app, helpers):
             task_type=(request.args.get("type") or "").strip() or None,
             contact_name=(request.args.get("contact_name") or "").strip()
             or None,
+            contact_id=(request.args.get("contact_id") or "").strip() or None,
             title=(request.args.get("title") or "").strip() or None,
             due_date=(request.args.get("due_date") or "").strip() or None,
             due_time=(request.args.get("due_time") or "").strip() or None,
@@ -431,6 +432,16 @@ def register_agenda_routes(app, helpers):
             ai_suggestion=(request.args.get("ai_suggestion") or "").strip()
             or None,
         )
+        prefill_contact = _scoped_contact(
+            organization_id,
+            agent_id,
+            form_values.get("contact_id"),
+        )
+        if prefill_contact:
+            form_values["contact_id"] = prefill_contact["id"]
+            form_values["contact_name"] = (
+                form_values.get("contact_name") or prefill_contact.get("name") or ""
+            )
 
         return _render_form(
             form_values=form_values,

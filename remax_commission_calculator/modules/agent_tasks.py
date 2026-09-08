@@ -1212,6 +1212,7 @@ def default_form_values(organization_id, *, now=None, **overrides):
         "external_listing_id": "",
         "operation_id": "",
         "contact_name": "",
+        "contact_id": "",
         "duration_minutes": 60,
         "reminder_minutes": 15,
         "description": "",

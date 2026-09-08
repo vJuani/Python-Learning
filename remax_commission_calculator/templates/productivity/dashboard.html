@@ -116,6 +116,11 @@
                     <div>
                         <strong>{{ item.title }}</strong>
                         {% if item.purpose_label %}<span>{{ t('prod_purpose') }}: {{ item.purpose_label }}</span>{% endif %}
+                        {% if item.contact_status == 'missing' %}
+                        <p>{{ t('prod_contact_missing', name=item.contact_name) }}</p>
+                        {% elif item.contact_status == 'matched' %}
+                        <p>{{ item.contact_name }}</p>
+                        {% endif %}
                     </div>
                     <form method="post" action="{{ url_for('productivity_log') }}">
                         <input type="hidden" name="action" value="edit">
@@ -124,6 +129,15 @@
                         <input type="hidden" name="day" value="{{ view.focus_date }}">
                         <button type="submit" class="prod-edit-link">{{ t('prod_edit') }}</button>
                     </form>
+                    {% if item.contact_status == 'missing' and not item.create_contact %}
+                    <form method="post" action="{{ url_for('productivity_log') }}">
+                        <input type="hidden" name="action" value="create_contact">
+                        <input type="hidden" name="index" value="{{ loop.index0 }}">
+                        <input type="hidden" name="period" value="{{ view.period }}">
+                        <input type="hidden" name="day" value="{{ view.focus_date }}">
+                        <button type="submit" class="prod-edit-link">{{ t('prod_create_contact') }}</button>
+                    </form>
+                    {% endif %}
                 </div>
                 {% endif %}
             </li>

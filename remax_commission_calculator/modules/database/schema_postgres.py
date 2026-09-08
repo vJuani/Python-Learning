@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v22"
+POSTGRES_SCHEMA_VERSION = "postgres_v23"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -962,6 +962,42 @@ SCHEMA_STATEMENTS = (
     """
     CREATE INDEX IF NOT EXISTS idx_contacts_org_name
     ON contacts (organization_id, name)
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS contact_property_interactions (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        agent_id BIGINT NOT NULL,
+        contact_id BIGINT NOT NULL,
+        property_id BIGINT,
+        interaction_type TEXT NOT NULL,
+        activity_id BIGINT,
+        label TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id) ON DELETE RESTRICT,
+        FOREIGN KEY (agent_id)
+            REFERENCES agents(id) ON DELETE RESTRICT,
+        FOREIGN KEY (contact_id)
+            REFERENCES contacts(id) ON DELETE RESTRICT
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_contact_interactions_owner
+    ON contact_property_interactions (organization_id, contact_id, created_at)
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS contact_import_batches (
+        id {_ID},
+        organization_id BIGINT NOT NULL,
+        agent_id BIGINT NOT NULL,
+        import_token TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        created_count INTEGER NOT NULL DEFAULT 0,
+        updated_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        UNIQUE (organization_id, agent_id, import_token)
+    )
     """,
     f"""
     CREATE TABLE IF NOT EXISTS google_calendar_connections (
@@ -2676,6 +2712,24 @@ def create_postgres_schema():
             cursor.execute(
                 f"""
                 ALTER TABLE agent_tasks
+                ADD COLUMN IF NOT EXISTS
+                {column_name} {column_sql}
+                """
+            )
+
+        for column_name, column_sql in (
+            ("first_name", "TEXT"),
+            ("last_name", "TEXT"),
+            ("company", "TEXT"),
+            ("contact_type", "TEXT"),
+            ("archived_at", "TEXT"),
+            ("phone_normalized", "TEXT"),
+            ("email_normalized", "TEXT"),
+            ("source_type", "TEXT"),
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE contacts
                 ADD COLUMN IF NOT EXISTS
                 {column_name} {column_sql}
                 """

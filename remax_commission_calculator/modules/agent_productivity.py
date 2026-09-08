@@ -541,7 +541,7 @@ def _activity_log(organization_id, agent_id, bounds, tz, language):
 
 def _parse_contact_name(text):
     match = re.search(
-        r"\bcon\s+([A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ'-]+)",
+        r"\b(?:con|a)\s+([A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ'-]+)",
         text or "",
         flags=re.IGNORECASE,
     )
@@ -600,6 +600,39 @@ def propose_logged_activity(text, *, channels=None, purposes=None, language="es"
     return proposals
 
 
+def enrich_logged_contacts(organization_id, agent_id, proposals, *, language="es"):
+    from modules.contacts import match_contacts
+
+    enriched = []
+    for item in proposals or []:
+        row = dict(item)
+        name = (row.get("contact_name") or "").strip()
+        if not name:
+            row["contact_status"] = "none"
+            enriched.append(row)
+            continue
+        matched = match_contacts(
+            organization_id,
+            agent_id,
+            name,
+            language=language,
+        )
+        if matched.get("status") == "single" and matched.get("contact"):
+            row["contact_id"] = matched["contact"]["id"]
+            row["contact_name"] = matched["contact"].get("name") or name
+            row["contact_status"] = "matched"
+        elif matched.get("status") == "ambiguous":
+            row["contact_status"] = "ambiguous"
+            row["contact_candidates"] = [
+                {"id": item.get("id"), "name": item.get("name")}
+                for item in (matched.get("candidates") or [])[:5]
+            ]
+        else:
+            row["contact_status"] = "missing"
+        enriched.append(row)
+    return enriched
+
+
 def edit_logged_activity(proposals, index, *, channel, contact_name, purpose, language="es"):
     updated = list(proposals or [])
     if index < 0 or index >= len(updated):
@@ -630,6 +663,21 @@ def confirm_logged_activity(
     local = instant.astimezone(tz)
     created = []
     for item in proposals or []:
+        if item.get("create_contact") and item.get("contact_name") and not item.get("contact_id"):
+            from modules.contacts import create_agent_contact
+
+            created_contact = create_agent_contact(
+                organization_id,
+                user["agent_id"],
+                {
+                    "name": item.get("contact_name"),
+                    "status": "lead",
+                    "source": "other",
+                    "source_type": "other",
+                },
+            )
+            item = dict(item)
+            item["contact_id"] = created_contact["id"]
         task_type = CHANNEL_TO_TASK.get(item.get("channel"))
         if task_type not in ("call", "meeting", "visit", "follow_up", "other"):
             continue
@@ -646,6 +694,7 @@ def confirm_logged_activity(
                 "due_time": local.strftime("%H:%M"),
                 "description": item.get("purpose_label") or item.get("purpose") or "",
                 "contact_name": item.get("contact_name") or "",
+                "contact_id": item.get("contact_id"),
             },
             created_by_user_id=user.get("id"),
         )

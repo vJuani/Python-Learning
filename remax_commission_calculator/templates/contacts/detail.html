@@ -6,36 +6,67 @@
 
 {% block content %}
 <article class="contact-profile">
+    <p class="contacts-back"><a href="{{ url_for('contacts_index') }}">{{ t('contacts_back') }}</a></p>
     <header class="contact-profile__hero">
         <p class="contacts-kicker">{{ t('contacts_title') }}</p>
         <h1>{{ contact.name }}</h1>
-        <p class="contact-profile__status">{{ contact.status_label }}</p>
+        <p class="contact-profile__status">
+            {% if contact.contact_type_label %}<span class="contact-badge">{{ contact.contact_type_label }}</span>{% endif %}
+            <span class="contact-badge contact-badge--status">{{ contact.status_label }}</span>
+        </p>
+        {% if contact.summary %}
+        <p class="contact-profile__bio">{{ contact.summary }}</p>
+        {% endif %}
+        <ul class="contact-profile__meta">
+            {% if contact.phone %}<li>{{ contact.phone }}</li>{% endif %}
+            {% if contact.email %}<li>{{ contact.email }}</li>{% endif %}
+            {% if contact.preferences.areas %}<li>{{ contact.preferences.areas | join(' · ') }}</li>{% endif %}
+        </ul>
         <div class="contact-profile__cta">
-            {% if contact.whatsapp_url %}
-            <a class="btn btn-primary" href="{{ contact.whatsapp_url }}" target="_blank" rel="noopener">{{ t('agenda_action_whatsapp') }}</a>
-            {% elif can_manage %}
-            <a class="btn btn-secondary" href="{{ url_for('contacts_edit', contact_id=contact.id) }}#contact-phone">{{ t('contacts_add_phone') }}</a>
-            {% endif %}
             {% if contact.tel_url %}
             <a class="btn btn-secondary" href="{{ contact.tel_url }}">{{ t('agenda_action_call') }}</a>
             {% endif %}
-            <a class="btn btn-primary" href="{{ url_for('contacts_property_matches', contact_id=contact.id) }}">{{ t('matches_search') }}</a>
             {% if can_manage %}
-            <a class="btn btn-secondary" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('contacts_schedule') }}</a>
+            <a class="btn btn-primary" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('contacts_schedule') }}</a>
+            <a class="btn btn-secondary" href="{{ url_for('productivity_home') }}#prod-log">{{ t('contacts_new_activity') }}</a>
+            <a class="btn btn-secondary" href="{{ url_for('contacts_need', contact_id=contact.id) }}">{{ t('contacts_create_need') }}</a>
+            <a class="btn btn-secondary" href="{{ url_for('contacts_edit', contact_id=contact.id) }}">{{ t('contacts_edit') }}</a>
             {% endif %}
         </div>
     </header>
 
-    <div class="contact-profile__grid">
-        {% if contact.summary %}
-        <section class="contact-panel">
-            <p class="contacts-kicker">{{ t('contacts_jrh') }}</p>
-            <p class="contact-panel__summary">{{ contact.summary }}</p>
-        </section>
-        {% endif %}
+    <section class="contact-kpis">
+        <article>
+            <p class="contacts-kicker">{{ t('contacts_last_interaction') }}</p>
+            <p>{{ contact.last_interaction_label or t('contacts_no_last') }}</p>
+        </article>
+        <article>
+            <p class="contacts-kicker">{{ t('contacts_next_action') }}</p>
+            <p>{{ contact.next_action_label or t('contacts_no_next') }}</p>
+        </article>
+        <article>
+            <p class="contacts-kicker">{{ t('contacts_active_needs') }}</p>
+            <p>
+                {% if contact.active_need %}
+                {{ contact.search_line or t('contacts_need_saved') }}
+                {% else %}
+                {{ t('contacts_no_preferences') }}
+                {% endif %}
+            </p>
+        </article>
+        <article>
+            <p class="contacts-kicker">{{ t('contacts_shared_properties') }}</p>
+            <p>{{ contact.shared_count }}</p>
+        </article>
+    </section>
 
+    <div class="contact-profile__grid">
+        {% if contact.active_need %}
         <section class="contact-panel">
             <p class="contacts-kicker">{{ t('contacts_looking_for') }}</p>
+            {% if contact.preferences.client_name %}
+            <p>{{ contact.preferences.client_name }}</p>
+            {% endif %}
             {% if contact.preferences.rooms %}
             <p>{{ t('contacts_rooms_label', count=contact.preferences.rooms) }}</p>
             {% endif %}
@@ -45,20 +76,20 @@
             {% if contact.budget_range_label %}
             <p>{{ contact.budget_range_label }}</p>
             {% endif %}
-            {% if contact.preferences.features %}
-            <ul class="contact-chips">
-                {% for item in contact.preferences.features %}
-                <li>{{ item }}</li>
+            <a class="btn btn-small btn-secondary" href="{{ url_for('contacts_property_matches', contact_id=contact.id) }}">{{ t('matches_search') }}</a>
+        </section>
+        {% endif %}
+
+        {% if contact.shared_count %}
+        <section class="contact-panel">
+            <p class="contacts-kicker">{{ t('contacts_shared_properties') }}</p>
+            <ul class="contact-viewed">
+                {% for property in contact.shared_properties %}
+                <li>{{ property.label }}</li>
                 {% endfor %}
             </ul>
-            {% endif %}
-            {% if not contact.preferences %}
-            <p class="contact-panel__muted">{{ t('contacts_no_preferences') }}</p>
-            {% endif %}
-            {% if can_manage %}
-            <a class="btn btn-small btn-secondary" href="{{ url_for('contacts_edit', contact_id=contact.id) }}#contact-prefs">{{ t('contacts_edit_preferences') }}</a>
-            {% endif %}
         </section>
+        {% endif %}
 
         {% if contact.recommendation and can_manage %}
         <section class="contact-panel contact-panel--recommend">
@@ -73,32 +104,6 @@
             <p>{{ t('contacts_recommend_no_next', name=contact.name.split(' ')[0]) }}</p>
             <a class="btn btn-small btn-primary" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('contacts_recommend_schedule') }}</a>
             {% endif %}
-        </section>
-        {% endif %}
-
-        <section class="contact-panel">
-            <p class="contacts-kicker">{{ t('contacts_next_action') }}</p>
-            {% if contact.has_next_action %}
-            <h2>{{ contact.next_task.title }}</h2>
-            <p>{{ contact.next_action_label }}</p>
-            <a class="btn btn-small btn-secondary" href="{{ url_for('agenda_index') }}">{{ t('contacts_open_agenda') }}</a>
-            {% else %}
-            <p class="contact-panel__muted">{{ t('contacts_no_next') }}</p>
-            {% if can_manage %}
-            <a class="btn btn-small btn-secondary" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('contacts_schedule') }}</a>
-            {% endif %}
-            {% endif %}
-        </section>
-
-        {% if contact.viewed_count %}
-        <section class="contact-panel">
-            <p class="contacts-kicker">{{ t('contacts_viewed_properties') }}</p>
-            <p><strong>{{ contact.viewed_count }}</strong></p>
-            <ul class="contact-viewed">
-                {% for property in contact.viewed_properties %}
-                <li>{{ property.address }}</li>
-                {% endfor %}
-            </ul>
         </section>
         {% endif %}
 
@@ -131,6 +136,17 @@
             </div>
             {% endfor %}
         </section>
+
+        {% if can_manage and not contact.is_archived %}
+        <form method="post" action="{{ url_for('contacts_archive', contact_id=contact.id) }}">
+            <button type="submit" class="btn btn-small btn-secondary">{{ t('contacts_archive') }}</button>
+        </form>
+        {% endif %}
+        {% if can_manage and contact.is_archived %}
+        <form method="post" action="{{ url_for('contacts_restore', contact_id=contact.id) }}">
+            <button type="submit" class="btn btn-small btn-primary">{{ t('contacts_restore') }}</button>
+        </form>
+        {% endif %}
     </div>
 </article>
 {% endblock %}

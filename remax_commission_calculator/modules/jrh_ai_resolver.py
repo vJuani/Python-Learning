@@ -47,7 +47,7 @@ def resolve_contacts(organization_id, query, *, user, agent_id=None):
     organization_id = require_organization_id(organization_id)
     scoped = _viewer_agent_id(user, agent_id)
     if is_agent(user) and scoped is None:
-        return {"status": "empty", "matches": []}
+        return []
     result = match_contacts(
         organization_id,
         scoped if is_agent(user) else None,
@@ -68,7 +68,7 @@ def resolve_contacts(organization_id, query, *, user, agent_id=None):
             {
                 "id": item.get("id"),
                 "name": item.get("name") or "",
-                "kind": "need",
+                "kind": "contact",
             }
         )
     return unique

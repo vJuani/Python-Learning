@@ -444,3 +444,55 @@ html[data-theme="dark"] .matches-card {
     overflow: hidden;
     clip: rect(0 0 0 0);
 }
+
+.contacts-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.contacts-stale-banner,
+.contacts-back {
+    margin: 0 0 12px;
+    color: var(--muted, #5b6b82);
+}
+
+.contact-kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 0 16px;
+}
+
+.contact-kpis article {
+    padding: 12px;
+    border-radius: 16px;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #d5dde8);
+}
+
+.contact-badge {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(13, 71, 255, 0.1);
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+.contact-profile__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 0;
+    margin: 8px 0 12px;
+    list-style: none;
+    color: var(--muted, #5b6b82);
+}
+
+@media (min-width: 720px) {
+    .contact-kpis {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}

@@ -14,6 +14,7 @@ from modules.agent_productivity import (
     confirm_logged_activity,
     disable_goal,
     edit_logged_activity,
+    enrich_logged_contacts,
     propose_logged_activity,
     require_productivity_agent,
     save_goals,
@@ -112,10 +113,15 @@ def register_productivity_routes(app, helpers):
             draft["note"] = request.form.get("note") or ""
             draft["channels"] = request.form.getlist("channel")
             draft["purposes"] = request.form.getlist("purpose")
-            draft["proposals"] = propose_logged_activity(
-                draft["note"],
-                channels=draft["channels"],
-                purposes=draft["purposes"],
+            draft["proposals"] = enrich_logged_contacts(
+                organization_id,
+                user["agent_id"],
+                propose_logged_activity(
+                    draft["note"],
+                    channels=draft["channels"],
+                    purposes=draft["purposes"],
+                    language=language,
+                ),
                 language=language,
             )
             draft["edit_index"] = None
@@ -133,15 +139,31 @@ def register_productivity_routes(app, helpers):
                 index = int(request.form.get("index") or -1)
             except ValueError:
                 index = -1
-            draft["proposals"] = edit_logged_activity(
-                draft.get("proposals") or [],
-                index,
-                channel=request.form.get("channel"),
-                contact_name=request.form.get("contact_name"),
-                purpose=request.form.get("purpose"),
+            draft["proposals"] = enrich_logged_contacts(
+                organization_id,
+                user["agent_id"],
+                edit_logged_activity(
+                    draft.get("proposals") or [],
+                    index,
+                    channel=request.form.get("channel"),
+                    contact_name=request.form.get("contact_name"),
+                    purpose=request.form.get("purpose"),
+                    language=language,
+                ),
                 language=language,
             )
             draft["edit_index"] = None
+            session[DRAFT_KEY] = draft
+        elif action == "create_contact":
+            try:
+                index = int(request.form.get("index") or -1)
+            except ValueError:
+                index = -1
+            proposals = list(draft.get("proposals") or [])
+            if 0 <= index < len(proposals):
+                proposals[index] = dict(proposals[index])
+                proposals[index]["create_contact"] = True
+            draft["proposals"] = proposals
             session[DRAFT_KEY] = draft
         elif action == "review":
             draft["edit_index"] = None

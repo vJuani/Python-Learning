@@ -39,6 +39,10 @@ from modules.jrh_ai_intents import (
     ACM_PRICE_SCENARIO,
     DOWNLOAD_ACM,
     QUERY_PRODUCTIVITY,
+    QUERY_CONTACT,
+    QUERY_CONTACT_HISTORY,
+    QUERY_CONTACT_PROPERTIES,
+    START_CONTACT_NEED,
     WRITE_ACTIONS,
 )
 from modules.jrh_ai_provider import interpret_prompt
@@ -149,6 +153,23 @@ def ask_jrh(
     intent = parsed.get("intent") or FALLBACK
     entities = parsed.get("entities") or {}
     confidence = float(parsed.get("confidence") or 0)
+    last = context.get("last_entity") or {}
+    if last.get("kind") == "contact" and last.get("id"):
+        folded = fold_text(text)
+        if entities.get("refers_to_previous") or any(
+            token in folded
+            for token in (
+                "llamalo",
+                "llamarlo",
+                "con el",
+                "con ella",
+                "le mande",
+                "le mandé",
+                "con el hoy",
+            )
+        ):
+            entities["contact_id"] = last["id"]
+            entities["contact_name"] = last.get("label") or entities.get("contact_name")
     if entities.get("cancel_pending"):
         store_context(session, intent=FALLBACK, prompt=text, pending_invoice={})
         return _fallback(language, confidence=0.9)
@@ -204,6 +225,10 @@ def ask_jrh(
         ACM_PRICE_SCENARIO: _handle_acm_scenario,
         DOWNLOAD_ACM: _handle_download_acm,
         QUERY_PRODUCTIVITY: _handle_productivity,
+        QUERY_CONTACT: _handle_contact,
+        QUERY_CONTACT_HISTORY: _handle_contact_history,
+        QUERY_CONTACT_PROPERTIES: _handle_contact_properties,
+        START_CONTACT_NEED: _handle_start_contact_need,
     }
     handler = handlers.get(intent, lambda **_kwargs: _fallback(language, confidence))
     result = handler(
@@ -961,13 +986,37 @@ def _handle_create_task(
         now=now or now_utc(),
     )
     item = (parsed.get("items") or [{}])[0]
+    contact_name = item.get("contact_name") or entities.get("contact_name") or ""
+    contact_id = item.get("contact_id") or entities.get("contact_id")
+    if contact_name or contact_id:
+        status, chosen, _matches = _resolve_prompt_contact(
+            organization_id,
+            user,
+            agent_id,
+            {"contact_name": contact_name, "contact_id": contact_id},
+            confidence,
+        )
+        if status == "unique" and chosen:
+            contact_id = chosen["id"]
+            contact_name = chosen.get("name") or contact_name
+        elif status == "ambiguous":
+            return _result(
+                CREATE_TASK,
+                "needs_attention",
+                language=language,
+                message_key="jrh_ai_contact_ambiguous",
+                candidates=_matches,
+                data={"name": contact_name},
+                confidence=confidence,
+            )
     draft = {
         "intent": CREATE_TASK,
         "title": item.get("title") or entities.get("title") or prompt,
         "task_type": item.get("task_type") or "visit",
         "due_date": item.get("due_date"),
         "due_time": item.get("due_time"),
-        "contact_name": item.get("contact_name") or entities.get("contact_name") or "",
+        "contact_name": contact_name,
+        "contact_id": contact_id,
         "property_id": item.get("property_id"),
     }
     if session is not None:
@@ -983,6 +1032,11 @@ def _handle_create_task(
                 "subtitle": draft.get("contact_name") or draft.get("task_type") or "",
             }
         ],
+        entity=(
+            {"kind": "contact", "id": draft.get("contact_id"), "label": draft.get("contact_name")}
+            if draft.get("contact_id")
+            else {}
+        ),
         actions=[
             {"label_key": "jrh_ai_confirm_task", "href_name": "jrh_ask_confirm"},
             {
@@ -1728,6 +1782,298 @@ def _handle_download_acm(
     )
 
 
+def _resolve_prompt_contact(organization_id, user, agent_id, entities, confidence):
+    from modules.contacts import load_contact
+
+    contact_id = entities.get("contact_id")
+    if contact_id:
+        try:
+            contact = load_contact(
+                organization_id,
+                int(contact_id),
+                agent_id=agent_id if is_agent(user) else None,
+            )
+        except Exception:
+            contact = None
+        if contact:
+            chosen = {
+                "id": contact["id"],
+                "name": contact.get("name") or "",
+                "kind": "contact",
+                "phone": contact.get("phone") or "",
+            }
+            return "unique", chosen, [chosen]
+    query = entities.get("contact_name") or entities.get("agent_name") or ""
+    matches = resolve_contacts(
+        organization_id,
+        query,
+        user=user,
+        agent_id=agent_id,
+    )
+    return pick_unique(matches, confidence=confidence)
+
+
+def _contact_attention(intent, status, language, query, matches, confidence):
+    return _result(
+        intent,
+        "needs_attention",
+        language=language,
+        message_key=(
+            "jrh_ai_contact_ambiguous"
+            if status == "ambiguous"
+            else "jrh_ai_contact_missing"
+        ),
+        candidates=matches,
+        data={"name": query},
+        confidence=confidence,
+    )
+
+
+def _handle_contact(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    confidence,
+    **_kwargs,
+):
+    from modules.contacts import load_contact
+
+    query = entities.get("contact_name") or entities.get("agent_name") or ""
+    status, chosen, matches = _resolve_prompt_contact(
+        organization_id, user, agent_id, entities, confidence
+    )
+    if status != "unique":
+        return _contact_attention(
+            QUERY_CONTACT, status, language, query, matches, confidence
+        )
+    contact = load_contact(
+        organization_id,
+        chosen["id"],
+        agent_id=agent_id if is_agent(user) else None,
+    )
+    phone = contact.get("phone") or ""
+    summary = contact.get("name") or ""
+    if phone:
+        summary = f"{summary} · {phone}"
+    return _result(
+        QUERY_CONTACT,
+        "ready",
+        language=language,
+        summary=summary,
+        cards=[{"title": contact.get("name") or "", "subtitle": phone or contact.get("email") or ""}],
+        actions=[
+            {
+                "label_key": "jrh_cta_view",
+                "href_name": "contacts_detail",
+                "href_args": {"contact_id": contact["id"]},
+            }
+        ],
+        confidence=confidence,
+        entity={"kind": "contact", "id": contact["id"], "label": contact.get("name") or ""},
+        data={"phone": phone, "email": contact.get("email") or ""},
+    )
+
+
+def _handle_contact_history(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    confidence,
+    now=None,
+    **_kwargs,
+):
+    from modules.contacts import decorate_contact, load_contact
+
+    query = entities.get("contact_name") or entities.get("agent_name") or ""
+    status, chosen, matches = _resolve_prompt_contact(
+        organization_id, user, agent_id, entities, confidence
+    )
+    if status != "unique":
+        return _contact_attention(
+            QUERY_CONTACT_HISTORY, status, language, query, matches, confidence
+        )
+    contact = load_contact(
+        organization_id,
+        chosen["id"],
+        agent_id=agent_id if is_agent(user) else None,
+    )
+    card = decorate_contact(
+        contact,
+        organization_id=organization_id,
+        language=language,
+        now=now,
+    )
+    events = []
+    for group in card.get("history") or []:
+        events.extend(group.get("events") or [])
+    recent = [
+        event
+        for event in events
+        if event.get("kind") != "created"
+    ][:6]
+    if not recent:
+        summary = _t("jrh_ai_contact_history_empty", language, name=contact.get("name") or "")
+    else:
+        first = recent[0]
+        title = first.get("title") or ""
+        if first.get("detail"):
+            title = f"{title} · {first['detail']}"
+        summary = _t(
+            "jrh_ai_contact_history_summary",
+            language,
+            name=contact.get("name") or "",
+            title=title,
+        )
+    cards = [
+        {
+            "title": event.get("title") or "",
+            "subtitle": event.get("detail") or event.get("time_label") or "",
+        }
+        for event in recent
+    ]
+    return _result(
+        QUERY_CONTACT_HISTORY,
+        "ready",
+        language=language,
+        summary=summary,
+        cards=cards,
+        actions=[
+            {
+                "label_key": "jrh_cta_view",
+                "href_name": "contacts_detail",
+                "href_args": {"contact_id": contact["id"]},
+            }
+        ],
+        confidence=confidence,
+        entity={"kind": "contact", "id": contact["id"], "label": contact.get("name") or ""},
+    )
+
+
+def _handle_contact_properties(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    confidence,
+    **_kwargs,
+):
+    from modules.contacts import decorate_contact, load_contact
+
+    query = entities.get("contact_name") or entities.get("agent_name") or ""
+    status, chosen, matches = _resolve_prompt_contact(
+        organization_id, user, agent_id, entities, confidence
+    )
+    if status != "unique":
+        return _contact_attention(
+            QUERY_CONTACT_PROPERTIES, status, language, query, matches, confidence
+        )
+    contact = load_contact(
+        organization_id,
+        chosen["id"],
+        agent_id=agent_id if is_agent(user) else None,
+    )
+    card = decorate_contact(
+        contact,
+        organization_id=organization_id,
+        language=language,
+    )
+    shared = card.get("shared_properties") or []
+    if not shared:
+        summary = _t("jrh_ai_contact_shared_empty", language, name=contact.get("name") or "")
+    else:
+        names = [item.get("label") for item in shared if item.get("label")]
+        summary = _t(
+            "jrh_ai_contact_shared",
+            language,
+            name=contact.get("name") or "",
+            count=len(shared),
+            list=", ".join(names[:5]),
+        )
+    return _result(
+        QUERY_CONTACT_PROPERTIES,
+        "ready",
+        language=language,
+        summary=summary,
+        cards=[{"title": item.get("label") or ""} for item in shared[:8]],
+        confidence=confidence,
+        entity={"kind": "contact", "id": contact["id"], "label": contact.get("name") or ""},
+    )
+
+
+def _handle_start_contact_need(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    prompt,
+    confidence,
+    session,
+    **_kwargs,
+):
+    from modules.jrh_ai_classify import extract_property_entities
+
+    query = entities.get("contact_name") or entities.get("agent_name") or ""
+    status, chosen, matches = _resolve_prompt_contact(
+        organization_id, user, agent_id, entities, confidence
+    )
+    if status != "unique":
+        return _contact_attention(
+            START_CONTACT_NEED, status, language, query, matches, confidence
+        )
+    extracted = extract_property_entities(prompt)
+    prefs = {}
+    area = extracted.get("neighborhood") or extracted.get("location")
+    if area:
+        prefs["areas"] = [area]
+    if extracted.get("rooms"):
+        prefs["rooms"] = extracted["rooms"]
+    if extracted.get("property_type"):
+        prefs["property_types"] = [extracted["property_type"]]
+    if extracted.get("max_price"):
+        prefs["budget"] = {
+            "max": extracted.get("max_price"),
+            "currency": extracted.get("currency") or "USD",
+        }
+    draft = {
+        "intent": START_CONTACT_NEED,
+        "contact_id": chosen["id"],
+        "contact_name": chosen.get("name") or query,
+        "preferences": prefs,
+    }
+    if session is not None:
+        session[SESSION_DRAFT_KEY] = draft
+    subtitle = " · ".join(
+        part
+        for part in (
+            " · ".join(prefs.get("areas") or []),
+            f"{prefs['rooms']} amb" if prefs.get("rooms") else "",
+        )
+        if part
+    )
+    return _result(
+        START_CONTACT_NEED,
+        "ready",
+        language=language,
+        summary=draft["contact_name"],
+        cards=[{"title": draft["contact_name"], "subtitle": subtitle}],
+        actions=[{"label_key": "jrh_ai_confirm_task", "href_name": "jrh_ask_confirm"}],
+        confirm_required=True,
+        confidence=confidence,
+        entity=chosen,
+        data={"draft": draft},
+    )
+
+
 def _handle_productivity(
     *,
     organization_id,
@@ -2223,6 +2569,7 @@ def confirm_jrh_action(
                 "due_date": draft.get("due_date"),
                 "due_time": draft.get("due_time"),
                 "contact_name": draft.get("contact_name") or "",
+                "contact_id": draft.get("contact_id"),
                 "property_id": draft.get("property_id"),
             },
             created_by_user_id=(user or {}).get("id"),
@@ -2237,6 +2584,45 @@ def confirm_jrh_action(
             wrote=True,
             data={"task_id": task.get("id")},
             actions=[{"label_key": "jrh_cta_view", "href_name": "agenda_index"}],
+        )
+    if intent == START_CONTACT_NEED:
+        from modules.contacts import save_contact_need
+
+        contact_id = draft.get("contact_id")
+        if not contact_id:
+            return _result(
+                START_CONTACT_NEED,
+                "needs_attention",
+                language=language,
+                message_key="jrh_ai_contact_missing",
+            )
+        save_contact_need(
+            organization_id,
+            contact_id,
+            draft.get("preferences") or {},
+            agent_id=agent_id,
+            client_name=draft.get("contact_name"),
+        )
+        if session is not None:
+            session.pop(SESSION_DRAFT_KEY, None)
+        return _result(
+            START_CONTACT_NEED,
+            "ready",
+            language=language,
+            message_key="contacts_flash_prefs_updated",
+            wrote=True,
+            entity={
+                "kind": "contact",
+                "id": contact_id,
+                "label": draft.get("contact_name") or "",
+            },
+            actions=[
+                {
+                    "label_key": "jrh_cta_open_results",
+                    "href_name": "contacts_property_matches",
+                    "href_args": {"contact_id": contact_id},
+                }
+            ],
         )
     return _result(
         intent,

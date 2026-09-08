@@ -12,9 +12,15 @@
             <h1>{{ t('contacts_title') }}</h1>
         </div>
         {% if can_manage %}
-        <a class="btn btn-primary" href="{{ url_for('contacts_new') }}">+ {{ t('contacts_new') }}</a>
+        <div class="contacts-hero__actions">
+            <a class="btn btn-secondary" href="{{ url_for('contacts_import') }}" data-import-entry>{{ t('contacts_import') }}</a>
+            <a class="btn btn-primary" href="{{ url_for('contacts_new') }}">+ {{ t('contacts_new') }}</a>
+        </div>
         {% endif %}
     </header>
+    {% if stale_count %}
+    <p class="contacts-stale-banner">{{ t('contacts_stale_banner', count=stale_count) }}</p>
+    {% endif %}
 
     <form method="get" class="contacts-search" action="{{ url_for('contacts_index') }}">
         <input type="hidden" name="filter" value="{{ contact_filter }}">
@@ -33,6 +39,10 @@
             ('active', t('contacts_filter_active')),
             ('leads', t('contacts_filter_leads')),
             ('no_next', t('contacts_filter_no_next')),
+            ('buyers', t('contacts_filter_buyers')),
+            ('sellers', t('contacts_filter_sellers')),
+            ('owners', t('contacts_filter_owners')),
+            ('stale', t('contacts_filter_stale')),
         ] %}
         <a
             class="contacts-filter{% if contact_filter == key %} is-active{% endif %}"
@@ -47,7 +57,11 @@
         <article class="contacts-card">
             <a class="contacts-card__main" href="{{ url_for('contacts_detail', contact_id=contact.id) }}">
                 <h2>{{ contact.name }}</h2>
-                <p class="contacts-card__status">{{ contact.status_label }}</p>
+                <p class="contacts-card__status">
+                    {% if contact.contact_type_label %}{{ contact.contact_type_label }} · {% endif %}
+                    {{ contact.status_label }}
+                </p>
+                {% if contact.phone %}<p>{{ contact.phone }}</p>{% endif %}
                 {% if contact.search_line or contact.budget_label %}
                 <p>
                     <span>{{ t('contacts_looking_for') }}</span>
@@ -71,8 +85,12 @@
                 {% endif %}
             </a>
             <div class="contacts-card__actions">
-                {% if contact.whatsapp_url %}
-                <a class="agenda-chip" href="{{ contact.whatsapp_url }}" target="_blank" rel="noopener">{{ t('agenda_action_whatsapp') }}</a>
+                {% if contact.tel_url %}
+                <a class="agenda-chip" href="{{ contact.tel_url }}">{{ t('agenda_action_call') }}</a>
+                {% endif %}
+                {% if can_manage %}
+                <a class="agenda-chip" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('contacts_schedule') }}</a>
+                <a class="agenda-chip" href="{{ url_for('productivity_home') }}#prod-log">{{ t('contacts_new_activity') }}</a>
                 {% endif %}
                 <a class="agenda-chip" href="{{ url_for('contacts_detail', contact_id=contact.id) }}">{{ t('contacts_view') }}</a>
             </div>

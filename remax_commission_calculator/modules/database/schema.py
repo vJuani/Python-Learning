@@ -3789,6 +3789,12 @@ def migrate_schema(create_backup=True):
 
     migrate_contacts_sqlite()
 
+    from .contacts_v2_migration import (
+        migrate_contacts_v2_sqlite,
+    )
+
+    migrate_contacts_v2_sqlite()
+
     from .property_inventory_migration import (
         migrate_property_inventory_sqlite,
     )
