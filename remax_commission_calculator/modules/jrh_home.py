@@ -171,31 +171,52 @@ def build_agent_home(
             can_manage=True,
         ),
         "arca": arca_chip_for(organization_id, user),
-        "quick_actions": (
-            {
-                "key": "search",
-                "label_key": "jrh_quick_search",
-                "endpoint": "contacts_index",
-            },
-            {
-                "key": "agenda",
-                "label_key": "jrh_quick_agenda",
-                "endpoint": "agenda_compose",
-            },
-            {
-                "key": "contacts",
-                "label_key": "jrh_quick_contacts",
-                "endpoint": "contacts_index",
-            },
-            {
-                "key": "billing",
-                "label_key": "jrh_quick_billing",
-                "endpoint": "billing_list",
-            },
-            {
-                "key": "acm",
-                "label_key": "nav_acm",
-                "endpoint": "acm_list",
-            },
+        "quick_actions": build_jrh_chip_actions(
+            can_acm=True,
+            can_productivity=True,
         ),
     }
+
+
+def build_jrh_chip_actions(*, can_acm=False, can_productivity=False):
+    """Shared Home + /jrh composer chips. Staff-only actions stay off."""
+    actions = [
+        {
+            "key": "search",
+            "label_key": "jrh_quick_search",
+            "example_key": "jrh_ask_ex_property",
+        },
+        {
+            "key": "agenda",
+            "label_key": "jrh_type_agenda",
+            "example_key": "jrh_example_agenda",
+        },
+        {
+            "key": "contacts",
+            "label_key": "jrh_quick_contacts",
+            "example_key": "jrh_ask_ex_contacts",
+        },
+        {
+            "key": "billing",
+            "label_key": "jrh_quick_billing",
+            "example_key": "jrh_example_invoice",
+        },
+    ]
+    if can_acm:
+        actions.append(
+            {
+                "key": "acm",
+                "label_key": "jrh_ask_quick_acm",
+                "example_key": "jrh_ask_ex_acm",
+                "acm": True,
+            }
+        )
+    if can_productivity:
+        actions.append(
+            {
+                "key": "performance",
+                "label_key": "nav_productivity",
+                "example_key": "jrh_ask_ex_performance",
+            }
+        )
+    return tuple(actions)

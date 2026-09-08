@@ -182,13 +182,83 @@ def parse_person(text):
     return ""
 
 
+_JUNK_PLACE_LABELS = frozenset(
+    {
+        "si",
+        "sí",
+        "no",
+        "ok",
+        "ya",
+        "hoy",
+        "ahi",
+        "ahí",
+        "eh",
+        "mm",
+        "si,",
+    }
+)
+
+
+def is_usable_place_label(value):
+    """Skip note fragments that were mapped as a place (e.g. 'si')."""
+    text = re.sub(r"\s+", " ", (value or "").strip()).strip(" ·,.")
+    if not text:
+        return False
+    folded = _fold(text)
+    if folded in _JUNK_PLACE_LABELS:
+        return False
+    if len(text) <= 2 and not any(char.isdigit() for char in text):
+        return False
+    return True
+
+
 def parse_property_query(text):
     match = _PROPERTY_RE.search(text or "")
 
     if match is None:
         return ""
 
-    return re.sub(r"\s+", " ", match.group(1)).strip(" .,")
+    place = re.sub(r"\s+", " ", match.group(1)).strip(" .,")
+    if not is_usable_place_label(place):
+        return ""
+    return place
+
+
+def build_task_display_title(
+    *,
+    task_type,
+    title="",
+    contact_name="",
+    property_address="",
+    operation_reference="",
+    type_label="",
+):
+    """Compact Home/agenda label from mapped fields. Does not invent data."""
+    place = ""
+    for candidate in (property_address, operation_reference):
+        if is_usable_place_label(candidate):
+            place = re.sub(r"\s+", " ", candidate.strip()).strip(" ·,.")
+            break
+
+    contact = (contact_name or "").strip()
+    label = (
+        type_label
+        or TYPE_TITLES.get(task_type)
+        or ""
+    )
+    if place:
+        return f"{label} · {place}" if label else place
+    if contact and label:
+        return f"{label} con {contact}"
+    if contact:
+        return contact
+
+    raw = (title or label or "").strip()
+    if " · " not in raw:
+        return raw
+    head, *rest = raw.split(" · ")
+    kept = [part.strip() for part in rest if is_usable_place_label(part)]
+    return " · ".join([head.strip()] + kept) if kept else head.strip()
 
 
 def build_task_title(task_type, contact_name, property_query, prompt=None):
@@ -199,7 +269,7 @@ def build_task_title(task_type, contact_name, property_query, prompt=None):
 
     if name:
         parts[0] = f"{label} con {name}"
-    if place:
+    if place and is_usable_place_label(place):
         parts.append(place)
 
     return " · ".join(parts)

@@ -140,6 +140,15 @@ class JrhHomeTests(unittest.TestCase):
         self.assertIn("agenda-block", body)
         self.assertIn("Para vos", body)
         self.assertIn("Google Calendar", body)
+        self.assertIn("Preguntar", body)
+        self.assertIn("branding/jrh-ai/", body)
+        self.assertIn("jrh-bot-hero", body)
+        self.assertIn("Mi rendimiento", body)
+        self.assertIn("Crear ACM", body)
+        self.assertNotIn("jrh-quick__", body)
+        self.assertNotIn("jrh-fab", body)
+        self.assertNotIn("jrh-bot-hero.webp", body)
+        self.assertNotIn("JRH One IA", body)
 
     def test_home_staff_keeps_executive_dashboard(self):
         client = self._login("jrh_admin", role=ROLE_ADMIN)

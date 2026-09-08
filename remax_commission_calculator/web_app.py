@@ -768,6 +768,7 @@ def inject_product_branding():
         get_logo_horizontal_rel,
         get_logo_icon_rel,
     )
+    from modules.jrh_branding import jrh_mascot_context
 
     def _brand_static_url(rel_path: str) -> str:
         return url_for(
@@ -798,6 +799,7 @@ def inject_product_branding():
         "brand_login_header_lockup_url": _brand_static_url(
             "brand/login-header-lockup.png",
         ),
+        "jrh_mascot": jrh_mascot_context(url_for),
     }
 
 

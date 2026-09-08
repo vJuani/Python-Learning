@@ -564,6 +564,12 @@ class JrhAiTests(unittest.TestCase):
         self.assertIn("jrh-studio", body)
         self.assertNotIn("jrh-ask__form", body)
         self.assertNotIn("QUERY_", body)
+        self.assertIn("branding/jrh-ai/", body)
+        self.assertIn("jrh-bot-hero", body)
+        self.assertNotIn("jrh-bot-hero.webp", body)
+        self.assertIn("Preguntar", body)
+        self.assertIn("Todavía no hay conversación.", body)
+        self.assertNotIn("Escribí un pedido", body)
 
     def test_19c_agent_sees_acm_quick_action(self):
         client = self._login("jrh_ai_agent")
@@ -585,6 +591,8 @@ class JrhAiTests(unittest.TestCase):
         css = Path(__file__).resolve().parents[1].joinpath("static", "css", "jrh-ask-page.css").read_text(encoding="utf-8")
         self.assertIn("prefers-reduced-motion", css)
         self.assertIn("[data-theme=\"dark\"]", css)
+        self.assertIn("jrhFloat", css)
+        self.assertIn(".jrh-bot-hero", css)
         asked = client.post(
             "/jrh",
             data={"prompt": "mostrame qué propiedades disponibles tengo en capital"},

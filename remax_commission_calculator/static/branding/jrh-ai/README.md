@@ -1,13 +1,24 @@
 # JRH AI mascot assets
 
-Replace these placeholders with the official transparent WebP files.
-Templates already point at the `.webp` names and fall back to the `.svg`
-placeholders, so swapping files does not require template changes.
+Official transparent PNG/WebP only. Do not generate another robot,
+do not use emoji, and do not crop the mascot from UI screenshots.
 
-Expected files (transparent background, no rectangular plate):
+Drop files here. Templates resolve the first existing file with
+`url_for('static', ...)` and the project's normal file-mtime version.
 
-- `jrh-bot-hero.webp` — large hero, ~720px tall
-- `jrh-bot-avatar.webp` — circular-friendly head, ~256px
-- `jrh-bot-floating.webp` — compact floating card, ~192px
+Supported names:
 
-Do not crop the mascot from UI screenshots. Use the brand master.
+- `jrh-bot-hero.png` / `.webp`
+- `jrh-bot-avatar.png` / `.webp`
+- `jrh-bot-floating.png` / `.webp`
+
+A single master is enough. Any of these is reused for hero, avatar
+and floating until the other sizes exist:
+
+- `jrh-bot.png` / `.webp`
+- `jrh-bot-hero.png` / `.webp`
+
+Filenames must stay lowercase for Linux/Railway.
+
+SVG placeholders remain only as a last-resort fallback so the UI
+never shows a broken image icon.

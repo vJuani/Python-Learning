@@ -25,7 +25,8 @@
     data-placeholders="{{ t('jrh_ask_ph_acm') }}|{{ t('jrh_ask_ph_properties') }}|{{ t('jrh_ask_ph_pending') }}|{{ t('jrh_ask_ph_invoice') }}|{{ t('jrh_ask_ph_agenda') }}"
 >
     <header class="jrh-studio__hero">
-        <div>
+        <div class="jrh-studio__copy">
+            <div class="jrh-studio__intro">
             <p class="jrh-studio__kicker">{{ t('jrh_ia_label') }}</p>
             <h1 class="jrh-studio__title">{{ t('jrh_ask_title') }}</h1>
             <p class="jrh-studio__lead">{{ t('jrh_ask_subtitle') }}</p>
@@ -34,6 +35,8 @@
                 <li>{{ t('jrh_ask_badge_live') }}</li>
                 <li>{{ t('jrh_ask_badge_confirm') }}</li>
             </ul>
+            </div>
+            <div class="jrh-studio__composer">
             <form class="jrh-studio__form" method="post" action="{{ url_for('jrh_ask') }}" data-jrh-interpret>
                 <label class="sr-only" for="jrh-ask-prompt">{{ t('jrh_ask_placeholder') }}</label>
                 <div class="jrh-studio__field">
@@ -75,39 +78,13 @@
                     </div>
                 </div>
             </form>
-            <div class="jrh-studio__actions" role="group" aria-label="{{ t('jrh_quick_title') }}">
-                <button type="button" class="jrh-studio__chip" data-jrh-example="{{ t('jrh_ask_ex_property') }}">
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20H4v-9.5Z" stroke="currentColor" stroke-width="1.7"/></svg>
-                    {{ t('jrh_quick_search') }}
-                </button>
-                <button type="button" class="jrh-studio__chip" data-jrh-example="{{ t('jrh_ask_ex_invoice') }}">
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h10v16H7V4Z" stroke="currentColor" stroke-width="1.7"/><path d="M10 8h4M10 12h4" stroke="currentColor" stroke-width="1.7"/></svg>
-                    {{ t('jrh_ask_quick_invoice') }}
-                </button>
-                {% if jrh_can_acm %}
-                <button type="button" class="jrh-studio__chip" data-jrh-acm data-jrh-example="{{ t('jrh_ask_ex_acm') }}">
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19V5h16v14H4Z" stroke="currentColor" stroke-width="1.7"/><path d="M7 15h4l2-4 2 3 2-5" stroke="currentColor" stroke-width="1.7"/></svg>
-                    {{ t('jrh_ask_quick_acm') }}
-                </button>
-                {% endif %}
-                <button type="button" class="jrh-studio__chip" data-jrh-example="{{ t('jrh_ask_ex_agenda') }}">
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.7"/></svg>
-                    {{ t('jrh_ask_quick_agenda') }}
-                </button>
-                <button type="button" class="jrh-studio__chip" data-jrh-example="{{ t('jrh_ask_ex_account') }}">
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.7"/><path d="M12 8v8M9 10h4.5a2 2 0 0 1 0 4H9" stroke="currentColor" stroke-width="1.7"/></svg>
-                    {{ t('jrh_ask_ex_account') }}
-                </button>
-                <a class="jrh-studio__chip" href="{{ url_for('pendings_center') }}">
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 7h12M6 12h12M6 17h8" stroke="currentColor" stroke-width="1.7"/></svg>
-                    {{ t('jrh_ask_quick_more') }}
-                </a>
+            {% include "dashboard/_jrh_quick_chips.html" %}
             </div>
         </div>
         <div class="jrh-studio__mascot-wrap">
             <span class="jrh-studio__glow" aria-hidden="true"></span>
             <div class="jrh-studio__mascot">
-                {% with variant='hero', width=320, height=420 %}
+                {% with variant='hero', width=320, height=420, decorative=false %}
                 {% include "dashboard/_jrh_mascot.html" %}
                 {% endwith %}
             </div>
@@ -124,7 +101,7 @@
             {% include "dashboard/_jrh_ask_result.html" %}
             {% include "dashboard/_jrh_result.html" %}
             {% if not jrh_ask and not jrh_result %}
-            <p class="jrh-studio__lead">{{ t('jrh_ask_empty') }}</p>
+            <p class="jrh-studio__empty">{{ t('jrh_ask_empty') }}</p>
             {% endif %}
         </section>
         <aside>

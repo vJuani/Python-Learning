@@ -21,6 +21,7 @@ import json
 import logging
 from datetime import date, timedelta
 
+from modules.agenda_nlp import build_task_display_title, is_usable_place_label
 from modules.visit_outcome import normalize_visit_outcome, outcome_is_present
 from modules.database.agent_tasks_repository import (
     PRIORITIES,
@@ -743,11 +744,12 @@ def decorate_task(task, *, tz, now, language="es"):
         and minutes_until is not None
         and 0 <= minutes_until <= SOON_THRESHOLD_MINUTES
     )
-    relation_label = (
+    raw_relation = (
         task.get("property_address")
         or task.get("operation_reference")
         or ""
     )
+    relation_label = raw_relation if is_usable_place_label(raw_relation) else ""
     maps_url = (
         "https://www.google.com/maps/search/?api=1&query="
         + _url_quote(task.get("property_address") or "")
@@ -756,6 +758,10 @@ def decorate_task(task, *, tz, now, language="es"):
     )
     whatsapp_text = _whatsapp_text(task, language)
     outcome = _parse_outcome(task.get("outcome_json"))
+    type_label = translate(
+        f"agent_task_type_{task['task_type']}",
+        language,
+    )
 
     return {
         **task,
@@ -763,15 +769,20 @@ def decorate_task(task, *, tz, now, language="es"):
         "due_datetime_label": format_local_datetime(task["due_at"], tz),
         "due_date_value": format_local_date_iso(task["due_at"], tz),
         "due_time_value": format_local_time(task["due_at"], tz),
-        "type_label": translate(
-            f"agent_task_type_{task['task_type']}",
-            language,
-        ),
+        "type_label": type_label,
         "status_label": translate(
             f"agent_task_status_{task['status']}",
             language,
         ),
         "relation_label": relation_label,
+        "display_title": build_task_display_title(
+            task_type=task.get("task_type"),
+            title=task.get("title") or "",
+            contact_name=task.get("contact_name") or "",
+            property_address=task.get("property_address") or "",
+            operation_reference=task.get("operation_reference") or "",
+            type_label=type_label,
+        ),
         "contact_name": task.get("contact_name") or "",
         "needs_attendance": (
             is_pending

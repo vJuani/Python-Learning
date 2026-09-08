@@ -123,7 +123,7 @@ def register_jrh_routes(app, helpers):
     flash_i18n = helpers["flash_i18n"]
 
     def _ask_page(user, organization_id, agent_id, *, jrh_ask=None, jrh_result=None, is_mobile=False):
-        from modules.jrh_home import build_agent_home
+        from modules.jrh_home import build_agent_home, build_jrh_chip_actions
         from modules.organization_time import now_utc, organization_timezone
 
         home = None
@@ -148,6 +148,10 @@ def register_jrh_routes(app, helpers):
             jrh_home=home,
             jrh_first_name=first_name,
             jrh_can_acm=bool(is_agent(user) and agent_id),
+            jrh_chip_actions=build_jrh_chip_actions(
+                can_acm=bool(is_agent(user) and agent_id),
+                can_productivity=bool(is_agent(user) and agent_id),
+            ),
             jrh_now_label=now_label,
         )
 

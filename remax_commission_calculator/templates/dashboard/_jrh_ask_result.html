@@ -12,10 +12,14 @@
     </article>
     {% endif %}
     <article class="jrh-chat__row" data-status="{{ jrh_ask.status }}">
-        <div class="jrh-chat__avatar">
-            {% with variant='avatar', width=72, height=72 %}
+        <div class="jrh-chat__avatar{% if not (jrh_mascot.avatar if jrh_mascot is defined else none) %} is-fallback{% endif %}">
+            {% if jrh_mascot is defined and jrh_mascot.avatar %}
+            {% with variant='avatar', width=72, height=72, decorative=true %}
             {% include "dashboard/_jrh_mascot.html" %}
             {% endwith %}
+            {% else %}
+            <span aria-hidden="true">JRH</span>
+            {% endif %}
         </div>
         <div>
             <p class="jrh-chat__meta">{{ t('jrh_ia_label') }}{% if jrh_now_label %} · {{ jrh_now_label }}{% endif %}</p>

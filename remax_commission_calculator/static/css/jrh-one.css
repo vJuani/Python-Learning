@@ -676,9 +676,11 @@ textarea.form-input:focus {
     text-decoration: none;
 }
 
-.jrh-float img {
+.jrh-float img,
+.jrh-float .jrh-bot-floating {
     width: 2.6rem;
     height: 2.6rem;
+    object-fit: contain;
     background: transparent;
 }
 

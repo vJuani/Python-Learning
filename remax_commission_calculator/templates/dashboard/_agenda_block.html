@@ -34,8 +34,8 @@
         {% for task in agenda_summary.tasks %}
         <li class="agenda-block__item{% if task.is_overdue %} agenda-block__item--overdue{% endif %}">
             <span class="agenda-block__hour">{{ task.due_time_label }}</span>
-            <span class="agenda-block__title">{{ task.title }}</span>
-            {% if task.relation_label %}
+            <span class="agenda-block__title">{{ task.display_title or task.title }}</span>
+            {% if task.relation_label and task.relation_label not in (task.display_title or '') %}
             <span class="agenda-block__relation">{{ task.relation_label }}</span>
             {% endif %}
             {% if task.starts_soon %}

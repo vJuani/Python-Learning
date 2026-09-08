@@ -85,13 +85,6 @@
         <nav id="app-rail-nav" class="app-rail-nav">
             {% include "_app_nav_links.html" %}
         </nav>
-        <div class="app-rail-promo hide-mobile">
-            <strong>{{ t('rail_ia_title') }}</strong>
-            <p>{{ t('rail_ia_text') }}</p>
-            <a href="{{ url_for('cash_ai_new') if is_admin() else url_for('dashboard') }}" class="app-rail-promo__link">
-                {{ t('rail_ia_cta') }} →
-            </a>
-        </div>
         <div class="app-rail-footer">
             {% if current_user %}
             {% set rail_first = (current_user.first_name or '').strip() %}
@@ -506,13 +499,15 @@
     </div>
 
     {% if current_user and not is_guest_session() %}
-    <a class="jrh-float" href="{{ url_for('jrh_ask') }}#jrh-ask-prompt" data-jrh-float>
-        <img
-            src="{{ url_for('static', filename='branding/jrh-ai/jrh-bot-floating.svg') }}"
-            alt=""
-            width="48"
-            height="48"
-        >
+    <a
+        class="jrh-float"
+        href="{{ url_for('jrh_ask') }}#jrh-ask-prompt"
+        data-jrh-float
+        aria-label="{{ t('jrh_float_need') }}"
+    >
+        {% with variant='floating', width=48, height=48, decorative=true %}
+        {% include "dashboard/_jrh_mascot.html" %}
+        {% endwith %}
         <div>
             <strong>{{ t('jrh_float_need') }}</strong>
             <span>{{ t('jrh_ask_online') }}</span>

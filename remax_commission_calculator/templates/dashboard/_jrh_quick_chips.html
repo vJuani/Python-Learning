@@ -1,0 +1,13 @@
+{% set chip_actions = actions if actions is defined else (jrh_chip_actions if jrh_chip_actions is defined else (home.quick_actions if home is defined else [])) %}
+<div class="{{ chip_class|default('jrh-studio__actions') }}" role="group" aria-label="{{ t('jrh_quick_title') }}">
+    {% for action in chip_actions %}
+    <button
+        type="button"
+        class="{{ chip_item_class|default('jrh-studio__chip') }}"
+        {% if action.acm %}data-jrh-acm{% endif %}
+        data-jrh-example="{{ t(action.example_key) }}"
+    >
+        {{ t(action.label_key) }}
+    </button>
+    {% endfor %}
+</div>

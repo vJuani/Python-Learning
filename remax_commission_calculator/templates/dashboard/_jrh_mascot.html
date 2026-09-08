@@ -1,12 +1,14 @@
 {% set jrh_mascot_name = variant or 'hero' %}
-{% set jrh_mascot_file = 'jrh-bot-' ~ jrh_mascot_name %}
-<picture>
-    <source srcset="{{ url_for('static', filename='branding/jrh-ai/' ~ jrh_mascot_file ~ '.webp') }}" type="image/webp">
-    <img
-        src="{{ url_for('static', filename='branding/jrh-ai/' ~ jrh_mascot_file ~ '.svg') }}"
-        alt="{{ t('jrh_ia_label') }}"
-        width="{{ width or 320 }}"
-        height="{{ height or 420 }}"
-        decoding="async"
-    >
-</picture>
+{% set jrh_mascot_src = jrh_mascot[jrh_mascot_name] if jrh_mascot is defined and jrh_mascot[jrh_mascot_name] else '' %}
+{% set jrh_mascot_decorative = decorative|default(false) %}
+{% if jrh_mascot_src %}
+<img
+    class="jrh-bot-{{ jrh_mascot_name }}"
+    src="{{ jrh_mascot_src }}"
+    alt="{% if jrh_mascot_decorative %}{% else %}JRH AI{% endif %}"
+    width="{{ width or 320 }}"
+    height="{{ height or 420 }}"
+    decoding="async"
+    onerror="this.hidden=true;this.removeAttribute('src');"
+>
+{% endif %}
