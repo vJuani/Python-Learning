@@ -9,6 +9,7 @@
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
+        <p class="acm-kicker">{{ t('acm_pdf_title') }}</p>
         <h2>{{ t('acm_title') }}</h2>
         <p class="field-help">{{ t('acm_one_click_help') }}</p>
     </div>
@@ -31,8 +32,8 @@
             {{ item.suggested_min_value|money(item.currency or 'USD') }} — {{ item.suggested_max_value|money(item.currency or 'USD') }}
             {% else %}—{% endif %}
         </p>
+        <p class="acm-confidence acm-confidence--{{ item.confidence or 'low' }}">{{ t('acm_confidence_' ~ (item.confidence or 'low')) }}</p>
         <ul class="acm-list-card__meta">
-            <li>{{ t('acm_confidence_' ~ (item.confidence or 'low')) }}</li>
             <li>{{ t('acm_used_similar', n=item.valuation_count or 0) }}</li>
             <li>{{ (item.finalized_at or item.updated_at or item.created_at or '')[:16] }}</li>
         </ul>
