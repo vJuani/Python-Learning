@@ -96,6 +96,8 @@ def _subject_snapshot(property_data):
         "parking_spaces": property_data.get("parking_spaces"),
         "features": property_data.get("features") or {},
         "commercial_status": property_data.get("commercial_status"),
+        "latitude": property_data.get("latitude"),
+        "longitude": property_data.get("longitude"),
     }
 
 
@@ -521,7 +523,10 @@ def get_acm_view(acm_id, organization_id, *, user, language="es"):
             "valid": int(metrics.get("valuation_count") or 0),
             "found": int(metrics.get("found_count") or len(enriched)),
             "closings": int(metrics.get("closing_count") or 0),
-            "geo_available": False,
+            "geo_available": bool(
+                subject.get("latitude") is not None
+                and subject.get("longitude") is not None
+            ),
             "confidence": metrics.get("confidence") or "low",
         },
         "comparables": enriched,

@@ -320,6 +320,37 @@ def approve_property_change_request(
 
     cursor.execute(
         """
+        SELECT address
+        FROM properties
+        WHERE id = ?
+            AND organization_id = ?
+        """,
+        (property_id, organization_id),
+    )
+    current = cursor.fetchone()
+    from modules.maps.location import addresses_differ_substantially
+
+    clear_geo = bool(
+        current and addresses_differ_substantially(current[0], row[1])
+    )
+    geo_sql = ""
+    if clear_geo:
+        geo_sql = """
+            ,
+            formatted_address = NULL,
+            locality = NULL,
+            administrative_area = NULL,
+            country = NULL,
+            postal_code = NULL,
+            google_place_id = NULL,
+            latitude = NULL,
+            longitude = NULL,
+            geocoded_at = NULL,
+            geocode_status = 'stale'
+        """
+
+    cursor.execute(
+        f"""
         UPDATE properties
         SET
             address = ?,
@@ -329,6 +360,7 @@ def approve_property_change_request(
             listing_price = ?,
             listing_purpose = ?,
             listing_currency = COALESCE(?, listing_currency)
+            {geo_sql}
         WHERE id = ?
             AND organization_id = ?
         """,

@@ -266,6 +266,15 @@
     font-size: 0.9rem;
 }
 
+.jrh-side-actions__maps {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent, #0d47ff);
+}
+
 .jrh-result {
     margin: 0 0 18px;
     padding: 16px;

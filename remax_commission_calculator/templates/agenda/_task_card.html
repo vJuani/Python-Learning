@@ -93,8 +93,8 @@
                 {% endif %}
             </a>
             {% endif %}
-            {% if task.maps_url %}
-            <a class="agenda-chip" href="{{ task.maps_url }}" target="_blank" rel="noopener">
+            {% if task.directions_url %}
+            <a class="agenda-chip" href="{{ task.directions_url }}" target="_blank" rel="noopener" aria-label="{{ t('agenda_action_directions') }}">
                 {{ t('agenda_action_directions') }}
             </a>
             {% endif %}

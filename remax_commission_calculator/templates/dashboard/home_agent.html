@@ -103,6 +103,9 @@
                 <li>
                     <strong>{{ task.due_time_label }}</strong>
                     <span>{{ task.display_title or task.title }}</span>
+                    {% if task.directions_url %}
+                    <a class="jrh-side-actions__maps" href="{{ task.directions_url }}" target="_blank" rel="noopener">{{ t('agenda_action_directions') }}</a>
+                    {% endif %}
                 </li>
                 {% endfor %}
             </ul>
@@ -158,6 +161,9 @@
                 <li>
                     <strong>{{ task.due_time_label }}</strong>
                     <span>{{ task.display_title or task.title }}</span>
+                    {% if task.directions_url %}
+                    <a class="jrh-side-actions__maps" href="{{ task.directions_url }}" target="_blank" rel="noopener">{{ t('agenda_action_directions') }}</a>
+                    {% endif %}
                 </li>
                 {% endfor %}
             </ul>

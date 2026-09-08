@@ -805,3 +805,48 @@ html[data-theme="dark"] .property-feature-chip {
         min-height: 2.75rem;
     }
 }
+
+.property-location__map {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 420px;
+    min-height: 180px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: transparent;
+}
+
+.property-location__address {
+    margin: 0.85rem 0 0.2rem;
+    font-weight: 700;
+}
+
+.property-location__meta {
+    margin: 0 0 0.85rem;
+    color: var(--text-muted, #5b6b82);
+}
+
+.property-location__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+}
+
+.property-location__actions .btn {
+    min-height: 2.75rem;
+}
+
+@media (max-width: 768px) {
+    .property-location__actions {
+        display: grid;
+    }
+
+    .property-location__actions .btn {
+        justify-content: center;
+    }
+}
+
+[data-theme="dark"] .property-location__map {
+    background: #121b33;
+}

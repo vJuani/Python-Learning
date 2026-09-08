@@ -208,4 +208,6 @@ def decorate_property_for_display(property_row, language="es"):
         if commercial in COMMERCIAL_STATUSES
         else None
     )
-    return row
+    from modules.maps.location import attach_property_maps
+
+    return attach_property_maps(row)

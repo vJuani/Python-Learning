@@ -69,6 +69,10 @@ _TASK_SELECT = """
         task.cancelled_at,
         agent.name,
         COALESCE(property.address, listing.address),
+        property.latitude,
+        property.longitude,
+        property.google_place_id,
+        property.formatted_address,
         operation.id,
         task.google_event_id,
         task.contact_id,
@@ -98,7 +102,7 @@ def _build_task(row):
     if row is None:
         return None
 
-    operation_id = row[25]
+    operation_id = row[29] if len(row) > 29 else row[25]
 
     return {
         "id": row[0],
@@ -126,15 +130,19 @@ def _build_task(row):
         "cancelled_at": row[22],
         "agent_name": row[23],
         "property_address": row[24],
+        "latitude": row[25] if len(row) > 28 else None,
+        "longitude": row[26] if len(row) > 28 else None,
+        "google_place_id": row[27] if len(row) > 28 else None,
+        "formatted_address": row[28] if len(row) > 28 else None,
         "operation_reference": (
             f"COM-{operation_id:06d}"
             if operation_id is not None
             else None
         ),
-        "google_event_id": row[26],
-        "contact_id": row[27] if len(row) > 27 else None,
-        "external_listing_id": row[28] if len(row) > 28 else None,
-        "external_url": row[29] if len(row) > 29 else None,
+        "google_event_id": row[30] if len(row) > 30 else None,
+        "contact_id": row[31] if len(row) > 31 else None,
+        "external_listing_id": row[32] if len(row) > 32 else None,
+        "external_url": row[33] if len(row) > 33 else None,
         "source": "jrh",
     }
 

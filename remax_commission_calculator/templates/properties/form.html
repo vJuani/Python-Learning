@@ -6,6 +6,10 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/properties-page.css') }}">
 {% endblock %}
 
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/property-maps.js') }}"></script>
+{% endblock %}
+
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
@@ -47,7 +51,7 @@
         <fieldset class="property-form-section">
             <legend>{{ t('property_section_main') }}</legend>
 
-            <div class="form-group">
+            <div class="form-group" data-jrh-maps data-maps-mode="autocomplete" data-maps-key="{{ (maps.browser_key if maps is defined else '') }}" data-maps-region="{{ (maps.region if maps is defined else 'ar') }}">
                 <label for="address">{{ t('address') }}</label>
                 <input
                     type="text"
@@ -55,8 +59,21 @@
                     name="address"
                     class="form-input"
                     value="{{ property_data.address }}"
+                    autocomplete="off"
+                    data-jrh-address
                     required
                 >
+                {% if maps is defined and maps.autocomplete_enabled %}
+                <p class="field-help">{{ t('property_address_help') }}</p>
+                {% endif %}
+                <input type="hidden" name="google_place_id" data-jrh-place-id value="{{ property_data.google_place_id or '' }}">
+                <input type="hidden" name="formatted_address" data-jrh-formatted value="{{ property_data.formatted_address or '' }}">
+                <input type="hidden" name="locality" data-jrh-locality value="{{ property_data.locality or '' }}">
+                <input type="hidden" name="administrative_area" data-jrh-admin-area value="{{ property_data.administrative_area or '' }}">
+                <input type="hidden" name="country" data-jrh-country value="{{ property_data.country or '' }}">
+                <input type="hidden" name="postal_code" data-jrh-postal value="{{ property_data.postal_code or '' }}">
+                <input type="hidden" name="latitude" data-jrh-lat value="{{ property_data.latitude if property_data.latitude is not none else '' }}">
+                <input type="hidden" name="longitude" data-jrh-lng value="{{ property_data.longitude if property_data.longitude is not none else '' }}">
             </div>
 
             <div class="form-group">

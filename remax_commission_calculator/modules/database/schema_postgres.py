@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v23"
+POSTGRES_SCHEMA_VERSION = "postgres_v24"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -118,6 +118,16 @@ SCHEMA_STATEMENTS = (
         description TEXT,
         commercial_status TEXT,
         features_json TEXT,
+        formatted_address TEXT,
+        locality TEXT,
+        administrative_area TEXT,
+        country TEXT,
+        postal_code TEXT,
+        google_place_id TEXT,
+        latitude DOUBLE PRECISION,
+        longitude DOUBLE PRECISION,
+        geocoded_at TEXT,
+        geocode_status TEXT,
         last_synced_at TEXT,
         external_id TEXT,
         status TEXT NOT NULL DEFAULT 'approved',
@@ -2825,6 +2835,16 @@ def create_postgres_schema():
             ("description", "TEXT"),
             ("commercial_status", "TEXT"),
             ("features_json", "TEXT"),
+            ("formatted_address", "TEXT"),
+            ("locality", "TEXT"),
+            ("administrative_area", "TEXT"),
+            ("country", "TEXT"),
+            ("postal_code", "TEXT"),
+            ("google_place_id", "TEXT"),
+            ("latitude", "DOUBLE PRECISION"),
+            ("longitude", "DOUBLE PRECISION"),
+            ("geocoded_at", "TEXT"),
+            ("geocode_status", "TEXT"),
         ):
             cursor.execute(
                 f"""
@@ -2833,6 +2853,13 @@ def create_postgres_schema():
                 {column_name} {column_sql}
                 """
             )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_properties_org_coords
+            ON properties (organization_id, latitude, longitude)
+            """
+        )
 
         cursor.execute(
             """

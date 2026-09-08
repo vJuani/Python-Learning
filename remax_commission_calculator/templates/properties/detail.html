@@ -6,6 +6,10 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/properties-page.css') }}">
 {% endblock %}
 
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/property-maps.js') }}"></script>
+{% endblock %}
+
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
@@ -153,6 +157,65 @@
         <strong>{{ t('rejection_reason') }}:</strong>
         {{ property_data.rejection_reason }}
     </p>
+    {% endif %}
+</section>
+
+<section class="panel property-location" aria-labelledby="property-location-title">
+    <div class="panel-header">
+        <h3 id="property-location-title">{{ t('property_location_title') }}</h3>
+    </div>
+    {% if property_data.show_map %}
+    <div
+        class="property-location__map"
+        data-jrh-maps
+        data-maps-mode="embed"
+        data-maps-key="{{ maps.browser_key if maps is defined else '' }}"
+        data-maps-lat="{{ property_data.latitude }}"
+        data-maps-lng="{{ property_data.longitude }}"
+        data-maps-title="{{ property_data.address }}"
+    ></div>
+    {% endif %}
+    <p class="property-location__address">{{ property_data.address }}</p>
+    {% if property_data.location_line %}
+    <p class="property-location__meta">{{ property_data.location_line }}</p>
+    {% endif %}
+    {% if property_data.has_coordinates %}
+    <div class="property-location__actions">
+        {% if property_data.maps_open_url %}
+        <a class="btn btn-secondary" href="{{ property_data.maps_open_url }}" target="_blank" rel="noopener" aria-label="{{ t('property_location_open') }}">
+            {{ t('property_location_open') }}
+        </a>
+        {% endif %}
+        {% if property_data.maps_directions_url %}
+        <a class="btn btn-primary" href="{{ property_data.maps_directions_url }}" target="_blank" rel="noopener" aria-label="{{ t('property_location_directions') }}">
+            {{ t('property_location_directions') }}
+        </a>
+        {% endif %}
+    </div>
+    {% elif property_data.geocode_status == 'stale' %}
+    <p class="field-help">{{ t('property_location_stale') }}</p>
+    <div class="property-location__actions">
+        {% if maps is defined and maps.configured and can_edit_property %}
+        <a class="btn btn-primary" href="{{ url_for('properties_edit', property_id=property_data.id) }}#address">{{ t('property_location_complete') }}</a>
+        {% elif property_data.maps_open_url %}
+        <a class="btn btn-secondary" href="{{ property_data.maps_open_url }}" target="_blank" rel="noopener">{{ t('property_location_search') }}</a>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="field-help">
+        {% if maps is defined and maps.configured %}
+        {{ t('property_location_ungeocoded') }}
+        {% else %}
+        {{ t('property_location_maps_off') }}
+        {% endif %}
+    </p>
+    <div class="property-location__actions">
+        {% if maps is defined and maps.configured and can_edit_property %}
+        <a class="btn btn-primary" href="{{ url_for('properties_edit', property_id=property_data.id) }}#address">{{ t('property_location_complete') }}</a>
+        {% elif property_data.maps_open_url %}
+        <a class="btn btn-secondary" href="{{ property_data.maps_open_url }}" target="_blank" rel="noopener">{{ t('property_location_search') }}</a>
+        {% endif %}
+    </div>
     {% endif %}
 </section>
 

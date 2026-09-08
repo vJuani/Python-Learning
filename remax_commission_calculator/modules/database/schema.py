@@ -3801,6 +3801,12 @@ def migrate_schema(create_backup=True):
 
     migrate_property_inventory_sqlite()
 
+    from .property_maps_migration import (
+        migrate_property_maps_sqlite,
+    )
+
+    migrate_property_maps_sqlite()
+
     from .external_listings_migration import (
         migrate_external_listings_sqlite,
     )

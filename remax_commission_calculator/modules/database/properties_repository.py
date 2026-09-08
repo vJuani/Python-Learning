@@ -75,6 +75,16 @@ def _build_property_dict(row):
         "commercial_status": row[26] if len(row) > 26 else None,
         "features_json": features_raw,
         "features": normalize_property_features(features_raw),
+        "formatted_address": row[28] if len(row) > 28 else None,
+        "locality": row[29] if len(row) > 29 else None,
+        "administrative_area": row[30] if len(row) > 30 else None,
+        "country": row[31] if len(row) > 31 else None,
+        "postal_code": row[32] if len(row) > 32 else None,
+        "google_place_id": row[33] if len(row) > 33 else None,
+        "latitude": row[34] if len(row) > 34 else None,
+        "longitude": row[35] if len(row) > 35 else None,
+        "geocoded_at": row[36] if len(row) > 36 else None,
+        "geocode_status": row[37] if len(row) > 37 else None,
     }
 
 
@@ -107,7 +117,17 @@ PROPERTIES_BASE_QUERY = """
         properties.parking_spaces,
         properties.description,
         properties.commercial_status,
-        properties.features_json
+        properties.features_json,
+        properties.formatted_address,
+        properties.locality,
+        properties.administrative_area,
+        properties.country,
+        properties.postal_code,
+        properties.google_place_id,
+        properties.latitude,
+        properties.longitude,
+        properties.geocoded_at,
+        properties.geocode_status
     FROM properties
     LEFT JOIN agents
         ON properties.agent_id = agents.id
@@ -372,6 +392,16 @@ def add_property(
     commercial_status=COMMERCIAL_STATUS_AVAILABLE,
     features=None,
     features_json=None,
+    formatted_address=None,
+    locality=None,
+    administrative_area=None,
+    country=None,
+    postal_code=None,
+    google_place_id=None,
+    latitude=None,
+    longitude=None,
+    geocoded_at=None,
+    geocode_status=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -431,9 +461,19 @@ def add_property(
             parking_spaces,
             description,
             commercial_status,
-            features_json
+            features_json,
+            formatted_address,
+            locality,
+            administrative_area,
+            country,
+            postal_code,
+            google_place_id,
+            latitude,
+            longitude,
+            geocoded_at,
+            geocode_status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             address.strip(),
@@ -459,6 +499,16 @@ def add_property(
             _optional_text(description),
             commercial_status,
             stored_features,
+            _optional_text(formatted_address),
+            _optional_text(locality),
+            _optional_text(administrative_area),
+            _optional_text(country),
+            _optional_text(postal_code),
+            _optional_text(google_place_id),
+            latitude,
+            longitude,
+            _optional_text(geocoded_at),
+            _optional_text(geocode_status),
         )
     )
 
@@ -503,6 +553,16 @@ def update_property(
     commercial_status=UNSET,
     features=UNSET,
     features_json=UNSET,
+    formatted_address=UNSET,
+    locality=UNSET,
+    administrative_area=UNSET,
+    country=UNSET,
+    postal_code=UNSET,
+    google_place_id=UNSET,
+    latitude=UNSET,
+    longitude=UNSET,
+    geocoded_at=UNSET,
+    geocode_status=UNSET,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -566,7 +626,71 @@ def update_property(
             features if features is not UNSET else features_json,
             _normalize_optional_features,
         ),
+        "formatted_address": (formatted_address, _optional_text),
+        "locality": (locality, _optional_text),
+        "administrative_area": (administrative_area, _optional_text),
+        "country": (country, _optional_text),
+        "postal_code": (postal_code, _optional_text),
+        "google_place_id": (google_place_id, _optional_text),
+        "latitude": (latitude, None),
+        "longitude": (longitude, None),
+        "geocoded_at": (geocoded_at, _optional_text),
+        "geocode_status": (geocode_status, _optional_text),
     }
+
+    location_passed = any(
+        optional_fields[name][0] is not UNSET
+        for name in (
+            "formatted_address",
+            "locality",
+            "administrative_area",
+            "country",
+            "postal_code",
+            "google_place_id",
+            "latitude",
+            "longitude",
+            "geocoded_at",
+            "geocode_status",
+        )
+    )
+    if not location_passed:
+        cursor.execute(
+            """
+            SELECT address, google_place_id, latitude, longitude
+            FROM properties
+            WHERE id = ?
+                AND organization_id = ?
+            """,
+            (property_id, organization_id),
+        )
+        current = cursor.fetchone()
+        if current is not None:
+            from modules.maps.location import (
+                addresses_differ_substantially,
+                has_coordinates,
+            )
+
+            current_row = {
+                "google_place_id": current[1],
+                "latitude": current[2],
+                "longitude": current[3],
+            }
+            if (
+                (current[1] or has_coordinates(current_row))
+                and addresses_differ_substantially(current[0], address)
+            ):
+                from modules.maps.config import GEOCODE_STALE
+
+                optional_fields["formatted_address"] = (None, _optional_text)
+                optional_fields["locality"] = (None, _optional_text)
+                optional_fields["administrative_area"] = (None, _optional_text)
+                optional_fields["country"] = (None, _optional_text)
+                optional_fields["postal_code"] = (None, _optional_text)
+                optional_fields["google_place_id"] = (None, _optional_text)
+                optional_fields["latitude"] = (None, None)
+                optional_fields["longitude"] = (None, None)
+                optional_fields["geocoded_at"] = (None, _optional_text)
+                optional_fields["geocode_status"] = (GEOCODE_STALE, _optional_text)
 
     for column_name, (value, transform) in optional_fields.items():
         if value is UNSET:

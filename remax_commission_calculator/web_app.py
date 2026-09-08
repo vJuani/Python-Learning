@@ -1292,7 +1292,24 @@ def _property_form_fields_from_request():
         ),
         "commercial_status": raw_status or None,
         "features": features,
+        "google_place_id": request.form.get("google_place_id", "").strip(),
+        "formatted_address": request.form.get("formatted_address", "").strip(),
+        "locality": request.form.get("locality", "").strip(),
+        "administrative_area": request.form.get(
+            "administrative_area",
+            "",
+        ).strip(),
+        "country": request.form.get("country", "").strip(),
+        "postal_code": request.form.get("postal_code", "").strip(),
+        "latitude": request.form.get("latitude", "").strip(),
+        "longitude": request.form.get("longitude", "").strip(),
     }
+
+
+def _maps_template_config():
+    from modules.maps.provider import get_maps_provider
+
+    return get_maps_provider().public_config()
 
 
 def _property_form_context(property_data):
@@ -1312,6 +1329,7 @@ def _property_form_context(property_data):
         "commercial_statuses": COMMERCIAL_STATUSES,
         "feature_keys": FEATURE_KEYS,
         "selected_features": selected_features,
+        "maps": _maps_template_config(),
     }
 
 
@@ -1328,6 +1346,19 @@ def _property_inventory_kwargs(fields):
         "commercial_status": fields.get("commercial_status"),
         "features": fields.get("features"),
     }
+
+
+def _property_location_kwargs(fields, existing=None):
+    from datetime import datetime
+
+    from modules.maps.location import LOCATION_FIELDS, location_from_form
+
+    payload = location_from_form(
+        fields,
+        existing,
+        geocoded_at=datetime.utcnow().replace(microsecond=0).isoformat(),
+    )
+    return {field: payload.get(field) for field in LOCATION_FIELDS}
 
 
 def _property_identity_kwargs(fields):
@@ -1364,6 +1395,15 @@ def _property_form_data_from_fields(fields, owner_agent_id):
         "description": fields.get("description") or "",
         "commercial_status": fields.get("commercial_status") or "",
         "features": fields.get("features") or {},
+        "google_place_id": fields.get("google_place_id") or "",
+        "formatted_address": fields.get("formatted_address") or "",
+        "locality": fields.get("locality") or "",
+        "administrative_area": fields.get("administrative_area") or "",
+        "country": fields.get("country") or "",
+        "postal_code": fields.get("postal_code") or "",
+        "latitude": fields.get("latitude") or "",
+        "longitude": fields.get("longitude") or "",
+        "geocode_status": fields.get("geocode_status") or "",
     }
 
 
@@ -4967,6 +5007,7 @@ def properties_new():
             listing_purpose=fields["listing_purpose"],
             listing_currency=fields.get("listing_currency"),
             **_property_inventory_kwargs(fields),
+            **_property_location_kwargs(fields),
         )
 
         if property_status == PROPERTY_STATUS_PENDING:
@@ -5090,6 +5131,7 @@ def properties_detail(property_id):
             get_guest_access() is None
             and can_write(get_current_user())
         ),
+        maps=_maps_template_config(),
     )
 
 
@@ -5380,6 +5422,7 @@ def properties_edit(property_id):
         current_user = get_current_user()
         inventory_kwargs = _property_inventory_kwargs(fields)
         identity_kwargs = _property_identity_kwargs(fields)
+        location_kwargs = _property_location_kwargs(fields, property_data)
         proposed_identity = {
             "address": fields["address"],
             "jurisdiction": fields["jurisdiction"],
@@ -5403,6 +5446,7 @@ def properties_edit(property_id):
                 agent_id=owner_agent_id,
                 **identity_kwargs,
                 **inventory_kwargs,
+                **location_kwargs,
             )
             flash_i18n("property_updated", "success")
         elif property_is_official(
@@ -5454,13 +5498,16 @@ def properties_edit(property_id):
             else:
                 flash_i18n("property_updated", "success")
 
+            official_update = dict(inventory_kwargs)
+            if not identity_changed:
+                official_update.update(location_kwargs)
             update_property(
                 property_id,
                 property_data["address"],
                 property_data["jurisdiction"],
                 organization_id,
                 agent_id=property_data.get("agent_id"),
-                **inventory_kwargs,
+                **official_update,
             )
         else:
             update_property(
@@ -5471,6 +5518,7 @@ def properties_edit(property_id):
                 agent_id=owner_agent_id,
                 **identity_kwargs,
                 **inventory_kwargs,
+                **location_kwargs,
             )
 
             if property_data.get("status") == PROPERTY_STATUS_REJECTED:

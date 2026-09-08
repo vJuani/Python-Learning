@@ -750,10 +750,22 @@ def decorate_task(task, *, tz, now, language="es"):
         or ""
     )
     relation_label = raw_relation if is_usable_place_label(raw_relation) else ""
-    maps_url = (
-        "https://www.google.com/maps/search/?api=1&query="
-        + _url_quote(task.get("property_address") or "")
-        if task.get("property_address")
+    from modules.maps.links import build_directions_url, build_open_maps_url
+
+    location_row = {
+        "address": task.get("property_address") or "",
+        "formatted_address": task.get("formatted_address") or "",
+        "google_place_id": task.get("google_place_id") or "",
+        "latitude": task.get("latitude"),
+        "longitude": task.get("longitude"),
+    }
+    linked_visit = bool(
+        task.get("task_type") == "visit" and task.get("property_id")
+    )
+    maps_url = build_open_maps_url(location_row) or None
+    directions_url = (
+        build_directions_url(location_row) or None
+        if linked_visit
         else None
     )
     whatsapp_text = _whatsapp_text(task, language)
@@ -789,6 +801,7 @@ def decorate_task(task, *, tz, now, language="es"):
             and task.get("attendance_status") == ATTENDANCE_PENDING
         ),
         "maps_url": maps_url,
+        "directions_url": directions_url,
         "whatsapp_url": (
             "https://wa.me/?text=" + _url_quote(whatsapp_text)
             if whatsapp_text

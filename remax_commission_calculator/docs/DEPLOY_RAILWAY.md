@@ -134,6 +134,17 @@ Example: `https://app.jrhone.com/agenda/calendar/callback`
 
 Each agent connects their own Google account from the agenda chip. Refresh tokens are stored encrypted with `SECRET_KEY`. Without these variables the chip shows “No configurado” and tasks stay in JRH only.
 
+### Google Maps (Properties, optional)
+
+| Variable | Production |
+|----------|------------|
+| `MAPS_PROVIDER` | `google` |
+| `GOOGLE_MAPS_BROWSER_KEY` | Browser key restricted by HTTP referrer |
+| `GOOGLE_MAPS_SERVER_KEY` | Optional server key (unused for mass geocoding) |
+| `MAPS_DEFAULT_REGION` | `AR` |
+
+Enable **Maps JavaScript API** and **Places API** in Google Cloud. Restrict the browser key to your app domains. Without these variables, property create/edit stays manual and detail shows a fallback instead of a map.
+
 Leave `UPLOAD_DIR` unset for this first staging so logos stay under
 `static/uploads` (servable by Flask). Those logo files are **not** on the
 volume unless you later persist that path; private docs and SQLite are.
