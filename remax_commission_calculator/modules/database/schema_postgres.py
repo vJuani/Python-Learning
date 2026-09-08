@@ -1725,6 +1725,7 @@ POSTGRES_TABLES = (
     "contacts",
     "external_listings",
     "arca_connections",
+    "arca_ta_cache",
     "property_documents",
     "property_document_files",
     "property_acms",

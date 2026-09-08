@@ -44,6 +44,7 @@ _RFC2822_WEEKDAY = re.compile(
 
 USER_AUTH_ERROR_KEY = "invoice_err_arca_auth_failed"
 USER_TA_PENDING_KEY = "invoice_err_arca_ta_pending"
+USER_TA_PERSIST_KEY = "invoice_err_arca_ta_persist_failed"
 DEBUG_WSAA_SCHEMA = "arca_err_wsaa_schema"
 DEBUG_WSAA_CMS = "arca_err_wsaa_cms"
 DEBUG_WSAA_UNAUTHORIZED = "arca_err_wsaa_unauthorized"
@@ -51,6 +52,7 @@ DEBUG_WSAA_CERTIFICATE = "arca_err_wsaa_certificate"
 DEBUG_WSAA_CLOCK = "arca_err_wsaa_clock"
 DEBUG_WSAA_TA_EXISTS = "arca_err_wsaa_ta_exists"
 DEBUG_WSAA_UNAVAILABLE = "arca_err_wsaa_unavailable"
+DEBUG_TA_PERSIST_FAILED = "arca_ta_persist_failed"
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,73 @@ class WsaaAuthError(ValueError):
         self.http_status = http_status
         self.faultcode = faultcode or ""
         self.faultstring = faultstring or ""
+
+
+class ArcaTaPersistError(RuntimeError):
+    """loginCms succeeded but the TA could not be stored."""
+
+    def __init__(
+        self,
+        *,
+        environment="",
+        organization_id=None,
+        user_id=None,
+        service="",
+        db_engine="",
+        exception_type="",
+    ):
+        super().__init__(USER_TA_PERSIST_KEY)
+        self.user_key = USER_TA_PERSIST_KEY
+        self.debug_key = DEBUG_TA_PERSIST_FAILED
+        self.environment = environment
+        self.organization_id = organization_id
+        self.user_id = user_id
+        self.service = service
+        self.db_engine = db_engine
+        self.exception_type = exception_type
+
+
+def parse_ta_cache_key(cache_key: str | None) -> dict:
+    """Split `{org}:{user}:{environment}:{service}` when that shape is used."""
+    parts = str(cache_key or "").split(":")
+    if (
+        len(parts) == 4
+        and parts[0].isdigit()
+        and parts[1].isdigit()
+    ):
+        return {
+            "organization_id": parts[0],
+            "user_id": parts[1],
+            "environment": parts[2],
+            "service": parts[3],
+        }
+    return {
+        "organization_id": None,
+        "user_id": None,
+        "environment": parts[-1] if parts and parts[-1] else None,
+        "service": parts[-2] if len(parts) >= 2 else None,
+    }
+
+
+def _log_ta_persist_failed(
+    *,
+    environment,
+    organization_id,
+    user_id,
+    service,
+    db_engine,
+    exception_type,
+):
+    logger.error(
+        "arca_ta_persist_failed environment=%s organization_id=%s "
+        "user_id=%s service=%s db_engine=%s exception_type=%s",
+        environment,
+        organization_id,
+        user_id,
+        service,
+        db_engine,
+        exception_type,
+    )
 
 
 def _utc_now() -> datetime:
@@ -440,7 +509,36 @@ def authenticate_wsaa(
         raise
 
     if cache_setter:
-        cache_setter(cache_key, ticket)
+        try:
+            cache_setter(cache_key, ticket)
+        except ArcaTaPersistError:
+            raise
+        except Exception as error:
+            from modules.config import get_database_backend
+
+            parsed = parse_ta_cache_key(cache_key)
+            environment_name = (
+                getattr(ticket, "environment", None) or environment
+            )
+            service_name = getattr(ticket, "service", None) or service
+            db_engine = get_database_backend()
+            exception_type = type(error).__name__
+            _log_ta_persist_failed(
+                environment=environment_name,
+                organization_id=parsed["organization_id"],
+                user_id=parsed["user_id"],
+                service=service_name,
+                db_engine=db_engine,
+                exception_type=exception_type,
+            )
+            raise ArcaTaPersistError(
+                environment=environment_name,
+                organization_id=parsed["organization_id"],
+                user_id=parsed["user_id"],
+                service=service_name,
+                db_engine=db_engine,
+                exception_type=exception_type,
+            ) from error
 
     logger.info("arca_auth_success")
     return ticket

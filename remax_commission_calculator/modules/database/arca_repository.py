@@ -9,6 +9,34 @@ from datetime import datetime, timezone
 from .connection import get_connection
 from .tenant import require_organization_id
 
+# SQLite and PostgreSQL both support this ON CONFLICT form.
+# Do not use INSERT OR REPLACE: PostgreSQL rejects it, and REPLACE
+# would overwrite created_at.
+UPSERT_CACHED_TA_SQL = """
+    INSERT INTO arca_ta_cache (
+        cache_key,
+        token,
+        sign,
+        expires_at,
+        service,
+        cuit,
+        environment,
+        updated_at,
+        generation_time,
+        created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (cache_key) DO UPDATE SET
+        token = excluded.token,
+        sign = excluded.sign,
+        expires_at = excluded.expires_at,
+        service = excluded.service,
+        cuit = excluded.cuit,
+        environment = excluded.environment,
+        updated_at = excluded.updated_at,
+        generation_time = excluded.generation_time
+"""
+
 
 def _now_iso():
     return datetime.now(timezone.utc).replace(
@@ -65,7 +93,7 @@ def get_cached_ta(cache_key: str):
             token=token,
             sign=sign,
             expires_at=datetime.fromisoformat(
-                row[2].replace("Z", "+00:00")
+                str(row[2]).replace("Z", "+00:00")
             ),
             service=row[3],
             cuit=row[4],
@@ -106,34 +134,8 @@ def store_cached_ta(cache_key: str, ticket) -> None:
     if getattr(ticket, "generation_time", None) is not None:
         generation = ticket.generation_time.isoformat()
     try:
-        created_at = now
         cursor.execute(
-            """
-            SELECT created_at
-            FROM arca_ta_cache
-            WHERE cache_key = ?
-            """,
-            (cache_key,),
-        )
-        existing = cursor.fetchone()
-        if existing and existing[0]:
-            created_at = existing[0]
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO arca_ta_cache (
-                cache_key,
-                token,
-                sign,
-                expires_at,
-                service,
-                cuit,
-                environment,
-                updated_at,
-                generation_time,
-                created_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+            UPSERT_CACHED_TA_SQL,
             (
                 cache_key,
                 encrypt_secret(ticket.token),
@@ -144,7 +146,7 @@ def store_cached_ta(cache_key: str, ticket) -> None:
                 ticket.environment,
                 now,
                 generation,
-                created_at,
+                now,
             ),
         )
         connection.commit()

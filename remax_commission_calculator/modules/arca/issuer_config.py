@@ -88,9 +88,13 @@ def test_arca_connection(
             user_id=user_id,
         )
     except Exception as error:
-        from modules.arca.wsaa import USER_AUTH_ERROR_KEY, WsaaAuthError
+        from modules.arca.wsaa import (
+            USER_AUTH_ERROR_KEY,
+            ArcaTaPersistError,
+            WsaaAuthError,
+        )
 
-        if isinstance(error, WsaaAuthError):
+        if isinstance(error, (WsaaAuthError, ArcaTaPersistError)):
             return "error", error.user_key
         return "error", USER_AUTH_ERROR_KEY
 
