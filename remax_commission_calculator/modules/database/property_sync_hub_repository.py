@@ -247,6 +247,48 @@ def start_property_sync_run(organization_id, integration_id, provider):
     return run_id
 
 
+def set_integration_status(
+    organization_id,
+    provider,
+    *,
+    status,
+    last_error=None,
+    config_updates=None,
+):
+    """Update status/error/config without treating the change as a sync."""
+    organization_id = require_organization_id(organization_id)
+    existing = get_property_integration(organization_id, provider)
+    if existing is None:
+        return None
+    merged = dict(existing.get("config") or {})
+    if config_updates:
+        merged.update(config_updates)
+    connection = get_connection()
+    try:
+        connection.execute(
+            """
+            UPDATE organization_property_integrations
+            SET status = ?,
+                last_error = ?,
+                config_json = ?,
+                updated_at = ?
+            WHERE organization_id = ? AND provider = ?
+            """,
+            (
+                status,
+                last_error,
+                json.dumps(merged),
+                _now_iso(),
+                organization_id,
+                provider,
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    return get_property_integration(organization_id, provider)
+
+
 def finish_property_sync_run(
     run_id,
     organization_id,
@@ -259,6 +301,7 @@ def finish_property_sync_run(
     failed_count=0,
     conflict_count=0,
     error_summary=None,
+    extra_stats=None,
 ):
     organization_id = require_organization_id(organization_id)
     stats = {
@@ -269,6 +312,8 @@ def finish_property_sync_run(
         "failed": failed_count,
         "conflicts": conflict_count,
     }
+    if extra_stats:
+        stats.update(extra_stats)
     connection = get_connection()
     try:
         connection.execute(

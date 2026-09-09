@@ -53,6 +53,7 @@ MIGRATION_TABLE_ORDER: tuple[str, ...] = (
     "external_agent_mappings",
     "property_media",
     "property_sync_conflicts",
+    "external_property_price_history",
 )
 
 # Columns with explicit identity that need setval after load.
@@ -85,6 +86,7 @@ IDENTITY_TABLES: tuple[tuple[str, str], ...] = (
     ("external_agent_mappings", "id"),
     ("property_media", "id"),
     ("property_sync_conflicts", "id"),
+    ("external_property_price_history", "id"),
 )
 
 # Insert first with these self-FK columns forced to NULL, then UPDATE.

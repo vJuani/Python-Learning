@@ -94,6 +94,8 @@ def _build_property_dict(row):
         "is_externally_managed": bool(row[44]) if len(row) > 44 and row[44] is not None else False,
         "external_status": row[45] if len(row) > 45 else None,
         "location_source": row[46] if len(row) > 46 else None,
+        "title": row[47] if len(row) > 47 else None,
+        "external_metadata_json": row[48] if len(row) > 48 else None,
     }
 
 
@@ -145,7 +147,9 @@ PROPERTIES_BASE_QUERY = """
         properties.sync_hash,
         properties.is_externally_managed,
         properties.external_status,
-        properties.location_source
+        properties.location_source,
+        properties.title,
+        properties.external_metadata_json
     FROM properties
     LEFT JOIN agents
         ON properties.agent_id = agents.id

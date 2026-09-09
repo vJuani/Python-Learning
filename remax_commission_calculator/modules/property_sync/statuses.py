@@ -23,6 +23,10 @@ STATUS_ALIASES = {
     "unavailable": "withdrawn",
     "deleted": "withdrawn",
     "withdrawn": "withdrawn",
+    "completed": "withdrawn",
+    "canceled": "withdrawn",
+    "cancelled": "withdrawn",
+    "expired": "withdrawn",
 }
 
 

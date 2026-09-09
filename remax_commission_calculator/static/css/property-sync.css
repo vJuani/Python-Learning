@@ -8,6 +8,31 @@
     font-weight: 600;
 }
 
+.sync-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.sync-office-form {
+    display: grid;
+    gap: 0.4rem;
+    max-width: 28rem;
+}
+
+.sync-office-form input {
+    width: 100%;
+}
+
+.sync-dry-run {
+    margin: 0;
+}
+
+.sync-dry-run ul {
+    margin: 0.35rem 0 0;
+    padding-left: 1.2rem;
+}
+
 .sync-conflicts {
     margin-top: 1rem;
     display: grid;

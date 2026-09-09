@@ -1810,6 +1810,7 @@ POSTGRES_TABLES = (
     "external_agent_mappings",
     "property_media",
     "property_sync_conflicts",
+    "external_property_price_history",
 )
 
 

@@ -84,7 +84,9 @@ def normalize_external_property(payload, *, source):
         raise NormalizeError("sync_err_invalid_status", status=external_status)
 
     latitude, longitude = _coords(raw)
-    location_source = "external" if latitude is not None else None
+    location_source = raw.get("location_source") or (
+        "external" if latitude is not None else None
+    )
 
     features = raw.get("features")
     if isinstance(features, str):
@@ -125,6 +127,7 @@ def normalize_external_property(payload, *, source):
         "agent": {
             "external_agent_id": _clean(
                 raw.get("external_agent_id")
+                or (raw.get("agent") or {}).get("external_agent_id")
                 or (raw.get("agent") or {}).get("external_id")
             ),
             "agent_name": _clean(
@@ -137,6 +140,15 @@ def normalize_external_property(payload, *, source):
             ),
         },
         "media": list(raw.get("media") or raw.get("photos") or []),
+        "title": _clean(raw.get("title")),
+        "warnings": list(raw.get("warnings") or []),
+        "external_metadata": raw.get("external_metadata")
+        if isinstance(raw.get("external_metadata"), dict)
+        else {},
+        "price_history": list(raw.get("price_history") or []),
+        "country": _clean(raw.get("country")),
+        "postal_code": _clean(raw.get("postal_code")),
+        "administrative_area": _clean(raw.get("administrative_area")),
     }
     normalized["sync_hash"] = compute_sync_hash(normalized)
     return normalized

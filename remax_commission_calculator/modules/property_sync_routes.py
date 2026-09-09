@@ -17,11 +17,15 @@ from modules.property_sync.media import resolve_media_filesystem_path
 from modules.property_sync.service import (
     PropertySyncError,
     SyncInProgressError,
+    dry_run_property_sync,
     integration_dashboard,
     require_sync_admin,
     resolve_conflict,
     run_property_sync,
+    test_property_source_connection,
+    update_redremax_office,
 )
+from modules.property_sync.redremax.mapping import PROVIDER_REDREMAX
 
 
 def register_property_sync_routes(app, helpers):
@@ -64,6 +68,51 @@ def register_property_sync_routes(app, helpers):
             flash_i18n("sync_run_done", "success")
         except SyncInProgressError:
             flash_i18n("sync_err_in_progress", "error")
+        except PropertySyncError as error:
+            flash_i18n(error.message_key, "error")
+        return redirect(url_for("settings_property_integrations"))
+
+    @app.route("/settings/integrations/properties/office", methods=["POST"])
+    @admin_required
+    def settings_property_integrations_office():
+        try:
+            _admin_user()
+        except PropertySyncError:
+            abort(403)
+        organization_id = require_user_organization()
+        office_id = (request.form.get("external_office_id") or "").strip()
+        update_redremax_office(organization_id, office_id)
+        flash_i18n("redremax_office_saved", "success")
+        return redirect(url_for("settings_property_integrations"))
+
+    @app.route("/settings/integrations/properties/test", methods=["POST"])
+    @admin_required
+    def settings_property_integrations_test():
+        try:
+            _admin_user()
+        except PropertySyncError:
+            abort(403)
+        organization_id = require_user_organization()
+        provider = (request.form.get("provider") or PROVIDER_REDREMAX).strip()
+        try:
+            test_property_source_connection(organization_id, provider)
+            flash_i18n("redremax_test_ok", "success")
+        except PropertySyncError as error:
+            flash_i18n(error.message_key, "error")
+        return redirect(url_for("settings_property_integrations"))
+
+    @app.route("/settings/integrations/properties/dry-run", methods=["POST"])
+    @admin_required
+    def settings_property_integrations_dry_run():
+        try:
+            _admin_user()
+        except PropertySyncError:
+            abort(403)
+        organization_id = require_user_organization()
+        provider = (request.form.get("provider") or PROVIDER_REDREMAX).strip()
+        try:
+            dry_run_property_sync(organization_id, provider)
+            flash_i18n("redremax_dry_run_done", "success")
         except PropertySyncError as error:
             flash_i18n(error.message_key, "error")
         return redirect(url_for("settings_property_integrations"))

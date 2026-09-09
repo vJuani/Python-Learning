@@ -217,6 +217,7 @@ def generate_property_brochure(
             resolve_media_filesystem_path,
         )
 
+        # Remote RedREMAX URLs stay as references. Do not download on each PDF.
         media_items = get_property_media_for_generation(property_data)
         gallery_paths = []
         for item in media_items:

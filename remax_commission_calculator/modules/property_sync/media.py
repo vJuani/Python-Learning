@@ -78,6 +78,13 @@ def sync_property_media(organization_id, property_id, source, media_items, *, ca
                 assert_safe_media_url(original_url, require_https=True)
             except ValueError:
                 original_url = None
+            if source == "redremax":
+                from modules.property_sync.redremax.photos import (
+                    is_allowed_redremax_photo_url,
+                )
+
+                if original_url and not is_allowed_redremax_photo_url(original_url):
+                    original_url = None
 
         if strategy == STRATEGY_COPY and payload:
             if not is_allowed_image_type(item.get("content_type") or "image/png"):
@@ -102,7 +109,7 @@ def sync_property_media(organization_id, property_id, source, media_items, *, ca
             storage_strategy=strategy,
             url_kind=url_kind,
             position=item.get("position", index),
-            is_cover=bool(item.get("is_cover") or index == 0),
+            is_cover=bool(item.get("is_cover")),
             width=item.get("width"),
             height=item.get("height"),
             content_type=item.get("content_type"),

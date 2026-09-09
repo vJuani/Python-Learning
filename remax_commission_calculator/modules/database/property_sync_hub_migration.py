@@ -14,6 +14,8 @@ PROPERTY_SYNC_COLUMNS = (
     ("external_status", "TEXT"),
     ("location_source", "TEXT"),
     ("sync_overrides_json", "TEXT"),
+    ("title", "TEXT"),
+    ("external_metadata_json", "TEXT"),
 )
 
 INTEGRATIONS_SQL = """
@@ -124,6 +126,28 @@ CREATE TABLE IF NOT EXISTS property_media (
 )
 """
 
+PRICE_HISTORY_SQL = """
+CREATE TABLE IF NOT EXISTS external_property_price_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    property_id INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    price TEXT,
+    currency TEXT,
+    observed_on TEXT,
+    usd_value TEXT,
+    local_value TEXT,
+    local_currency TEXT,
+    exchange_rate_snapshot TEXT,
+    created_at TEXT NOT NULL,
+
+    FOREIGN KEY (organization_id)
+        REFERENCES organizations(id) ON DELETE RESTRICT,
+    FOREIGN KEY (property_id)
+        REFERENCES properties(id) ON DELETE RESTRICT
+)
+"""
+
 CONFLICTS_SQL = """
 CREATE TABLE IF NOT EXISTS property_sync_conflicts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,6 +207,13 @@ INDEXES = (
     ON property_sync_conflicts (organization_id, provider, external_id)
     WHERE status = 'open'
     """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS
+    idx_external_price_history_identity
+    ON external_property_price_history (
+        organization_id, property_id, source, observed_on, price, currency
+    )
+    """,
 )
 
 
@@ -201,6 +232,7 @@ def migrate_property_sync_hub_sqlite():
         cursor.execute(AGENT_MAP_SQL)
         cursor.execute(MEDIA_SQL)
         cursor.execute(CONFLICTS_SQL)
+        cursor.execute(PRICE_HISTORY_SQL)
         for column_name, column_sql in PROPERTY_SYNC_COLUMNS:
             if not _column_exists(cursor, "properties", column_name):
                 cursor.execute(
@@ -263,6 +295,13 @@ def migrate_property_sync_hub_postgres(cursor):
         .replace("organization_id INTEGER NOT NULL", "organization_id BIGINT NOT NULL")
         .replace("existing_property_id INTEGER", "existing_property_id BIGINT")
     )
+    pg_history = (
+        PRICE_HISTORY_SQL.replace(
+            "INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY"
+        )
+        .replace("organization_id INTEGER NOT NULL", "organization_id BIGINT NOT NULL")
+        .replace("property_id INTEGER NOT NULL", "property_id BIGINT NOT NULL")
+    )
     for statement in (
         pg_integrations,
         pg_runs,
@@ -270,6 +309,7 @@ def migrate_property_sync_hub_postgres(cursor):
         pg_agents,
         pg_media,
         pg_conflicts,
+        pg_history,
     ):
         cursor.execute(statement)
     for column_name, column_sql in PROPERTY_SYNC_COLUMNS + (

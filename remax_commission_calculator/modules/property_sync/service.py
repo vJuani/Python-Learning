@@ -9,6 +9,9 @@ from modules.database.properties_repository import (
     add_property,
     get_property_record,
 )
+from modules.database.external_price_history_repository import (
+    upsert_external_price_history,
+)
 from modules.database.property_sync_hub_repository import (
     CONFLICT_CREATED,
     CONFLICT_LINKED,
@@ -17,6 +20,7 @@ from modules.database.property_sync_hub_repository import (
     RUN_OK,
     RUN_PARTIAL,
     STATUS_CONNECTED,
+    STATUS_DISCONNECTED,
     STATUS_ERROR,
     add_sync_conflict,
     add_sync_run_item,
@@ -29,6 +33,7 @@ from modules.database.property_sync_hub_repository import (
     list_open_conflicts,
     list_property_integrations,
     resolve_sync_conflict,
+    set_integration_status,
     start_property_sync_run,
     try_begin_sync,
     upsert_property_integration,
@@ -46,12 +51,23 @@ from modules.property_sync.connector import get_connector
 from modules.property_sync.media import sync_property_media
 from modules.property_sync.normalize import NormalizeError, normalize_external_property
 import modules.property_sync.mock  # noqa: F401 — register mock connector
+import modules.property_sync.redremax.connector  # noqa: F401 — register redremax
 
+from modules.property_sync.redremax.auth import default_auth_provider
+from modules.property_sync.redremax.connector import ListingBatch
+from modules.property_sync.redremax.errors import (
+    RedRemaxAuthError,
+    RedRemaxConfigError,
+    RedRemaxError,
+    RedRemaxPartialError,
+)
+from modules.property_sync.redremax.mapping import PROVIDER_REDREMAX
 
 SOURCE_LABELS = {
     "mock_network": "Mock Network",
     "tokko": "Tokko",
     "remax": "RE/MAX",
+    "redremax": "RedREMAX",
     "inmoweb": "Inmoweb",
 }
 
@@ -76,6 +92,10 @@ EXTERNALLY_MANAGED_FIELDS = (
     "features_json",
     "external_url",
     "external_status",
+    "title",
+    "country",
+    "postal_code",
+    "administrative_area",
 )
 
 INTERNAL_FIELDS = (
@@ -126,6 +146,185 @@ def ensure_mock_integration(organization_id):
     )
 
 
+def ensure_redremax_integration(organization_id):
+    organization_id = require_organization_id(organization_id)
+    existing = get_property_integration(organization_id, PROVIDER_REDREMAX)
+    if existing:
+        return existing
+    return upsert_property_integration(
+        organization_id,
+        PROVIDER_REDREMAX,
+        status=STATUS_DISCONNECTED,
+        sync_enabled=False,
+        config={"external_office_id": ""},
+    )
+
+
+def update_redremax_office(organization_id, office_id):
+    organization_id = require_organization_id(organization_id)
+    existing = ensure_redremax_integration(organization_id)
+    config = dict(existing.get("config") or {})
+    config["external_office_id"] = str(office_id or "").strip()
+    status = existing["status"]
+    if status == "syncing":
+        status = STATUS_DISCONNECTED
+    return upsert_property_integration(
+        organization_id,
+        PROVIDER_REDREMAX,
+        status=status,
+        sync_enabled=False,
+        config=config,
+    )
+
+
+def compute_auth_state(integration, auth_provider=None):
+    """Never report connected just because RedRemaxConnector exists."""
+    item = integration or {}
+    provider = item.get("provider")
+    if provider != PROVIDER_REDREMAX:
+        if item.get("status") == STATUS_CONNECTED:
+            return "connected"
+        if item.get("status") == STATUS_ERROR:
+            return "error"
+        return item.get("status") or "not_configured"
+
+    auth_provider = auth_provider or default_auth_provider()
+    office_id = str((item.get("config") or {}).get("external_office_id") or "").strip()
+    last_error = item.get("last_error")
+    last_ok = bool((item.get("config") or {}).get("last_connection_ok"))
+    if not office_id:
+        return "not_configured"
+    if last_error == "redremax_err_auth":
+        return "auth_expired"
+    if item.get("status") == STATUS_ERROR:
+        return "error"
+    if item.get("status") == STATUS_CONNECTED and (
+        last_ok or item.get("last_success_at")
+    ):
+        return "connected"
+    if auth_provider.is_production_ready() and auth_provider.is_configured() and last_ok:
+        return "connected"
+    return "authentication_pending"
+
+
+def test_property_source_connection(organization_id, provider):
+    organization_id = require_organization_id(organization_id)
+    if provider == PROVIDER_REDREMAX:
+        ensure_redremax_integration(organization_id)
+    integration = get_property_integration(organization_id, provider)
+    if integration is None:
+        raise PropertySyncError("sync_err_not_configured", 400)
+    connector = get_connector(provider)
+    try:
+        result = connector.test_connection(integration)
+    except RedRemaxAuthError:
+        set_integration_status(
+            organization_id,
+            provider,
+            status=STATUS_ERROR,
+            last_error="redremax_err_auth",
+            config_updates={"last_connection_ok": False},
+        )
+        raise PropertySyncError("redremax_err_auth", 401)
+    except RedRemaxConfigError as error:
+        set_integration_status(
+            organization_id,
+            provider,
+            status=STATUS_ERROR,
+            last_error=error.message_key,
+            config_updates={"last_connection_ok": False},
+        )
+        raise PropertySyncError(error.message_key, 400)
+    except RedRemaxError as error:
+        set_integration_status(
+            organization_id,
+            provider,
+            status=STATUS_ERROR,
+            last_error=error.message_key,
+            config_updates={"last_connection_ok": False},
+        )
+        raise PropertySyncError(error.message_key, error.status_code)
+    set_integration_status(
+        organization_id,
+        provider,
+        status=STATUS_CONNECTED,
+        last_error=None,
+        config_updates={
+            "last_connection_ok": True,
+            "last_connection_test_at": _now_iso(),
+        },
+    )
+    return result
+
+
+def dry_run_property_sync(organization_id, provider):
+    """Call source + normalize. Never writes Property / media / price history."""
+    organization_id = require_organization_id(organization_id)
+    if provider == PROVIDER_REDREMAX:
+        ensure_redremax_integration(organization_id)
+    integration = get_property_integration(organization_id, provider)
+    if integration is None:
+        raise PropertySyncError("sync_err_not_configured", 400)
+    connector = get_connector(provider)
+    try:
+        listed = _as_listing_batch(connector.list_properties(integration))
+    except RedRemaxAuthError:
+        raise PropertySyncError("redremax_err_auth", 401)
+    except RedRemaxPartialError as error:
+        listed = ListingBatch(
+            items=error.items,
+            source_total=error.source_total or 0,
+            pages_fetched=error.pages_fetched,
+            incomplete=True,
+        )
+    except RedRemaxError as error:
+        raise PropertySyncError(error.message_key, error.status_code)
+
+    valid = 0
+    warnings = 0
+    errors = 0
+    unmapped_agents = 0
+    for raw in listed.items:
+        if raw.get("_skipped"):
+            warnings += 1
+            continue
+        try:
+            normalized = normalize_external_property(raw, source=provider)
+        except NormalizeError:
+            errors += 1
+            continue
+        valid += 1
+        item_warnings = list(normalized.get("warnings") or [])
+        agent_id, _reason = resolve_agent_id(
+            organization_id, provider, normalized.get("agent")
+        )
+        if (normalized.get("agent") or {}).get("external_agent_id") and agent_id is None:
+            unmapped_agents += 1
+            item_warnings.append("redremax_warn_unmapped_agent")
+        warnings += len(item_warnings)
+
+    summary = {
+        "found": listed.source_total or len(listed.items),
+        "valid": valid,
+        "warnings": warnings,
+        "errors": errors,
+        "unmapped_agents": unmapped_agents,
+        "pages_fetched": listed.pages_fetched,
+        "incomplete": listed.incomplete,
+        "wrote": False,
+        "at": _now_iso(),
+    }
+    if provider == PROVIDER_REDREMAX:
+        set_integration_status(
+            organization_id,
+            provider,
+            status=integration.get("status") or STATUS_DISCONNECTED,
+            last_error=integration.get("last_error"),
+            config_updates={"last_dry_run": summary},
+        )
+    return summary
+
+
 def apply_synced_property_fields(property_id, organization_id, normalized, *, agent_id=None):
     """Update externally managed fields only. Never touches approval/internal data."""
     organization_id = require_organization_id(organization_id)
@@ -147,7 +346,12 @@ def apply_synced_property_fields(property_id, organization_id, normalized, *, ag
         params.append(value)
 
     location_source = current.get("location_source")
-    if normalized.get("latitude") is not None and location_source in (None, "", "external"):
+    if normalized.get("latitude") is not None and location_source in (
+        None,
+        "",
+        "external",
+        "external_redremax",
+    ):
         assignments.extend(
             [
                 "latitude = ?",
@@ -159,13 +363,20 @@ def apply_synced_property_fields(property_id, organization_id, normalized, *, ag
             [
                 normalized.get("latitude"),
                 normalized.get("longitude"),
-                "external",
+                normalized.get("location_source") or "external",
             ]
         )
 
     if agent_id is not None:
         assignments.append("agent_id = ?")
         params.append(agent_id)
+
+    metadata = normalized.get("external_metadata")
+    if isinstance(metadata, dict):
+        import json
+
+        assignments.append("external_metadata_json = ?")
+        params.append(json.dumps(metadata, ensure_ascii=False, sort_keys=True))
 
     assignments.extend(
         [
@@ -329,6 +540,9 @@ def sync_external_property(
             features=normalized.get("features"),
             formatted_address=normalized.get("formatted_address"),
             locality=normalized.get("locality"),
+            administrative_area=normalized.get("administrative_area"),
+            country=normalized.get("country"),
+            postal_code=normalized.get("postal_code"),
             latitude=normalized.get("latitude"),
             longitude=normalized.get("longitude"),
             geocode_status="resolved" if normalized.get("latitude") is not None else None,
@@ -373,6 +587,21 @@ def sync_external_property(
             },
         )
 
+    if property_id and normalized.get("price_history"):
+        upsert_external_price_history(
+            organization_id,
+            property_id,
+            source,
+            normalized.get("price_history"),
+        )
+
+    warnings = list(normalized.get("warnings") or [])
+    if (
+        (normalized.get("agent") or {}).get("external_agent_id")
+        and agent_id is None
+    ):
+        warnings.append("redremax_warn_unmapped_agent")
+
     if run_id:
         add_sync_run_item(
             organization_id,
@@ -380,14 +609,27 @@ def sync_external_property(
             external_id=external_id,
             outcome=outcome,
             property_id=property_id,
+            message=";".join(warnings) if warnings else None,
         )
-    return {"outcome": outcome, "property_id": property_id}
+    return {
+        "outcome": outcome,
+        "property_id": property_id,
+        "warnings": warnings,
+    }
+
+
+def _as_listing_batch(raw):
+    if isinstance(raw, ListingBatch):
+        return raw
+    return ListingBatch(items=list(raw or []))
 
 
 def run_property_sync(organization_id, provider=PROVIDER_MOCK_NETWORK, *, language="es"):
     organization_id = require_organization_id(organization_id)
     if provider == PROVIDER_MOCK_NETWORK:
         ensure_mock_integration(organization_id)
+    if provider == PROVIDER_REDREMAX:
+        ensure_redremax_integration(organization_id)
     integration = try_begin_sync(organization_id, provider)
     if integration is None:
         existing = get_property_integration(organization_id, provider)
@@ -405,27 +647,80 @@ def run_property_sync(organization_id, provider=PROVIDER_MOCK_NETWORK, *, langua
         "failed": 0,
         "conflicts": 0,
     }
-    fatal_error = None
+    extra_stats = {"source_total": 0, "pages_fetched": 0}
+    incomplete = False
 
     try:
-        raw_items = connector.list_properties(integration)
-    except Exception as error:
-        fatal_error = "provider_unavailable"
+        listed = _as_listing_batch(connector.list_properties(integration))
+    except RedRemaxAuthError:
         finish_property_sync_run(
             run_id,
             organization_id,
             status=RUN_FAILED,
-            error_summary=fatal_error,
+            error_summary="redremax_err_auth",
+            extra_stats=extra_stats,
         )
         finish_integration_state(
             organization_id,
             provider,
             status=STATUS_ERROR,
-            last_error=fatal_error,
+            last_error="redremax_err_auth",
+        )
+        return get_property_sync_run(run_id, organization_id)
+    except RedRemaxPartialError as error:
+        listed = ListingBatch(
+            items=error.items,
+            source_total=error.source_total or 0,
+            pages_fetched=error.pages_fetched,
+            incomplete=True,
+        )
+        incomplete = True
+    except (RedRemaxConfigError, RedRemaxError) as error:
+        finish_property_sync_run(
+            run_id,
+            organization_id,
+            status=RUN_FAILED,
+            error_summary=error.message_key,
+            extra_stats=extra_stats,
+        )
+        finish_integration_state(
+            organization_id,
+            provider,
+            status=STATUS_ERROR,
+            last_error=error.message_key,
+        )
+        return get_property_sync_run(run_id, organization_id)
+    except Exception:
+        finish_property_sync_run(
+            run_id,
+            organization_id,
+            status=RUN_FAILED,
+            error_summary="provider_unavailable",
+            extra_stats=extra_stats,
+        )
+        finish_integration_state(
+            organization_id,
+            provider,
+            status=STATUS_ERROR,
+            last_error="provider_unavailable",
         )
         return get_property_sync_run(run_id, organization_id)
 
-    for raw in raw_items:
+    extra_stats["source_total"] = listed.source_total
+    extra_stats["pages_fetched"] = listed.pages_fetched
+    incomplete = incomplete or listed.incomplete
+
+    for raw in listed.items:
+        if raw.get("_skipped"):
+            stats["warnings"] += 1
+            add_sync_run_item(
+                organization_id,
+                run_id,
+                external_id=raw.get("external_id"),
+                outcome="warning",
+                message=";".join(raw.get("warnings") or []),
+            )
+            continue
         try:
             normalized = normalize_external_property(raw, source=provider)
             result = sync_external_property(
@@ -442,6 +737,8 @@ def run_property_sync(organization_id, provider=PROVIDER_MOCK_NETWORK, *, langua
                 "conflict": "conflicts",
             }.get(result["outcome"], "warnings")
             stats[key] += 1
+            if result.get("warnings"):
+                stats["warnings"] += 1
         except NormalizeError as error:
             stats["failed"] += 1
             add_sync_run_item(
@@ -461,12 +758,11 @@ def run_property_sync(organization_id, provider=PROVIDER_MOCK_NETWORK, *, langua
                 message="sync_item_failed",
             )
 
-    if stats["failed"] and (stats["created"] or stats["updated"] or stats["unchanged"]):
+    processed = stats["created"] or stats["updated"] or stats["unchanged"]
+    if incomplete or (stats["failed"] and processed):
         run_status = RUN_PARTIAL
-        integration_status = STATUS_CONNECTED
-    elif stats["failed"] and not (
-        stats["created"] or stats["updated"] or stats["unchanged"]
-    ):
+        integration_status = STATUS_CONNECTED if processed else STATUS_ERROR
+    elif stats["failed"] and not processed:
         run_status = RUN_FAILED
         integration_status = STATUS_ERROR
     else:
@@ -483,6 +779,7 @@ def run_property_sync(organization_id, provider=PROVIDER_MOCK_NETWORK, *, langua
         warning_count=stats["warnings"],
         failed_count=stats["failed"],
         conflict_count=stats["conflicts"],
+        extra_stats=extra_stats,
     )
     finish_integration_state(
         organization_id,
@@ -576,10 +873,13 @@ def resolve_conflict(organization_id, conflict_id, action):
 def integration_dashboard(organization_id, language="es"):
     organization_id = require_organization_id(organization_id)
     ensure_mock_integration(organization_id)
+    ensure_redremax_integration(organization_id)
     cards = []
     for item in list_property_integrations(organization_id):
         provider = item["provider"]
         conflicts = list_open_conflicts(organization_id, provider)
+        config = item.get("config") or {}
+        auth_state = compute_auth_state(item)
         cards.append(
             {
                 **item,
@@ -587,6 +887,16 @@ def integration_dashboard(organization_id, language="es"):
                 "property_count": count_synced_properties(organization_id, provider),
                 "conflicts": conflicts,
                 "conflict_count": len(conflicts),
+                "auth_state": auth_state,
+                "external_office_id": config.get("external_office_id") or "",
+                "last_dry_run": config.get("last_dry_run") or {},
+                "architecture_ready": provider == PROVIDER_REDREMAX,
+                "auth_configured": (
+                    default_auth_provider().is_configured()
+                    if provider == PROVIDER_REDREMAX
+                    else True
+                ),
+                "authenticated": auth_state == "connected",
             }
         )
     return {"integrations": cards}

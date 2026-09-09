@@ -26,6 +26,83 @@
         <h3>{{ t('sync_system_title') }}</h3>
         <span class="badge badge-soft">{{ item.label }}</span>
     </div>
+
+    {% if item.provider == 'redremax' %}
+    <p class="sync-card__status">
+        {% if item.auth_state == 'connected' %}
+        {{ t('redremax_auth_connected') }}
+        {% elif item.auth_state == 'auth_expired' %}
+        {{ t('redremax_auth_expired') }}
+        {% elif item.auth_state == 'error' %}
+        {{ t('redremax_auth_error') }}
+        {% elif item.auth_state == 'not_configured' %}
+        {{ t('redremax_auth_not_configured') }}
+        {% else %}
+        {{ t('redremax_auth_pending') }}
+        {% endif %}
+    </p>
+    <p class="field-help">{{ t('redremax_architecture_ready') }}</p>
+    {% if item.auth_state != 'connected' %}
+    <p class="field-help">{{ t('redremax_auth_missing_official') }}</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('settings_property_integrations_office') }}" class="sync-office-form">
+        <label for="external_office_id">{{ t('redremax_office_id') }}</label>
+        <input
+            id="external_office_id"
+            name="external_office_id"
+            type="text"
+            value="{{ item.external_office_id }}"
+            autocomplete="off"
+            placeholder="AR.XX.YY"
+        >
+        <p class="field-help">{{ t('redremax_office_id_help') }}</p>
+        <button type="submit" class="btn btn-secondary">{{ t('redremax_save_office') }}</button>
+    </form>
+
+    <p class="field-help">
+        {{ t('sync_last_run') }}:
+        {% if item.last_success_at %}
+        {{ item.last_success_at }}
+        {% else %}
+        —
+        {% endif %}
+    </p>
+    <p>
+        <strong>{{ item.property_count }}</strong> {{ t('sync_property_count') }}
+        {% if item.conflict_count %}
+        · <strong>{{ item.conflict_count }}</strong> {{ t('sync_need_review') }}
+        {% endif %}
+    </p>
+
+    {% if item.last_dry_run %}
+    <div class="sync-dry-run">
+        <p><strong>{{ t('redremax_dry_run_done') }}</strong></p>
+        <ul>
+            <li>{{ t('redremax_dry_found') }}: {{ item.last_dry_run.found }}</li>
+            <li>{{ t('redremax_dry_valid') }}: {{ item.last_dry_run.valid }}</li>
+            <li>{{ t('redremax_dry_warnings') }}: {{ item.last_dry_run.warnings }}</li>
+            <li>{{ t('redremax_dry_errors') }}: {{ item.last_dry_run.errors }}</li>
+            <li>{{ t('redremax_dry_unmapped') }}: {{ item.last_dry_run.unmapped_agents }}</li>
+        </ul>
+    </div>
+    {% endif %}
+
+    <div class="page-actions sync-card__actions">
+        <form method="post" action="{{ url_for('settings_property_integrations_test') }}">
+            <input type="hidden" name="provider" value="{{ item.provider }}">
+            <button type="submit" class="btn btn-secondary">{{ t('redremax_test_connection') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('settings_property_integrations_dry_run') }}">
+            <input type="hidden" name="provider" value="{{ item.provider }}">
+            <button type="submit" class="btn btn-secondary">{{ t('redremax_dry_run') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('settings_property_integrations_sync') }}">
+            <input type="hidden" name="provider" value="{{ item.provider }}">
+            <button type="submit" class="btn btn-primary">{{ t('sync_now') }}</button>
+        </form>
+    </div>
+    {% else %}
     <p class="sync-card__status">
         {% if item.status == 'connected' %}
         {{ t('sync_status_connected') }}
@@ -57,6 +134,7 @@
             <button type="submit" class="btn btn-primary">{{ t('sync_now') }}</button>
         </form>
     </div>
+    {% endif %}
 
     {% if item.conflicts %}
     <div class="sync-conflicts">
