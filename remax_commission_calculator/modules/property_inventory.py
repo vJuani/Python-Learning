@@ -209,5 +209,10 @@ def decorate_property_for_display(property_row, language="es"):
         else None
     )
     from modules.maps.location import attach_property_maps
+    from modules.property_sync.service import source_label
+
+    source = (row.get("external_source") or "").strip()
+    row["is_synced"] = bool(source and row.get("external_id"))
+    row["sync_source_label"] = source_label(source, language) if source else None
 
     return attach_property_maps(row)

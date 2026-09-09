@@ -1804,6 +1804,12 @@ POSTGRES_TABLES = (
     "property_acms",
     "property_acm_comparables",
     "agent_goals",
+    "organization_property_integrations",
+    "property_sync_runs",
+    "property_sync_run_items",
+    "external_agent_mappings",
+    "property_media",
+    "property_sync_conflicts",
 )
 
 
@@ -1889,6 +1895,12 @@ def create_postgres_schema():
               AND BTRIM(external_id) != ''
             """
         )
+
+        from .property_sync_hub_migration import (
+            migrate_property_sync_hub_postgres,
+        )
+
+        migrate_property_sync_hub_postgres(cursor)
 
         for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),

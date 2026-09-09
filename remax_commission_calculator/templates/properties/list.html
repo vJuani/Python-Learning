@@ -6,6 +6,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/properties-page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/property-sync.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -272,6 +273,9 @@
                                         <span class="property-media-placeholder" aria-hidden="true"></span>
                                         <div>
                                             <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="properties-property-cell__title">{{ row.address }}</a>
+                                            {% if row.is_synced %}
+                                            <span class="property-sync-badge">{{ row.sync_source_label or t('sync_badge_synced') }}</span>
+                                            {% endif %}
                                             {% if row.distance_label %}
                                             <span class="properties-property-cell__address">{{ row.distance_label }}</span>
                                             {% endif %}
@@ -343,6 +347,9 @@
                         <div>
                             <span class="property-mobile-card__type">{{ row.category_label }}</span>
                             <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__title">{{ row.address }}</a>
+                            {% if row.is_synced %}
+                            <span class="property-sync-badge">{{ row.sync_source_label or t('sync_badge_synced') }}</span>
+                            {% endif %}
                             {% if row.distance_label %}
                             <p class="property-mobile-card__addr">{{ row.distance_label }}</p>
                             {% endif %}

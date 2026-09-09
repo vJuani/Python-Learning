@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/properties-page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/property-sync.css') }}">
 {% endblock %}
 
 {% block extra_js %}
@@ -16,6 +17,9 @@
         <h2>{{ property_data.address }}</h2>
         {% if property_data.neighborhood %}
         <p class="property-neighborhood">{{ property_data.neighborhood }}</p>
+        {% endif %}
+        {% if property_data.is_synced %}
+        <span class="property-sync-badge">{{ property_data.sync_source_label or t('sync_badge_synced') }}</span>
         {% endif %}
         {% if property_data.external_id %}
         <span class="entity-external-id">#{{ property_data.external_id }}</span>
@@ -37,6 +41,14 @@
             <span class="badge badge-soft">{{ property_data.commercial_status_label }}</span>
             {% endif %}
         </p>
+        {% if property_data.is_synced %}
+        <p class="property-sync-meta">
+            {{ t('sync_source_meta', source=property_data.sync_source_label, code=property_data.external_id) }}
+            {% if property_data.last_synced_at %}
+            · {{ t('sync_last_updated') }} {{ property_data.last_synced_at }}
+            {% endif %}
+        </p>
+        {% endif %}
         <p class="field-help">{{ t('property_detail_subtitle') }}</p>
     </div>
 

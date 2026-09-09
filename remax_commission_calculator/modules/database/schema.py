@@ -3820,6 +3820,12 @@ def migrate_schema(create_backup=True):
 
     migrate_property_acm_sqlite()
 
+    from .property_sync_hub_migration import (
+        migrate_property_sync_hub_sqlite,
+    )
+
+    migrate_property_sync_hub_sqlite()
+
     from .agent_goals_migration import (
         migrate_agent_goals_sqlite,
     )

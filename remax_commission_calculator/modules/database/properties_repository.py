@@ -85,6 +85,15 @@ def _build_property_dict(row):
         "longitude": row[35] if len(row) > 35 else None,
         "geocoded_at": row[36] if len(row) > 36 else None,
         "geocode_status": row[37] if len(row) > 37 else None,
+        "external_source": row[38] if len(row) > 38 else None,
+        "external_updated_at": row[39] if len(row) > 39 else None,
+        "sync_status": row[40] if len(row) > 40 else None,
+        "external_url": row[41] if len(row) > 41 else None,
+        "sync_error": row[42] if len(row) > 42 else None,
+        "sync_hash": row[43] if len(row) > 43 else None,
+        "is_externally_managed": bool(row[44]) if len(row) > 44 and row[44] is not None else False,
+        "external_status": row[45] if len(row) > 45 else None,
+        "location_source": row[46] if len(row) > 46 else None,
     }
 
 
@@ -127,7 +136,16 @@ PROPERTIES_BASE_QUERY = """
         properties.latitude,
         properties.longitude,
         properties.geocoded_at,
-        properties.geocode_status
+        properties.geocode_status,
+        properties.external_source,
+        properties.external_updated_at,
+        properties.sync_status,
+        properties.external_url,
+        properties.sync_error,
+        properties.sync_hash,
+        properties.is_externally_managed,
+        properties.external_status,
+        properties.location_source
     FROM properties
     LEFT JOIN agents
         ON properties.agent_id = agents.id

@@ -331,6 +331,11 @@
                                     class="nav-dropdown-item{% if request.endpoint == 'organization_settings' %} active{% endif %}"
                                     role="menuitem"
                                 >{{ t('nav_organization_settings') }}</a>
+                                <a
+                                    href="{{ url_for('settings_property_integrations') }}"
+                                    class="nav-dropdown-item{% if request.endpoint == 'settings_property_integrations' %} active{% endif %}"
+                                    role="menuitem"
+                                >{{ t('sync_nav') }}</a>
                                 {% endif %}
                                 <a
                                     href="{{ url_for('logout') }}"

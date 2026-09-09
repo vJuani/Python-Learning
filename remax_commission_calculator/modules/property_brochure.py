@@ -211,6 +211,24 @@ def generate_property_brochure(
         "gallery": [],
     }
 
+    try:
+        from modules.property_sync.media import (
+            get_property_media_for_generation,
+            resolve_media_filesystem_path,
+        )
+
+        media_items = get_property_media_for_generation(property_data)
+        gallery_paths = []
+        for item in media_items:
+            path = resolve_media_filesystem_path(item)
+            if path is not None:
+                gallery_paths.append(str(path))
+        if gallery_paths:
+            payload["hero_image"] = gallery_paths[0]
+            payload["gallery"] = gallery_paths[1:]
+    except Exception:
+        pass
+
     pdf_bytes = build_property_brochure_pdf(payload)
     if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
         raise PropertyMediaError("property_brochure_err_generate", 500)

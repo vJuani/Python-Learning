@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page {% endblock %}
+
+{% block title %}{{ t('sync_page_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings-page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/property-sync.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('sync_page_title') }}</h2>
+        <p>{{ t('sync_page_subtitle') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('organization_settings') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    </div>
+</section>
+
+{% for item in view.integrations %}
+<section class="panel sync-card">
+    <div class="panel-header">
+        <h3>{{ t('sync_system_title') }}</h3>
+        <span class="badge badge-soft">{{ item.label }}</span>
+    </div>
+    <p class="sync-card__status">
+        {% if item.status == 'connected' %}
+        {{ t('sync_status_connected') }}
+        {% elif item.status == 'syncing' %}
+        {{ t('sync_status_syncing') }}
+        {% elif item.status == 'error' %}
+        {{ t('sync_status_error') }}
+        {% else %}
+        {{ t('sync_status_disconnected') }}
+        {% endif %}
+    </p>
+    <p class="field-help">
+        {{ t('sync_last_run') }}:
+        {% if item.last_success_at %}
+        {{ item.last_success_at }}
+        {% else %}
+        —
+        {% endif %}
+    </p>
+    <p>
+        <strong>{{ item.property_count }}</strong> {{ t('sync_property_count') }}
+        {% if item.conflict_count %}
+        · <strong>{{ item.conflict_count }}</strong> {{ t('sync_need_review') }}
+        {% endif %}
+    </p>
+    <div class="page-actions">
+        <form method="post" action="{{ url_for('settings_property_integrations_sync') }}">
+            <input type="hidden" name="provider" value="{{ item.provider }}">
+            <button type="submit" class="btn btn-primary">{{ t('sync_now') }}</button>
+        </form>
+    </div>
+
+    {% if item.conflicts %}
+    <div class="sync-conflicts">
+        <h4>{{ t('sync_conflicts_title') }}</h4>
+        {% for conflict in item.conflicts %}
+        <article class="sync-conflict">
+            <p>
+                <strong>{{ conflict.address_external }}</strong>
+                · {{ conflict.provider|upper }} · {{ conflict.external_id }}
+            </p>
+            <p class="field-help">
+                {{ t('sync_conflict_exists') }} #{{ conflict.existing_property_id }}
+                · {{ conflict.address_existing }}
+            </p>
+            <form method="post" action="{{ url_for('settings_property_integration_conflict', conflict_id=conflict.id) }}" class="sync-conflict__actions">
+                <button class="btn btn-secondary" name="action" value="link" type="submit">{{ t('sync_link_existing') }}</button>
+                <button class="btn btn-primary" name="action" value="create" type="submit">{{ t('sync_create_new') }}</button>
+            </form>
+        </article>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

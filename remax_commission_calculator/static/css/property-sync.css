@@ -1,0 +1,50 @@
+.sync-card {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.sync-card__status {
+    margin: 0;
+    font-weight: 600;
+}
+
+.sync-conflicts {
+    margin-top: 1rem;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.sync-conflict {
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border, #d8dee8);
+}
+
+.sync-conflict__actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.property-sync-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    background: rgba(8, 96, 200, 0.12);
+    color: var(--accent, #0860c8);
+}
+
+html[data-theme="dark"] .property-sync-badge {
+    background: rgba(120, 170, 255, 0.16);
+    color: #c5d8ff;
+}
+
+.property-sync-meta {
+    margin: 0.35rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}

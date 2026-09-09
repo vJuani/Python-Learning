@@ -8251,6 +8251,17 @@ register_route_routes(
     },
 )
 
+from modules.property_sync_routes import register_property_sync_routes
+
+register_property_sync_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+    },
+)
+
 
 if __name__ == "__main__":
     from modules.database import create_tables
