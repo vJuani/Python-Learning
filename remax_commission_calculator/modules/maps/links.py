@@ -64,3 +64,41 @@ def build_directions_url(row):
     if not query:
         return ""
     return f"https://www.google.com/maps/dir/?api=1&destination={quote(query)}"
+
+
+# Google Maps URLs accept origin + destination + up to 9 waypoints.
+MAX_ROUTE_WAYPOINTS = 9
+
+
+def _coord_pair(row):
+    if not _has_coords(row):
+        return ""
+    return f"{float(row['latitude'])},{float(row['longitude'])}"
+
+
+def build_route_directions_url(stops, *, origin=None):
+    """Multi-stop Maps URL. No API key. Origin is the first stop unless given.
+
+    Never uses the Agent's live GPS. Extra stops beyond the URL limit are
+    dropped by the caller; this helper uses at most 11 points.
+    """
+    located = [row for row in (stops or []) if _has_coords(row)]
+    if not located:
+        return ""
+    if len(located) == 1:
+        return build_directions_url(located[0])
+    start = origin if origin and _has_coords(origin) else located[0]
+    dest = located[-1]
+    middle = located[1:-1][:MAX_ROUTE_WAYPOINTS]
+    origin_text = _coord_pair(start)
+    dest_text = _coord_pair(dest)
+    url = (
+        "https://www.google.com/maps/dir/?api=1"
+        f"&origin={quote(origin_text)}"
+        f"&destination={quote(dest_text)}"
+        "&travelmode=driving"
+    )
+    if middle:
+        waypoints = "|".join(_coord_pair(row) for row in middle)
+        url += f"&waypoints={quote(waypoints, safe='|,')}"
+    return url

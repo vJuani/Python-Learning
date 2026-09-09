@@ -216,12 +216,12 @@ def register_jrh_routes(app, helpers):
             row = dict(action)
             name = row.get("href_name")
             args = row.get("href_args") or {}
-            href = ""
+            href = row.get("href") or ""
             if name:
                 try:
                     href = url_for(name, **args)
                 except Exception:
-                    href = ""
+                    href = href or ""
             row["href"] = href
             actions.append(row)
         attached["actions"] = actions
@@ -234,7 +234,7 @@ def register_jrh_routes(app, helpers):
                 try:
                     row["href"] = url_for(name, **args)
                 except Exception:
-                    row["href"] = ""
+                    row["href"] = row.get("href") or ""
             cards.append(row)
         attached["cards"] = cards
         return attached

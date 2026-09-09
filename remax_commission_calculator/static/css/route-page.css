@@ -1,0 +1,38 @@
+.route-page { max-width: 72rem; margin: 0 auto; padding: 0 0 2rem; }
+.route-hero { background: #fff; border: 1px solid #d7e2ee; border-radius: 18px; padding: 1.35rem 1.45rem; margin-bottom: 1rem; }
+.route-kicker { margin: 0; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.72rem; color: #0860c8; font-weight: 700; }
+.route-hero h1 { margin: 0.2rem 0 0.35rem; color: #001838; font-size: 1.7rem; }
+.route-count { color: #5b6b7c; margin: 0 0 0.8rem; }
+.route-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+.route-note { background: #eef3f9; border-radius: 10px; padding: 0.7rem 0.9rem; color: #33415c; }
+.route-note--mute { background: transparent; color: #5b6b7c; padding-left: 0; }
+.route-alert { background: #fff8e8; border: 1px solid #ead9a8; border-radius: 12px; padding: 0.9rem 1rem; margin: 0.75rem 0; }
+.route-alert h2 { margin: 0 0 0.4rem; font-size: 1rem; }
+.route-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.9fr); gap: 1rem; align-items: start; }
+.route-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; }
+.route-stop { display: grid; grid-template-columns: 2.2rem minmax(0, 1fr) auto; gap: 0.7rem; border: 1px solid #c9d6e5; border-radius: 12px; padding: 0.85rem 1rem; background: #fff; }
+.route-stop__num { width: 2rem; height: 2rem; border-radius: 999px; background: #0860c8; color: #fff; display: grid; place-items: center; font-weight: 700; }
+.route-stop__time { margin: 0; font-weight: 700; color: #001838; }
+.route-stop__place, .route-stop__km { margin: 0.15rem 0 0; color: #5b6b7c; }
+.route-stop__cta { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 0.4rem; }
+.route-stop__move { display: flex; flex-direction: column; gap: 0.25rem; }
+.route-stop__move button { border: 1px solid #c9d6e5; background: #eef3f9; border-radius: 8px; min-width: 2rem; cursor: pointer; }
+.route-map__canvas { min-height: 22rem; border-radius: 12px; background: #eef3f9; }
+.route-duration, .route-empty { color: #5b6b7c; }
+.agenda-hero__route { margin: 0.75rem 0 0; }
+
+@media (max-width: 800px) {
+    .route-layout { grid-template-columns: 1fr; }
+    .route-map__canvas { display: none; min-height: 16rem; }
+    .route-map__canvas.is-open { display: block; }
+}
+
+html[data-theme="dark"] .route-hero,
+html[data-theme="dark"] .route-stop {
+    background: #152033;
+    border-color: #2a3c55;
+    color: #e8eef6;
+}
+html[data-theme="dark"] .route-hero h1,
+html[data-theme="dark"] .route-stop__time { color: #e8eef6; }
+html[data-theme="dark"] .route-note { background: #1c2b40; color: #c5d0de; }

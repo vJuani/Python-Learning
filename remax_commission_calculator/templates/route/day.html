@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('route_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block body_class %}is-agenda-page is-route-page {% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agenda-page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/route-page.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/property-maps.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+{% set view = view or {} %}
+<div class="route-page">
+    <header class="route-hero">
+        <p class="route-kicker">{{ t('route_kicker') }}</p>
+        <h1>{{ t('route_heading', date=view.date_label) }}</h1>
+        <p class="route-count">
+            {% if view.visit_count == 1 %}
+            {{ t('route_count_one') }}
+            {% elif view.visit_count %}
+            {{ t('route_count', count=view.visit_count) }}
+            {% else %}
+            {{ t('route_count_zero') }}
+            {% endif %}
+        </p>
+        <div class="route-actions">
+            <a class="btn btn-secondary" href="{{ url_for('agenda_index', date=view.date) }}">{{ t('agenda_title') }}</a>
+            {% if view.maps_url %}
+            <a class="btn btn-primary" href="{{ view.maps_url }}" target="_blank" rel="noopener">{{ t('route_open_maps') }}</a>
+            {% endif %}
+        </div>
+    </header>
+
+    {% if view.schedule_locked %}
+    <p class="route-note">{{ t('route_locked_note') }}</p>
+    {% endif %}
+    {% if view.manual %}
+    <p class="route-note">{{ t('route_manual_note') }}</p>
+    {% endif %}
+    <p class="route-note route-note--mute">{{ t('route_no_eta') }}</p>
+
+    {% if view.conflicts %}
+    <section class="route-alert" role="alert">
+        <h2>{{ t('route_conflicts_title') }}</h2>
+        <ul>
+            {% for item in view.conflicts %}
+            <li>{{ item.label }}</li>
+            {% endfor %}
+        </ul>
+        <a href="{{ url_for('agenda_index', date=view.date) }}">{{ t('route_view_agenda') }}</a>
+    </section>
+    {% endif %}
+
+    {% if view.unlocated %}
+    <section class="route-alert">
+        <p>{{ t('route_unlocated', count=view.unlocated|length) }}</p>
+        {% for item in view.unlocated %}
+        <p>
+            {{ item.due_time_label }} · {{ item.place_label or item.title }}
+            {% if item.property_id %}
+            <a href="{{ url_for('properties_edit', property_id=item.property_id) }}">{{ t('property_location_complete') }}</a>
+            {% endif %}
+        </p>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if view.maps_truncated %}
+    <p class="route-note">{{ t('route_maps_truncated') }}</p>
+    {% endif %}
+
+    {% if view.stops %}
+    <div class="route-layout">
+        <ol class="route-list">
+            {% for stop in view.stops %}
+            <li class="route-stop">
+                <span class="route-stop__num">{{ stop.sequence }}</span>
+                <div class="route-stop__body">
+                    <p class="route-stop__time">{{ stop.due_time_label or '—' }}</p>
+                    <p class="route-stop__place">{{ stop.place_label }}</p>
+                    {% if stop.distance_from_previous_label %}
+                    <p class="route-stop__km">{{ t('route_from_previous', distance=stop.distance_from_previous_label) }}</p>
+                    {% endif %}
+                    <div class="route-stop__cta">
+                        {% if stop.directions_url %}
+                        <a href="{{ stop.directions_url }}" target="_blank" rel="noopener">{{ t('agenda_action_directions') }}</a>
+                        {% endif %}
+                        {% if stop.property_id %}
+                        <a href="{{ url_for('properties_detail', property_id=stop.property_id) }}">{{ t('agenda_action_view_property') }}</a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="route-stop__move">
+                    {% if stop.order_up %}
+                    <form method="post" action="{{ url_for('agenda_route_reorder') }}">
+                        <input type="hidden" name="date" value="{{ view.date }}">
+                        <input type="hidden" name="order" value="{{ stop.order_up }}">
+                        <button type="submit" aria-label="{{ t('route_move_up') }}">↑</button>
+                    </form>
+                    {% endif %}
+                    {% if stop.order_down %}
+                    <form method="post" action="{{ url_for('agenda_route_reorder') }}">
+                        <input type="hidden" name="date" value="{{ view.date }}">
+                        <input type="hidden" name="order" value="{{ stop.order_down }}">
+                        <button type="submit" aria-label="{{ t('route_move_down') }}">↓</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ol>
+        {% if view.map and view.map.available %}
+        <div class="route-map">
+            <button type="button" class="btn btn-secondary hide-desktop" data-route-map-toggle>{{ t('route_view_map') }}</button>
+            <div
+                class="route-map__canvas"
+                data-jrh-maps
+                data-maps-mode="route"
+                data-maps-key="{{ maps.browser_key if maps is defined else '' }}"
+                data-maps-region="{{ maps.region if maps is defined else 'ar' }}"
+                data-maps-payload='{{ view.map | tojson }}'
+            ></div>
+        </div>
+        {% endif %}
+    </div>
+    <p class="route-duration">{{ t('route_duration_unknown') }}{% if view.total_distance_label %} · {{ view.total_distance_label }}{% endif %}</p>
+    {% else %}
+    <p class="route-empty">{{ t('route_empty') }}</p>
+    {% endif %}
+</div>
+<script>
+(function () {
+    var toggle = document.querySelector("[data-route-map-toggle]");
+    var canvas = document.querySelector(".route-map__canvas");
+    if (!toggle || !canvas) return;
+    toggle.addEventListener("click", function () {
+        canvas.classList.toggle("is-open");
+    });
+})();
+</script>
+{% endblock %}

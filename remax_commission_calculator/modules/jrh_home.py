@@ -132,6 +132,16 @@ def build_agent_home(
     )
     visit_count = sum(1 for task in today_tasks if task.get("task_type") == "visit")
     call_count = sum(1 for task in today_tasks if task.get("task_type") == "call")
+    next_visit = None
+    if agent_id:
+        from modules.route_planning import get_next_visit
+
+        next_visit = get_next_visit(
+            organization_id,
+            agent_id,
+            language=language,
+            now=now,
+        )
 
     pending_actions = build_agent_pending_actions(
         organization_id,
@@ -159,6 +169,8 @@ def build_agent_home(
             "overdue": agenda.get("overdue_count") or 0,
         },
         "upcoming": agenda.get("tasks") or [],
+        "next_visit": next_visit,
+        "today_visit_count": visit_count,
         "recommendations": build_home_recommendations(
             organization_id,
             agent_id,

@@ -1,0 +1,12 @@
+{% if home.next_visit %}
+<p class="jrh-side-actions__next">
+    <strong>{{ home.next_visit.due_time_label }}</strong>
+    {{ t('agent_task_type_visit') }} · {{ home.next_visit.place_label or home.next_visit.title }}
+    {% if home.next_visit.directions_url %}
+    <a class="jrh-side-actions__maps" href="{{ home.next_visit.directions_url }}" target="_blank" rel="noopener">{{ t('agenda_action_directions') }}</a>
+    {% endif %}
+</p>
+{% endif %}
+{% if (home.today_visit_count or 0) >= 3 %}
+<p><a href="{{ url_for('agenda_route') }}">{{ t('route_home_cta') }}</a></p>
+{% endif %}

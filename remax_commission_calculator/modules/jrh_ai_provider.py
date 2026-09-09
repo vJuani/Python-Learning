@@ -123,6 +123,15 @@ Examples:
 - cuántas visitas hice esta semana?
 - cuánto cobré este mes?
 
+QUERY_NEXT_VISIT = the agent's next pending property visit. Never invent times.
+QUERY_DAILY_ROUTE / BUILD_DAILY_ROUTE = show today's (or named day's) visit route. Read-only. Never reschedule. Never track GPS.
+Examples:
+- cuál es mi próxima visita?
+- armame el recorrido de mañana
+- cómo me conviene organizar las visitas de hoy?
+- mostrame el recorrido del jueves
+- tengo una visita nueva a las 16 en Olivos, dónde la meto?
+
 START_INVOICE = prepare invoice preview, never emit.
 "facturame lo que tengo" lists billable charges or opens preview.
 "facturame eso" uses previous charge context.

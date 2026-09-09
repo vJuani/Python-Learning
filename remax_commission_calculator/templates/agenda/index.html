@@ -41,6 +41,11 @@
                 {{ t('agenda_today_status_zero') }}
                 {% endif %}
             </p>
+            {% if can_manage %}
+            <p class="agenda-hero__route">
+                <a class="btn btn-secondary" href="{{ url_for('agenda_route', date=agenda.due_date or none) }}">{{ t('route_open_today') }}</a>
+            </p>
+            {% endif %}
         </div>
         {% if can_manage %}
         <details class="agenda-new-menu hide-mobile">

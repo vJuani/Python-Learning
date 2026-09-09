@@ -13,6 +13,7 @@ from modules.maps.config import (
 from modules.maps.links import (
     build_directions_url,
     build_open_maps_url,
+    build_route_directions_url,
 )
 from modules.maps.geo import (
     attach_distance,
@@ -45,6 +46,7 @@ __all__ = (
     "bounding_box",
     "build_directions_url",
     "build_open_maps_url",
+    "build_route_directions_url",
     "distance_between_coordinates",
     "filter_by_radius",
     "find_place",

@@ -36,6 +36,9 @@ from modules.jrh_ai_intents import (
     QUERY_CONTACT_HISTORY,
     QUERY_CONTACT_PROPERTIES,
     START_CONTACT_NEED,
+    QUERY_NEXT_VISIT,
+    QUERY_DAILY_ROUTE,
+    BUILD_DAILY_ROUTE,
 )
 
 ORIGIN_CHARGE = "agent_account_charge"
@@ -181,6 +184,9 @@ EXPLICIT_NEW_INTENTS = frozenset(
         QUERY_CONTACT_HISTORY,
         QUERY_CONTACT_PROPERTIES,
         START_CONTACT_NEED,
+        QUERY_NEXT_VISIT,
+        QUERY_DAILY_ROUTE,
+        BUILD_DAILY_ROUTE,
     }
 )
 
@@ -444,9 +450,43 @@ def _looks_like_agenda_query(folded):
     return False
 
 
+def has_next_visit_signal(text):
+    folded = fold_text(text)
+    return any(
+        phrase in folded
+        for phrase in (
+            "proxima visita",
+            "siguiente visita",
+            "cual es mi proxima",
+            "cual es la proxima",
+            "mi proxima visita",
+        )
+    )
+
+
+def has_daily_route_signal(text):
+    folded = fold_text(text)
+    if CREATE_TASK_RE.search(folded) and "recorrido" not in folded and "donde la meto" not in folded:
+        return False
+    return any(
+        phrase in folded
+        for phrase in (
+            "recorrido",
+            "organizar las visitas",
+            "organizar mis visitas",
+            "como me conviene organizar",
+            "armame el recorrido",
+            "arma el recorrido",
+            "donde la meto",
+        )
+    )
+
+
 def has_agenda_query_signal(text):
     folded = fold_text(text)
     if has_property_need_signal(text):
+        return False
+    if has_next_visit_signal(text) or has_daily_route_signal(text):
         return False
     if has_property_inventory_signal(text) and "agenda" not in folded:
         return False
@@ -1172,6 +1212,25 @@ def classify_intent(prompt, *, context=None):
         scores[QUERY_PENDINGS] = 0.95
     if has_agenda_query_signal(text):
         scores[QUERY_AGENDA] = 0.92
+    if has_next_visit_signal(text):
+        scores[QUERY_NEXT_VISIT] = 0.97
+    if has_daily_route_signal(text):
+        if "donde la meto" in folded or "como me conviene" in folded or "armame" in folded or "arma el" in folded:
+            scores[BUILD_DAILY_ROUTE] = 0.98
+            entities["slot_query"] = "donde la meto" in folded
+            time_match = re.search(r"a las (\d{1,2})(?::(\d{2}))?", folded)
+            if time_match:
+                hour = int(time_match.group(1))
+                minute = int(time_match.group(2) or 0)
+                entities["slot_time"] = f"{hour:02d}:{minute:02d}"
+            place_match = re.search(
+                r"\ben\s+([a-z]{3,}(?:\s+[a-z]{2,})?)",
+                folded,
+            )
+            if place_match:
+                entities["slot_place"] = place_match.group(1).strip()
+        else:
+            scores[QUERY_DAILY_ROUTE] = 0.97
     if has_property_need_signal(text):
         scores[QUERY_PROPERTY_NEEDS] = 0.9
     if has_property_inventory_signal(text) and not has_property_need_signal(text):
@@ -1433,6 +1492,16 @@ def apply_intent_guards(parsed, prompt, context=None):
         result["intent"] = QUERY_PROPERTIES
         result["confidence"] = max(float(result.get("confidence") or 0), 0.86)
         result["guard"] = "property_inventory"
+    elif rule_intent in {QUERY_NEXT_VISIT, QUERY_DAILY_ROUTE, BUILD_DAILY_ROUTE} and result.get("intent") in {
+        QUERY_AGENDA,
+        CREATE_TASK,
+        FALLBACK,
+        QUERY_PROPERTIES,
+    }:
+        result["intent"] = rule_intent
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.9)
+        result["guard"] = "visit_route"
+        result["entities"] = merged
     elif rule_intent == QUERY_AGENDA and result.get("intent") in {
         CREATE_TASK,
         FALLBACK,

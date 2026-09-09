@@ -34,6 +34,14 @@ class MapProvider:
         """Transient geocode for an explicit search. Never used for distance."""
         return None
 
+    def driving_route(self, stops, **_kwargs):
+        """Reserved for Directions API (road distance / ETA / traffic).
+
+        V1 returns None so route planning stays on Haversine and never
+        incurs per-combination Matrix/Directions cost.
+        """
+        return None
+
 
 class GoogleMapsProvider(MapProvider):
     name = PROVIDER_GOOGLE

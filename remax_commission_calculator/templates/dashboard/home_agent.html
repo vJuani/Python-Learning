@@ -97,6 +97,7 @@
             <div class="home-card__header">
                 <h2>{{ t('jrh_next_title') }}</h2>
             </div>
+            {% include "dashboard/_home_route_actions.html" %}
             {% if home.upcoming %}
             <ul class="jrh-side-actions__list">
                 {% for task in home.upcoming %}
@@ -155,6 +156,7 @@
             <div class="home-card__header">
                 <h2>{{ t('jrh_next_title') }}</h2>
             </div>
+            {% include "dashboard/_home_route_actions.html" %}
             {% if home.upcoming %}
             <ul class="jrh-side-actions__list">
                 {% for task in home.upcoming %}

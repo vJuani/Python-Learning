@@ -43,6 +43,9 @@ from modules.jrh_ai_intents import (
     QUERY_CONTACT_HISTORY,
     QUERY_CONTACT_PROPERTIES,
     START_CONTACT_NEED,
+    QUERY_NEXT_VISIT,
+    QUERY_DAILY_ROUTE,
+    BUILD_DAILY_ROUTE,
     WRITE_ACTIONS,
 )
 from modules.jrh_ai_provider import interpret_prompt
@@ -230,6 +233,9 @@ def ask_jrh(
         QUERY_CONTACT_HISTORY: _handle_contact_history,
         QUERY_CONTACT_PROPERTIES: _handle_contact_properties,
         START_CONTACT_NEED: _handle_start_contact_need,
+        QUERY_NEXT_VISIT: _handle_next_visit,
+        QUERY_DAILY_ROUTE: _handle_daily_route,
+        BUILD_DAILY_ROUTE: _handle_daily_route,
     }
     handler = handlers.get(intent, lambda **_kwargs: _fallback(language, confidence))
     result = handler(
@@ -242,6 +248,7 @@ def ask_jrh(
         confidence=confidence,
         session=session,
         now=now,
+        intent=intent,
     )
     store_context(
         session,
@@ -618,6 +625,194 @@ def _handle_agenda(
             "count": len(tasks),
             "source_prompt": prompt,
         },
+    )
+
+
+def _handle_next_visit(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    confidence,
+    now=None,
+    **_kwargs,
+):
+    from modules.route_planning import get_next_visit
+
+    if not is_agent(user) or not agent_id:
+        return _result(
+            QUERY_NEXT_VISIT,
+            "needs_attention",
+            language=language,
+            message_key="jrh_ai_route_agent_only",
+            confidence=confidence,
+        )
+    visit = get_next_visit(
+        organization_id,
+        agent_id,
+        language=language,
+        now=now or now_utc(),
+    )
+    if not visit:
+        return _result(
+            QUERY_NEXT_VISIT,
+            "ready",
+            language=language,
+            message_key="jrh_ai_next_visit_empty",
+            actions=[{"label_key": "jrh_ai_suggest_agenda", "href_name": "agenda_index"}],
+            confidence=confidence,
+        )
+    actions = []
+    if visit.get("directions_url"):
+        actions.append(
+            {
+                "label_key": "agenda_action_directions",
+                "href": visit["directions_url"],
+            }
+        )
+    if visit.get("property_id"):
+        actions.append(
+            {
+                "label_key": "jrh_ai_view_property",
+                "href_name": "properties_detail",
+                "href_args": {"property_id": visit["property_id"]},
+            }
+        )
+    return _result(
+        QUERY_NEXT_VISIT,
+        "ready",
+        language=language,
+        message_key="jrh_ai_next_visit",
+        data={
+            "time": visit.get("due_time_label") or "",
+            "place": visit.get("place_label") or visit.get("title") or "",
+        },
+        cards=[
+            {
+                "title": " — ".join(
+                    part
+                    for part in (
+                        visit.get("due_time_label"),
+                        visit.get("place_label") or visit.get("title"),
+                    )
+                    if part
+                ),
+                "subtitle": visit.get("type_label") or "",
+            }
+        ],
+        actions=actions,
+        confidence=confidence,
+        entity={"kind": "task", "id": visit.get("id"), "label": visit.get("place_label")},
+    )
+
+
+def _handle_daily_route(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    prompt,
+    confidence,
+    now=None,
+    intent=None,
+    **_kwargs,
+):
+    from modules.route_planning import build_daily_route, find_visit_on_route
+
+    if not is_agent(user) or not agent_id:
+        return _result(
+            QUERY_DAILY_ROUTE,
+            "needs_attention",
+            language=language,
+            message_key="jrh_ai_route_agent_only",
+            confidence=confidence,
+        )
+    tz = organization_timezone(organization_id)
+    current = (now or now_utc()).astimezone(tz)
+    resolved = resolve_agenda_date(entities, current)
+    start = resolved["start"]
+    view = build_daily_route(
+        organization_id,
+        agent_id,
+        local_date=start,
+        language=language,
+        now=now or now_utc(),
+    )
+    when_phrase = _agenda_when_phrase(resolved, language)
+    if entities.get("slot_query"):
+        found = find_visit_on_route(
+            view,
+            time_text=entities.get("slot_time") or "",
+            place_text=entities.get("slot_place") or "",
+        )
+        if found is None:
+            return _result(
+                BUILD_DAILY_ROUTE,
+                "needs_attention",
+                language=language,
+                message_key="jrh_ai_route_missing_visit",
+                actions=[
+                    {
+                        "label_key": "jrh_ai_schedule_visit",
+                        "href_name": "agenda_compose",
+                    }
+                ],
+                confidence=confidence,
+            )
+    cards = []
+    for stop in view.get("stops") or []:
+        cards.append(
+            {
+                "title": f"{stop.get('sequence')}. {stop.get('due_time_label') or ''} {stop.get('place_label') or ''}".strip(),
+                "subtitle": stop.get("distance_from_previous_label") or "",
+            }
+        )
+    actions = [
+        {
+            "label_key": "jrh_ai_route_open",
+            "href_name": "agenda_route",
+            "href_args": {"date": view.get("date")},
+        }
+    ]
+    if view.get("maps_url"):
+        actions.append(
+            {
+                "label_key": "route_open_maps",
+                "href": view["maps_url"],
+            }
+        )
+    if view.get("conflicts"):
+        message_key = "jrh_ai_route_conflict"
+        actions.append(
+            {
+                "label_key": "route_view_agenda",
+                "href_name": "agenda_index",
+                "href_args": {"date": view.get("date")},
+            }
+        )
+    elif not view.get("stops"):
+        message_key = "jrh_ai_route_empty"
+    elif view.get("schedule_locked"):
+        message_key = "jrh_ai_route_locked"
+    else:
+        message_key = "jrh_ai_route_found"
+    data = {
+        "path": (view.get("facts") or {}).get("path") or "",
+        "when": when_phrase,
+        "count": view.get("unlocated") and len(view.get("unlocated") or []),
+    }
+    return _result(
+        intent or (BUILD_DAILY_ROUTE if entities.get("slot_query") else QUERY_DAILY_ROUTE),
+        "ready" if view.get("stops") and not view.get("conflicts") else "needs_attention",
+        language=language,
+        message_key=message_key,
+        data=data,
+        cards=cards,
+        actions=actions,
+        confidence=confidence,
     )
 
 

@@ -158,6 +158,65 @@
         }
     }
 
+    function initRoute(root) {
+        var raw = root.getAttribute("data-maps-payload") || "";
+        var payload;
+        try {
+            payload = JSON.parse(raw);
+        } catch (err) {
+            return;
+        }
+        var markers = (payload && payload.markers) || [];
+        if (!window.google || !google.maps || !markers.length) {
+            return;
+        }
+        var map = new google.maps.Map(root, {
+            center: { lat: Number(markers[0].lat), lng: Number(markers[0].lng) },
+            zoom: 12,
+            disableDefaultUI: true,
+            zoomControl: true,
+            fullscreenControl: true,
+        });
+        var bounds = new google.maps.LatLngBounds();
+        var path = [];
+        markers.forEach(function (item) {
+            var pos = { lat: Number(item.lat), lng: Number(item.lng) };
+            if (Number.isNaN(pos.lat) || Number.isNaN(pos.lng)) {
+                return;
+            }
+            path.push(pos);
+            bounds.extend(pos);
+            var marker = new google.maps.Marker({
+                map: map,
+                position: pos,
+                label: String(item.label || ""),
+                title: item.title || "",
+            });
+            marker.addListener("click", function () {
+                var info = new google.maps.InfoWindow({
+                    content: "<strong>" + (item.title || "") + "</strong><br>"
+                        + (item.time || "") + " "
+                        + (item.distance || "")
+                        + (item.href ? "<br><a href=\"" + item.href + "\">Ver</a>" : ""),
+                });
+                info.open(map, marker);
+            });
+        });
+        if (path.length > 1) {
+            new google.maps.Polyline({
+                map: map,
+                path: path,
+                geodesic: true,
+                strokeColor: "#0860c8",
+                strokeOpacity: 0.85,
+                strokeWeight: 3,
+            });
+        }
+        if (!bounds.isEmpty()) {
+            map.fitBounds(bounds, 48);
+        }
+    }
+
     window.jrhInitPropertyMaps = function () {
         document.querySelectorAll("[data-jrh-maps]").forEach(function (root) {
             var mode = root.getAttribute("data-maps-mode");
@@ -169,6 +228,9 @@
             }
             if (mode === "cluster") {
                 initCluster(root);
+            }
+            if (mode === "route") {
+                initRoute(root);
             }
         });
     };
