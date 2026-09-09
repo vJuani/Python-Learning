@@ -28,9 +28,11 @@ Names only. Never commit values.
 - `REDREMAX_HTTP_TIMEOUT_SECONDS`
 
 `REDREMAX_ACCESS_TOKEN` is read by `ConfiguredRedRemaxTokenProvider`.
-That provider is **NON-PRODUCTION**, disabled when the app is deployed, and
-is not a product auth solution. Do not paste a browser Bearer into the UI,
-the database, or the repository.
+Put the raw credential only (`eyJ...`). Do **not** include the word `Bearer`;
+the client adds `Authorization: Bearer <token>` itself.
+
+That provider is **NON-PRODUCTION** and is not official RedREMAX auth.
+Do not paste a browser Bearer into the UI, the database, or the repository.
 
 ## Authentication
 
@@ -49,8 +51,9 @@ Until official auth works:
 
 UI states: Not configured, Authentication pending, Connected, Auth expired, Error.
 
-A `401`/`403` fails the run with “No se pudo autenticar con RedREMAX.”
-It does **not** archive or deactivate properties.
+A `401`/`403` fails the run with a safe Staff message. It does **not**
+archive or deactivate properties. Logs go to stdout (Railway) and never
+include the token, `Authorization`, cookies, or response headers.
 
 ## Pagination
 

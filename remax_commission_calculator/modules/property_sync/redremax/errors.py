@@ -9,8 +9,8 @@ class RedRemaxError(Exception):
 
 
 class RedRemaxAuthError(RedRemaxError):
-    def __init__(self):
-        super().__init__("redremax_err_auth", 401)
+    def __init__(self, message_key="redremax_err_auth", status_code=401):
+        super().__init__(message_key, status_code)
 
 
 class RedRemaxConfigError(RedRemaxError):

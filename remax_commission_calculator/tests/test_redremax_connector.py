@@ -32,6 +32,7 @@ from modules.property_sync.connector import get_connector, register_connector
 from modules.property_sync.redremax.auth import (
     ConfiguredRedRemaxTokenProvider,
     RedRemaxOfficialAuthProvider,
+    normalize_access_token,
 )
 from modules.property_sync.redremax.client import (
     RedRemaxClient,
@@ -329,7 +330,10 @@ class RedRemaxConnectorTests(unittest.TestCase):
             self._install(failing)
             run = run_property_sync(self.org, PROVIDER_REDREMAX)
             self.assertEqual(run["status"], "failed")
-            self.assertEqual(run["error_summary"], "redremax_err_auth")
+            self.assertEqual(
+                run["error_summary"],
+                "redremax_err_auth_401" if status == 401 else "redremax_err_auth_403",
+            )
             current = get_property_record(row["id"], self.org)
             self.assertEqual(current["commercial_status"], "available")
             self.assertEqual(current["external_id"], row["external_id"])
@@ -452,15 +456,58 @@ class RedRemaxConnectorTests(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             provider.get_access_token()
 
-    def test_configured_token_disabled_when_deployed(self):
-        from modules.property_sync.redremax import auth as auth_mod
-
-        original = auth_mod.is_deployed
-        auth_mod.is_deployed = lambda: True
-        self.addCleanup(lambda: setattr(auth_mod, "is_deployed", original))
-        provider = ConfiguredRedRemaxTokenProvider(TOKEN)
+    def test_missing_token_is_not_configured(self):
+        provider = ConfiguredRedRemaxTokenProvider("")
         self.assertFalse(provider.is_configured())
         self.assertIsNone(provider.get_access_token())
+        client = RedRemaxClient(
+            auth_provider=provider,
+            transport=forbid_real_http,
+            base_url="https://redremax.test.invalid",
+        )
+        with self.assertRaises(RedRemaxAuthError) as raised:
+            client._headers()
+        self.assertEqual(raised.exception.message_key, "redremax_err_token_missing")
+
+    def test_token_builds_bearer_authorization(self):
+        captured = {}
+
+        def transport(url, headers, timeout):
+            captured["headers"] = dict(headers)
+            captured["url"] = url
+            return TransportResponse(
+                200,
+                json.dumps(listings_envelope([])).encode("utf-8"),
+                {},
+            )
+
+        client = RedRemaxClient(
+            auth_provider=ConfiguredRedRemaxTokenProvider("eyJtest-token"),
+            transport=transport,
+            base_url="https://redremax.test.invalid",
+            sleeper=lambda _seconds: None,
+        )
+        client.get_listings(office_id=OFFICE, page=1, page_size=1)
+        self.assertEqual(captured["headers"]["Authorization"], "Bearer eyJtest-token")
+        self.assertIn("/listings/api/listings", captured["url"])
+        self.assertIn("byoffice=AR.TEST.27", captured["url"])
+        self.assertIn("pagesize=1", captured["url"])
+        self.assertIn("page=1", captured["url"])
+
+    def test_env_token_does_not_need_bearer_prefix(self):
+        self.assertEqual(normalize_access_token("Bearer eyJabc"), "eyJabc")
+        client = RedRemaxClient(
+            auth_provider=ConfiguredRedRemaxTokenProvider("Bearer eyJabc"),
+            transport=forbid_real_http,
+            base_url="https://redremax.test.invalid",
+        )
+        self.assertEqual(client._headers()["Authorization"], "Bearer eyJabc")
+
+    def test_configured_token_is_not_production_ready(self):
+        provider = ConfiguredRedRemaxTokenProvider(TOKEN)
+        self.assertTrue(provider.is_configured())
+        self.assertFalse(provider.is_production_ready())
+        self.assertEqual(provider.get_access_token(), TOKEN)
 
     def test_sensitive_payload_stripped_by_normalizer(self):
         payload = load_fixture()

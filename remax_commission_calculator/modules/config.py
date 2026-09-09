@@ -240,23 +240,31 @@ def apply_config(app):
 
 def configure_logging(app):
     log_level = get_log_level()
-
-    app.logger.setLevel(log_level)
-
-    if app.logger.handlers:
-        return
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(log_level)
-    handler.setFormatter(
-        logging.Formatter(
-            "%(asctime)s %(levelname)s "
-            "[%(name)s] %(message)s"
-        )
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)s "
+        "[%(name)s] %(message)s"
     )
 
-    app.logger.addHandler(handler)
-    app.logger.propagate = False
+    root = logging.getLogger()
+    root.setLevel(log_level)
+    has_stdout = any(
+        isinstance(handler, logging.StreamHandler)
+        and getattr(handler, "stream", None) is sys.stdout
+        for handler in root.handlers
+    )
+    if not has_stdout:
+        root_handler = logging.StreamHandler(sys.stdout)
+        root_handler.setLevel(log_level)
+        root_handler.setFormatter(formatter)
+        root.addHandler(root_handler)
+
+    app.logger.setLevel(log_level)
+    if not app.logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(log_level)
+        handler.setFormatter(formatter)
+        app.logger.addHandler(handler)
+        app.logger.propagate = False
 
     logging.getLogger("werkzeug").setLevel(
         log_level

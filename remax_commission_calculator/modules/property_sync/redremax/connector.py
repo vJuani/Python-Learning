@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from modules.property_sync.connector import (
@@ -18,6 +19,8 @@ from modules.property_sync.redremax.errors import (
 from modules.property_sync.redremax.filters import RedRemaxSyncFilterConfig
 from modules.property_sync.redremax.mapping import PROVIDER_REDREMAX
 from modules.property_sync.redremax.normalizer import RedRemaxPropertyNormalizer
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -53,15 +56,31 @@ class RedRemaxConnector(PropertySourceConnector):
 
     def test_connection(self, integration):
         office_id = configured_office_id(integration)
+        logger.info(
+            "RedREMAX test_connection start office_id=%s",
+            office_id or "-",
+        )
         if not office_id:
-            raise RedRemaxConfigError()
-        if not self.client.auth_provider.is_configured():
-            raise RedRemaxAuthError()
+            logger.warning("RedREMAX test_connection missing office_id")
+            raise RedRemaxConfigError("redremax_err_office_required")
+        token_configured = bool(self.client.resolved_token())
+        logger.info(
+            "RedREMAX auth configured=%s office_id=%s",
+            token_configured,
+            office_id,
+        )
+        if not token_configured:
+            raise RedRemaxAuthError("redremax_err_token_missing")
         page = self.client.get_listings(
             office_id=office_id,
             page=1,
             page_size=1,
             filters=self.filters,
+        )
+        logger.info(
+            "RedREMAX test_connection ok office_id=%s source_total_items=%s",
+            office_id,
+            page.get("total_items") or 0,
         )
         results = page.get("results") or []
         for item in results:
@@ -100,6 +119,11 @@ class RedRemaxConnector(PropertySourceConnector):
             except RedRemaxAuthError:
                 raise
             except Exception:
+                logger.exception(
+                    "RedREMAX page failed office_id=%s page=%s",
+                    office_id,
+                    page,
+                )
                 if pages_fetched == 0:
                     raise
                 raise RedRemaxPartialError(

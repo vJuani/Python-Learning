@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from modules.database.properties_repository import (
     STATUS_APPROVED,
@@ -194,7 +197,7 @@ def compute_auth_state(integration, auth_provider=None):
     last_ok = bool((item.get("config") or {}).get("last_connection_ok"))
     if not office_id:
         return "not_configured"
-    if last_error == "redremax_err_auth":
+    if last_error in {"redremax_err_auth", "redremax_err_auth_401"}:
         return "auth_expired"
     if item.get("status") == STATUS_ERROR:
         return "error"
@@ -215,18 +218,36 @@ def test_property_source_connection(organization_id, provider):
     if integration is None:
         raise PropertySyncError("sync_err_not_configured", 400)
     connector = get_connector(provider)
+    office_id = str((integration.get("config") or {}).get("external_office_id") or "").strip()
+    logger.info(
+        "RedREMAX test_connection start org_id=%s office_id=%s",
+        organization_id,
+        office_id or "-",
+    )
     try:
         result = connector.test_connection(integration)
-    except RedRemaxAuthError:
+    except RedRemaxAuthError as error:
+        logger.exception(
+            "RedREMAX test_connection failed org_id=%s office_id=%s error_type=%s",
+            organization_id,
+            office_id or "-",
+            type(error).__name__,
+        )
         set_integration_status(
             organization_id,
             provider,
             status=STATUS_ERROR,
-            last_error="redremax_err_auth",
+            last_error=error.message_key,
             config_updates={"last_connection_ok": False},
         )
-        raise PropertySyncError("redremax_err_auth", 401)
+        raise PropertySyncError(error.message_key, error.status_code)
     except RedRemaxConfigError as error:
+        logger.exception(
+            "RedREMAX test_connection failed org_id=%s office_id=%s error_type=%s",
+            organization_id,
+            office_id or "-",
+            type(error).__name__,
+        )
         set_integration_status(
             organization_id,
             provider,
@@ -236,6 +257,12 @@ def test_property_source_connection(organization_id, provider):
         )
         raise PropertySyncError(error.message_key, 400)
     except RedRemaxError as error:
+        logger.exception(
+            "RedREMAX test_connection failed org_id=%s office_id=%s error_type=%s",
+            organization_id,
+            office_id or "-",
+            type(error).__name__,
+        )
         set_integration_status(
             organization_id,
             provider,
@@ -244,6 +271,20 @@ def test_property_source_connection(organization_id, provider):
             config_updates={"last_connection_ok": False},
         )
         raise PropertySyncError(error.message_key, error.status_code)
+    except Exception:
+        logger.exception(
+            "RedREMAX test_connection failed org_id=%s office_id=%s error_type=Exception",
+            organization_id,
+            office_id or "-",
+        )
+        set_integration_status(
+            organization_id,
+            provider,
+            status=STATUS_ERROR,
+            last_error="redremax_err_http",
+            config_updates={"last_connection_ok": False},
+        )
+        raise PropertySyncError("redremax_err_http", 502)
     set_integration_status(
         organization_id,
         provider,
@@ -268,8 +309,13 @@ def dry_run_property_sync(organization_id, provider):
     connector = get_connector(provider)
     try:
         listed = _as_listing_batch(connector.list_properties(integration))
-    except RedRemaxAuthError:
-        raise PropertySyncError("redremax_err_auth", 401)
+    except RedRemaxAuthError as error:
+        logger.exception(
+            "RedREMAX dry_run failed org_id=%s error_type=%s",
+            organization_id,
+            type(error).__name__,
+        )
+        raise PropertySyncError(error.message_key, error.status_code)
     except RedRemaxPartialError as error:
         listed = ListingBatch(
             items=error.items,
@@ -652,19 +698,24 @@ def run_property_sync(organization_id, provider=PROVIDER_MOCK_NETWORK, *, langua
 
     try:
         listed = _as_listing_batch(connector.list_properties(integration))
-    except RedRemaxAuthError:
+    except RedRemaxAuthError as error:
+        logger.exception(
+            "RedREMAX sync failed org_id=%s error_type=%s",
+            organization_id,
+            type(error).__name__,
+        )
         finish_property_sync_run(
             run_id,
             organization_id,
             status=RUN_FAILED,
-            error_summary="redremax_err_auth",
+            error_summary=error.message_key,
             extra_stats=extra_stats,
         )
         finish_integration_state(
             organization_id,
             provider,
             status=STATUS_ERROR,
-            last_error="redremax_err_auth",
+            last_error=error.message_key,
         )
         return get_property_sync_run(run_id, organization_id)
     except RedRemaxPartialError as error:
