@@ -19,7 +19,7 @@ from __future__ import annotations
 from modules.database.connection import get_connection
 
 
-POSTGRES_SCHEMA_VERSION = "postgres_v24"
+POSTGRES_SCHEMA_VERSION = "postgres_v25"
 
 # Money / calculation columns use NUMERIC(18,4).
 _MONEY = "NUMERIC(18, 4)"
@@ -1720,6 +1720,8 @@ SCHEMA_STATEMENTS = (
         area_source TEXT,
         area_override_by_user_id BIGINT,
         score_reasons_json TEXT,
+        snapshot_latitude DOUBLE PRECISION,
+        snapshot_longitude DOUBLE PRECISION,
 
         FOREIGN KEY (organization_id)
             REFERENCES organizations(id) ON DELETE RESTRICT,
@@ -1896,6 +1898,8 @@ def create_postgres_schema():
             ("area_source", "TEXT"),
             ("area_override_by_user_id", "BIGINT"),
             ("score_reasons_json", "TEXT"),
+            ("snapshot_latitude", "DOUBLE PRECISION"),
+            ("snapshot_longitude", "DOUBLE PRECISION"),
         ):
             cursor.execute(
                 f"""

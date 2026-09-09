@@ -218,6 +218,37 @@ def _score_budget(criteria, listing):
 
 
 def _score_zone(criteria, listing):
+    from modules.maps.geo import format_distance, need_geo_from_preferences, need_geo_ratio
+
+    geo = need_geo_from_preferences(criteria)
+    if geo:
+        meters = listing.get("distance_meters")
+        if meters is None:
+            from modules.maps.geo import distance_between_coordinates
+
+            meters = distance_between_coordinates(
+                geo["center_latitude"],
+                geo["center_longitude"],
+                listing.get("latitude"),
+                listing.get("longitude"),
+            )
+        ratio = need_geo_ratio(meters, geo["radius_m"])
+        if ratio is None:
+            return _criterion(
+                "zone",
+                CONFLICT,
+                0.0,
+                neighborhood=listing.get("neighborhood"),
+                distance_meters=meters,
+            )
+        return _criterion(
+            "zone",
+            MATCH,
+            ratio,
+            neighborhood=listing.get("neighborhood"),
+            distance_meters=meters,
+            distance_label=format_distance(meters),
+        )
     areas = (criteria or {}).get("areas") or []
     neighborhood = listing.get("neighborhood")
     if not areas or not neighborhood:
@@ -346,6 +377,25 @@ def passes_hard_filters(criteria, listing, property_row=None):
         if maximum is not None and price is not None and price > maximum:
             return False
 
+    from modules.maps.geo import (
+        distance_between_coordinates,
+        need_geo_from_preferences,
+    )
+
+    geo = need_geo_from_preferences(criteria)
+    if geo:
+        meters = listing.get("distance_meters")
+        if meters is None:
+            meters = distance_between_coordinates(
+                geo["center_latitude"],
+                geo["center_longitude"],
+                listing.get("latitude") or row.get("latitude"),
+                listing.get("longitude") or row.get("longitude"),
+            )
+        if meters is None or meters > geo["radius_m"]:
+            return False
+        listing["distance_meters"] = meters
+
     return True
 
 
@@ -452,6 +502,13 @@ def query_filters_from_criteria(criteria):
     if currency in ("USD", "ARS") and budget.get("max") is not None:
         filters["listing_currency"] = currency
         filters["max_listing_price"] = budget["max"]
+    from modules.maps.geo import need_geo_from_preferences
+
+    geo = need_geo_from_preferences(criteria)
+    if geo:
+        filters["center_lat"] = geo["center_latitude"]
+        filters["center_lng"] = geo["center_longitude"]
+        filters["radius_m"] = geo["radius_m"]
     return filters
 
 
@@ -557,6 +614,18 @@ def _explain_criterion(item, language="es"):
         return translate("matches_explain_budget_unknown", language)
     if key == "zone":
         hood = item.get("neighborhood")
+        if item.get("distance_label"):
+            if state == MATCH:
+                return translate(
+                    "matches_explain_distance_ok",
+                    language,
+                    distance=item["distance_label"],
+                )
+            return translate(
+                "matches_explain_distance_miss",
+                language,
+                distance=item["distance_label"],
+            )
         if state == MATCH:
             return hood
         if state == CONFLICT:
@@ -746,6 +815,25 @@ def search_chip_labels(criteria, *, language="es"):
     purpose = normalize_listing_purpose(criteria.get("purpose"))
     if purpose:
         chips.append(translate(f"listing_purpose_{purpose}", language))
+    from modules.maps.geo import format_distance, need_geo_from_preferences
+
+    geo = need_geo_from_preferences(criteria)
+    if geo:
+        label = geo.get("location_reference_text") or ""
+        distance = format_distance(geo["radius_m"], language)
+        if label:
+            chips.append(
+                translate(
+                    "matches_chip_near",
+                    language,
+                    distance=distance,
+                    place=label,
+                )
+            )
+        else:
+            chips.append(
+                translate("matches_chip_radius", language, distance=distance)
+            )
     return chips
 
 

@@ -97,6 +97,10 @@ def resolve_properties(
     balcony=None,
     terrace=None,
     garden=None,
+    center_lat=None,
+    center_lng=None,
+    radius_km=None,
+    exclude_property_id=None,
     limit=8,
 ):
     from modules.database.properties_repository import filter_properties
@@ -135,6 +139,10 @@ def resolve_properties(
         min_listing_price=min_price,
         listing_currency=currency or None,
         include_all_statuses=False,
+        center_lat=center_lat,
+        center_lng=center_lng,
+        radius_m=(float(radius_km) * 1000.0 if radius_km else None),
+        exclude_property_id=exclude_property_id,
     )
 
     def _keep(row):
@@ -176,7 +184,8 @@ def resolve_properties(
 
     rows = [row for row in rows if _keep(row)]
     text_query = (address or "").strip()
-    if text_query:
+    geo_active = center_lat is not None and center_lng is not None and radius_km
+    if text_query and not geo_active:
         ranked = rank_entity_candidates(
             text_query,
             rows[:RANK_POOL_LIMIT],
@@ -202,6 +211,10 @@ def resolve_properties(
             "bathrooms": row.get("bathrooms"),
             "covered_m2": row.get("covered_m2") or row.get("total_m2"),
             "match_score": row.get("match_score"),
+            "distance_meters": row.get("distance_meters"),
+            "distance_label": row.get("distance_label"),
+            "latitude": row.get("latitude"),
+            "longitude": row.get("longitude"),
         }
         for row in rows[:limit]
     ]
@@ -322,3 +335,127 @@ def pick_unique(matches, *, confidence=1.0):
     if confidence < 0.7:
         return "ambiguous", None, matches
     return "ambiguous", None, matches
+
+
+def resolve_geo_center(
+    organization_id,
+    *,
+    user,
+    agent_id=None,
+    entities=None,
+    context=None,
+):
+    """Resolve a search center from Property context, inventory, or Places.
+
+    Never invents coordinates. Places is only used for an explicit
+    radius search around free text that is not an existing Property.
+    """
+    from modules.database.properties_repository import get_property_record
+    from modules.maps.geo import parse_radius_km
+    from modules.maps.location import has_coordinates
+    from modules.maps.provider import find_place
+
+    entities = entities or {}
+    context = context or {}
+    last = context.get("last_entity") or {}
+    radius_km = parse_radius_km(entities.get("radius_km"))
+    near_this = bool(entities.get("near_this_property"))
+    center_text = (entities.get("center_text") or "").strip()
+    property_id = None
+    if near_this and last.get("kind") == "property" and last.get("id"):
+        property_id = last["id"]
+    elif center_text:
+        from modules.database.properties_repository import filter_properties
+
+        scoped = _viewer_agent_id(user, agent_id)
+        rows = filter_properties(
+            organization_id,
+            agent_id=scoped,
+            address=center_text,
+            include_all_statuses=False,
+        )
+        property_id = None
+        if len(rows) == 1:
+            property_id = rows[0].get("id")
+        elif rows:
+            ranked = rank_entity_candidates(
+                center_text,
+                rows[:RANK_POOL_LIMIT],
+                text_fields=("address", "neighborhood", "formatted_address", "external_id"),
+                code_fields=("external_id", "id"),
+                limit=5,
+            )
+            status, chosen, _confidence = decide_entity_matches(ranked)
+            log_entity_match(center_text, ranked, status, kind="property_geo")
+            if status == "unique" and chosen:
+                property_id = chosen[0].get("id")
+            elif ranked:
+                return {
+                    "status": "ambiguous",
+                    "matches": ranked,
+                    "radius_km": radius_km,
+                    "label": center_text,
+                }
+        if property_id is None:
+            matches, _total = resolve_properties(
+                organization_id,
+                user=user,
+                agent_id=agent_id,
+                address=center_text,
+                limit=5,
+            )
+            if len(matches) == 1:
+                property_id = matches[0].get("id")
+            elif matches:
+                return {
+                    "status": "ambiguous",
+                    "matches": matches,
+                    "radius_km": radius_km,
+                    "label": center_text,
+                }
+
+    if property_id:
+        row = get_property_record(property_id, organization_id)
+        if row is None:
+            return {"status": "missing", "radius_km": radius_km}
+        if not has_coordinates(row):
+            return {
+                "status": "unlocated",
+                "property": row,
+                "property_id": property_id,
+                "label": row.get("address"),
+                "radius_km": radius_km,
+            }
+        return {
+            "status": "ok",
+            "latitude": row["latitude"],
+            "longitude": row["longitude"],
+            "property_id": property_id,
+            "label": row.get("address"),
+            "radius_km": radius_km,
+        }
+
+    if center_text and radius_km:
+        place = find_place(center_text)
+        if place and place.get("latitude") is not None:
+            return {
+                "status": "ok",
+                "latitude": place["latitude"],
+                "longitude": place["longitude"],
+                "label": place.get("formatted_address") or center_text,
+                "radius_km": radius_km,
+                "transient": True,
+            }
+        return {
+            "status": "unresolved",
+            "label": center_text,
+            "radius_km": radius_km,
+        }
+
+    if entities.get("ask_radius") and last.get("kind") == "property":
+        return {
+            "status": "ask_radius",
+            "property_id": last.get("id"),
+            "label": last.get("label"),
+        }
+    return {"status": "none", "radius_km": radius_km}

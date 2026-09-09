@@ -86,7 +86,10 @@ def register_contact_routes(app, helpers):
             "notes": request.form.get("notes"),
             "company": request.form.get("company"),
             "contact_type": request.form.get("contact_type"),
-            "preferences": preferences_from_form(request.form),
+            "preferences": preferences_from_form(
+                request.form,
+                organization_id=require_user_organization(),
+            ),
         }
 
     @app.route("/contacts")
@@ -248,7 +251,10 @@ def register_contact_routes(app, helpers):
                 )
             except ContactError as error:
                 errors = [error.message_key]
-                form["preferences"] = preferences_from_form(request.form)
+                form["preferences"] = preferences_from_form(
+                    request.form,
+                    organization_id=organization_id,
+                )
             else:
                 flash_i18n("contacts_flash_updated", "success")
                 return redirect(
@@ -425,7 +431,10 @@ def register_contact_routes(app, helpers):
                 save_contact_need(
                     organization_id,
                     contact_id,
-                    preferences_from_form(request.form),
+                    preferences_from_form(
+                        request.form,
+                        organization_id=organization_id,
+                    ),
                     agent_id=agent_id,
                     client_name=request.form.get("client_name") or contact.get("name"),
                 )
@@ -463,11 +472,17 @@ def register_contact_routes(app, helpers):
                 "feature",
                 "purpose",
                 "listing_purpose",
+                "center_latitude",
+                "radius_km",
+                "location_mode",
             )
         )
         if not has_search:
             return None
-        return preferences_from_form(source)
+        return preferences_from_form(
+            source,
+            organization_id=require_user_organization(),
+        )
 
     def _selected_ids(name):
         ids = []
@@ -494,7 +509,10 @@ def register_contact_routes(app, helpers):
             persist_search_preferences(
                 organization_id,
                 contact,
-                override or preferences_from_form(request.form),
+                override or preferences_from_form(
+                    request.form,
+                    organization_id=organization_id,
+                ),
             )
             flash_i18n("contacts_flash_prefs_updated", "success")
             return redirect(

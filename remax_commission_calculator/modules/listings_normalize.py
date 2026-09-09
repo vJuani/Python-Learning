@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 
+from modules.maps.location import parse_coordinate
 from modules.listing_sources import SOURCE_INTERNAL, normalize_listing_source
 from modules.property_features import normalize_property_features
 from modules.property_types import (
@@ -95,6 +96,9 @@ def normalize_listing(source_record=None, **fields):
         ),
         "description": _clean_text(raw.get("description")),
         "images": list(images),
+        "latitude": parse_coordinate(raw.get("latitude"), kind="lat"),
+        "longitude": parse_coordinate(raw.get("longitude"), kind="lng"),
+        "distance_meters": _optional_number(raw.get("distance_meters")),
         "commercial_status": _clean_text(raw.get("commercial_status")),
         "published_at": _clean_text(raw.get("published_at")),
         "updated_at": _clean_text(
@@ -130,6 +134,9 @@ def listing_from_property(property_row):
         description=property_row.get("description"),
         commercial_status=property_row.get("commercial_status"),
         images=property_row.get("images"),
+        latitude=property_row.get("latitude"),
+        longitude=property_row.get("longitude"),
+        distance_meters=property_row.get("distance_meters"),
     )
 
 
@@ -158,6 +165,9 @@ def listing_from_external_listing(external_listing):
         commercial_status=row.get("commercial_status"),
         published_at=row.get("published_at") or row.get("first_seen_at"),
         updated_at=row.get("source_updated_at") or row.get("updated_at"),
+        latitude=row.get("latitude"),
+        longitude=row.get("longitude"),
+        distance_meters=row.get("distance_meters"),
     )
 
 

@@ -59,6 +59,14 @@
 <section class="panel">
     <form method="post" class="acm-filters">
         <input type="hidden" name="action" value="refresh">
+        <label>{{ t('acm_filter_distance') }}
+            <select name="max_distance_km">
+                <option value="">{{ t('acm_filter_distance_none') }}</option>
+                <option value="1">1 km</option>
+                <option value="2">2 km</option>
+                <option value="5">5 km</option>
+            </select>
+        </label>
         <label><input type="checkbox" name="same_zone" value="1" checked> {{ t('acm_filter_same_zone') }}</label>
         <label>{{ t('acm_filter_area') }} ±
             <select name="area_pct">
@@ -98,7 +106,11 @@
         <li class="acm-comp{% if row.selected %} acm-comp--in{% endif %}{% if row.is_outlier %} acm-comp--outlier{% endif %}{% if not row.valuation_valid %} acm-comp--ref{% endif %}">
             <div>
                 <strong>{{ row.external_reference or row.snapshot_location or '—' }}</strong>
-                <p class="field-help">{{ row.location.primary }}{% if row.location.secondary %} · {{ row.location.secondary }}{% endif %}</p>
+                <p class="field-help">
+                    {% if row.distance_label %}{{ row.distance_label }}{% endif %}
+                    {% if row.location.primary %}{% if row.distance_label %} · {% endif %}{{ row.location.primary }}{% endif %}
+                    {% if row.location.secondary %} · {{ row.location.secondary }}{% endif %}
+                </p>
                 <p>
                     {{ (row.snapshot_price)|money(row.snapshot_currency or acm.currency or 'USD') }}
                     · {% if row.display_area %}{{ row.display_area }} m²{% else %}{{ t('acm_area_unknown') }}{% endif %}

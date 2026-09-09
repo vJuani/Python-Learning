@@ -749,6 +749,11 @@ def inject_organization_branding():
 
 
 @app.context_processor
+def inject_maps_config():
+    return {"maps": _maps_template_config()}
+
+
+@app.context_processor
 def inject_listing_sources():
     from modules.listing_sources import listing_source_capabilities
 
@@ -4845,6 +4850,11 @@ def properties_list():
             "listing_currency",
             "",
         ).strip(),
+        "nearby_id": request.args.get("nearby_id", "").strip(),
+        "center_lat": request.args.get("center_lat", "").strip(),
+        "center_lng": request.args.get("center_lng", "").strip(),
+        "radius_km": request.args.get("radius_km", "").strip(),
+        "near": request.args.get("near", "").strip(),
     }
 
     raw_panel_filters = dict(filters)
@@ -4891,6 +4901,17 @@ def properties_list():
         filters,
         organization_id=organization_id,
     )
+    raw_panel_filters["nearby_id"] = parsed_filters.get("nearby_id") or filters.get("nearby_id") or ""
+    raw_panel_filters["center_lat"] = parsed_filters.get("center_lat")
+    raw_panel_filters["center_lng"] = parsed_filters.get("center_lng")
+    raw_panel_filters["radius_km"] = parsed_filters.get("radius_km")
+    raw_panel_filters["near"] = parsed_filters.get("near_label") or filters.get("near") or ""
+    raw_panel_filters["center_unlocated"] = parsed_filters.get("center_unlocated")
+    if parsed_filters.get("center_unlocated"):
+        flash_i18n("property_geo_unverified", "error")
+    if parsed_filters.get("radius_km") and parsed_filters.get("center_lat") is not None:
+        if raw_panel_filters.get("sort") in ("", "recent"):
+            raw_panel_filters["sort"] = "distance"
 
     property_count = len(properties)
     properties_panel = build_properties_directory(
@@ -4911,6 +4932,7 @@ def properties_list():
         filters_active=has_active_property_filters(
             parsed_filters
         ),
+        maps=_maps_template_config(),
     )
 
 

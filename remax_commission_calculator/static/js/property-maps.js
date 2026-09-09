@@ -103,6 +103,61 @@
         });
     }
 
+    function initCluster(root) {
+        var raw = root.getAttribute("data-maps-payload") || "";
+        var payload;
+        try {
+            payload = JSON.parse(raw);
+        } catch (err) {
+            return;
+        }
+        var target = payload && payload.target;
+        if (!window.google || !google.maps || !target) {
+            return;
+        }
+        var map = new google.maps.Map(root, {
+            center: { lat: Number(target.lat), lng: Number(target.lng) },
+            zoom: 14,
+            disableDefaultUI: true,
+            zoomControl: true,
+            fullscreenControl: true,
+        });
+        var bounds = new google.maps.LatLngBounds();
+        var targetPos = { lat: Number(target.lat), lng: Number(target.lng) };
+        new google.maps.Marker({
+            map: map,
+            position: targetPos,
+            title: target.title || "",
+            zIndex: 1000,
+        });
+        bounds.extend(targetPos);
+        (payload.markers || []).forEach(function (item) {
+            var pos = { lat: Number(item.lat), lng: Number(item.lng) };
+            if (Number.isNaN(pos.lat) || Number.isNaN(pos.lng)) {
+                return;
+            }
+            var marker = new google.maps.Marker({
+                map: map,
+                position: pos,
+                title: item.title || "",
+                opacity: 0.85,
+            });
+            bounds.extend(pos);
+            marker.addListener("click", function () {
+                var info = new google.maps.InfoWindow({
+                    content: "<strong>" + (item.title || "") + "</strong><br>"
+                        + (item.distance || "") + " "
+                        + (item.price || "")
+                        + (item.href ? "<br><a href=\"" + item.href + "\">Ver</a>" : ""),
+                });
+                info.open(map, marker);
+            });
+        });
+        if (!bounds.isEmpty()) {
+            map.fitBounds(bounds, 48);
+        }
+    }
+
     window.jrhInitPropertyMaps = function () {
         document.querySelectorAll("[data-jrh-maps]").forEach(function (root) {
             var mode = root.getAttribute("data-maps-mode");
@@ -111,6 +166,9 @@
             }
             if (mode === "embed") {
                 initEmbed(root);
+            }
+            if (mode === "cluster") {
+                initCluster(root);
             }
         });
     };

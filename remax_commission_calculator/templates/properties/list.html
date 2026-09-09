@@ -80,6 +80,13 @@
         <div class="properties-page__main">
             <section class="properties-card">
                 <form class="properties-toolbar" method="get" action="{{ url_for('properties_list') }}">
+                    <input type="hidden" name="nearby_id" value="{{ properties_panel.filters.nearby_id }}">
+                    <input type="hidden" name="center_lat" value="{{ properties_panel.filters.center_lat }}">
+                    <input type="hidden" name="center_lng" value="{{ properties_panel.filters.center_lng }}">
+                    <input type="hidden" name="near" value="{{ properties_panel.filters.near }}">
+                    {% if properties_panel.filters.radius_km %}
+                    <input type="hidden" name="radius_km" value="{{ properties_panel.filters.radius_km }}">
+                    {% endif %}
                     <div class="properties-toolbar__search">
                         <input
                             type="search"
@@ -177,22 +184,60 @@
                 </form>
 
                 <div class="properties-card__heading">
-                    <h2>{{ t('properties_list_title') }}</h2>
+                    <h2>{% if properties_panel.geo_search %}{{ t('property_nearby_title') }}{% else %}{{ t('properties_list_title') }}{% endif %}</h2>
                     <form method="get" action="{{ url_for('properties_list') }}" class="properties-sort">
                         <input type="hidden" name="q" value="{{ properties_panel.filters.q }}">
                         <input type="hidden" name="type" value="{{ properties_panel.filters.type }}">
                         <input type="hidden" name="status" value="{{ properties_panel.filters.status }}">
                         <input type="hidden" name="agent_id" value="{{ properties_panel.filters.agent_id }}">
+                        <input type="hidden" name="nearby_id" value="{{ properties_panel.filters.nearby_id }}">
+                        <input type="hidden" name="center_lat" value="{{ properties_panel.filters.center_lat }}">
+                        <input type="hidden" name="center_lng" value="{{ properties_panel.filters.center_lng }}">
+                        <input type="hidden" name="radius_km" value="{{ properties_panel.filters.radius_km }}">
+                        <input type="hidden" name="near" value="{{ properties_panel.filters.near }}">
                         <label>
                             <span>{{ t('properties_sort_by') }}</span>
                             <select name="sort" onchange="this.form.submit()">
                                 <option value="recent" {% if properties_panel.filters.sort == 'recent' %}selected{% endif %}>{{ t('properties_sort_recent') }}</option>
+                                {% if properties_panel.geo_search %}
+                                <option value="distance" {% if properties_panel.filters.sort == 'distance' %}selected{% endif %}>{{ t('property_sort_distance') }}</option>
+                                {% endif %}
                                 <option value="price_desc" {% if properties_panel.filters.sort == 'price_desc' %}selected{% endif %}>{{ t('properties_sort_price_desc') }}</option>
                                 <option value="price_asc" {% if properties_panel.filters.sort == 'price_asc' %}selected{% endif %}>{{ t('properties_sort_price_asc') }}</option>
                             </select>
                         </label>
                     </form>
                 </div>
+
+                {% if properties_panel.geo_search or properties_panel.filters.center_unlocated %}
+                <div class="properties-geo">
+                    {% if properties_panel.filters.near %}
+                    <span class="properties-geo__chip">
+                        {{ t('property_geo_chip', distance=(properties_panel.filters.radius_km ~ ' km'), place=properties_panel.filters.near) }}
+                        <a href="{{ url_for('properties_list', q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id) }}" aria-label="{{ t('property_geo_clear') }}">×</a>
+                    </span>
+                    {% endif %}
+                    <div class="properties-geo__radii" role="group" aria-label="{{ t('property_geo_radius') }}">
+                        {% for km in [1, 2, 5] %}
+                        <a class="properties-btn properties-btn--ghost{% if properties_panel.filters.radius_km|string == km|string or properties_panel.filters.radius_km|float == km %} is-active{% endif %}" href="{{ url_for('properties_list', nearby_id=properties_panel.filters.nearby_id, center_lat=properties_panel.filters.center_lat, center_lng=properties_panel.filters.center_lng, radius_km=km, near=properties_panel.filters.near, q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, min_price=properties_panel.filters.min_price, max_price=properties_panel.filters.max_price, listing_purpose=properties_panel.filters.listing_purpose) }}">{{ km }} km</a>
+                        {% endfor %}
+                    </div>
+                    {% if properties_panel.geo_map.available %}
+                    <button type="button" class="properties-btn properties-btn--ghost hide-desktop" data-geo-map-toggle>{{ t('property_geo_view_map') }}</button>
+                    <div
+                        class="properties-geo__map"
+                        data-jrh-maps
+                        data-maps-mode="cluster"
+                        data-maps-key="{{ maps.browser_key if maps is defined else '' }}"
+                        data-maps-region="{{ maps.region if maps is defined else 'ar' }}"
+                        data-maps-payload='{{ properties_panel.geo_map | tojson }}'
+                    ></div>
+                    {% endif %}
+                    {% if properties_panel.filters.center_unlocated %}
+                    <p class="field-help">{{ t('property_geo_unverified') }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
 
                 <nav class="properties-status-tabs hide-desktop" aria-label="{{ t('status') }}">
                     <a href="{{ url_for('properties_list', q=properties_panel.filters.q, type=properties_panel.filters.type, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if not properties_panel.filters.status %}is-active{% endif %}">
@@ -227,6 +272,9 @@
                                         <span class="property-media-placeholder" aria-hidden="true"></span>
                                         <div>
                                             <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="properties-property-cell__title">{{ row.address }}</a>
+                                            {% if row.distance_label %}
+                                            <span class="properties-property-cell__address">{{ row.distance_label }}</span>
+                                            {% endif %}
                                             {% if row.neighborhood %}
                                             <span class="properties-property-cell__address">{{ row.neighborhood }}</span>
                                             {% endif %}
@@ -295,6 +343,9 @@
                         <div>
                             <span class="property-mobile-card__type">{{ row.category_label }}</span>
                             <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__title">{{ row.address }}</a>
+                            {% if row.distance_label %}
+                            <p class="property-mobile-card__addr">{{ row.distance_label }}</p>
+                            {% endif %}
                             {% if row.neighborhood %}
                             <p class="property-mobile-card__addr">{{ row.neighborhood }}</p>
                             {% endif %}
@@ -371,6 +422,11 @@
                         <input type="hidden" name="listing_purpose" value="{{ properties_panel.filters.listing_purpose }}">
                         <input type="hidden" name="commercial_status" value="{{ properties_panel.filters.commercial_status }}">
                         <input type="hidden" name="listing_currency" value="{{ properties_panel.filters.listing_currency }}">
+                        <input type="hidden" name="nearby_id" value="{{ properties_panel.filters.nearby_id }}">
+                        <input type="hidden" name="center_lat" value="{{ properties_panel.filters.center_lat }}">
+                        <input type="hidden" name="center_lng" value="{{ properties_panel.filters.center_lng }}">
+                        <input type="hidden" name="radius_km" value="{{ properties_panel.filters.radius_km }}">
+                        <input type="hidden" name="near" value="{{ properties_panel.filters.near }}">
                     </form>
                 </footer>
                 {% else %}
@@ -455,6 +511,20 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/property-maps.js') }}"></script>
+<script>
+(function () {
+    var toggle = document.querySelector("[data-geo-map-toggle]");
+    var map = document.querySelector(".properties-geo__map");
+    if (!toggle || !map) return;
+    toggle.addEventListener("click", function () {
+        map.classList.toggle("is-open");
+        toggle.textContent = map.classList.contains("is-open")
+            ? {{ t('property_geo_hide_map') | tojson }}
+            : {{ t('property_geo_view_map') | tojson }};
+    });
+})();
+</script>
 <script>
     window.__propertiesOccupancyChart = {{ properties_panel.occupancy_breakdown | tojson }};
 </script>

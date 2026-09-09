@@ -171,17 +171,43 @@ def find_candidates(organization_id, subject, filters=None):
     area_pct = filters.get("area_pct") or "0.20"
     min_area, max_area = _area_bounds(subject, basis, area_pct)
     same_zone = filters.get("same_zone", True)
+    from modules.maps.geo import (
+        ACM_UNLIMITED_SEARCH_KM,
+        attach_distance,
+        bounding_box,
+        parse_radius_km,
+        radius_km_to_meters,
+    )
+    from modules.maps.location import has_coordinates
+
+    max_distance_km = parse_radius_km(filters.get("max_distance_km"))
+    subject_geo = has_coordinates(subject)
+    search_km = max_distance_km
+    if search_km is None and subject_geo:
+        search_km = ACM_UNLIMITED_SEARCH_KM
+    box = None
+    if subject_geo and search_km:
+        box = bounding_box(
+            subject.get("latitude"),
+            subject.get("longitude"),
+            radius_km_to_meters(search_km),
+        )
+    use_text_zone = same_zone and not subject_geo
     internal = list_internal_candidates(
         organization_id,
         exclude_property_id=subject["id"],
         listing_purpose=subject.get("listing_purpose"),
         property_type=subject.get("property_type"),
         currency=subject.get("listing_currency"),
-        neighborhood=subject.get("neighborhood") if same_zone else None,
-        jurisdiction=subject.get("jurisdiction") if same_zone else None,
+        neighborhood=subject.get("neighborhood") if use_text_zone else None,
+        jurisdiction=subject.get("jurisdiction") if use_text_zone else None,
         min_area=min_area,
         max_area=max_area,
         area_column=basis or AREA_COVERED,
+        min_lat=(box or {}).get("south"),
+        max_lat=(box or {}).get("north"),
+        min_lng=(box or {}).get("west"),
+        max_lng=(box or {}).get("east"),
         limit=80,
     )
     closed = list_closed_candidates(
@@ -190,8 +216,12 @@ def find_candidates(organization_id, subject, filters=None):
         listing_purpose=subject.get("listing_purpose"),
         property_type=subject.get("property_type"),
         currency=subject.get("listing_currency"),
-        neighborhood=subject.get("neighborhood") if same_zone else None,
-        jurisdiction=subject.get("jurisdiction") if same_zone else None,
+        neighborhood=subject.get("neighborhood") if use_text_zone else None,
+        jurisdiction=subject.get("jurisdiction") if use_text_zone else None,
+        min_lat=(box or {}).get("south"),
+        max_lat=(box or {}).get("north"),
+        min_lng=(box or {}).get("west"),
+        max_lng=(box or {}).get("east"),
         limit=40,
     )
     include_closing = filters.get("include_closing", True)
@@ -203,6 +233,15 @@ def find_candidates(organization_id, subject, filters=None):
     if include_closing:
         for item in closed:
             item = dict(item)
+            item = attach_distance(
+                item,
+                subject.get("latitude"),
+                subject.get("longitude"),
+            )
+            if max_distance_km is not None:
+                meters = item.get("distance_meters")
+                if meters is None or meters > max_distance_km * 1000:
+                    continue
             item["source_type"] = SOURCE_CLOSED
             item["price"] = item.get("sale_price")
             item["currency"] = item.get("operation_currency") or item.get("listing_currency")
@@ -220,6 +259,15 @@ def find_candidates(organization_id, subject, filters=None):
             if ("prop", item["id"]) in seen:
                 continue
             item = dict(item)
+            item = attach_distance(
+                item,
+                subject.get("latitude"),
+                subject.get("longitude"),
+            )
+            if max_distance_km is not None:
+                meters = item.get("distance_meters")
+                if meters is None or meters > max_distance_km * 1000:
+                    continue
             item["source_type"] = SOURCE_INTERNAL
             item["price"] = item.get("listing_price")
             item["currency"] = item.get("listing_currency")
@@ -289,6 +337,15 @@ def _row_from_candidate(candidate, subject):
         "total_m2": candidate.get("total_m2"),
         "neighborhood": candidate.get("neighborhood"),
         "jurisdiction": candidate.get("jurisdiction"),
+        "latitude": candidate.get("latitude"),
+        "longitude": candidate.get("longitude"),
+        "snapshot_latitude": candidate.get("latitude"),
+        "snapshot_longitude": candidate.get("longitude"),
+        "distance_meters": (
+            str(int(round(candidate["distance_meters"])))
+            if candidate.get("distance_meters") is not None
+            else None
+        ),
     }
 
 
@@ -465,7 +522,73 @@ def _enrich_comparable(row, subject, language="es"):
     item["source_label"] = source_label(item.get("source_type"), language=language)
     score = to_decimal(item.get("score")) or reasons.get("score")
     item["score_int"] = int(round(float(score or 0)))
+    from modules.maps.geo import format_distance
+    from modules.maps.location import parse_coordinate
+
+    item["latitude"] = parse_coordinate(
+        item.get("snapshot_latitude") or item.get("latitude"),
+        kind="lat",
+    )
+    item["longitude"] = parse_coordinate(
+        item.get("snapshot_longitude") or item.get("longitude"),
+        kind="lng",
+    )
+    try:
+        meters = float(item["distance_meters"]) if item.get("distance_meters") not in (None, "") else None
+    except (TypeError, ValueError):
+        meters = None
+    item["distance_meters"] = meters
+    item["distance_label"] = format_distance(meters, language) if meters is not None else ""
+    if item["distance_label"]:
+        item["match_labels"] = [item["distance_label"]] + [
+            label for label in item["match_labels"] if label != translate("acm_match_distance", language)
+        ]
     return item
+
+
+def _acm_map_payload(subject, rows, language="es"):
+    from modules.maps.location import has_coordinates, parse_coordinate
+
+    target = None
+    if has_coordinates(subject):
+        target = {
+            "lat": subject.get("latitude"),
+            "lng": subject.get("longitude"),
+            "title": subject.get("address") or "",
+            "kind": "target",
+        }
+    markers = []
+    for row in rows or []:
+        lat = parse_coordinate(row.get("latitude"), kind="lat")
+        lng = parse_coordinate(row.get("longitude"), kind="lng")
+        if lat is None or lng is None:
+            continue
+        markers.append(
+            {
+                "id": row.get("id"),
+                "lat": lat,
+                "lng": lng,
+                "title": row.get("external_reference") or row.get("snapshot_location") or "",
+                "distance": row.get("distance_label") or "",
+                "price": row.get("snapshot_price"),
+                "currency": row.get("snapshot_currency"),
+                "ppm2": row.get("snapshot_price_per_m2"),
+                "score": row.get("score_int"),
+                "source": row.get("source_type"),
+                "href": (
+                    f"/properties/{row['comparable_property_id']}"
+                    if row.get("comparable_property_id")
+                    else ""
+                ),
+                "selected": bool(row.get("selected")),
+            }
+        )
+    return {
+        "available": bool(target or markers),
+        "target": target,
+        "markers": markers,
+        "message_key": "acm_map_placeholder" if not (target or markers) else "",
+    }
 
 
 def get_acm_view(acm_id, organization_id, *, user, language="es"):
@@ -539,10 +662,7 @@ def get_acm_view(acm_id, organization_id, *, user, language="es"):
         "min_valid_required": MIN_VALID_COMPS,
         "disclaimer": translate("acm_disclaimer", language=language),
         "source_catalog": source_catalog(language=language),
-        "map": {
-            "available": False,
-            "message_key": "acm_map_placeholder",
-        },
+        "map": _acm_map_payload(subject, enriched, language),
         "best_comparable": most_similar_comparable(enriched),
         "photo_url": None,
     }

@@ -125,7 +125,8 @@ WEEKDAY_LABELS_ES = (
 )
 PRICE_RE = re.compile(
     r"(?:hasta\s+)?(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?)\s*(mil|k|lucas)?"
-    r"|(?:hasta\s+)(\d{1,3}(?:[.,]\d{3})+|\d+)",
+    r"(?!\s*(?:km|kilometros?|m|metros?)\b)"
+    r"|(?:hasta\s+)(\d{1,3}(?:[.,]\d{3})+|\d+)(?!\s*(?:km|kilometros?|m|metros?)\b)",
     re.IGNORECASE,
 )
 PERSON_RE = re.compile(
@@ -378,6 +379,10 @@ def has_property_inventory_signal(text):
     )
     if inventory_nouns:
         return True
+    if "cerca de" in folded or "a menos de" in folded or "por la zona" in folded:
+        return True
+    if re.search(r"\b\d+(?:[.,]\d+)?\s*(km|metros?)\b", folded):
+        return True
     if "hay algo" in folded:
         return bool(
             _has_location_signal(folded)
@@ -528,7 +533,18 @@ def has_create_task_signal(text):
 
 def extract_property_entities(text):
     folded = fold_text(text)
-    entities = {}
+    entities = extract_geo_entities(text)
+    if not entities.get("center_text") and not entities.get("address"):
+        address = re.search(
+            r"(libertador|santa fe|cabildo|corrientes|madero)(?:\s+\d+)?",
+            folded,
+        )
+        if address:
+            entities["address"] = address.group(0)
+        else:
+            street = _extract_street_address(folded)
+            if street:
+                entities["address"] = street
     if any(token in folded for token in ("disponible", "publicado", "lo disponible")):
         entities["availability"] = COMMERCIAL_STATUS_AVAILABLE
     if has_property_inventory_signal(text) and "disponib" in folded:
@@ -582,6 +598,15 @@ def extract_property_entities(text):
         entities["min_area"] = float(area.group(1).replace(",", "."))
 
     price = parse_price_amount(text)
+    if price is not None:
+        compact = (
+            str(int(price)) if float(price).is_integer() else str(price)
+        )
+        haystack = fold_text(
+            f"{entities.get('center_text') or ''} {entities.get('address') or ''}"
+        ).replace(" ", "")
+        if compact and compact in haystack:
+            price = None
     if price:
         entities["max_price"] = price
     if "lucas" in folded and not any(
@@ -602,12 +627,149 @@ def extract_property_entities(text):
     if "jardin" in folded:
         entities["garden"] = True
 
-    address = re.search(
-        r"(libertador|santa fe|cabildo|corrientes|madero)(?:\s+\d+)?",
-        folded,
-    )
-    if address:
-        entities["address"] = address.group(0)
+    return entities
+
+
+_STREET_NAME_STOP = frozenset(
+    {
+        "de",
+        "del",
+        "a",
+        "en",
+        "la",
+        "el",
+        "los",
+        "las",
+        "un",
+        "una",
+        "menos",
+        "mas",
+        "hasta",
+        "desde",
+        "con",
+        "sin",
+        "mostrame",
+        "mostrar",
+        "buscame",
+        "buscar",
+        "propiedad",
+        "propiedades",
+        "departamento",
+        "departamentos",
+        "depto",
+        "deptos",
+        "casa",
+        "casas",
+        "venta",
+        "alquiler",
+        "ambiente",
+        "ambientes",
+        "km",
+        "metros",
+    }
+)
+_STREET_ADDRESS_RE = re.compile(
+    r"\b((?:av\.?|avenida|calle|pasaje|pje\.?)?\s*"
+    r"[a-z][a-z.'\-]{1,}(?:\s+[a-z][a-z.'\-]{1,}){0,3})"
+    r"\s+(\d{1,5})\b"
+    r"(?!\s*(?:km|kilometros?|m|metros?|mil|k|usd|ars)\b)",
+    re.IGNORECASE,
+)
+_PROPERTY_PREFIX_RE = re.compile(
+    r"^(?:mostrame|mostrar|buscame|buscar|ver)\s+"
+    r"(?:la\s+|el\s+)?(?:propiedad\s+|depto\s+|departamento\s+)?"
+)
+
+
+def _extract_street_address(folded):
+    """Capture 'Italia 1341' / 'Av. Cabildo 2500' without treating prices as streets."""
+    remainder = _PROPERTY_PREFIX_RE.sub("", folded or "", count=1).strip()
+    found = ""
+    for match in _STREET_ADDRESS_RE.finditer(remainder):
+        tokens = (match.group(1) or "").split()
+        while tokens and tokens[0] in _STREET_NAME_STOP:
+            tokens.pop(0)
+        if not tokens:
+            continue
+        found = f"{' '.join(tokens)} {match.group(2)}".strip()
+    return found
+
+
+_RADIUS_CENTER_RE = re.compile(
+    r"(?:a\s+menos\s+de|menos\s+de|dentro\s+de|a)\s+"
+    r"(\d+(?:[.,]\d+)?)\s*(km|kilometros?|m|metros?)\s+de\s+(.+)$",
+    re.IGNORECASE,
+)
+_RADIUS_ONLY_RE = re.compile(
+    r"(?:a\s+menos\s+de|menos\s+de|dentro\s+de|a)\s+"
+    r"(\d+(?:[.,]\d+)?)\s*(km|kilometros?|m|metros?)\b",
+    re.IGNORECASE,
+)
+_CERCA_DE_RE = re.compile(r"cerca\s+de\s+(.+)$", re.IGNORECASE)
+_NEAR_HERE_TOKENS = (
+    "esta propiedad",
+    "esta",
+    "esto",
+    "aqui",
+    "aca",
+    "la propiedad",
+)
+_ASK_ZONE_PHRASES = (
+    "por la zona",
+    "en la zona",
+    "por aca",
+    "por aqui",
+    "hay algo por la zona",
+)
+
+
+def _radius_to_km(number, unit):
+    from modules.maps.geo import parse_radius_to_meters
+
+    meters = parse_radius_to_meters(number, unit)
+    if meters is None:
+        return None
+    return meters / 1000.0
+
+
+def extract_geo_entities(text):
+    folded = fold_text(text)
+    entities = {}
+    center_match = _RADIUS_CENTER_RE.search(folded)
+    if center_match:
+        km = _radius_to_km(center_match.group(1), center_match.group(2))
+        center = (center_match.group(3) or "").strip(" ?.")
+        if km is not None:
+            entities["radius_km"] = km
+        if center in _NEAR_HERE_TOKENS or center.startswith("esta "):
+            entities["near_this_property"] = True
+        elif center:
+            entities["center_text"] = center
+        return entities
+    radius_match = _RADIUS_ONLY_RE.search(folded)
+    if radius_match:
+        km = _radius_to_km(radius_match.group(1), radius_match.group(2))
+        if km is not None:
+            entities["radius_km"] = km
+            entities["near_this_property"] = True
+    cerca = _CERCA_DE_RE.search(folded)
+    if cerca and "radius_km" not in entities:
+        center = (cerca.group(1) or "").strip(" ?.")
+        if center in _NEAR_HERE_TOKENS or center.startswith("esta "):
+            entities["near_this_property"] = True
+            entities["ask_radius"] = True
+        elif center:
+            entities["center_text"] = center
+    if any(phrase in folded for phrase in _ASK_ZONE_PHRASES):
+        entities["ask_radius"] = True
+        entities["near_this_property"] = True
+    if re.fullmatch(r"\d+(?:[.,]\d+)?\s*(km|kilometros?)?", folded):
+        number = re.match(r"(\d+(?:[.,]\d+)?)", folded)
+        km = _radius_to_km(number.group(1), "km") if number else None
+        if km is not None:
+            entities["radius_km"] = km
+            entities["near_this_property"] = True
+            entities.pop("ask_radius", None)
     return entities
 
 
@@ -1016,6 +1178,8 @@ def classify_intent(prompt, *, context=None):
         scores[QUERY_PROPERTIES] = 0.9
         if entities.get("availability") or entities.get("jurisdiction") or entities.get("neighborhood"):
             scores[QUERY_PROPERTIES] = 0.94
+        if entities.get("radius_km") or entities.get("center_text") or entities.get("ask_radius"):
+            scores[QUERY_PROPERTIES] = 0.96
     if any(
         phrase in folded
         for phrase in ("operacion de", "buscame la operacion")
@@ -1076,6 +1240,24 @@ def classify_intent(prompt, *, context=None):
     ):
         scores[ACM_FILTER_COMPARABLES] = 0.98
         entities["filter"] = "closings"
+    elif any(
+        phrase in folded
+        for phrase in (
+            "comparables mas cercanos",
+            "comparables más cercanos",
+            "solo comparables a menos",
+            "comparables a menos",
+        )
+    ) or (
+        "comparables" in folded
+        and entities.get("radius_km")
+    ):
+        scores[ACM_FILTER_COMPARABLES] = 0.98
+        if entities.get("radius_km"):
+            entities["filter"] = "max_distance"
+            entities["max_distance_km"] = entities["radius_km"]
+        else:
+            entities["filter"] = "nearest"
     elif any(
         phrase in folded
         for phrase in ("saca ", "sacá ", "exclui ", "excluì ", "excluì", "excluir ")

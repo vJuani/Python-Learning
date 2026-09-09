@@ -232,6 +232,7 @@ def register_acm_routes(app, helpers):
                             "max_age_months": request.form.get("max_age_months") or None,
                             "include_closing": request.form.get("include_closing") == "1",
                             "include_listing": request.form.get("include_listing") == "1",
+                            "max_distance_km": request.form.get("max_distance_km") or None,
                         },
                     )
                 else:

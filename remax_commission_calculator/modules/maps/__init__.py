@@ -14,6 +14,14 @@ from modules.maps.links import (
     build_directions_url,
     build_open_maps_url,
 )
+from modules.maps.geo import (
+    attach_distance,
+    bounding_box,
+    distance_between_coordinates,
+    filter_by_radius,
+    format_distance,
+    rank_by_distance,
+)
 from modules.maps.location import (
     addresses_differ_substantially,
     apply_place_to_location,
@@ -23,7 +31,7 @@ from modules.maps.location import (
     parse_address_components,
     parse_coordinate,
 )
-from modules.maps.provider import get_maps_provider
+from modules.maps.provider import get_maps_provider, find_place
 
 __all__ = (
     "GEOCODE_MANUAL",
@@ -32,9 +40,15 @@ __all__ = (
     "GEOCODE_UNRESOLVED",
     "addresses_differ_substantially",
     "apply_place_to_location",
+    "attach_distance",
     "attach_property_maps",
+    "bounding_box",
     "build_directions_url",
     "build_open_maps_url",
+    "distance_between_coordinates",
+    "filter_by_radius",
+    "find_place",
+    "format_distance",
     "get_maps_provider",
     "get_maps_provider_name",
     "has_coordinates",
@@ -44,4 +58,5 @@ __all__ = (
     "maps_region",
     "parse_address_components",
     "parse_coordinate",
+    "rank_by_distance",
 )

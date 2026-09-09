@@ -181,6 +181,9 @@
     {% endif %}
     {% if property_data.has_coordinates %}
     <div class="property-location__actions">
+        <a class="btn btn-secondary" href="{{ url_for('properties_list', nearby_id=property_data.id, radius_km=1, near=property_data.address) }}">
+            {{ t('property_nearby') }}
+        </a>
         {% if property_data.maps_open_url %}
         <a class="btn btn-secondary" href="{{ property_data.maps_open_url }}" target="_blank" rel="noopener" aria-label="{{ t('property_location_open') }}">
             {{ t('property_location_open') }}

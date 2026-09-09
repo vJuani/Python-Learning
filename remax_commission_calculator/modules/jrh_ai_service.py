@@ -50,6 +50,7 @@ from modules.jrh_ai_resolver import (
     pick_unique,
     resolve_agents,
     resolve_contacts,
+    resolve_geo_center,
     resolve_operations,
     resolve_pending_charges,
     resolve_properties,
@@ -653,6 +654,15 @@ def _property_list_href_args(entities):
         args["listing_currency"] = entities["currency"]
     if entities.get("property_type"):
         args["type"] = entities["property_type"]
+    if entities.get("radius_km") and entities.get("center_lat") is not None:
+        args["center_lat"] = entities["center_lat"]
+        args["center_lng"] = entities["center_lng"]
+        args["radius_km"] = entities["radius_km"]
+        if entities.get("near"):
+            args["near"] = entities["near"]
+    if entities.get("nearby_id"):
+        args["nearby_id"] = entities["nearby_id"]
+        args["radius_km"] = entities.get("radius_km") or args.get("radius_km")
     return args
 
 
@@ -683,13 +693,131 @@ def _handle_properties(
     entities,
     prompt,
     confidence,
+    session=None,
     **_kwargs,
 ):
+    context = load_context(session)
+    geo = {}
+    if (
+        entities.get("radius_km")
+        or entities.get("center_text")
+        or entities.get("near_this_property")
+        or entities.get("ask_radius")
+    ):
+        geo = resolve_geo_center(
+            organization_id,
+            user=user,
+            agent_id=agent_id,
+            entities=entities,
+            context=context,
+        )
+        if geo.get("status") == "ask_radius":
+            return _result(
+                QUERY_PROPERTIES,
+                "needs_attention",
+                language=language,
+                message_key="jrh_ai_geo_ask_radius",
+                data={"place": geo.get("label") or ""},
+                confidence=confidence,
+                entity={
+                    "kind": "property",
+                    "id": geo.get("property_id"),
+                    "label": geo.get("label"),
+                },
+                actions=[
+                    {
+                        "label": "1 km",
+                        "href_name": "properties_list",
+                        "href_args": {
+                            "nearby_id": geo.get("property_id"),
+                            "radius_km": 1,
+                        },
+                    },
+                    {
+                        "label": "2 km",
+                        "href_name": "properties_list",
+                        "href_args": {
+                            "nearby_id": geo.get("property_id"),
+                            "radius_km": 2,
+                        },
+                    },
+                    {
+                        "label": "5 km",
+                        "href_name": "properties_list",
+                        "href_args": {
+                            "nearby_id": geo.get("property_id"),
+                            "radius_km": 5,
+                        },
+                    },
+                ],
+            )
+        if geo.get("status") == "ambiguous":
+            return _result(
+                QUERY_PROPERTIES,
+                "needs_attention",
+                language=language,
+                message_key="jrh_ai_geo_ambiguous",
+                data={"place": geo.get("label") or ""},
+                candidates=geo.get("matches") or [],
+                confidence=confidence,
+            )
+        if geo.get("status") in {"none", "missing"} and (
+            entities.get("near_this_property") or entities.get("radius_km")
+        ):
+            return _result(
+                QUERY_PROPERTIES,
+                "needs_attention",
+                language=language,
+                message_key="jrh_ai_geo_need_center",
+                confidence=confidence,
+            )
+        if geo.get("status") == "unlocated":
+            property_id = geo.get("property_id")
+            return _result(
+                QUERY_PROPERTIES,
+                "needs_attention",
+                language=language,
+                message_key="jrh_ai_geo_unlocated",
+                confidence=confidence,
+                entity={
+                    "kind": "property",
+                    "id": property_id,
+                    "label": geo.get("label"),
+                },
+                actions=[
+                    {
+                        "label_key": "property_location_complete",
+                        "href_name": "properties_edit",
+                        "href_args": {"property_id": property_id},
+                    }
+                ],
+            )
+        if geo.get("status") == "unresolved":
+            return _result(
+                QUERY_PROPERTIES,
+                "needs_attention",
+                language=language,
+                message_key="jrh_ai_geo_unresolved",
+                data={"place": geo.get("label") or ""},
+                confidence=confidence,
+            )
+        if geo.get("status") == "ok":
+            entities = dict(entities)
+            entities["center_lat"] = geo["latitude"]
+            entities["center_lng"] = geo["longitude"]
+            entities["radius_km"] = geo.get("radius_km") or entities.get("radius_km")
+            entities["near"] = geo.get("label")
+            if geo.get("property_id"):
+                entities["nearby_id"] = geo["property_id"]
+
+    address = ""
+    if geo.get("status") != "ok":
+        address = entities.get("address") or entities.get("property_text") or ""
     matches, total = resolve_properties(
         organization_id,
         user=user,
         agent_id=agent_id,
-        address=entities.get("address") or entities.get("property_text") or "",
+        address=address,
         neighborhood=entities.get("neighborhood") or "",
         jurisdiction=entities.get("jurisdiction") or "",
         location_group=entities.get("location_group") or "",
@@ -709,6 +837,10 @@ def _handle_properties(
         balcony=entities.get("balcony"),
         terrace=entities.get("terrace"),
         garden=entities.get("garden"),
+        center_lat=entities.get("center_lat"),
+        center_lng=entities.get("center_lng"),
+        radius_km=entities.get("radius_km"),
+        exclude_property_id=entities.get("nearby_id"),
         limit=5,
     )
     cards = []
@@ -725,7 +857,14 @@ def _handle_properties(
                 "title": item.get("name") or "",
                 "subtitle": " · ".join(part for part in (zone, type_label) if part),
                 "meta": _format_listing_price(item),
-                "detail": _property_detail_line(item),
+                "detail": " · ".join(
+                    part
+                    for part in (
+                        item.get("distance_label"),
+                        _property_detail_line(item),
+                    )
+                    if part
+                ),
                 "cta_key": "jrh_ai_view_property",
                 "href_name": "properties_detail",
                 "href_args": {"property_id": item.get("id")},
@@ -793,7 +932,17 @@ def _handle_properties(
         actions=actions,
         candidates=matches if len(matches) > 1 else [],
         confidence=confidence,
-        entity=matches[0] if len(matches) == 1 else {},
+        entity=(
+            {
+                "kind": "property",
+                "id": entities.get("nearby_id") or matches[0].get("id"),
+                "label": entities.get("near") or matches[0].get("name"),
+            }
+            if entities.get("nearby_id")
+            else matches[0]
+            if len(matches) == 1
+            else {}
+        ),
     )
 
 
@@ -2392,11 +2541,14 @@ def _handle_acm_filter(
     language,
     confidence,
     session=None,
+    entities=None,
     **_kwargs,
 ):
     if not is_agent(user) or not agent_id:
         return _require_acm_agent_result(ACM_FILTER_COMPARABLES, language, confidence)
     from modules.acm_service import refresh_draft
+
+    entities = entities or {}
 
     view = _latest_acm_view(organization_id, user, language, session=session)
     if view is None:
@@ -2407,18 +2559,28 @@ def _handle_acm_filter(
             message_key="acm_jrh_no_acm",
             confidence=confidence,
         )
+    filters = {"include_closing": True, "include_listing": True}
+    if entities.get("filter") == "closings":
+        filters = {"include_closing": True, "include_listing": False}
+    elif entities.get("filter") in {"max_distance", "nearest"}:
+        if entities.get("max_distance_km") or entities.get("radius_km"):
+            filters["max_distance_km"] = entities.get("max_distance_km") or entities.get("radius_km")
     refresh_draft(
         view["acm"]["id"],
         organization_id,
         user=user,
         language=language,
-        filters={"include_closing": True, "include_listing": False},
+        filters=filters,
     )
+    message_key = "acm_jrh_filter_closings"
+    if entities.get("filter") in {"max_distance", "nearest"}:
+        message_key = "acm_jrh_filter_distance"
     return _result(
         ACM_FILTER_COMPARABLES,
         "ready",
         language=language,
-        message_key="acm_jrh_filter_closings",
+        message_key=message_key,
+        data={"distance": entities.get("radius_km") or entities.get("max_distance_km") or ""},
         wrote=True,
         confidence=confidence,
         entity={"kind": "acm", "id": view["acm"]["id"]},

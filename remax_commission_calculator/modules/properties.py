@@ -80,6 +80,13 @@ def validate_property_filters(
         "listing_purpose": None,
         "commercial_status": None,
         "listing_currency": None,
+        "nearby_id": None,
+        "center_lat": None,
+        "center_lng": None,
+        "radius_km": None,
+        "near_label": None,
+        "center_unlocated": False,
+        "exclude_property_id": None,
     }
 
     property_id = raw_filters.get(
@@ -195,13 +202,74 @@ def validate_property_filters(
         else:
             parsed["listing_currency"] = listing_currency
 
+    from modules.maps.geo import parse_radius_km
+    from modules.maps.location import parse_coordinate
+
+    nearby_raw = str(raw_filters.get("nearby_id") or "").strip()
+    if nearby_raw:
+        try:
+            parsed["nearby_id"] = int(nearby_raw)
+        except ValueError:
+            errors.append("err_invalid_nearby_property")
+
+    radius_km = parse_radius_km(raw_filters.get("radius_km"))
+    if str(raw_filters.get("radius_km") or "").strip() and radius_km is None:
+        errors.append("err_invalid_radius")
+    parsed["radius_km"] = radius_km
+
+    parsed["center_lat"] = parse_coordinate(
+        raw_filters.get("center_lat"),
+        kind="lat",
+    )
+    parsed["center_lng"] = parse_coordinate(
+        raw_filters.get("center_lng"),
+        kind="lng",
+    )
+    near_label = str(raw_filters.get("near") or "").strip()
+    if near_label:
+        parsed["near_label"] = near_label[:160]
+
+    if organization_id is not None and parsed["nearby_id"] is not None:
+        from modules.database.properties_repository import get_property_record
+        from modules.maps.location import has_coordinates
+
+        center = get_property_record(parsed["nearby_id"], organization_id)
+        if center is None:
+            errors.append("err_invalid_nearby_property")
+        else:
+            parsed["exclude_property_id"] = center["id"]
+            parsed["near_label"] = parsed["near_label"] or center.get("address")
+            if has_coordinates(center):
+                parsed["center_lat"] = center["latitude"]
+                parsed["center_lng"] = center["longitude"]
+            else:
+                parsed["center_unlocated"] = True
+            if parsed["radius_km"] is None:
+                parsed["radius_km"] = 1.0
+
+    geo_ready = (
+        parsed["center_lat"] is not None
+        and parsed["center_lng"] is not None
+        and parsed["radius_km"] is not None
+        and not parsed["center_unlocated"]
+    )
+    if (
+        (parsed["center_lat"] is not None or parsed["center_lng"] is not None)
+        and not geo_ready
+        and not parsed["center_unlocated"]
+        and parsed["nearby_id"] is None
+    ):
+        errors.append("err_invalid_geo_center")
+
     return errors, parsed
 
 
 def has_active_property_filters(parsed):
+    skip = {"center_unlocated"}
     return any(
-        value is not None
-        for value in parsed.values()
+        value not in (None, False, "")
+        for key, value in (parsed or {}).items()
+        if key not in skip
     )
 
 
@@ -224,6 +292,9 @@ def get_filtered_properties(
         parsed["filter_agent_id"],
     )
 
+    if parsed.get("center_unlocated"):
+        return [], []
+
     if not has_active_property_filters(parsed):
         return [], get_properties(
             organization_id,
@@ -244,6 +315,14 @@ def get_filtered_properties(
         listing_currency=parsed["listing_currency"],
         agent_id=effective_agent_id,
         include_all_statuses=include_all_statuses,
+        center_lat=parsed["center_lat"],
+        center_lng=parsed["center_lng"],
+        radius_m=(
+            parsed["radius_km"] * 1000.0
+            if parsed["radius_km"] and not parsed["center_unlocated"]
+            else None
+        ),
+        exclude_property_id=parsed["exclude_property_id"],
     )
 
     return [], properties

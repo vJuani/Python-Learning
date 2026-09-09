@@ -161,6 +161,33 @@ def normalize_preferences(raw):
     if client_name:
         prefs["client_name"] = client_name[:MAX_NAME]
 
+    from modules.maps.geo import parse_radius_km
+    from modules.maps.location import parse_coordinate
+
+    center_lat = parse_coordinate(raw.get("center_latitude"), kind="lat")
+    center_lng = parse_coordinate(raw.get("center_longitude"), kind="lng")
+    radius_km = parse_radius_km(raw.get("radius_km"))
+    location_text = str(raw.get("location_reference_text") or "").strip()
+    place_id = str(raw.get("location_place_id") or "").strip()
+    property_ref = raw.get("location_property_id")
+    try:
+        property_ref = int(property_ref) if property_ref not in (None, "") else None
+    except (TypeError, ValueError):
+        property_ref = None
+    if center_lat is not None and center_lng is not None and radius_km is not None:
+        prefs["center_latitude"] = center_lat
+        prefs["center_longitude"] = center_lng
+        prefs["radius_km"] = radius_km
+        if location_text:
+            prefs["location_reference_text"] = location_text[:160]
+        if place_id:
+            prefs["location_place_id"] = place_id[:128]
+        if property_ref:
+            prefs["location_property_id"] = property_ref
+    elif location_text and radius_km is not None:
+        prefs["location_reference_text"] = location_text[:160]
+        prefs["radius_km"] = radius_km
+
     return prefs
 
 
@@ -193,6 +220,19 @@ def merge_contact_preferences(existing, incoming):
     for key in ("rooms", "bedrooms", "purpose"):
         if merged.get(key) is None and extra.get(key) is not None:
             merged[key] = extra[key]
+
+    for key in (
+        "center_latitude",
+        "center_longitude",
+        "radius_km",
+        "location_reference_text",
+        "location_place_id",
+        "location_property_id",
+    ):
+        if extra.get(key) is not None:
+            merged[key] = extra[key]
+        elif key not in extra and extra:
+            pass
 
     return merged
 
@@ -578,7 +618,7 @@ def touch_contact_interaction(organization_id, contact_id):
     )
 
 
-def preferences_from_form(form):
+def preferences_from_form(form, organization_id=None):
     areas = [item.strip() for item in form.getlist("area") if item.strip()]
     extra_areas = [
         part.strip()
@@ -603,21 +643,48 @@ def preferences_from_form(form):
             if part.strip()
         )
 
-    return normalize_preferences(
-        {
-            "areas": areas + extra_areas,
-            "features": features + extra_features,
-            "property_types": types,
-            "rooms": form.get("rooms"),
-            "bedrooms": form.get("bedrooms"),
-            "purpose": form.get("purpose") or form.get("listing_purpose"),
-            "budget": {
-                "min": form.get("budget_min"),
-                "max": form.get("budget_max"),
-                "currency": form.get("budget_currency"),
-            },
-        }
-    )
+    payload = {
+        "areas": areas + extra_areas,
+        "features": features + extra_features,
+        "property_types": types,
+        "rooms": form.get("rooms"),
+        "bedrooms": form.get("bedrooms"),
+        "purpose": form.get("purpose") or form.get("listing_purpose"),
+        "budget": {
+            "min": form.get("budget_min"),
+            "max": form.get("budget_max"),
+            "currency": form.get("budget_currency"),
+        },
+    }
+    if (form.get("location_mode") or "zones") == "point":
+        payload.update(
+            {
+                "center_latitude": form.get("center_latitude"),
+                "center_longitude": form.get("center_longitude"),
+                "radius_km": form.get("radius_km"),
+                "location_reference_text": form.get("location_reference_text"),
+                "location_place_id": form.get("location_place_id"),
+                "location_property_id": form.get("location_property_id"),
+            }
+        )
+        if organization_id and payload.get("location_property_id") and not payload.get("center_latitude"):
+            from modules.database.properties_repository import get_property_record
+            from modules.maps.location import has_coordinates
+
+            try:
+                property_id = int(payload["location_property_id"])
+            except (TypeError, ValueError):
+                property_id = None
+            if property_id:
+                row = get_property_record(property_id, organization_id)
+                if row and has_coordinates(row):
+                    payload["center_latitude"] = row["latitude"]
+                    payload["center_longitude"] = row["longitude"]
+                    payload["location_reference_text"] = (
+                        payload.get("location_reference_text") or row.get("address")
+                    )
+
+    return normalize_preferences(payload)
 
 
 def whatsapp_digits(phone):

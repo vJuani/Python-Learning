@@ -113,6 +113,8 @@ COMPARABLE_EXTRA_COLUMNS = (
     ("area_source", "TEXT"),
     ("area_override_by_user_id", "INTEGER"),
     ("score_reasons_json", "TEXT"),
+    ("snapshot_latitude", "REAL"),
+    ("snapshot_longitude", "REAL"),
 )
 
 

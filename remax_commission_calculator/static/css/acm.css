@@ -211,6 +211,14 @@
 
 .acm-quality-grid { list-style: none; padding: 0; display: grid; gap: 0.4rem; }
 .acm-map { min-height: 8rem; }
+.acm-map__canvas {
+    width: 100%;
+    min-height: 240px;
+    aspect-ratio: 16 / 9;
+    max-height: 380px;
+    border-radius: 12px;
+    overflow: hidden;
+}
 .acm-map__placeholder {
     min-height: 10rem;
     border-radius: 12px;

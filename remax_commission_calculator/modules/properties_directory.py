@@ -214,7 +214,54 @@ def _submitted_at_sort_key(value):
     return parsed.strftime("%Y%m%d")
 
 
-def _sort_properties(rows, sort_key):
+def _geo_map_payload(rows, raw_filters, language):
+    from modules.maps.geo import format_distance
+    from modules.maps.location import has_coordinates, parse_coordinate
+
+    center_lat = parse_coordinate(raw_filters.get("center_lat"), kind="lat")
+    center_lng = parse_coordinate(raw_filters.get("center_lng"), kind="lng")
+    if center_lat is None or center_lng is None:
+        return {"available": False, "target": None, "markers": []}
+    markers = []
+    for row in rows or []:
+        if not has_coordinates(row):
+            continue
+        markers.append(
+            {
+                "id": row.get("id"),
+                "lat": row.get("latitude"),
+                "lng": row.get("longitude"),
+                "title": row.get("address") or "",
+                "subtitle": row.get("neighborhood") or "",
+                "distance": row.get("distance_label")
+                or format_distance(row.get("distance_meters"), language),
+                "price": row.get("price_display") or "",
+                "href": f"/properties/{row.get('id')}",
+            }
+        )
+        if len(markers) >= 80:
+            break
+    return {
+        "available": True,
+        "target": {
+            "lat": center_lat,
+            "lng": center_lng,
+            "title": raw_filters.get("near") or "",
+        },
+        "markers": markers,
+    }
+
+
+def _sort_properties(rows, sort_key, geo_active=False):
+    if geo_active and sort_key in ("", "recent", "distance"):
+        return sorted(
+            rows,
+            key=lambda item: (
+                item.get("distance_meters") is None,
+                item.get("distance_meters") if item.get("distance_meters") is not None else 0,
+                -(item.get("id") or 0),
+            ),
+        )
     if sort_key == "price_asc":
         return sorted(
             rows,
@@ -350,7 +397,7 @@ def build_properties_directory(
         except (TypeError, ValueError):
             pass
 
-    rows = _sort_properties(rows, sort_key)
+    rows = _sort_properties(rows, sort_key, geo_active=bool(raw_filters.get("radius_km") and raw_filters.get("center_lat")))
 
     page_size = int(raw_filters.get("per_page") or 8)
     page_size = max(5, min(page_size, 50))
@@ -466,7 +513,23 @@ def build_properties_directory(
             "commercial_status": raw_filters.get("commercial_status") or "",
             "listing_currency": raw_filters.get("listing_currency") or "",
             "per_page": page_size,
+            "nearby_id": raw_filters.get("nearby_id") or "",
+            "center_lat": raw_filters.get("center_lat") or "",
+            "center_lng": raw_filters.get("center_lng") or "",
+            "radius_km": raw_filters.get("radius_km") or "",
+            "near": raw_filters.get("near") or "",
+            "center_unlocated": bool(raw_filters.get("center_unlocated")),
         },
+        "geo_search": bool(
+            raw_filters.get("radius_km")
+            and raw_filters.get("center_lat")
+            and raw_filters.get("center_lng")
+        ),
+        "geo_map": _geo_map_payload(
+            rows,
+            raw_filters,
+            language,
+        ),
         "agent_options": agents,
         "property_types": PROPERTY_TYPES,
         "listing_purposes": LISTING_PURPOSES,

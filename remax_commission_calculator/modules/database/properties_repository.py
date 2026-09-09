@@ -885,6 +885,10 @@ def filter_properties(
     include_all_statuses=False,
     only_with_operations=False,
     only_without_operations=False,
+    center_lat=None,
+    center_lng=None,
+    radius_m=None,
+    exclude_property_id=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -1005,6 +1009,32 @@ def filter_properties(
             """
         )
 
+    if exclude_property_id is not None:
+        conditions.append("properties.id != ?")
+        params.append(exclude_property_id)
+
+    from modules.maps.geo import bounding_box, bbox_sql_clauses, filter_by_radius
+    from modules.maps.location import parse_coordinate
+
+    geo_lat = parse_coordinate(center_lat, kind="lat")
+    geo_lng = parse_coordinate(center_lng, kind="lng")
+    try:
+        geo_radius = float(radius_m) if radius_m not in (None, "") else None
+    except (TypeError, ValueError):
+        geo_radius = None
+    geo_active = (
+        geo_lat is not None
+        and geo_lng is not None
+        and geo_radius is not None
+        and geo_radius > 0
+    )
+    if geo_active:
+        box = bounding_box(geo_lat, geo_lng, geo_radius)
+        fragment, box_params = bbox_sql_clauses(box, table="properties")
+        if fragment:
+            conditions.append(fragment)
+            params.extend(box_params)
+
     if min_price is not None or max_price is not None:
         query += """
             LEFT JOIN operations
@@ -1040,10 +1070,19 @@ def filter_properties(
     rows = cursor.fetchall()
     connection.close()
 
-    return [
+    properties = [
         _build_property_dict(row)
         for row in rows
     ]
+    if geo_active:
+        return filter_by_radius(
+            properties,
+            geo_lat,
+            geo_lng,
+            geo_radius,
+            exclude_id=exclude_property_id,
+        )
+    return properties
 
 
 UNAVAILABLE_FOR_MATCH = ("sold", "rented", "withdrawn")
@@ -1057,6 +1096,9 @@ def list_match_candidates(
     listing_purpose=None,
     listing_currency=None,
     max_listing_price=None,
+    center_lat=None,
+    center_lng=None,
+    radius_m=None,
     limit=300,
 ):
     """Approved, commercially available listings for the matcher."""
@@ -1119,6 +1161,28 @@ def list_match_candidates(
             ]
         )
 
+    from modules.maps.geo import bounding_box, bbox_sql_clauses, filter_by_radius
+    from modules.maps.location import parse_coordinate
+
+    geo_lat = parse_coordinate(center_lat, kind="lat")
+    geo_lng = parse_coordinate(center_lng, kind="lng")
+    try:
+        geo_radius = float(radius_m) if radius_m not in (None, "") else None
+    except (TypeError, ValueError):
+        geo_radius = None
+    geo_active = (
+        geo_lat is not None
+        and geo_lng is not None
+        and geo_radius is not None
+        and geo_radius > 0
+    )
+    if geo_active:
+        box = bounding_box(geo_lat, geo_lng, geo_radius)
+        fragment, box_params = bbox_sql_clauses(box, table="properties")
+        if fragment:
+            conditions.append(fragment)
+            params.extend(box_params)
+
     try:
         limit_value = max(1, int(limit))
     except (TypeError, ValueError):
@@ -1134,4 +1198,12 @@ def list_match_candidates(
     rows = cursor.fetchall()
     connection.close()
 
-    return [_build_property_dict(row) for row in rows]
+    properties = [_build_property_dict(row) for row in rows]
+    if geo_active:
+        return filter_by_radius(
+            properties,
+            geo_lat,
+            geo_lng,
+            geo_radius,
+        )
+    return properties

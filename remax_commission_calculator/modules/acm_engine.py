@@ -37,7 +37,7 @@ GENERIC_JURISDICTIONS = {
 }
 
 # Only weights for fields that exist in JRH One today.
-# No antiquity, condition, or lat/lng — those are not stored.
+# Distance uses the zone weight when both points have coordinates.
 SCORE_WEIGHTS = {
     "zone": Decimal("30"),
     "type": Decimal("15"),
@@ -146,7 +146,23 @@ def score_comparable(subject, candidate):
     )
     sub_jur = fold_text(subject.get("jurisdiction"))
     cand_jur = fold_text(candidate.get("jurisdiction"))
-    if sub_hood or cand_hood or sub_jur or cand_jur:
+    from modules.maps.geo import acm_geo_ratio, distance_between_coordinates
+
+    distance_m = candidate.get("distance_meters")
+    if distance_m is None:
+        distance_m = distance_between_coordinates(
+            subject.get("latitude") or subject.get("snapshot_latitude"),
+            subject.get("longitude") or subject.get("snapshot_longitude"),
+            candidate.get("latitude") or candidate.get("snapshot_latitude"),
+            candidate.get("longitude") or candidate.get("snapshot_longitude"),
+        )
+        if distance_m is not None:
+            candidate["distance_meters"] = distance_m
+    geo_ratio = acm_geo_ratio(distance_m)
+    if geo_ratio is not None:
+        applicable += SCORE_WEIGHTS["zone"]
+        earned += SCORE_WEIGHTS["zone"] * Decimal(str(geo_ratio))
+    elif sub_hood or cand_hood or sub_jur or cand_jur:
         applicable += SCORE_WEIGHTS["zone"]
         if sub_hood and cand_hood and sub_hood == cand_hood:
             earned += SCORE_WEIGHTS["zone"]
@@ -269,7 +285,19 @@ def explain_score(subject, candidate):
     )
     sub_jur = fold_text(subject.get("jurisdiction"))
     cand_jur = fold_text(candidate.get("jurisdiction"))
-    if sub_hood and cand_hood and sub_hood == cand_hood:
+    from modules.maps.geo import distance_between_coordinates
+
+    distance_m = candidate.get("distance_meters")
+    if distance_m is None:
+        distance_m = distance_between_coordinates(
+            subject.get("latitude") or subject.get("snapshot_latitude"),
+            subject.get("longitude") or subject.get("snapshot_longitude"),
+            candidate.get("latitude") or candidate.get("snapshot_latitude"),
+            candidate.get("longitude") or candidate.get("snapshot_longitude"),
+        )
+    if distance_m is not None:
+        matches.append("distance")
+    elif sub_hood and cand_hood and sub_hood == cand_hood:
         matches.append("neighborhood")
     elif sub_jur and cand_jur and sub_jur == cand_jur:
         if cand_jur in GENERIC_JURISDICTIONS:

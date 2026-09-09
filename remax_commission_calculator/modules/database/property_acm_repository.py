@@ -101,6 +101,8 @@ def _comp_dict(row):
         "area_source": row[30] if len(row) > 30 else None,
         "area_override_by_user_id": row[31] if len(row) > 31 else None,
         "score_reasons": _json_load(row[32] if len(row) > 32 else None),
+        "snapshot_latitude": row[33] if len(row) > 33 else None,
+        "snapshot_longitude": row[34] if len(row) > 34 else None,
     }
 
 
@@ -122,7 +124,8 @@ COMP_SELECT = """
            snapshot_price_kind, snapshot_operation_id, snapshot_operation_date,
            score, is_outlier, distance_meters, notes, created_at,
            snapshot_bathrooms, snapshot_parking, snapshot_url, snapshot_observed_at,
-           area_source, area_override_by_user_id, score_reasons_json
+           area_source, area_override_by_user_id, score_reasons_json,
+           snapshot_latitude, snapshot_longitude
     FROM property_acm_comparables
 """
 
@@ -273,10 +276,11 @@ def add_comparable(organization_id, acm_id, payload):
                 snapshot_price_kind, snapshot_operation_id, snapshot_operation_date,
                 score, is_outlier, distance_meters, notes, created_at,
                 snapshot_bathrooms, snapshot_parking, snapshot_url, snapshot_observed_at,
-                area_source, area_override_by_user_id, score_reasons_json
+                area_source, area_override_by_user_id, score_reasons_json,
+                snapshot_latitude, snapshot_longitude
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -312,6 +316,8 @@ def add_comparable(organization_id, acm_id, payload):
                 payload.get("area_source"),
                 payload.get("area_override_by_user_id"),
                 _json_dump(payload.get("score_reasons")),
+                payload.get("snapshot_latitude"),
+                payload.get("snapshot_longitude"),
             ),
         )
         connection.commit()
@@ -418,6 +424,10 @@ def list_internal_candidates(
     min_area=None,
     max_area=None,
     area_column="covered_m2",
+    min_lat=None,
+    max_lat=None,
+    min_lng=None,
+    max_lng=None,
     limit=80,
 ):
     organization_id = require_organization_id(organization_id)
@@ -453,13 +463,20 @@ def list_internal_candidates(
     if max_area is not None:
         clauses.append(f"(p.{area_column} IS NULL OR p.{area_column} <= ?)")
         params.append(str(max_area))
+    if None not in (min_lat, max_lat, min_lng, max_lng):
+        clauses.append(
+            "p.latitude IS NOT NULL AND p.longitude IS NOT NULL "
+            "AND p.latitude BETWEEN ? AND ? AND p.longitude BETWEEN ? AND ?"
+        )
+        params.extend([min_lat, max_lat, min_lng, max_lng])
     params.append(int(limit))
     sql = f"""
         SELECT p.id, p.address, p.jurisdiction, p.organization_id, p.agent_id,
                p.property_type, p.listing_price, p.listing_purpose,
                p.listing_currency, p.neighborhood, p.rooms, p.bedrooms,
                p.covered_m2, p.total_m2, p.parking_spaces, p.commercial_status,
-               p.features_json, p.last_synced_at, p.bathrooms, p.external_id
+               p.features_json, p.last_synced_at, p.bathrooms, p.external_id,
+               p.latitude, p.longitude
         FROM properties p
         WHERE {' AND '.join(clauses)}
         LIMIT ?
@@ -491,6 +508,8 @@ def list_internal_candidates(
                     "last_synced_at": row[17],
                     "bathrooms": row[18],
                     "external_id": row[19],
+                    "latitude": row[20] if len(row) > 20 else None,
+                    "longitude": row[21] if len(row) > 21 else None,
                 }
             )
         return results
@@ -507,6 +526,10 @@ def list_closed_candidates(
     currency=None,
     neighborhood=None,
     jurisdiction=None,
+    min_lat=None,
+    max_lat=None,
+    min_lng=None,
+    max_lng=None,
     limit=40,
 ):
     organization_id = require_organization_id(organization_id)
@@ -531,6 +554,12 @@ def list_closed_candidates(
     elif jurisdiction:
         clauses.append("p.jurisdiction = ?")
         params.append(jurisdiction)
+    if None not in (min_lat, max_lat, min_lng, max_lng):
+        clauses.append(
+            "p.latitude IS NOT NULL AND p.longitude IS NOT NULL "
+            "AND p.latitude BETWEEN ? AND ? AND p.longitude BETWEEN ? AND ?"
+        )
+        params.extend([min_lat, max_lat, min_lng, max_lng])
     params.append(int(limit))
     sql = f"""
         SELECT p.id, p.address, p.jurisdiction, p.organization_id, p.agent_id,
@@ -538,7 +567,7 @@ def list_closed_candidates(
                p.listing_currency, p.neighborhood, p.rooms, p.bedrooms,
                p.covered_m2, p.total_m2, p.parking_spaces, p.commercial_status,
                p.features_json, o.sale_price, o.currency, o.id, o.operation_date,
-               p.bathrooms, p.external_id
+               p.bathrooms, p.external_id, p.latitude, p.longitude
         FROM operations o
         JOIN properties p ON p.id = o.property_id
         WHERE {' AND '.join(clauses)}
@@ -575,6 +604,8 @@ def list_closed_candidates(
                     "operation_date": row[20],
                     "bathrooms": row[21],
                     "external_id": row[22],
+                    "latitude": row[23] if len(row) > 23 else None,
+                    "longitude": row[24] if len(row) > 24 else None,
                 }
             )
         return results

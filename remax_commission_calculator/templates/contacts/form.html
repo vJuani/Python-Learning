@@ -4,6 +4,25 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/contacts.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/property-maps.js') }}"></script>
+<script>
+(function () {
+    var root = document.querySelector("[data-need-location]");
+    if (!root) return;
+    var point = root.querySelector("[data-need-point]");
+    root.querySelectorAll("input[name='location_mode']").forEach(function (input) {
+        input.addEventListener("change", function () {
+            if (!point) return;
+            point.hidden = input.value !== "point" || !input.checked;
+            if (input.value === "point" && input.checked) {
+                point.hidden = false;
+            } else if (input.value === "zones" && input.checked) {
+                point.hidden = true;
+            }
+        });
+    });
+})();
+</script>
 {% endblock %}
 
 {% block title %}
@@ -71,6 +90,36 @@
         {% if mode in ['edit', 'need'] %}
         <section class="contact-panel" id="contact-prefs">
             <p class="contacts-kicker">{{ t('contacts_looking_for') }}</p>
+
+            <fieldset class="contact-field" data-need-location>
+                <legend>{{ t('contacts_location_mode') }}</legend>
+                {% set geo_on = prefs.center_latitude and prefs.radius_km %}
+                <label>
+                    <input type="radio" name="location_mode" value="zones" {% if not geo_on %}checked{% endif %}>
+                    {{ t('contacts_location_zones') }}
+                </label>
+                <label>
+                    <input type="radio" name="location_mode" value="point" {% if geo_on %}checked{% endif %}>
+                    {{ t('contacts_location_point') }}
+                </label>
+                <div class="contact-point" data-need-point {% if not geo_on %}hidden{% endif %} data-jrh-maps data-maps-mode="autocomplete" data-maps-key="{{ maps.browser_key if maps is defined else '' }}" data-maps-region="{{ maps.region if maps is defined else 'ar' }}">
+                    <label class="contact-field">
+                        <span>{{ t('contacts_location_point_help') }}</span>
+                        <input type="text" name="location_reference_text" data-jrh-address value="{{ prefs.location_reference_text or '' }}" autocomplete="off">
+                    </label>
+                    <input type="hidden" name="center_latitude" data-jrh-lat value="{{ prefs.center_latitude or '' }}">
+                    <input type="hidden" name="center_longitude" data-jrh-lng value="{{ prefs.center_longitude or '' }}">
+                    <input type="hidden" name="location_place_id" data-jrh-place-id value="{{ prefs.location_place_id or '' }}">
+                    <label class="contact-field">
+                        <span>{{ t('contacts_location_radius') }}</span>
+                        <select name="radius_km">
+                            {% for km in [0.5, 1, 2, 5] %}
+                            <option value="{{ km }}" {% if prefs.radius_km == km %}selected{% endif %}>{{ km }} km</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+            </fieldset>
 
             <div class="contact-field" data-contact-chips>
                 <span>{{ t('contacts_field_areas') }}</span>

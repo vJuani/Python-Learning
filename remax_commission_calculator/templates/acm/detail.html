@@ -175,20 +175,42 @@
         <canvas id="acmPpm2Chart" height="140"></canvas>
     </article>
     <article class="acm-panel acm-map" id="acm-mapa">
-        <h3>{{ t('acm_map_title') }}</h3>
+        <h3>{{ t('acm_map_comps_title') }}</h3>
+        {% if view.map and view.map.available %}
+        <div
+            class="acm-map__canvas"
+            data-jrh-maps
+            data-maps-mode="cluster"
+            data-maps-key="{{ maps.browser_key if maps is defined else '' }}"
+            data-maps-region="{{ maps.region if maps is defined else 'ar' }}"
+            data-maps-payload='{{ view.map | tojson }}'
+        ></div>
+        {% else %}
         <div class="acm-map__placeholder">
             <p>{{ t('acm_map_unavailable') }}</p>
             <p class="field-help">{{ t('acm_map_placeholder') }}</p>
         </div>
+        {% endif %}
     </article>
 </section>
 {% else %}
 <section class="acm-panel acm-map" id="acm-mapa">
-    <h3>{{ t('acm_map_title') }}</h3>
+    <h3>{{ t('acm_map_comps_title') }}</h3>
+    {% if view.map and view.map.available %}
+    <div
+        class="acm-map__canvas"
+        data-jrh-maps
+        data-maps-mode="cluster"
+        data-maps-key="{{ maps.browser_key if maps is defined else '' }}"
+        data-maps-region="{{ maps.region if maps is defined else 'ar' }}"
+        data-maps-payload='{{ view.map | tojson }}'
+    ></div>
+    {% else %}
     <div class="acm-map__placeholder">
         <p>{{ t('acm_map_unavailable') }}</p>
         <p class="field-help">{{ t('acm_map_placeholder') }}</p>
     </div>
+    {% endif %}
 </section>
 {% endif %}
 
@@ -203,7 +225,11 @@
             </span>
         </div>
         <h3>{{ row.external_reference or row.snapshot_location or '—' }}</h3>
-        <p class="field-help">{{ row.location.primary }}{% if row.location.secondary %} · {{ row.location.secondary }}{% endif %}</p>
+        <p class="field-help">
+            {% if row.distance_label %}<strong>{{ row.distance_label }}</strong>{% endif %}
+            {% if row.location.primary %}{% if row.distance_label %} · {% endif %}{{ row.location.primary }}{% endif %}
+            {% if row.location.secondary %} · {{ row.location.secondary }}{% endif %}
+        </p>
         <p class="acm-card__price">{{ (row.snapshot_price)|money(row.snapshot_currency or currency) }}</p>
         <p class="acm-card__ppm2">
             {% if row.display_area %}{{ row.display_area }} m²{% else %}{{ t('acm_area_unknown') }}{% endif %}
@@ -332,6 +358,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/property-maps.js') }}"></script>
 {% if view.chart_points %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>

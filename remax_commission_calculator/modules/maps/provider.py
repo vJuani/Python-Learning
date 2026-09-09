@@ -10,8 +10,9 @@ from modules.maps.config import (
     maps_is_configured,
     maps_public_config,
     maps_region,
+    maps_server_key,
 )
-from modules.maps.location import apply_place_to_location
+from modules.maps.location import apply_place_to_location, parse_coordinate
 
 
 class MapProvider:
@@ -29,12 +30,57 @@ class MapProvider:
     def normalize_place(self, place, *, geocoded_at=None):
         return apply_place_to_location(place, geocoded_at=geocoded_at)
 
+    def find_place(self, query, *, region=None):
+        """Transient geocode for an explicit search. Never used for distance."""
+        return None
+
 
 class GoogleMapsProvider(MapProvider):
     name = PROVIDER_GOOGLE
 
     def browser_key(self):
         return maps_browser_key()
+
+    def find_place(self, query, *, region=None):
+        text = " ".join(str(query or "").split())
+        if not text:
+            return None
+        key = maps_server_key()
+        if not key:
+            return None
+        import json
+        import urllib.parse
+        import urllib.request
+
+        params = urllib.parse.urlencode(
+            {
+                "address": text,
+                "key": key,
+                "region": (region or self.region() or "ar").lower(),
+            }
+        )
+        url = f"https://maps.googleapis.com/maps/api/geocode/json?{params}"
+        try:
+            with urllib.request.urlopen(url, timeout=8) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (OSError, ValueError, TimeoutError):
+            return None
+        results = payload.get("results") if isinstance(payload, dict) else None
+        if not results:
+            return None
+        first = results[0] or {}
+        geometry = (first.get("geometry") or {}).get("location") or {}
+        lat = parse_coordinate(geometry.get("lat"), kind="lat")
+        lng = parse_coordinate(geometry.get("lng"), kind="lng")
+        if lat is None or lng is None:
+            return None
+        return {
+            "place_id": first.get("place_id"),
+            "formatted_address": first.get("formatted_address"),
+            "latitude": lat,
+            "longitude": lng,
+            "address_components": first.get("address_components") or [],
+        }
 
 
 class MockMapsProvider(MapProvider):
@@ -82,3 +128,8 @@ def get_maps_provider():
     if name == PROVIDER_GOOGLE and maps_browser_key():
         return GoogleMapsProvider()
     return DisabledMapsProvider()
+
+
+def find_place(query, *, region=None):
+    """Explicit search lookup. Distance scoring never goes through here."""
+    return get_maps_provider().find_place(query, region=region)

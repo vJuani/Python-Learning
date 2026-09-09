@@ -28,6 +28,9 @@ class InternalListingConnector(BaseListingConnector):
             listing_purpose=filters["listing_purpose"],
             listing_currency=filters["listing_currency"],
             max_listing_price=filters["max_listing_price"],
+            center_lat=filters.get("center_lat"),
+            center_lng=filters.get("center_lng"),
+            radius_m=filters.get("radius_m"),
             limit=CANDIDATE_LIMIT,
         )
         listings = []

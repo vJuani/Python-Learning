@@ -70,7 +70,7 @@ def build_acm_facts(view, language="es"):
         "area_max": str(max(areas)) if areas else None,
         "subject_area": str(display_area(subject) or ""),
         "can_finalize": bool((view or {}).get("can_finalize")),
-        "geo_available": False,
+        "geo_available": bool((view or {}).get("map", {}).get("available")),
         "quality_complete": complete,
         "quality_total": len(key_fields),
         "status": acm.get("status") or "draft",
