@@ -52,15 +52,15 @@ from modules.property_sync.service import (
     test_property_source_connection,
     update_redremax_office,
 )
+from tests.redremax_listing_fixture import SANITIZED_LISTING
 from web_app import app
 
-FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "redremax_listing.json"
 TOKEN = "test-token-not-real"
 OFFICE = "AR.TEST.27"
 
 
 def load_fixture(**overrides):
-    payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    payload = json.loads(json.dumps(SANITIZED_LISTING))
     if "id" in overrides:
         street_id = str(overrides["id"]).split(".")[-1]
         address = dict(payload.get("address") or {})
