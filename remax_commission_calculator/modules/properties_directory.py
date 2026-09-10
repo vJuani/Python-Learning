@@ -21,6 +21,17 @@ from modules.property_types import (
 from modules.validators import date_to_sortable
 
 
+def _attach_property_covers(organization_id, rows):
+    from modules.property_sync.media import list_covers_for_properties, media_display_src
+
+    ids = [row.get("id") for row in rows or [] if row.get("id")]
+    covers = list_covers_for_properties(organization_id, ids)
+    for row in rows or []:
+        cover = covers.get(int(row["id"])) if row.get("id") else None
+        row["cover"] = cover
+        row["cover_url"] = media_display_src(cover, row.get("id"))
+
+
 RESIDENTIAL_TYPES = frozenset({"apartment", "house", "ph", "land"})
 COMMERCIAL_TYPES = frozenset({"commercial", "office"})
 
@@ -419,6 +430,7 @@ def build_properties_directory(
         key=lambda item: item.get("listing_price") or 0,
         reverse=True,
     )[:4]
+    _attach_property_covers(organization_id, page_rows + featured)
 
     status_summary = []
     bucket_labels = {

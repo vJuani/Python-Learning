@@ -57,9 +57,12 @@
                 </div>
             </details>
         </div>
-        {% if hero_photo %}
+        {% set acm_photos = view.photo_urls or ([hero_photo] if hero_photo else []) %}
+        {% if acm_photos %}
         <div class="acm-hero__photos">
-            <img src="{{ hero_photo }}" alt="">
+            {% for src in acm_photos[:4] %}
+            <img src="{{ src }}" alt="" loading="lazy" data-media-fallback data-fallback-label="{{ t('property_no_synced_photos') }}">
+            {% endfor %}
         </div>
         {% endif %}
     </div>
@@ -224,6 +227,9 @@
                 {% if row.snapshot_price_kind == 'closing' %}{{ t('acm_price_closing') }}{% else %}{{ t('acm_price_listing') }}{% endif %}
             </span>
         </div>
+        {% if row.photo_url %}
+        <img class="acm-card__cover" src="{{ row.photo_url }}" alt="" loading="lazy" data-media-fallback data-fallback-label="{{ t('property_no_synced_photos') }}">
+        {% endif %}
         <h3>{{ row.external_reference or row.snapshot_location or '—' }}</h3>
         <p class="field-help">
             {% if row.distance_label %}<strong>{{ row.distance_label }}</strong>{% endif %}

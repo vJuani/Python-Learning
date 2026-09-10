@@ -5075,6 +5075,21 @@ def properties_new():
     )
 
 
+def _property_gallery_for_detail(property_data):
+    from modules.property_sync.media import (
+        get_property_media_for_generation,
+        media_display_src,
+    )
+
+    gallery = []
+    for item in get_property_media_for_generation(property_data, limit=5):
+        src = media_display_src(item, property_data.get("id"))
+        if not src:
+            continue
+        gallery.append({"src": src, "id": item.get("id")})
+    return gallery
+
+
 @app.route("/properties/<int:property_id>")
 @login_required
 def properties_detail(property_id):
@@ -5133,6 +5148,7 @@ def properties_detail(property_id):
             property_data,
             language=language,
         ),
+        property_gallery=_property_gallery_for_detail(property_data),
         property_display_id=format_property_display_id(
             property_data["id"]
         ),

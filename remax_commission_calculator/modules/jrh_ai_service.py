@@ -868,6 +868,35 @@ def _format_listing_price(item):
     return f"{currency} {item.get('listing_price')}".strip()
 
 
+def _attach_property_card_covers(organization_id, cards):
+    from modules.property_sync.media import list_covers_for_properties, media_display_src
+
+    ids = []
+    for card in cards or []:
+        pid = card.get("property_id") or (card.get("href_args") or {}).get(
+            "property_id"
+        )
+        if pid:
+            ids.append(pid)
+    if not ids:
+        return cards
+    covers = list_covers_for_properties(organization_id, ids)
+    for card in cards or []:
+        pid = card.get("property_id") or (card.get("href_args") or {}).get(
+            "property_id"
+        )
+        if not pid:
+            continue
+        try:
+            cover = covers.get(int(pid))
+        except (TypeError, ValueError):
+            cover = None
+        src = media_display_src(cover, pid)
+        if src:
+            card["image_url"] = src
+    return cards
+
+
 def _property_detail_line(item):
     parts = []
     if item.get("rooms"):
@@ -1063,8 +1092,10 @@ def _handle_properties(
                 "cta_key": "jrh_ai_view_property",
                 "href_name": "properties_detail",
                 "href_args": {"property_id": item.get("id")},
+                "property_id": item.get("id"),
             }
         )
+    cards = _attach_property_card_covers(organization_id, cards)
     list_args = _property_list_href_args(entities)
     actions = []
     if total:
@@ -1188,8 +1219,10 @@ def _handle_needs(
             {
                 "title": listing.get("address") or listing.get("title") or chosen["name"],
                 "subtitle": listing.get("neighborhood") or "",
+                "property_id": listing.get("id"),
             }
         )
+    cards = _attach_property_card_covers(organization_id, cards)
     return _result(
         QUERY_PROPERTY_NEEDS,
         "ready",

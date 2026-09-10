@@ -546,6 +546,45 @@ def _enrich_comparable(row, subject, language="es"):
     return item
 
 
+def _attach_acm_photos(view, organization_id, property_data, enriched):
+    from modules.property_sync.media import (
+        get_property_cover_media,
+        get_property_media_for_generation,
+        list_covers_for_properties,
+        media_display_src,
+    )
+
+    property_id = (property_data or {}).get("id")
+    cover = get_property_cover_media(property_data) if property_data else None
+    gallery = (
+        get_property_media_for_generation(property_data, limit=4)
+        if property_data
+        else []
+    )
+    cover_src = media_display_src(cover, property_id)
+    extras = []
+    for item in gallery:
+        src = media_display_src(item, property_id)
+        if src and src != cover_src:
+            extras.append(src)
+        if len(extras) >= 3:
+            break
+    view["photo_url"] = cover_src
+    view["photo_urls"] = ([cover_src] + extras) if cover_src else extras
+    if view.get("subject") is not None:
+        view["subject"]["photo_url"] = cover_src
+    comp_ids = [
+        row.get("comparable_property_id")
+        for row in enriched or []
+        if row.get("comparable_property_id")
+    ]
+    covers = list_covers_for_properties(organization_id, comp_ids)
+    for row in enriched or []:
+        linked_id = row.get("comparable_property_id")
+        linked_cover = covers.get(int(linked_id)) if linked_id else None
+        row["photo_url"] = media_display_src(linked_cover, linked_id)
+
+
 def _acm_map_payload(subject, rows, language="es"):
     from modules.maps.location import has_coordinates, parse_coordinate
 
@@ -665,7 +704,9 @@ def get_acm_view(acm_id, organization_id, *, user, language="es"):
         "map": _acm_map_payload(subject, enriched, language),
         "best_comparable": most_similar_comparable(enriched),
         "photo_url": None,
+        "photo_urls": [],
     }
+    _attach_acm_photos(view, organization_id, property_data, enriched)
     facts = build_acm_facts(view, language=language)
     explained = explain_acm(facts, language=language)
     view["facts"] = facts

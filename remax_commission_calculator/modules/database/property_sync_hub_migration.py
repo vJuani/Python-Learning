@@ -219,7 +219,7 @@ INDEXES = (
     """
     CREATE UNIQUE INDEX IF NOT EXISTS
     idx_property_media_external
-    ON property_media (organization_id, source, external_media_id)
+    ON property_media (organization_id, property_id, source, external_media_id)
     WHERE external_media_id IS NOT NULL
       AND TRIM(external_media_id) != ''
     """,
@@ -283,6 +283,7 @@ def migrate_property_sync_hub_sqlite():
             )
         if not _column_exists(cursor, "properties", "sync_status"):
             cursor.execute("ALTER TABLE properties ADD COLUMN sync_status TEXT")
+        cursor.execute("DROP INDEX IF EXISTS idx_property_media_external")
         for statement in INDEXES:
             cursor.execute(statement)
         connection.commit()
@@ -374,6 +375,7 @@ def migrate_property_sync_hub_postgres(cursor):
             ADD COLUMN IF NOT EXISTS {column_name} {column_sql}
             """
         )
+    cursor.execute("DROP INDEX IF EXISTS idx_property_media_external")
     for statement in INDEXES:
         cursor.execute(statement.replace("TRIM(", "BTRIM("))
 

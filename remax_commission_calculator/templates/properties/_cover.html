@@ -1,0 +1,13 @@
+{% if src %}
+<img
+    class="property-cover {{ modifier or '' }}"
+    src="{{ src }}"
+    alt=""
+    loading="lazy"
+    data-media-fallback
+    data-fallback-label="{{ t('property_no_synced_photos') }}"
+>
+<noscript></noscript>
+{% else %}
+<span class="property-media-placeholder {{ modifier or '' }}" title="{{ t('property_no_synced_photos') }}" aria-label="{{ t('property_no_synced_photos') }}"></span>
+{% endif %}

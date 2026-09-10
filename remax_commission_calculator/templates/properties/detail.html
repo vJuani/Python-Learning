@@ -76,6 +76,36 @@
     </div>
 </section>
 
+{% if property_gallery is defined %}
+<section class="panel property-gallery" data-property-gallery>
+    <div class="panel-header">
+        <h3>{{ t('property_gallery_title') }}</h3>
+    </div>
+    {% if property_gallery %}
+    <div class="property-gallery__stage">
+        <img
+            class="property-gallery__hero"
+            src="{{ property_gallery[0].src }}"
+            alt=""
+            data-media-fallback
+            data-fallback-label="{{ t('property_no_synced_photos') }}"
+        >
+        {% if property_gallery|length > 1 %}
+        <div class="property-gallery__thumbs">
+            {% for item in property_gallery %}
+            <button type="button" class="property-gallery__thumb{% if loop.first %} is-active{% endif %}" data-gallery-src="{{ item.src }}">
+                <img src="{{ item.src }}" alt="" loading="lazy" data-media-fallback data-fallback-label="{{ t('property_no_synced_photos') }}">
+            </button>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="property-gallery__empty">{{ t('property_no_synced_photos') }}</p>
+    {% endif %}
+</section>
+{% endif %}
+
 <section class="panel">
     <div class="panel-header">
         <h3>{{ t('property_detail_title') }}</h3>

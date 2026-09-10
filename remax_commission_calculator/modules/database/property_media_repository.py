@@ -67,20 +67,21 @@ def get_property_media(media_id, organization_id):
     return _media_dict(row)
 
 
-def find_media_by_external_id(organization_id, source, external_media_id):
+def find_media_by_external_id(organization_id, property_id, source, external_media_id):
     organization_id = require_organization_id(organization_id)
     source = str(source or "").strip()
     identity = str(external_media_id or "").strip()
-    if not source or not identity:
+    if not source or not identity or property_id is None:
         return None
     connection = get_connection()
     try:
         row = connection.execute(
             MEDIA_SELECT
             + """
-            WHERE organization_id = ? AND source = ? AND external_media_id = ?
+            WHERE organization_id = ? AND property_id = ?
+              AND source = ? AND external_media_id = ?
             """,
-            (organization_id, source, identity),
+            (organization_id, int(property_id), source, identity),
         ).fetchone()
     finally:
         connection.close()
@@ -122,6 +123,31 @@ def list_property_media(organization_id, property_id, *, include_removed=False):
     return [_media_dict(row) for row in rows]
 
 
+def list_property_media_for_properties(organization_id, property_ids, *, include_removed=False):
+    organization_id = require_organization_id(organization_id)
+    ids = []
+    for value in property_ids or []:
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return []
+    placeholders = ", ".join("?" for _ in ids)
+    sql = MEDIA_SELECT + f" WHERE organization_id = ? AND property_id IN ({placeholders})"
+    params = [organization_id, *ids]
+    if not include_removed:
+        sql += " AND status = ?"
+        params.append(STATUS_ACTIVE)
+    sql += " ORDER BY is_cover DESC, position ASC, id ASC"
+    connection = get_connection()
+    try:
+        rows = connection.execute(sql, params).fetchall()
+    finally:
+        connection.close()
+    return [_media_dict(row) for row in rows]
+
+
 def upsert_property_media(
     organization_id,
     property_id,
@@ -146,12 +172,12 @@ def upsert_property_media(
     existing = None
     if external_media_id:
         existing = find_media_by_external_id(
-            organization_id, source, external_media_id
+            organization_id, property_id, source, external_media_id
         )
-        if existing and int(existing["property_id"]) != int(property_id):
-            raise TenantError("Media belongs to another property.")
         if existing and int(existing["organization_id"]) != int(organization_id):
             raise TenantError("Media belongs to another organization.")
+        if existing and int(existing["property_id"]) != int(property_id):
+            raise TenantError("Media belongs to another property.")
     if existing is None and content_hash and not external_media_id:
         existing = find_media_by_hash(organization_id, property_id, content_hash)
     now = _now_iso()

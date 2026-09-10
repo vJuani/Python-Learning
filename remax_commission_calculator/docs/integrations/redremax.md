@@ -110,11 +110,24 @@ Unknown operation/type: keep original + warning. The listing is not dropped.
 
 ## Photos
 
+Beta strategy: `REMOTE_REFERENCE`, maximum **5** photos per property.
+
+`photos[]` is the only automatic gallery source. Always keep
+`primary=true` even if it is not first, then fill in array order.
+Cover policy: explicit manual override → RedREMAX primary → first valid
+media. Identity is the SHA-256 of the canonical HTTPS URL, not position.
+
+Frontend list/detail/ACM/JRH cards use the same cover helper. Broken
+remote URLs fall back to the “Sin fotos sincronizadas” placeholder and
+do not delete `PropertyMedia`. Brochure may fetch an allowlisted image
+once per PDF (in-memory cache). `PublicListingMediaProvider` is disabled.
+
 V1 strategy: `REMOTE_REFERENCE`.
 
 Allowed host: `redremax-images.s3.amazonaws.com`.
 
-Dedupe by SHA-256 of the canonical URL (scheme+host+path). Position is not identity.
+Dedupe by SHA-256 of the canonical URL (scheme+host+path) **per property**.
+Position is not identity. The same CDN URL may exist on two listings.
 
 Signed S3 blueprint URLs (`X-Amz-…`) expire. They are **not** stored as
 permanent media. V1 only records that blueprints exist.
@@ -138,11 +151,13 @@ snapshot. It does not overwrite JRH FX.
 
 ## Brochure and content
 
-The current PDF engine uses local files only. Remote RedREMAX photos are
-not downloaded on each brochure request.
+Brochure prefers a local file when one exists. For RedREMAX remote
+references it may fetch an allowlisted HTTPS image once per PDF
+(timeout, size cap, image content-type, host allowlist, in-memory cache).
+A failed fetch skips that photo; the PDF still generates.
 
-`get_property_media_for_generation()` returns authorized gallery items and
-does **not** send them to OpenAI.
+`get_property_media_for_generation()` returns authorized gallery items
+(cover first, max 5) and does **not** send them to OpenAI.
 
 ## Conflicts
 

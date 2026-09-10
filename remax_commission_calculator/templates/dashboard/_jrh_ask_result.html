@@ -38,6 +38,9 @@
             <ul class="jrh-chat__cards">
                 {% for card in jrh_ask.cards %}
                 <li>
+                    {% if card.image_url %}
+                    <img class="jrh-chat__card-cover" src="{{ card.image_url }}" alt="" loading="lazy" data-media-fallback data-fallback-label="{{ t('property_no_synced_photos') }}">
+                    {% endif %}
                     <strong>{{ card.title }}</strong>
                     {% if card.subtitle %}<span>{{ card.subtitle }}</span>{% endif %}
                     {% if card.meta %}<span>{{ card.meta }}</span>{% endif %}

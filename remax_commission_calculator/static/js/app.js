@@ -602,6 +602,46 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
+    document.addEventListener("error", function (event) {
+        var target = event.target;
+        if (!target || target.tagName !== "IMG" || !target.hasAttribute("data-media-fallback")) {
+            return;
+        }
+        var placeholder = document.createElement("span");
+        placeholder.className = "property-media-placeholder";
+        if (target.classList.contains("property-media-placeholder--card")) {
+            placeholder.className += " property-media-placeholder--card";
+        }
+        if (target.classList.contains("property-media-placeholder--small")) {
+            placeholder.className += " property-media-placeholder--small";
+        }
+        var label = target.getAttribute("data-fallback-label") || "";
+        if (label) {
+            placeholder.setAttribute("title", label);
+            placeholder.setAttribute("aria-label", label);
+        } else {
+            placeholder.setAttribute("aria-hidden", "true");
+        }
+        if (target.parentNode) {
+            target.parentNode.replaceChild(placeholder, target);
+        }
+    }, true);
+
+    document.querySelectorAll("[data-property-gallery]").forEach(function (gallery) {
+        var hero = gallery.querySelector(".property-gallery__hero");
+        gallery.querySelectorAll("[data-gallery-src]").forEach(function (button) {
+            button.addEventListener("click", function () {
+                if (!hero) {
+                    return;
+                }
+                hero.src = button.getAttribute("data-gallery-src") || hero.src;
+                gallery.querySelectorAll("[data-gallery-src]").forEach(function (item) {
+                    item.classList.toggle("is-active", item === button);
+                });
+            });
+        });
+    });
+
     var operationsMobileFiltersOpen = document.querySelector("[data-operations-mobile-filters-open]");
     var operationsMobileAdvanced = document.querySelector(".operations-mobile-advanced");
     if (operationsMobileFiltersOpen && operationsMobileAdvanced) {

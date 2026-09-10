@@ -270,7 +270,9 @@
                             <tr>
                                 <td>
                                     <div class="properties-property-cell">
-                                        <span class="property-media-placeholder" aria-hidden="true"></span>
+                                        {% with src=row.cover_url, modifier='' %}
+                                        {% include "properties/_cover.html" %}
+                                        {% endwith %}
                                         <div>
                                             <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="properties-property-cell__title">{{ row.address }}</a>
                                             {% if row.is_synced %}
@@ -343,7 +345,9 @@
                 <div class="property-mobile-list hide-desktop">
                     {% for row in properties_panel.rows %}
                     <article class="property-mobile-card">
-                        <span class="property-media-placeholder property-media-placeholder--card" aria-hidden="true"></span>
+                        {% with src=row.cover_url, modifier='property-media-placeholder--card' %}
+                        {% include "properties/_cover.html" %}
+                        {% endwith %}
                         <div>
                             <span class="property-mobile-card__type">{{ row.category_label }}</span>
                             <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__title">{{ row.address }}</a>
@@ -456,7 +460,9 @@
                 <ul class="properties-featured-list">
                     {% for row in properties_panel.featured %}
                     <li>
-                        <span class="property-media-placeholder property-media-placeholder--small" aria-hidden="true"></span>
+                        {% with src=row.cover_url, modifier='property-media-placeholder--small' %}
+                        {% include "properties/_cover.html" %}
+                        {% endwith %}
                         <div>
                             <a href="{{ url_for('properties_detail', property_id=row.id) }}">{{ row.address }}</a>
                             <span class="money">{% if row.listing_price is not none %}{{ row.listing_price|listing_money(row.listing_currency) }}{% else %}—{% endif %}</span>

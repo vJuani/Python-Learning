@@ -938,10 +938,11 @@ def filter_properties(
         params.append(property_id)
 
     if address is not None:
+        like = f"%{address}%"
         conditions.append(
-            "properties.address LIKE ?"
+            "(properties.address LIKE ? OR COALESCE(properties.external_id, '') LIKE ?)"
         )
-        params.append(f"%{address}%")
+        params.extend([like, like])
 
     if jurisdiction is not None:
         conditions.append(

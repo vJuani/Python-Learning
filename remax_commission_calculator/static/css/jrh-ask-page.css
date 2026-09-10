@@ -377,6 +377,15 @@ body.is-jrh-ask-page .app-main-inner {
     background: #fff;
 }
 
+.jrh-chat__card-cover {
+    width: 100%;
+    height: 7rem;
+    object-fit: cover;
+    border-radius: 10px;
+    margin: 0 0 0.5rem;
+    background: #eef3f9;
+}
+
 .jrh-chat__cards strong,
 .jrh-chat__cards span {
     display: block;
