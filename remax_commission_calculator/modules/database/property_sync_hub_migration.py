@@ -160,11 +160,33 @@ CREATE TABLE IF NOT EXISTS property_sync_conflicts (
     status TEXT NOT NULL DEFAULT 'open',
     created_at TEXT NOT NULL,
     resolved_at TEXT,
+    payload_snapshot_json TEXT,
 
     FOREIGN KEY (organization_id)
         REFERENCES organizations(id) ON DELETE RESTRICT,
     FOREIGN KEY (existing_property_id)
         REFERENCES properties(id) ON DELETE SET NULL
+)
+"""
+
+DEMO_IMPORTS_SQL = """
+CREATE TABLE IF NOT EXISTS redremax_demo_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    created_by INTEGER,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'preview',
+    source_total INTEGER NOT NULL DEFAULT 0,
+    valid_count INTEGER NOT NULL DEFAULT 0,
+    warning_count INTEGER NOT NULL DEFAULT 0,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    confirm_token TEXT NOT NULL,
+    preview_json TEXT,
+    listings_json TEXT,
+
+    FOREIGN KEY (organization_id)
+        REFERENCES organizations(id) ON DELETE RESTRICT
 )
 """
 
@@ -214,6 +236,16 @@ INDEXES = (
         organization_id, property_id, source, observed_on, price, currency
     )
     """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS
+    idx_redremax_demo_imports_token
+    ON redremax_demo_imports (organization_id, confirm_token)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS
+    idx_redremax_demo_imports_org
+    ON redremax_demo_imports (organization_id, created_at)
+    """,
 )
 
 
@@ -233,6 +265,11 @@ def migrate_property_sync_hub_sqlite():
         cursor.execute(MEDIA_SQL)
         cursor.execute(CONFLICTS_SQL)
         cursor.execute(PRICE_HISTORY_SQL)
+        cursor.execute(DEMO_IMPORTS_SQL)
+        if not _column_exists(cursor, "property_sync_conflicts", "payload_snapshot_json"):
+            cursor.execute(
+                "ALTER TABLE property_sync_conflicts ADD COLUMN payload_snapshot_json TEXT"
+            )
         for column_name, column_sql in PROPERTY_SYNC_COLUMNS:
             if not _column_exists(cursor, "properties", column_name):
                 cursor.execute(
@@ -302,6 +339,13 @@ def migrate_property_sync_hub_postgres(cursor):
         .replace("organization_id INTEGER NOT NULL", "organization_id BIGINT NOT NULL")
         .replace("property_id INTEGER NOT NULL", "property_id BIGINT NOT NULL")
     )
+    pg_demo = (
+        DEMO_IMPORTS_SQL.replace(
+            "INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY"
+        )
+        .replace("organization_id INTEGER NOT NULL", "organization_id BIGINT NOT NULL")
+        .replace("created_by INTEGER", "created_by BIGINT")
+    )
     for statement in (
         pg_integrations,
         pg_runs,
@@ -310,8 +354,15 @@ def migrate_property_sync_hub_postgres(cursor):
         pg_media,
         pg_conflicts,
         pg_history,
+        pg_demo,
     ):
         cursor.execute(statement)
+    cursor.execute(
+        """
+        ALTER TABLE property_sync_conflicts
+        ADD COLUMN IF NOT EXISTS payload_snapshot_json TEXT
+        """
+    )
     for column_name, column_sql in PROPERTY_SYNC_COLUMNS + (
         ("external_source", "TEXT"),
         ("external_updated_at", "TEXT"),

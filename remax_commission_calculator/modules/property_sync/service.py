@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 
@@ -125,6 +126,21 @@ class SyncInProgressError(PropertySyncError):
 
 def _now_iso():
     return datetime.utcnow().replace(microsecond=0).isoformat()
+
+
+def _conflict_snapshot(normalized):
+    """JSON-safe listing snapshot. Never persist tokens or binary media."""
+    if not isinstance(normalized, dict):
+        return None
+    payload = json.loads(json.dumps(normalized, ensure_ascii=False, default=str))
+    media = []
+    for item in list(payload.get("media") or payload.get("photos") or []):
+        item = dict(item or {})
+        item.pop("content_bytes", None)
+        media.append(item)
+    payload["media"] = media
+    payload["photos"] = media
+    return payload
 
 
 def source_label(source, language="es"):
@@ -619,6 +635,7 @@ def sync_external_property(
                 existing_property_id=manual["id"],
                 address_external=normalized["address"],
                 address_existing=manual["address"],
+                payload_snapshot=_conflict_snapshot(normalized),
             )
             if run_id:
                 add_sync_run_item(
@@ -959,10 +976,14 @@ def resolve_conflict(organization_id, conflict_id, action):
     provider = conflict["provider"]
     connector = get_connector(provider)
     integration = get_property_integration(organization_id, provider) or {}
-    raw = connector.get_property(integration, conflict["external_id"])
-    if raw is None:
-        raise PropertySyncError("sync_err_external_missing", 404)
-    normalized = normalize_external_property(raw, source=provider)
+    snapshot = conflict.get("payload_snapshot")
+    if isinstance(snapshot, dict) and snapshot.get("external_id"):
+        normalized = normalize_external_property(snapshot, source=provider)
+    else:
+        raw = connector.get_property(integration, conflict["external_id"])
+        if raw is None:
+            raise PropertySyncError("sync_err_external_missing", 404)
+        normalized = normalize_external_property(raw, source=provider)
 
     if action == "link":
         link_external_identity(
@@ -1006,6 +1027,13 @@ def integration_dashboard(organization_id, language="es"):
         conflicts = list_open_conflicts(organization_id, provider)
         config = item.get("config") or {}
         auth_state = compute_auth_state(item)
+        from modules.property_sync.demo_import_service import demo_import_dashboard_fields
+
+        demo_fields = (
+            demo_import_dashboard_fields(config)
+            if provider == PROVIDER_REDREMAX
+            else {}
+        )
         cards.append(
             {
                 **item,
@@ -1017,6 +1045,12 @@ def integration_dashboard(organization_id, language="es"):
                 "external_office_id": config.get("external_office_id") or "",
                 "last_dry_run": config.get("last_dry_run") or {},
                 "last_diagnostic": config.get("last_diagnostic") or {},
+                "last_import_preview": demo_fields.get("last_import_preview") or {},
+                "last_manual_import": demo_fields.get("last_manual_import") or {},
+                "last_manual_import_display": demo_fields.get(
+                    "last_manual_import_display"
+                )
+                or "",
                 "architecture_ready": provider == PROVIDER_REDREMAX,
                 "auth_configured": (
                     default_auth_provider().is_configured()

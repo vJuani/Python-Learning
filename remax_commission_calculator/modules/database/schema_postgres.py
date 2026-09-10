@@ -1811,6 +1811,7 @@ POSTGRES_TABLES = (
     "property_media",
     "property_sync_conflicts",
     "external_property_price_history",
+    "redremax_demo_imports",
 )
 
 

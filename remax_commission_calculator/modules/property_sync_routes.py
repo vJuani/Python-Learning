@@ -14,6 +14,10 @@ from modules.property_media_access import (
 )
 from modules.database.property_media_repository import get_property_media
 from modules.property_sync.media import resolve_media_filesystem_path
+from modules.property_sync.demo_import_service import (
+    confirm_redremax_json_import,
+    preview_redremax_json_import,
+)
 from modules.property_sync.service import (
     PropertySyncError,
     SyncInProgressError,
@@ -129,6 +133,43 @@ def register_property_sync_routes(app, helpers):
         try:
             dry_run_property_sync(organization_id, provider)
             flash_i18n("redremax_dry_run_done", "success")
+        except PropertySyncError as error:
+            flash_i18n(error.message_key, "error")
+        return redirect(url_for("settings_property_integrations"))
+
+    @app.route("/settings/integrations/properties/redremax/import/preview", methods=["POST"])
+    @admin_required
+    def settings_property_integrations_redremax_import_preview():
+        try:
+            _admin_user()
+        except PropertySyncError:
+            abort(403)
+        organization_id = require_user_organization()
+        user = get_current_user()
+        files = request.files.getlist("json_files")
+        try:
+            preview_redremax_json_import(
+                organization_id,
+                files,
+                created_by=(user or {}).get("id"),
+            )
+            flash_i18n("redremax_demo_preview_done", "success")
+        except PropertySyncError as error:
+            flash_i18n(error.message_key, "error")
+        return redirect(url_for("settings_property_integrations"))
+
+    @app.route("/settings/integrations/properties/redremax/import/confirm", methods=["POST"])
+    @admin_required
+    def settings_property_integrations_redremax_import_confirm():
+        try:
+            _admin_user()
+        except PropertySyncError:
+            abort(403)
+        organization_id = require_user_organization()
+        token = (request.form.get("confirm_token") or "").strip()
+        try:
+            confirm_redremax_json_import(organization_id, token)
+            flash_i18n("redremax_demo_import_done", "success")
         except PropertySyncError as error:
             flash_i18n(error.message_key, "error")
         return redirect(url_for("settings_property_integrations"))

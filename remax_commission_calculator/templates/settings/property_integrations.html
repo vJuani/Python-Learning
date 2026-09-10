@@ -123,6 +123,61 @@
             <button type="submit" class="btn btn-primary">{{ t('sync_now') }}</button>
         </form>
     </div>
+
+    <div class="sync-demo">
+        <div class="sync-demo__header">
+            <h4>{{ t('redremax_demo_title') }}</h4>
+            <span class="property-sync-badge">{{ t('redremax_demo_badge') }}</span>
+        </div>
+        <p class="field-help">{{ t('redremax_demo_help') }}</p>
+        <form
+            method="post"
+            action="{{ url_for('settings_property_integrations_redremax_import_preview') }}"
+            enctype="multipart/form-data"
+            class="sync-demo__upload"
+        >
+            <label for="redremax_json_files">{{ t('redremax_demo_select_json') }}</label>
+            <input
+                id="redremax_json_files"
+                name="json_files"
+                type="file"
+                accept=".json,application/json"
+                multiple
+            >
+            <button type="submit" class="btn btn-secondary">{{ t('redremax_demo_preview') }}</button>
+        </form>
+
+        {% if item.last_import_preview and item.last_import_preview.confirm_token %}
+        <div class="sync-dry-run">
+            <p><strong>{{ t('redremax_demo_preview_title') }}</strong></p>
+            <ul>
+                <li>{{ t('redremax_demo_found') }}: {{ item.last_import_preview.found }}</li>
+                <li>{{ t('redremax_demo_valid') }}: {{ item.last_import_preview.valid }}</li>
+                <li>{{ t('redremax_demo_new') }}: {{ item.last_import_preview.created }}</li>
+                <li>{{ t('redremax_demo_updates') }}: {{ item.last_import_preview.updated }}</li>
+                <li>{{ t('redremax_demo_unchanged') }}: {{ item.last_import_preview.unchanged }}</li>
+                <li>{{ t('redremax_demo_duplicates') }}: {{ item.last_import_preview.conflicts }}</li>
+                <li>{{ t('redremax_demo_unmapped') }}: {{ item.last_import_preview.unmapped_agents }}</li>
+                <li>{{ t('redremax_demo_errors') }}: {{ item.last_import_preview.errors }}</li>
+            </ul>
+            <form method="post" action="{{ url_for('settings_property_integrations_redremax_import_confirm') }}" class="sync-demo__confirm">
+                <input type="hidden" name="confirm_token" value="{{ item.last_import_preview.confirm_token }}">
+                <button type="submit" class="btn btn-primary">{{ t('redremax_demo_import') }}</button>
+            </form>
+        </div>
+        {% endif %}
+
+        {% if item.last_manual_import %}
+        <p class="field-help">
+            {{ t('redremax_demo_last_import') }}
+            {{ item.last_manual_import_display or item.last_manual_import.at }}
+        </p>
+        <p class="field-help">
+            {{ item.last_manual_import.processed or item.last_manual_import.source_total or 0 }}
+            {{ t('redremax_demo_last_import_count') }}
+        </p>
+        {% endif %}
+    </div>
     {% else %}
     <p class="sync-card__status">
         {% if item.status == 'connected' %}
@@ -162,13 +217,14 @@
         <h4>{{ t('sync_conflicts_title') }}</h4>
         {% for conflict in item.conflicts %}
         <article class="sync-conflict">
-            <p>
-                <strong>{{ conflict.address_external }}</strong>
-                · {{ conflict.provider|upper }} · {{ conflict.external_id }}
-            </p>
+            <p><strong>{{ t('sync_conflicts_title') }}</strong></p>
             <p class="field-help">
-                {{ t('sync_conflict_exists') }} #{{ conflict.existing_property_id }}
-                · {{ conflict.address_existing }}
+                JRH: {{ conflict.address_existing }}
+            </p>
+            <p>
+                <strong>{{ item.label }}:</strong>
+                {{ conflict.address_external }}
+                · {{ conflict.external_id }}
             </p>
             <form method="post" action="{{ url_for('settings_property_integration_conflict', conflict_id=conflict.id) }}" class="sync-conflict__actions">
                 <button class="btn btn-secondary" name="action" value="link" type="submit">{{ t('sync_link_existing') }}</button>

@@ -73,3 +73,28 @@ html[data-theme="dark"] .property-sync-badge {
     color: var(--text-muted);
     font-size: 0.85rem;
 }
+
+.sync-demo {
+    display: grid;
+    gap: 0.65rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border, #d8dee8);
+}
+
+.sync-demo__header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.sync-demo__header h4 {
+    margin: 0;
+}
+
+.sync-demo__upload,
+.sync-demo__confirm {
+    display: grid;
+    gap: 0.4rem;
+    max-width: 32rem;
+}

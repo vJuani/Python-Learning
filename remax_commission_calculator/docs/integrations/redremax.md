@@ -151,6 +151,45 @@ Identity is `(organization_id, external_source, external_id)`.
 Possible address duplicates stay in the existing conflict workflow
 (Link / Create new). No auto-merge. Manual photos are not deleted.
 
+## Demo / manual JSON import (temporary)
+
+Until official authentication works, Staff can upload a RedREMAX listings
+JSON export. This is **not** automatic sync.
+
+Accepted envelopes:
+
+- `{ "data": { "results": [...], "page", "pageSize", "totalItems", "totalPages" } }`
+- `{ "results": [...] }`
+
+Multiple page files may be uploaded together. Listings are merged by
+`id` / `external_id` (first wins).
+
+The upload is parsed in memory, stripped of `clients`, `clientsData`,
+`documents`, and `privateNotes`, then passed through
+`RedRemaxPropertyNormalizer` and the existing Property Sync Hub
+(`sync_external_property`). Routes do not write `Property` rows directly.
+
+Files that contain `Authorization`, `Bearer`, cookies, or `JSESSIONID`
+are rejected. Those values are never stored.
+
+Office check is the same as the live connector:
+`listing.office == configured external_office_id`. Other offices are
+skipped with a warning.
+
+Preview writes nothing. Confirm uses a one-time token. A second confirm
+of the same token fails. Importing the same JSON again is idempotent
+(`organization_id` + `external_source=redremax` + `external_id`).
+
+Imported properties keep `external_source=redremax` and store
+`ingestion_method=manual_json_import` in metadata so a future official
+connector can update the same rows.
+
+Manual import only creates or updates. Listings missing from a later
+file are **not** archived.
+
+Excel/manual properties are never auto-merged by address. Possible
+duplicates use the existing Link / Create-new conflict UI.
+
 ## What is still required for production
 
 1. Official RedREMAX credentials and protocol documentation.

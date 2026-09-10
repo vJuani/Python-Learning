@@ -519,7 +519,8 @@ def find_open_conflict(organization_id, provider, external_id):
         row = connection.execute(
             """
             SELECT id, organization_id, provider, external_id, existing_property_id,
-                   address_external, address_existing, status, created_at
+                   address_external, address_existing, status, created_at,
+                   payload_snapshot_json
             FROM property_sync_conflicts
             WHERE organization_id = ? AND provider = ? AND external_id = ?
               AND status = ?
@@ -535,7 +536,8 @@ def list_open_conflicts(organization_id, provider=None):
     organization_id = require_organization_id(organization_id)
     sql = """
         SELECT id, organization_id, provider, external_id, existing_property_id,
-               address_external, address_existing, status, created_at
+               address_external, address_existing, status, created_at,
+               payload_snapshot_json
         FROM property_sync_conflicts
         WHERE organization_id = ? AND status = ?
     """
@@ -560,11 +562,15 @@ def add_sync_conflict(
     existing_property_id,
     address_external,
     address_existing,
+    payload_snapshot=None,
 ):
     organization_id = require_organization_id(organization_id)
     existing = find_open_conflict(organization_id, provider, external_id)
     if existing:
         return existing
+    snapshot_json = None
+    if isinstance(payload_snapshot, dict) and payload_snapshot:
+        snapshot_json = json.dumps(payload_snapshot, ensure_ascii=False, default=str)
     connection = get_connection()
     try:
         execute_insert(
@@ -572,9 +578,10 @@ def add_sync_conflict(
             """
             INSERT INTO property_sync_conflicts (
                 organization_id, provider, external_id, existing_property_id,
-                address_external, address_existing, status, created_at
+                address_external, address_existing, status, created_at,
+                payload_snapshot_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 organization_id,
@@ -585,6 +592,7 @@ def add_sync_conflict(
                 address_existing,
                 CONFLICT_OPEN,
                 _now_iso(),
+                snapshot_json,
             ),
         )
         connection.commit()
@@ -620,7 +628,8 @@ def get_sync_conflict(conflict_id, organization_id):
         row = connection.execute(
             """
             SELECT id, organization_id, provider, external_id, existing_property_id,
-                   address_external, address_existing, status, created_at
+                   address_external, address_existing, status, created_at,
+                   payload_snapshot_json
             FROM property_sync_conflicts
             WHERE id = ? AND organization_id = ?
             """,
@@ -634,6 +643,11 @@ def get_sync_conflict(conflict_id, organization_id):
 def _conflict_dict(row):
     if row is None:
         return None
+    snapshot = None
+    if len(row) > 9:
+        snapshot = _parse_json(row[9], default={}) or None
+        if snapshot == {}:
+            snapshot = None
     return {
         "id": row[0],
         "organization_id": row[1],
@@ -644,6 +658,7 @@ def _conflict_dict(row):
         "address_existing": row[6],
         "status": row[7],
         "created_at": row[8],
+        "payload_snapshot": snapshot,
     }
 
 
