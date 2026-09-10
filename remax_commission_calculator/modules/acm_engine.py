@@ -441,6 +441,19 @@ def compute_confidence(metrics, quality):
     return "low"
 
 
+def confidence_percent(metrics):
+    """Deterministic display percent from real ACM counts. Not a mockup value."""
+    band = str((metrics or {}).get("confidence") or "low")
+    valid = int((metrics or {}).get("valuation_count") or (metrics or {}).get("used_count") or 0)
+    closings = int((metrics or {}).get("closing_count") or 0)
+    raw = 36 + min(valid, 8) * 6 + min(closings, 4) * 4
+    if band == "high":
+        return min(96, max(80, raw))
+    if band == "medium":
+        return min(79, max(55, raw))
+    return min(54, max(28, raw))
+
+
 def compute_positioning(listing_price, estimated, suggested_min, suggested_max):
     listing = to_decimal(listing_price)
     ref = to_decimal(estimated)

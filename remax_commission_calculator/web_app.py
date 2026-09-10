@@ -8254,6 +8254,16 @@ register_property_media_routes(
 )
 
 from modules.acm_routes import register_acm_routes
+from modules.agent_photo_routes import register_agent_photo_routes
+
+register_agent_photo_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+    },
+)
 
 register_acm_routes(
     app,

@@ -18,6 +18,17 @@
         <button type="button" class="aa-btn aa-btn--ghost aa-btn--small aa-filters-toggle" data-aa-filters-open>{{ t('agent_account_filters') }}</button>
     </header>
 
+    <section class="aa-panel">
+        <h2>{{ t('agent_photo_title') }}</h2>
+        <p>{{ t('agent_photo_help') }}</p>
+        {% if agent.profile_photo_key %}
+        <p>
+            <img src="{{ url_for('agent_profile_photo', agent_id=agent.id) }}" alt="{{ agent.name }}" class="acm-photo-preview__img" style="max-height: 10rem; background: transparent;">
+        </p>
+        {% endif %}
+        <a href="{{ url_for('agent_photo_profile') }}" class="aa-btn aa-btn--ghost">{{ t('agent_photo_change') }}</a>
+    </section>
+
     <section class="aa-balance-grid aa-balance-grid--compact">
         {{ balance_card('ARS', detail.display_balances.ARS, compact=true) }}
         {{ balance_card('USD', detail.display_balances.USD, compact=true) }}

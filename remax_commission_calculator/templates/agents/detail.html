@@ -33,6 +33,7 @@
         >{{ t('team_report_open') }}</a>
         {% endif %}
         {% if can_edit %}
+        <a href="{{ url_for('agent_photo_edit', agent_id=agent.id) }}" class="btn btn-secondary">{{ t('agent_photo_title') }}</a>
         <a href="{{ url_for('agents_edit', agent_id=agent.id) }}" class="btn btn-primary">{{ t('edit') }}</a>
         <a href="{{ url_for('agents_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
         {% else %}

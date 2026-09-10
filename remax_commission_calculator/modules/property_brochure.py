@@ -52,36 +52,17 @@ def brochure_filename(property_data, brand_name=None):
 
 
 def resolve_property_agent_contact(property_data):
-    agent_id = property_data.get("agent_id")
-    if not agent_id:
+    from modules.agent_branding import get_agent_branding
+
+    branding = get_agent_branding(
+        (property_data or {}).get("agent_id"),
+        (property_data or {}).get("organization_id"),
+    )
+    if not branding:
         return None
-
-    name = (property_data.get("agent_name") or "").strip() or None
-    user = get_user_by_agent_id(agent_id, property_data["organization_id"])
-    phone = None
-    email = None
-    if user:
-        phone = (user.get("phone") or "").strip() or None
-        email = (user.get("email") or "").strip() or None
-        if name is None:
-            assembled = " ".join(
-                part
-                for part in (
-                    user.get("first_name"),
-                    user.get("last_name"),
-                )
-                if part
-            ).strip()
-            name = assembled or (user.get("username") or "").strip() or None
-
-    if not any((name, phone, email)):
+    if not any((branding.get("name"), branding.get("phone"), branding.get("email"))):
         return None
-
-    return {
-        "name": name,
-        "phone": phone,
-        "email": email,
-    }
+    return branding
 
 
 def _chip_values(property_data, language):

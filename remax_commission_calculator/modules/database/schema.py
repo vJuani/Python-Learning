@@ -3832,6 +3832,12 @@ def migrate_schema(create_backup=True):
 
     migrate_agent_goals_sqlite()
 
+    from .agent_profile_photo_migration import (
+        migrate_agent_profile_photo_sqlite,
+    )
+
+    migrate_agent_profile_photo_sqlite()
+
     return backup_path
 
 

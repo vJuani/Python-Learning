@@ -39,6 +39,12 @@ def _build_agent_dict(row):
         "team_leader_type": (
             row[9] if len(row) > 9 else None
         ),
+        "profile_photo_key": row[10] if len(row) > 10 else None,
+        "profile_photo_original_key": row[11] if len(row) > 11 else None,
+        "profile_photo_mime": row[12] if len(row) > 12 else None,
+        "profile_photo_width": row[13] if len(row) > 13 else None,
+        "profile_photo_height": row[14] if len(row) > 14 else None,
+        "profile_photo_updated_at": row[15] if len(row) > 15 else None,
     }
 
 
@@ -53,7 +59,13 @@ AGENTS_BASE_QUERY = """
         agents.last_synced_at,
         agents.team_leader_agent_id,
         team_leader.name,
-        team_leader.type
+        team_leader.type,
+        agents.profile_photo_key,
+        agents.profile_photo_original_key,
+        agents.profile_photo_mime,
+        agents.profile_photo_width,
+        agents.profile_photo_height,
+        agents.profile_photo_updated_at
     FROM agents
     LEFT JOIN agents AS team_leader
         ON agents.team_leader_agent_id = team_leader.id
@@ -433,3 +445,60 @@ def delete_agent(
 
     connection.commit()
     connection.close()
+
+
+def update_agent_profile_photo(
+    agent_id,
+    organization_id,
+    *,
+    profile_photo_key,
+    profile_photo_original_key=None,
+    profile_photo_mime=None,
+    profile_photo_width=None,
+    profile_photo_height=None,
+    profile_photo_updated_at=None,
+):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE agents
+        SET profile_photo_key = ?,
+            profile_photo_original_key = ?,
+            profile_photo_mime = ?,
+            profile_photo_width = ?,
+            profile_photo_height = ?,
+            profile_photo_updated_at = ?
+        WHERE id = ? AND organization_id = ?
+        """,
+        (
+            profile_photo_key,
+            profile_photo_original_key,
+            profile_photo_mime,
+            profile_photo_width,
+            profile_photo_height,
+            profile_photo_updated_at or _now_iso(),
+            agent_id,
+            organization_id,
+        ),
+    )
+    if cursor.rowcount == 0:
+        connection.close()
+        raise TenantError("Agent was not found in this organization.")
+    connection.commit()
+    connection.close()
+    return get_agent_record(agent_id, organization_id)
+
+
+def clear_agent_profile_photo(agent_id, organization_id):
+    return update_agent_profile_photo(
+        agent_id,
+        organization_id,
+        profile_photo_key=None,
+        profile_photo_original_key=None,
+        profile_photo_mime=None,
+        profile_photo_width=None,
+        profile_photo_height=None,
+        profile_photo_updated_at=None,
+    )

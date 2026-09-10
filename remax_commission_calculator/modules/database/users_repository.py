@@ -180,7 +180,7 @@ def get_user_by_agent_id(agent_id, organization_id):
         WHERE users.organization_id = ?
             AND users.agent_id = ?
             AND users.is_active = 1
-        ORDER BY users.id
+        ORDER BY CASE WHEN users.role = 'agent' THEN 0 ELSE 1 END, users.id
         LIMIT 1
         """,
         (
@@ -193,6 +193,11 @@ def get_user_by_agent_id(agent_id, organization_id):
     connection.close()
 
     return build_user_dict(row)
+
+
+def get_agent_login_user(agent_id, organization_id):
+    """Prefer the Agent login over an admin/staff user sharing the same agent_id."""
+    return get_user_by_agent_id(agent_id, organization_id)
 
 
 def get_user_by_email(email, organization_id):

@@ -1904,6 +1904,12 @@ def create_postgres_schema():
 
         migrate_property_sync_hub_postgres(cursor)
 
+        from .agent_profile_photo_migration import (
+            migrate_agent_profile_photo_postgres,
+        )
+
+        migrate_agent_profile_photo_postgres(cursor)
+
         for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),
             ("snapshot_parking", "INTEGER"),

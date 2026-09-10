@@ -940,7 +940,8 @@ class AcmTests(unittest.TestCase):
         client = self._login(self.agent_user, ROLE_AGENT, self.org)
         response = client.get(f"/acm/{view['acm']['id']}")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("acm-hero", response.get_data(as_text=True))
+        html = response.get_data(as_text=True)
+        self.assertTrue("acm-hero" in html or "acm-v5-header" in html)
 
     def test_60_min_comps_still_blocks(self):
         view = create_acm_for_property(
@@ -1127,7 +1128,7 @@ class AcmTests(unittest.TestCase):
         client = self._login(self.agent_user, ROLE_AGENT, self.org)
         html = client.get(f"/acm/{view['acm']['id']}").get_data(as_text=True)
         self.assertIn("Revisar comparables", html)
-        self.assertIn("acm-hero", html)
+        self.assertTrue("acm-hero" in html or "acm-v5-header" in html)
         self.assertNotIn("acm_diff_[", html)
 
 

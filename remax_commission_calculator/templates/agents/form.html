@@ -86,6 +86,12 @@
             <small class="field-help">{{ t('team_leader_help') }}</small>
         </div>
 
+        {% if is_edit %}
+        <p class="field-help">
+            <a href="{{ url_for('agent_photo_edit', agent_id=agent.id) }}">{{ t('agent_photo_title') }}</a>
+        </p>
+        {% endif %}
+
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">
                 {% if is_edit %}{{ t('save_changes') }}{% else %}{{ t('create_agent') }}{% endif %}

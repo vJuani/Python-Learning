@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('agent_photo_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/acm.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('agent_photo_title') }}</h2>
+        <p>{{ agent.name }}</p>
+    </div>
+    <div class="page-actions">
+        {% if photo_is_admin %}
+        <a href="{{ url_for('agents_edit', agent_id=agent.id) }}" class="btn btn-secondary">{{ t('back') }}</a>
+        {% else %}
+        <a href="{{ url_for('acm_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        {% endif %}
+    </div>
+</section>
+
+<section class="panel acm-photo-panel">
+    <p class="field-help">{{ t('agent_photo_help') }}</p>
+    <div class="acm-photo-preview">
+        {% if branding and branding.has_photo %}
+        <img src="{{ url_for('agent_profile_photo', agent_id=agent.id) }}" alt="{{ agent.name }}" class="acm-photo-preview__img">
+        {% else %}
+        <div class="acm-photo-preview__empty">{{ t('agent_photo_empty') }}</div>
+        {% endif %}
+    </div>
+    {% if can_edit %}
+    <form method="post" enctype="multipart/form-data" class="acm-photo-form">
+        <input type="hidden" name="action" value="upload">
+        <label class="btn btn-secondary">
+            {{ t('agent_photo_change') }}
+            <input type="file" name="photo" accept="image/png,image/jpeg,image/webp" hidden>
+        </label>
+        <button type="submit" class="btn btn-primary">{{ t('agent_photo_save') }}</button>
+    </form>
+    {% if branding and branding.has_photo %}
+    <form method="post">
+        <input type="hidden" name="action" value="delete">
+        <button type="submit" class="btn btn-ghost">{{ t('agent_photo_delete') }}</button>
+    </form>
+    {% endif %}
+    {% endif %}
+</section>
+{% endblock %}

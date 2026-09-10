@@ -1,0 +1,36 @@
+{% set branding = view.agent_branding if view is defined else branding %}
+{% set photo_src = url_for('agent_profile_photo', agent_id=branding.agent_id) if branding and branding.has_photo else none %}
+<section class="acm-v5-header acm-hero">
+    <div class="acm-v5-header__copy">
+        <p class="acm-v5-eyebrow">{{ t('acm_pdf_title') }}</p>
+        <h1 class="acm-v5-title">{{ t('acm_smart_title') }} <em>{{ t('acm_smart_title_em') }}</em></h1>
+        <p class="acm-v5-subtitle">{{ t('acm_smart_subtitle') }}</p>
+    </div>
+    {% if branding and branding.name %}
+    <aside class="acm-v5-agentcard">
+        <div>
+            <p class="acm-v5-agentcard__quote">{{ t('acm_agent_quote') }}</p>
+            <p class="acm-v5-agentcard__name">{{ branding.name }}</p>
+            {% if branding.title %}<p class="acm-v5-agentcard__role">{{ branding.title }}</p>{% endif %}
+        </div>
+        {% if photo_src %}
+        <img class="acm-v5-agentcard__photo" src="{{ photo_src }}" alt="{{ branding.name }}" decoding="async">
+        {% endif %}
+    </aside>
+    {% endif %}
+</section>
+
+<nav class="acm-v5-stepper" aria-label="{{ t('acm_title') }}">
+    {% set steps = [
+        (1, 'acm_step_short_1', url_for('acm_list')),
+        (2, 'acm_step_short_2', url_for('acm_comparables', acm_id=acm.id) if acm is defined else url_for('acm_list')),
+        (3, 'acm_step_short_3', url_for('acm_detail', acm_id=acm.id) if acm is defined else url_for('acm_list')),
+        (4, 'acm_step_short_4', url_for('acm_pdf', acm_id=acm.id, include_agent=1) if acm is defined else url_for('acm_list')),
+    ] %}
+    {% for number, key, href in steps %}
+    <a class="acm-v5-step{% if step == number %} is-current{% elif step > number %} is-done{% endif %}" href="{{ href }}">
+        <span>{{ number }}</span>
+        {{ t(key) }}
+    </a>
+    {% endfor %}
+</nav>

@@ -59,9 +59,7 @@ from modules.database.property_acm_repository import (
     update_comparable,
 )
 from modules.database.properties_repository import get_property_record
-from modules.database.users_repository import get_user_by_agent_id
 from modules.i18n import translate
-from modules.property_brochure import resolve_property_agent_contact
 
 
 class AcmError(Exception):
@@ -557,7 +555,7 @@ def _attach_acm_photos(view, organization_id, property_data, enriched):
     property_id = (property_data or {}).get("id")
     cover = get_property_cover_media(property_data) if property_data else None
     gallery = (
-        get_property_media_for_generation(property_data, limit=4)
+        get_property_media_for_generation(property_data, limit=5)
         if property_data
         else []
     )
@@ -567,10 +565,10 @@ def _attach_acm_photos(view, organization_id, property_data, enriched):
         src = get_property_media_url(item, property_id)
         if src and src != cover_src:
             extras.append(src)
-        if len(extras) >= 3:
+        if len(extras) >= 4:
             break
     view["photo_url"] = cover_src
-    view["photo_urls"] = ([cover_src] + extras) if cover_src else extras
+    view["photo_urls"] = ([cover_src] + extras)[:5] if cover_src else extras[:5]
     if view.get("subject") is not None:
         view["subject"]["photo_url"] = cover_src
     comp_ids = [
@@ -583,6 +581,21 @@ def _attach_acm_photos(view, organization_id, property_data, enriched):
         linked_id = row.get("comparable_property_id")
         linked_cover = covers.get(int(linked_id)) if linked_id else None
         row["photo_url"] = get_property_media_url(linked_cover, linked_id)
+
+
+def _attach_source_badges(organization_id, enriched, language):
+    from modules.database.properties_repository import get_property_record
+
+    for row in enriched or []:
+        linked_id = row.get("comparable_property_id")
+        if not linked_id:
+            continue
+        linked = get_property_record(linked_id, organization_id)
+        if (linked or {}).get("external_source") == "redremax":
+            row["source_key"] = "redremax"
+            row["source_label"] = translate("acm_source_redremax", language)
+            continue
+        row["source_key"] = row.get("source_type")
 
 
 def _acm_map_payload(subject, rows, language="es"):
@@ -656,6 +669,7 @@ def get_acm_view(acm_id, organization_id, *, user, language="es"):
             }
         )
     subject_ppm2 = price_per_m2(subject.get("listing_price"), display_area(subject))
+    reference_ppm2 = price_per_m2(acm.get("estimated_value"), display_area(subject))
     source_counts = {}
     for row in enriched:
         key = row.get("source_type") or "other_external"
@@ -696,6 +710,7 @@ def get_acm_view(acm_id, organization_id, *, user, language="es"):
         "chart_points": chart_points,
         "source_chart": source_chart,
         "subject_ppm2": str(subject_ppm2) if subject_ppm2 is not None else None,
+        "reference_ppm2": str(reference_ppm2) if reference_ppm2 is not None else None,
         "metrics": metrics,
         "can_finalize": bool(metrics.get("can_finalize")),
         "min_valid_required": MIN_VALID_COMPS,
@@ -707,6 +722,27 @@ def get_acm_view(acm_id, organization_id, *, user, language="es"):
         "photo_urls": [],
     }
     _attach_acm_photos(view, organization_id, property_data, enriched)
+    _attach_source_badges(organization_id, enriched, language)
+    insight_facts = []
+    seen_facts = set()
+    for row in enriched:
+        if not row.get("selected"):
+            continue
+        for label in row.get("match_labels") or []:
+            if not label or label in seen_facts:
+                continue
+            seen_facts.add(label)
+            insight_facts.append(label)
+            if len(insight_facts) >= 5:
+                break
+        if len(insight_facts) >= 5:
+            break
+    view["insight_facts"] = insight_facts
+    from modules.agent_branding import get_agent_branding
+    from modules.acm_engine import confidence_percent
+
+    view["agent_branding"] = get_agent_branding(acm["agent_id"], organization_id, language=language)
+    metrics["confidence_pct"] = confidence_percent(metrics)
     facts = build_acm_facts(view, language=language)
     explained = explain_acm(facts, language=language)
     view["facts"] = facts
@@ -993,25 +1029,17 @@ def list_agent_acms(organization_id, *, user):
 
 
 def agent_contact_for_acm(view):
-    property_data = view.get("property") or {}
-    contact = resolve_property_agent_contact(property_data)
-    if contact:
-        return contact
-    user = get_user_by_agent_id(
-        view["acm"]["agent_id"],
-        view["acm"]["organization_id"],
+    """Contact comes from the ACM Agent, never from current_user or admin."""
+    from modules.agent_branding import get_agent_branding
+
+    acm = view.get("acm") or {}
+    branding = get_agent_branding(
+        acm.get("agent_id"),
+        acm.get("organization_id"),
     )
-    if not user:
+    if not branding:
         return None
-    name = " ".join(
-        part for part in (user.get("first_name"), user.get("last_name")) if part
-    ).strip() or user.get("username")
-    return {
-        "name": name,
-        "phone": user.get("phone"),
-        "email": user.get("email"),
-        "role": "agent",
-    }
+    return branding
 
 
 def build_acm_explanation(subject, rows, metrics, language="es"):
