@@ -8,7 +8,11 @@ from modules.property_sync.redremax.mapping import (
     map_operation_type,
     map_property_type,
 )
-from modules.property_sync.redremax.photos import has_blueprints, map_photos
+from modules.property_sync.redremax.photos import (
+    has_blueprints,
+    inspect_photos,
+    public_photo_audit,
+)
 from modules.property_sync.redremax.privacy import strip_sensitive_fields
 
 
@@ -39,7 +43,12 @@ class RedRemaxPropertyNormalizer:
         dimensions = raw.get("dimensions") if isinstance(raw.get("dimensions"), dict) else {}
         rooms_count = _rooms_count(raw)
 
-        media = map_photos(raw.get("photos"))
+        photo_audit = inspect_photos(raw.get("photos"))
+        media = photo_audit["selected"]
+        if photo_audit["payload_count"] == 0:
+            warnings.append("redremax_warn_no_photos")
+        elif photo_audit["valid_count"] == 0:
+            warnings.append("redremax_warn_photos_rejected")
         if has_blueprints(raw):
             warnings.append("redremax_warn_blueprints_skipped")
 
@@ -79,6 +88,7 @@ class RedRemaxPropertyNormalizer:
             "agent": {"external_agent_id": _clean(raw.get("associate"))},
             "media": media,
             "photos": media,
+            "photo_audit": public_photo_audit(photo_audit),
             "warnings": warnings,
             "external_metadata": sanitized_metadata(raw, price_block, dimensions, address_block),
             "price_history": normalize_price_history(raw.get("priceHistory")),

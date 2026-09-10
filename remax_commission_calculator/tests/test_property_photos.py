@@ -44,12 +44,33 @@ from modules.property_sync.media import (
 )
 from modules.property_sync.public_listing import PublicListingMediaProvider
 from modules.property_sync.redremax.normalizer import RedRemaxPropertyNormalizer
-from modules.property_sync.redremax.photos import BETA_PHOTO_LIMIT, map_photos, resolve_photo_source_url
+from modules.property_sync.redremax.photos import (
+    BETA_PHOTO_LIMIT,
+    inspect_photos,
+    map_photos,
+    resolve_photo_source_url,
+)
 from modules.property_sync.service import update_redremax_office
 from tests.redremax_listing_fixture import SANITIZED_LISTING
 from web_app import app
 
 OFFICE = "AR.42.27"
+
+
+def signed_photo(index, *, primary=False):
+    path = f"https://redremax-images.s3.amazonaws.com/listings/photo-{index}.jpg"
+    query = (
+        "?X-Amz-Algorithm=AWS4-HMAC-SHA256"
+        "&X-Amz-Credential=AKIAEXAMPLE"
+        "&X-Amz-Signature=deadbeef"
+        "&X-Amz-Expires=3600"
+    )
+    return {
+        "cdn": path + query,
+        "cloudfront": None,
+        "prefix": path + query,
+        "primary": primary,
+    }
 
 
 def photo(index, *, primary=False, host="redremax-images.s3.amazonaws.com", scheme="https"):
@@ -464,3 +485,149 @@ class PropertyPhotoTests(unittest.TestCase):
             "redremax-images.s3.amazonaws.com",
             get_property_media_url(mapped),
         )
+
+    def test_cdn_creates_property_media(self):
+        listing = load_listing(id="AR.42.27.1.401", photo_count=1, primary_index=0)
+        row = self._import(listing)
+        media = list_property_media(self.org, row["id"])
+        self.assertEqual(len(media), 1)
+        self.assertEqual(media[0]["source"], "redremax")
+        self.assertEqual(media[0]["media_type"], "photo")
+        self.assertEqual(media[0]["status"], "active")
+        self.assertTrue(media[0]["is_cover"])
+        self.assertIn("photo-0.jpg", media[0]["original_url"])
+        self.assertEqual(media[0]["storage_strategy"], "remote_reference")
+        self.assertIsNone(media[0]["storage_key"])
+
+    def test_twenty_photos_saves_max_five(self):
+        listing = load_listing(id="AR.42.27.1.402", photo_count=20, primary_index=0)
+        self.assertEqual(len(map_photos(listing["photos"])), 5)
+        row = self._import(listing)
+        self.assertEqual(len(list_property_media(self.org, row["id"])), 5)
+
+    def test_first_five_invalid_sixth_valid_is_kept(self):
+        photos = [photo(index, host="evil.example") for index in range(5)]
+        photos.append(photo(5, primary=True))
+        mapped = map_photos(photos)
+        self.assertEqual(len(mapped), 1)
+        self.assertIn("photo-5.jpg", mapped[0]["original_url"])
+        listing = load_listing(id="AR.42.27.1.403", photo_count=0)
+        listing["photos"] = photos
+        row = self._import(listing)
+        media = list_property_media(self.org, row["id"])
+        self.assertEqual(len(media), 1)
+        self.assertIn("photo-5.jpg", media[0]["original_url"])
+        self.assertTrue(media[0]["is_cover"])
+
+    def test_signed_cdn_is_stored_canonical(self):
+        listing = load_listing(id="AR.42.27.1.404", photo_count=0)
+        listing["photos"] = [signed_photo(0, primary=True), signed_photo(1)]
+        mapped = map_photos(listing["photos"])
+        self.assertEqual(len(mapped), 2)
+        self.assertTrue(all("X-Amz-" not in item["original_url"] for item in mapped))
+        self.assertTrue(all("?" not in item["original_url"] for item in mapped))
+        row = self._import(listing)
+        media = list_property_media(self.org, row["id"])
+        self.assertEqual(len(media), 2)
+        for item in media:
+            self.assertNotIn("X-Amz-", item["original_url"] or "")
+            self.assertNotIn("?", item["original_url"] or "")
+            self.assertIn("redremax-images.s3.amazonaws.com", item["original_url"])
+            self.assertIsNone(item["storage_key"])
+
+    def test_cloudfront_used_when_cdn_missing(self):
+        cloudfront_url = "https://redremax-images.s3.amazonaws.com/listings/from-cloudfront.jpg"
+        chosen = resolve_photo_source_url(
+            {
+                "cdn": None,
+                "cloudfront": cloudfront_url,
+                "prefix": "https://redremax-images.s3.amazonaws.com/listings/from-prefix.jpg",
+            }
+        )
+        self.assertEqual(chosen, cloudfront_url)
+
+    def test_unknown_photo_host_is_recorded_not_allowlisted(self):
+        audit = inspect_photos(
+            [{"cdn": "https://d111111abcdef8.cloudfront.net/listings/x.jpg", "primary": True}]
+        )
+        self.assertEqual(audit["selected"], [])
+        self.assertEqual(audit["unknown_hosts"], ["d111111abcdef8.cloudfront.net"])
+        self.assertEqual(audit["reject_reasons"].get("invalid_host"), 1)
+
+    def test_reimport_repairs_missing_media_without_duplicate_property(self):
+        listing = load_listing(id="AR.42.27.1.405", photo_count=0)
+        row = self._import(listing)
+        self.assertEqual(list_property_media(self.org, row["id"]), [])
+        listing = load_listing(id="AR.42.27.1.405", photo_count=6, primary_index=0)
+        repaired = self._import(listing)
+        self.assertEqual(row["id"], repaired["id"])
+        media = list_property_media(self.org, row["id"])
+        self.assertEqual(len(media), 5)
+        matches = [
+            item
+            for item in get_properties(self.org, include_all_statuses=True)
+            if item.get("external_id") == "AR.42.27.1.405"
+        ]
+        self.assertEqual(len(matches), 1)
+        self._import(listing)
+        self.assertEqual(len(list_property_media(self.org, row["id"])), 5)
+        self.assertEqual(
+            len(
+                [
+                    item
+                    for item in get_properties(self.org, include_all_statuses=True)
+                    if item.get("external_id") == "AR.42.27.1.405"
+                ]
+            ),
+            1,
+        )
+
+    def test_dedupe_is_isolated_per_property(self):
+        listing_a = load_listing(id="AR.42.27.1.406", photo_count=1, primary_index=0)
+        listing_b = load_listing(id="AR.42.27.1.407", photo_count=1, primary_index=0)
+        row_a = self._import(listing_a)
+        row_b = self._import(listing_b)
+        media_a = list_property_media(self.org, row_a["id"])
+        media_b = list_property_media(self.org, row_b["id"])
+        self.assertEqual(len(media_a), 1)
+        self.assertEqual(len(media_b), 1)
+        self.assertEqual(media_a[0]["original_url"], media_b[0]["original_url"])
+        self.assertEqual(media_a[0]["external_media_id"], media_b[0]["external_media_id"])
+        self.assertNotEqual(media_a[0]["id"], media_b[0]["id"])
+
+    def test_redremax_s3_host_accepted_invalid_host_rejected(self):
+        allowed = map_photos([photo(12, primary=True)])
+        self.assertEqual(len(allowed), 1)
+        self.assertIn("redremax-images.s3.amazonaws.com", allowed[0]["original_url"])
+        self.assertEqual(map_photos([photo(12, host="evil.example")]), [])
+
+    def test_preview_reports_photo_stats_and_missing_photos(self):
+        listing = load_listing(id="AR.42.27.1.408", photo_count=3, primary_index=0)
+        preview = preview_redremax_json_import(
+            self.org,
+            [json_upload(listings_envelope([listing]))],
+            created_by=self.admin,
+        )
+        self.assertEqual(preview["photos_detected"], 3)
+        self.assertEqual(preview["photos_valid"], 3)
+        self.assertEqual(preview["photos_new"], 3)
+        self.assertEqual(preview["photos_rejected"], 0)
+        empty = load_listing(id="AR.42.27.1.409", photo_count=0)
+        empty_preview = preview_redremax_json_import(
+            self.org,
+            [json_upload(listings_envelope([empty]))],
+            created_by=self.admin,
+        )
+        self.assertEqual(empty_preview["photos_detected"], 0)
+        self.assertEqual(empty_preview["photo_notes"][0]["code"], "no_photos")
+        rejected = load_listing(id="AR.42.27.1.410", photo_count=0)
+        rejected["photos"] = [photo(1, host="evil.example")]
+        rejected_preview = preview_redremax_json_import(
+            self.org,
+            [json_upload(listings_envelope([rejected]))],
+            created_by=self.admin,
+        )
+        self.assertEqual(rejected_preview["photos_detected"], 1)
+        self.assertEqual(rejected_preview["photos_rejected"], 1)
+        self.assertEqual(rejected_preview["photo_notes"][0]["code"], "photos_rejected")
+        self.assertEqual(rejected_preview["unknown_hosts"], ["evil.example"])

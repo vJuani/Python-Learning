@@ -159,7 +159,29 @@
                 <li>{{ t('redremax_demo_duplicates') }}: {{ item.last_import_preview.conflicts }}</li>
                 <li>{{ t('redremax_demo_unmapped') }}: {{ item.last_import_preview.unmapped_agents }}</li>
                 <li>{{ t('redremax_demo_errors') }}: {{ item.last_import_preview.errors }}</li>
+                <li>{{ t('redremax_demo_photos_detected') }}: {{ item.last_import_preview.photos_detected or 0 }}</li>
+                <li>{{ t('redremax_demo_photos_valid') }}: {{ item.last_import_preview.photos_valid or 0 }}</li>
+                <li>{{ t('redremax_demo_photos_new') }}: {{ item.last_import_preview.photos_new or 0 }}</li>
+                <li>{{ t('redremax_demo_photos_existing') }}: {{ item.last_import_preview.photos_existing or 0 }}</li>
+                <li>{{ t('redremax_demo_photos_rejected') }}: {{ item.last_import_preview.photos_rejected or 0 }}</li>
             </ul>
+            {% if item.last_import_preview.photo_notes %}
+            <p><strong>{{ t('redremax_demo_photo_notes') }}</strong></p>
+            <ul>
+                {% for note in item.last_import_preview.photo_notes %}
+                <li>
+                    {{ note.external_id }}:
+                    {{ t(note.message_key) }}
+                    {% if note.reason_key %}
+                    {{ t(note.reason_key) }}
+                    {% endif %}
+                    {% if note.unknown_hosts %}
+                    {{ note.unknown_hosts | join(', ') }}
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
             <form method="post" action="{{ url_for('settings_property_integrations_redremax_import_confirm') }}" class="sync-demo__confirm">
                 <input type="hidden" name="confirm_token" value="{{ item.last_import_preview.confirm_token }}">
                 <button type="submit" class="btn btn-primary">{{ t('redremax_demo_import') }}</button>
@@ -176,6 +198,15 @@
             {{ item.last_manual_import.processed or item.last_manual_import.source_total or 0 }}
             {{ t('redremax_demo_last_import_count') }}
         </p>
+        {% if item.last_manual_import.photos_detected is not none %}
+        <p class="field-help">
+            {{ t('redremax_demo_photos_detected') }}: {{ item.last_manual_import.photos_detected or 0 }}.
+            {{ t('redremax_demo_photos_valid') }}: {{ item.last_manual_import.photos_valid or 0 }}.
+            {{ t('redremax_demo_photos_new') }}: {{ item.last_manual_import.photos_new or item.last_manual_import.photos_created or 0 }}.
+            {{ t('redremax_demo_photos_existing') }}: {{ item.last_manual_import.photos_existing or 0 }}.
+            {{ t('redremax_demo_photos_rejected') }}: {{ item.last_manual_import.photos_rejected or 0 }}.
+        </p>
+        {% endif %}
         {% endif %}
     </div>
     {% else %}

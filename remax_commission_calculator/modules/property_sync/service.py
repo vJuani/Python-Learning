@@ -710,11 +710,12 @@ def sync_external_property(
             )
             outcome = "updated"
 
+    media_stats = {"created": 0, "unchanged": 0, "removed": 0}
     if connector and connector.capabilities.supports_media:
         media_items = normalized.get("media") or connector.list_property_media(
             integration or {}, external_id
         )
-        sync_property_media(
+        media_stats = sync_property_media(
             organization_id,
             property_id,
             source,
@@ -723,7 +724,7 @@ def sync_external_property(
                 "media_strategy": connector.capabilities.media_strategy,
                 "media_url_kind": connector.capabilities.media_url_kind,
             },
-        )
+        ) or media_stats
 
     if property_id and normalized.get("price_history"):
         upsert_external_price_history(
@@ -753,6 +754,7 @@ def sync_external_property(
         "outcome": outcome,
         "property_id": property_id,
         "warnings": warnings,
+        "media": media_stats,
     }
 
 

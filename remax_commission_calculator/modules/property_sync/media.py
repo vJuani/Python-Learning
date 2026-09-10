@@ -78,17 +78,20 @@ def sync_property_media(organization_id, property_id, source, media_items, *, ca
         if url_kind == "temporary":
             original_url = None
         elif original_url and url_kind != "local_fixture":
-            try:
-                assert_safe_media_url(original_url, require_https=True)
-            except ValueError:
-                original_url = None
             if source == "redremax":
                 from modules.property_sync.redremax.photos import (
+                    canonical_photo_url,
                     is_allowed_redremax_photo_url,
                 )
 
+                original_url = canonical_photo_url(original_url) or None
                 if original_url and not is_allowed_redremax_photo_url(original_url):
                     original_url = None
+            try:
+                if original_url:
+                    assert_safe_media_url(original_url, require_https=True)
+            except ValueError:
+                original_url = None
 
         if strategy == STRATEGY_COPY and payload:
             if not is_allowed_image_type(item.get("content_type") or "image/png"):
@@ -241,6 +244,10 @@ def get_property_media_url(media, property_id=None):
     if not is_displayable_media(media):
         return None
     url = (media.get("original_url") or media.get("remote_url") or "").strip()
+    if _media_source(media) == "redremax":
+        from modules.property_sync.redremax.photos import canonical_photo_url
+
+        url = canonical_photo_url(url)
     if media.get("storage_key") and property_id and media.get("id"):
         if media.get("storage_strategy") != STRATEGY_REMOTE:
             try:

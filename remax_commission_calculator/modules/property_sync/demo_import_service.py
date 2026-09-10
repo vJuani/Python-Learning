@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from modules.database.properties_repository import get_property_record
+from modules.database.property_media_repository import list_property_media
 from modules.database.property_sync_hub_repository import (
     STATUS_DISCONNECTED,
     find_manual_property_by_address,
@@ -37,6 +39,15 @@ from modules.property_sync.service import (
     ensure_redremax_integration,
     sync_external_property,
 )
+
+logger = logging.getLogger(__name__)
+
+PHOTO_REASON_KEYS = {
+    "empty": "redremax_demo_photo_reason_empty",
+    "not_url": "redremax_demo_photo_reason_not_url",
+    "http": "redremax_demo_photo_reason_http",
+    "invalid_host": "redremax_demo_photo_reason_invalid_host",
+}
 
 
 class DemoImportMediaConnector:
@@ -163,6 +174,7 @@ def preview_redremax_json_import(
             conflicts += 1
         prepared.append(hub)
 
+    photo_preview = _aggregate_photo_preview(organization_id, prepared)
     preview = {
         "found": len(raw_listings),
         "valid": valid,
@@ -175,6 +187,7 @@ def preview_redremax_json_import(
         "errors": errors,
         "wrote": False,
         "at": _now_iso(),
+        **photo_preview,
     }
     session = create_demo_import_session(
         organization_id,
@@ -233,6 +246,13 @@ def confirm_redremax_json_import(organization_id, confirm_token):
         "source_total": session.get("source_total") or len(session.get("listings") or []),
         "wrote": True,
         "at": _now_iso(),
+        "photos_detected": 0,
+        "photos_valid": 0,
+        "photos_created": 0,
+        "photos_existing": 0,
+        "photos_rejected": 0,
+        "photo_notes": [],
+        "unknown_hosts": [],
     }
     connector = DemoImportMediaConnector()
     integration = get_property_integration(organization_id, PROVIDER_REDREMAX) or {}
@@ -250,6 +270,7 @@ def confirm_redremax_json_import(organization_id, confirm_token):
                     integration=integration,
                     connector=connector,
                 )
+                _merge_photo_confirm_stats(stats, hub, result.get("media") or {})
                 key = {
                     "created": "created",
                     "updated": "updated",
@@ -272,6 +293,7 @@ def confirm_redremax_json_import(organization_id, confirm_token):
         )
         raise
 
+    stats["photos_new"] = stats["photos_created"]
     finish_demo_import_session(
         session["id"],
         organization_id,
@@ -305,4 +327,124 @@ def demo_import_dashboard_fields(config):
         "last_manual_import_display": last.get("display_at")
         or _format_display_time(last.get("at")),
     }
+
+
+def _existing_redremax_media_ids(organization_id, external_id):
+    existing = find_property_by_external_identity(
+        organization_id,
+        external_source=PROVIDER_REDREMAX,
+        external_id=external_id,
+    )
+    if not existing:
+        return set()
+    return {
+        item.get("external_media_id")
+        for item in list_property_media(organization_id, existing["id"])
+        if item.get("source") == PROVIDER_REDREMAX and item.get("external_media_id")
+    }
+
+
+def _primary_reject_reason(reasons):
+    reasons = reasons or {}
+    if not reasons:
+        return None
+    return max(reasons.items(), key=lambda item: item[1])[0]
+
+
+def _photo_note(hub):
+    audit = hub.get("photo_audit") or {}
+    external_id = hub.get("external_id")
+    payload_count = int(audit.get("payload_count") or 0)
+    valid_count = int(audit.get("valid_count") or 0)
+    if payload_count == 0:
+        return {
+            "external_id": external_id,
+            "code": "no_photos",
+            "message_key": "redremax_warn_no_photos",
+        }
+    if valid_count == 0:
+        reason = _primary_reject_reason(audit.get("reject_reasons"))
+        return {
+            "external_id": external_id,
+            "code": "photos_rejected",
+            "message_key": "redremax_warn_photos_rejected",
+            "reason": reason,
+            "reason_key": PHOTO_REASON_KEYS.get(reason),
+            "unknown_hosts": list(audit.get("unknown_hosts") or []),
+        }
+    return None
+
+
+def _log_photo_audit(external_id, audit, media_stats=None):
+    media_stats = media_stats or {}
+    logger.info(
+        "redremax photo audit external_id=%s photos_count_payload=%s photos_valid_count=%s media_created=%s media_updated=%s media_rejected=%s reject_reasons=%s unknown_hosts=%s",
+        external_id or "-",
+        int((audit or {}).get("payload_count") or 0),
+        int((audit or {}).get("valid_count") or 0),
+        int(media_stats.get("created") or 0),
+        int(media_stats.get("unchanged") or 0),
+        int((audit or {}).get("rejected_count") or 0),
+        dict((audit or {}).get("reject_reasons") or {}),
+        list((audit or {}).get("unknown_hosts") or []),
+    )
+
+
+def _aggregate_photo_preview(organization_id, hubs):
+    photos_detected = 0
+    photos_valid = 0
+    photos_new = 0
+    photos_existing = 0
+    photos_rejected = 0
+    photo_notes = []
+    unknown_hosts = []
+    for hub in hubs or []:
+        if hub.get("_skipped"):
+            continue
+        audit = hub.get("photo_audit") or {}
+        photos_detected += int(audit.get("payload_count") or 0)
+        photos_valid += int(audit.get("valid_count") or 0)
+        photos_rejected += int(audit.get("rejected_count") or 0)
+        selected_ids = {
+            item.get("external_media_id")
+            for item in (hub.get("media") or [])
+            if item.get("external_media_id")
+        }
+        existing_ids = _existing_redremax_media_ids(
+            organization_id, hub.get("external_id")
+        )
+        photos_new += len(selected_ids - existing_ids)
+        photos_existing += len(selected_ids & existing_ids)
+        for host in audit.get("unknown_hosts") or []:
+            if host not in unknown_hosts:
+                unknown_hosts.append(host)
+        note = _photo_note(hub)
+        if note:
+            photo_notes.append(note)
+        _log_photo_audit(hub.get("external_id"), audit)
+    return {
+        "photos_detected": photos_detected,
+        "photos_valid": photos_valid,
+        "photos_new": photos_new,
+        "photos_existing": photos_existing,
+        "photos_rejected": photos_rejected,
+        "photo_notes": photo_notes,
+        "unknown_hosts": unknown_hosts,
+    }
+
+
+def _merge_photo_confirm_stats(stats, hub, media_stats):
+    audit = hub.get("photo_audit") or {}
+    stats["photos_detected"] += int(audit.get("payload_count") or 0)
+    stats["photos_valid"] += int(audit.get("valid_count") or 0)
+    stats["photos_rejected"] += int(audit.get("rejected_count") or 0)
+    stats["photos_created"] += int(media_stats.get("created") or 0)
+    stats["photos_existing"] += int(media_stats.get("unchanged") or 0)
+    for host in audit.get("unknown_hosts") or []:
+        if host not in stats["unknown_hosts"]:
+            stats["unknown_hosts"].append(host)
+    note = _photo_note(hub)
+    if note:
+        stats["photo_notes"].append(note)
+    _log_photo_audit(hub.get("external_id"), audit, media_stats)
 

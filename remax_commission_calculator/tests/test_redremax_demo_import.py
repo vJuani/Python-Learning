@@ -249,6 +249,21 @@ class RedRemaxDemoImportTests(unittest.TestCase):
         media = list_property_media(self.org, row["id"])
         self.assertEqual(len(media), 2)
         self.assertTrue(all(item["storage_strategy"] == "remote_reference" for item in media))
+        self.assertTrue(all(item.get("storage_key") is None for item in media))
+
+    def test_preview_includes_photo_counts(self):
+        fixture = load_fixture(id="AR.42.27.1.130")
+        preview = self._preview([json_upload(listings_envelope([fixture]))])
+        self.assertEqual(preview["photos_detected"], 2)
+        self.assertEqual(preview["photos_valid"], 2)
+        self.assertEqual(preview["photos_new"], 2)
+        self.assertEqual(preview["photos_existing"], 0)
+        self.assertEqual(preview["photos_rejected"], 0)
+        result = confirm_redremax_json_import(self.org, preview["confirm_token"])
+        self.assertEqual(result["photos_created"], 2)
+        second = self._preview([json_upload(listings_envelope([fixture]), "again.json")])
+        self.assertEqual(second["photos_existing"], 2)
+        self.assertEqual(second["photos_new"], 0)
 
     def test_10_primary_photo_correct(self):
         fixture = load_fixture(id="AR.42.27.1.110")
