@@ -22,6 +22,8 @@ STATUS_PENDING = "pending"
 STATUS_APPROVED = "approved"
 STATUS_REJECTED = "rejected"
 
+ASSIGNMENT_SOURCE_MANUAL = "manual"
+
 UNSET = object()
 
 
@@ -96,6 +98,7 @@ def _build_property_dict(row):
         "location_source": row[46] if len(row) > 46 else None,
         "title": row[47] if len(row) > 47 else None,
         "external_metadata_json": row[48] if len(row) > 48 else None,
+        "agent_assignment_source": row[49] if len(row) > 49 else None,
     }
 
 
@@ -149,7 +152,8 @@ PROPERTIES_BASE_QUERY = """
         properties.external_status,
         properties.location_source,
         properties.title,
-        properties.external_metadata_json
+        properties.external_metadata_json,
+        properties.agent_assignment_source
     FROM properties
     LEFT JOIN agents
         ON properties.agent_id = agents.id
@@ -610,6 +614,31 @@ def update_property(
         jurisdiction.strip(),
         agent_id,
     ]
+    cursor.execute(
+        """
+        SELECT agent_id
+        FROM properties
+        WHERE id = ?
+            AND organization_id = ?
+        """,
+        (property_id, organization_id),
+    )
+    current_agent_row = cursor.fetchone()
+    if current_agent_row is not None:
+        current_agent_id = current_agent_row[0]
+        same_agent = current_agent_id is None and agent_id is None
+        if not same_agent:
+            try:
+                same_agent = (
+                    current_agent_id is not None
+                    and agent_id is not None
+                    and int(current_agent_id) == int(agent_id)
+                )
+            except (TypeError, ValueError):
+                same_agent = False
+        if not same_agent:
+            assignments.append("agent_assignment_source = ?")
+            params.append(ASSIGNMENT_SOURCE_MANUAL)
 
     optional_fields = {
         "property_type": (
@@ -740,6 +769,60 @@ def update_property(
 
     connection.commit()
     connection.close()
+
+
+def apply_external_agent_assignment(
+    property_id,
+    organization_id,
+    agent_id,
+    source,
+):
+    """Assign an agent from an external mapping. Never overwrites a manual assignment."""
+    organization_id = require_organization_id(organization_id)
+    if not source or source == ASSIGNMENT_SOURCE_MANUAL:
+        raise ValueError("external assignment source required")
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        assert_agent_in_organization(cursor, agent_id, organization_id)
+        cursor.execute(
+            """
+            SELECT agent_id, agent_assignment_source
+            FROM properties
+            WHERE id = ?
+                AND organization_id = ?
+            """,
+            (property_id, organization_id),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            raise TenantError("Property not found in organization.")
+        current_agent_id, assignment_source = row
+        if assignment_source == ASSIGNMENT_SOURCE_MANUAL:
+            return False
+        same_agent = (
+            current_agent_id is not None
+            and int(current_agent_id) == int(agent_id)
+            and assignment_source == source
+        )
+        if same_agent:
+            return False
+        cursor.execute(
+            """
+            UPDATE properties
+            SET agent_id = ?,
+                agent_assignment_source = ?
+            WHERE id = ?
+                AND organization_id = ?
+            """,
+            (agent_id, source, property_id, organization_id),
+        )
+        if cursor.rowcount == 0:
+            raise TenantError("Property not found in organization.")
+        connection.commit()
+        return True
+    finally:
+        connection.close()
 
 
 def update_property_status(

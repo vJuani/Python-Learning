@@ -23,7 +23,7 @@ from modules.database.redremax_demo_import_repository import (
     get_demo_import_by_token,
 )
 from modules.database.tenant import require_organization_id
-from modules.property_sync.agents import resolve_agent_id
+from modules.property_sync.agents import resolve_agent_id, summarize_agent_resolution
 from modules.property_sync.connector import ConnectorCapabilities
 from modules.property_sync.normalize import NormalizeError, normalize_external_property
 from modules.property_sync.redremax.demo_import import (
@@ -129,7 +129,7 @@ def preview_redremax_json_import(
     conflicts = 0
     errors = 0
     warnings = 0
-    unmapped_agents = 0
+    agent_refs = []
 
     for raw in raw_listings:
         try:
@@ -156,11 +156,12 @@ def preview_redremax_json_import(
             continue
         valid += 1
         item_warnings = list(normalized.get("warnings") or [])
+        agent_ref = normalized.get("agent") or {}
+        agent_refs.append(agent_ref)
         agent_id, _reason = resolve_agent_id(
-            organization_id, PROVIDER_REDREMAX, normalized.get("agent")
+            organization_id, PROVIDER_REDREMAX, agent_ref
         )
-        if (normalized.get("agent") or {}).get("external_agent_id") and agent_id is None:
-            unmapped_agents += 1
+        if agent_ref.get("external_agent_id") and agent_id is None:
             item_warnings.append("redremax_warn_unmapped_agent")
         warnings += len(item_warnings)
         outcome = _classify_normalized(organization_id, normalized)
@@ -174,6 +175,9 @@ def preview_redremax_json_import(
             conflicts += 1
         prepared.append(hub)
 
+    resolution = summarize_agent_resolution(
+        organization_id, PROVIDER_REDREMAX, agent_refs
+    )
     photo_preview = _aggregate_photo_preview(organization_id, prepared)
     preview = {
         "found": len(raw_listings),
@@ -182,7 +186,8 @@ def preview_redremax_json_import(
         "updated": updated,
         "unchanged": unchanged,
         "conflicts": conflicts,
-        "unmapped_agents": unmapped_agents,
+        "mapped_agents": resolution["mapped_agents"],
+        "unmapped_agents": resolution["unmapped_agents"],
         "warnings": warnings,
         "errors": errors,
         "wrote": False,

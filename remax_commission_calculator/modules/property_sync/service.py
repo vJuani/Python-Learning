@@ -9,6 +9,7 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 from modules.database.properties_repository import (
+    ASSIGNMENT_SOURCE_MANUAL,
     STATUS_APPROVED,
     add_property,
     get_property_record,
@@ -50,7 +51,7 @@ from modules.database.property_sync_repository import (
 )
 from modules.database.tenant import TenantError, require_organization_id
 from modules.i18n import translate
-from modules.property_sync.agents import resolve_agent_id
+from modules.property_sync.agents import resolve_agent_id, summarize_agent_resolution
 from modules.property_sync.connector import get_connector
 from modules.property_sync.media import sync_property_media
 from modules.property_sync.normalize import NormalizeError, normalize_external_property
@@ -420,7 +421,7 @@ def dry_run_property_sync(organization_id, provider):
     valid = 0
     warnings = 0
     errors = 0
-    unmapped_agents = 0
+    agent_refs = []
     for raw in listed.items:
         if raw.get("_skipped"):
             warnings += 1
@@ -432,20 +433,21 @@ def dry_run_property_sync(organization_id, provider):
             continue
         valid += 1
         item_warnings = list(normalized.get("warnings") or [])
-        agent_id, _reason = resolve_agent_id(
-            organization_id, provider, normalized.get("agent")
-        )
-        if (normalized.get("agent") or {}).get("external_agent_id") and agent_id is None:
-            unmapped_agents += 1
+        agent_ref = normalized.get("agent") or {}
+        agent_refs.append(agent_ref)
+        agent_id, _reason = resolve_agent_id(organization_id, provider, agent_ref)
+        if agent_ref.get("external_agent_id") and agent_id is None:
             item_warnings.append("redremax_warn_unmapped_agent")
         warnings += len(item_warnings)
 
+    resolution = summarize_agent_resolution(organization_id, provider, agent_refs)
     summary = {
         "found": listed.source_total or len(listed.items),
         "valid": valid,
         "warnings": warnings,
         "errors": errors,
-        "unmapped_agents": unmapped_agents,
+        "mapped_agents": resolution["mapped_agents"],
+        "unmapped_agents": resolution["unmapped_agents"],
         "pages_fetched": listed.pages_fetched,
         "incomplete": listed.incomplete,
         "wrote": False,
@@ -504,9 +506,14 @@ def apply_synced_property_fields(property_id, organization_id, normalized, *, ag
             ]
         )
 
-    if agent_id is not None:
+    if (
+        agent_id is not None
+        and current.get("agent_assignment_source") != ASSIGNMENT_SOURCE_MANUAL
+    ):
         assignments.append("agent_id = ?")
         params.append(agent_id)
+        assignments.append("agent_assignment_source = ?")
+        params.append(normalized.get("external_source") or current.get("external_source"))
 
     metadata = normalized.get("external_metadata")
     if isinstance(metadata, dict):
@@ -1036,6 +1043,13 @@ def integration_dashboard(organization_id, language="es"):
             if provider == PROVIDER_REDREMAX
             else {}
         )
+        mapping_view = {}
+        if provider == PROVIDER_REDREMAX:
+            from modules.property_sync.agent_mapping import (
+                redremax_agent_mapping_dashboard,
+            )
+
+            mapping_view = redremax_agent_mapping_dashboard(organization_id)
         cards.append(
             {
                 **item,
@@ -1060,6 +1074,7 @@ def integration_dashboard(organization_id, language="es"):
                     else True
                 ),
                 "authenticated": auth_state == "connected",
+                "agent_mapping": mapping_view,
             }
         )
     return {"integrations": cards}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flask import abort, redirect, render_template, request, send_file, url_for
+from flask import abort, jsonify, redirect, render_template, request, send_file, url_for
 
 from modules.auth import admin_required, get_current_user, is_guest_session, login_required
 from modules.database.properties_repository import get_property_record
@@ -17,6 +17,13 @@ from modules.property_sync.media import resolve_media_filesystem_path
 from modules.property_sync.demo_import_service import (
     confirm_redremax_json_import,
     preview_redremax_json_import,
+)
+from modules.database.tenant import TenantError
+from modules.property_sync.agent_mapping import (
+    organization_agent_choices,
+    parse_mapping_form,
+    save_external_agent_mappings,
+    unlink_external_agent_mapping,
 )
 from modules.property_sync.service import (
     PropertySyncError,
@@ -172,6 +179,70 @@ def register_property_sync_routes(app, helpers):
             flash_i18n("redremax_demo_import_done", "success")
         except PropertySyncError as error:
             flash_i18n(error.message_key, "error")
+        return redirect(url_for("settings_property_integrations"))
+
+    @app.route("/settings/integrations/properties/redremax/agents/search")
+    @admin_required
+    def settings_property_integrations_redremax_agents_search():
+        try:
+            _admin_user()
+        except PropertySyncError:
+            abort(403)
+        organization_id = require_user_organization()
+        query = (request.args.get("q") or "").strip()
+        return jsonify(
+            {
+                "items": organization_agent_choices(organization_id, query=query),
+            }
+        )
+
+    @app.route(
+        "/settings/integrations/properties/redremax/agents/map",
+        methods=["POST"],
+    )
+    @admin_required
+    def settings_property_integrations_redremax_agents_map():
+        try:
+            _admin_user()
+        except PropertySyncError:
+            abort(403)
+        organization_id = require_user_organization()
+        try:
+            pairs = parse_mapping_form(request.form)
+        except (TypeError, ValueError):
+            flash_i18n("redremax_err_invalid_mapping", "error")
+            return redirect(url_for("settings_property_integrations"))
+        if not pairs:
+            flash_i18n("redremax_err_invalid_mapping", "error")
+            return redirect(url_for("settings_property_integrations"))
+        try:
+            save_external_agent_mappings(organization_id, PROVIDER_REDREMAX, pairs)
+        except TenantError:
+            flash_i18n("redremax_err_agent_org", "error")
+            return redirect(url_for("settings_property_integrations"))
+        flash_i18n("redremax_agents_saved", "success")
+        return redirect(url_for("settings_property_integrations"))
+
+    @app.route(
+        "/settings/integrations/properties/redremax/agents/unlink",
+        methods=["POST"],
+    )
+    @admin_required
+    def settings_property_integrations_redremax_agents_unlink():
+        try:
+            _admin_user()
+        except PropertySyncError:
+            abort(403)
+        organization_id = require_user_organization()
+        if (request.form.get("confirm") or "").strip() != "1":
+            flash_i18n("redremax_err_mapping_confirm", "error")
+            return redirect(url_for("settings_property_integrations"))
+        identity = (request.form.get("external_agent_id") or "").strip()
+        if not identity:
+            flash_i18n("redremax_err_invalid_mapping", "error")
+            return redirect(url_for("settings_property_integrations"))
+        unlink_external_agent_mapping(organization_id, PROVIDER_REDREMAX, identity)
+        flash_i18n("redremax_agents_unlinked_ok", "success")
         return redirect(url_for("settings_property_integrations"))
 
     @app.route(

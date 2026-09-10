@@ -16,6 +16,7 @@ PROPERTY_SYNC_COLUMNS = (
     ("sync_overrides_json", "TEXT"),
     ("title", "TEXT"),
     ("external_metadata_json", "TEXT"),
+    ("agent_assignment_source", "TEXT"),
 )
 
 INTEGRATIONS_SQL = """
@@ -283,6 +284,14 @@ def migrate_property_sync_hub_sqlite():
             )
         if not _column_exists(cursor, "properties", "sync_status"):
             cursor.execute("ALTER TABLE properties ADD COLUMN sync_status TEXT")
+        for column_name, column_sql in (
+            ("updated_at", "TEXT"),
+            ("external_metadata_json", "TEXT"),
+        ):
+            if not _column_exists(cursor, "external_agent_mappings", column_name):
+                cursor.execute(
+                    f"ALTER TABLE external_agent_mappings ADD COLUMN {column_name} {column_sql}"
+                )
         cursor.execute("DROP INDEX IF EXISTS idx_property_media_external")
         for statement in INDEXES:
             cursor.execute(statement)
@@ -372,6 +381,16 @@ def migrate_property_sync_hub_postgres(cursor):
         cursor.execute(
             f"""
             ALTER TABLE properties
+            ADD COLUMN IF NOT EXISTS {column_name} {column_sql}
+            """
+        )
+    for column_name, column_sql in (
+        ("updated_at", "TEXT"),
+        ("external_metadata_json", "TEXT"),
+    ):
+        cursor.execute(
+            f"""
+            ALTER TABLE external_agent_mappings
             ADD COLUMN IF NOT EXISTS {column_name} {column_sql}
             """
         )

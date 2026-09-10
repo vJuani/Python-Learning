@@ -9,6 +9,10 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/property-sync.css') }}">
 {% endblock %}
 
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/redremax-agent-mapping.js') }}" defer></script>
+{% endblock %}
+
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
@@ -101,6 +105,7 @@
             <li>{{ t('redremax_dry_valid') }}: {{ item.last_dry_run.valid }}</li>
             <li>{{ t('redremax_dry_warnings') }}: {{ item.last_dry_run.warnings }}</li>
             <li>{{ t('redremax_dry_errors') }}: {{ item.last_dry_run.errors }}</li>
+            <li>{{ t('redremax_agents_mapped') }}: {{ item.last_dry_run.mapped_agents or 0 }}</li>
             <li>{{ t('redremax_dry_unmapped') }}: {{ item.last_dry_run.unmapped_agents }}</li>
         </ul>
     </div>
@@ -157,6 +162,7 @@
                 <li>{{ t('redremax_demo_updates') }}: {{ item.last_import_preview.updated }}</li>
                 <li>{{ t('redremax_demo_unchanged') }}: {{ item.last_import_preview.unchanged }}</li>
                 <li>{{ t('redremax_demo_duplicates') }}: {{ item.last_import_preview.conflicts }}</li>
+                <li>{{ t('redremax_agents_mapped') }}: {{ item.last_import_preview.mapped_agents or 0 }}</li>
                 <li>{{ t('redremax_demo_unmapped') }}: {{ item.last_import_preview.unmapped_agents }}</li>
                 <li>{{ t('redremax_demo_errors') }}: {{ item.last_import_preview.errors }}</li>
                 <li>{{ t('redremax_demo_photos_detected') }}: {{ item.last_import_preview.photos_detected or 0 }}</li>
@@ -206,6 +212,171 @@
             {{ t('redremax_demo_photos_existing') }}: {{ item.last_manual_import.photos_existing or 0 }}.
             {{ t('redremax_demo_photos_rejected') }}: {{ item.last_manual_import.photos_rejected or 0 }}.
         </p>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    {% set mapping = item.agent_mapping or {} %}
+    <div class="sync-agents" data-redremax-agents>
+        <div class="sync-demo__header">
+            <h4>{{ t('redremax_agents_title') }}</h4>
+            <span class="property-sync-badge">{{ mapping.detected_count or 0 }}</span>
+        </div>
+        {% if mapping.unmapped_count %}
+        <p class="field-help">
+            {{ mapping.unmapped_count }} {{ t('redremax_agents_unlinked_count') }}
+        </p>
+        {% endif %}
+        {% if not mapping.rows %}
+        <p class="field-help">{{ t('redremax_agents_none') }}</p>
+        {% else %}
+        <div class="sync-agents__table-wrap">
+            <table class="sync-agents__table">
+                <thead>
+                    <tr>
+                        <th>{{ t('redremax_agents_external') }}</th>
+                        <th>{{ t('redremax_agents_jrh') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in mapping.rows %}
+                    <tr>
+                        <td>
+                            <strong>{{ t('redremax_agents_id') }}</strong>
+                            <div>{{ row.external_agent_id }}</div>
+                            {% if row.external_name %}
+                            <div>{{ row.external_name }}</div>
+                            {% endif %}
+                            {% if row.external_email %}
+                            <div>{{ row.external_email }}</div>
+                            {% endif %}
+                            {% if row.associate_qrid %}
+                            <p class="field-help">{{ row.associate_qrid }}</p>
+                            {% endif %}
+                            <p class="field-help">
+                                {{ t('redremax_agents_detected') }}: {{ row.property_count }}
+                            </p>
+                            {% if row.example_addresses %}
+                            <p class="field-help">
+                                {{ t('redremax_agents_examples') }}:
+                                {{ row.example_addresses | join(', ') }}
+                            </p>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.mapped %}
+                            <p><strong>{{ row.agent_name }}</strong></p>
+                            <form
+                                method="post"
+                                action="{{ url_for('settings_property_integrations_redremax_agents_map') }}"
+                                class="sync-agents__row-form"
+                            >
+                                <label class="visually-hidden" for="change-{{ loop.index }}">{{ t('redremax_agents_jrh') }}</label>
+                                <input
+                                    type="search"
+                                    class="sync-agents__filter"
+                                    placeholder="{{ t('redremax_agents_search') }}"
+                                    data-agent-filter
+                                    aria-controls="change-{{ loop.index }}"
+                                >
+                                <select id="change-{{ loop.index }}" name="map__{{ row.external_agent_id }}">
+                                    {% for agent in mapping.jrh_agents %}
+                                    <option
+                                        value="{{ agent.id }}"
+                                        {% if agent.id == row.agent_id %}selected{% endif %}
+                                        data-label="{{ agent.name }} {{ agent.email }}"
+                                    >
+                                        {{ agent.name }}{% if agent.email %} — {{ agent.email }}{% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-secondary">{{ t('redremax_agents_change') }}</button>
+                            </form>
+                            <form
+                                method="post"
+                                action="{{ url_for('settings_property_integrations_redremax_agents_unlink') }}"
+                                class="sync-agents__row-form"
+                                onsubmit="return confirm('{{ t('redremax_agents_unlink_confirm') }}');"
+                            >
+                                <input type="hidden" name="external_agent_id" value="{{ row.external_agent_id }}">
+                                <input type="hidden" name="confirm" value="1">
+                                <button type="submit" class="btn btn-secondary">{{ t('redremax_agents_unlink') }}</button>
+                            </form>
+                            {% else %}
+                            <p class="field-help">{{ t('redremax_agents_unlinked') }}</p>
+                            {% if row.email_suggestion %}
+                            <p>
+                                <strong>{{ t('redremax_agents_suggestion') }}</strong>
+                                {{ row.email_suggestion.name }}
+                            </p>
+                            <form
+                                method="post"
+                                action="{{ url_for('settings_property_integrations_redremax_agents_map') }}"
+                                class="sync-agents__row-form"
+                            >
+                                <input type="hidden" name="external_agent_id" value="{{ row.external_agent_id }}">
+                                <input type="hidden" name="agent_id" value="{{ row.email_suggestion.agent_id }}">
+                                <button type="submit" class="btn btn-primary">{{ t('redremax_agents_confirm_link') }}</button>
+                            </form>
+                            {% elif row.suggestions %}
+                            <p class="field-help">
+                                {{ t('redremax_agents_suggestion') }}:
+                                {{ row.suggestions[0].name }}
+                            </p>
+                            {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if mapping.unmapped_rows %}
+        <form
+            method="post"
+            action="{{ url_for('settings_property_integrations_redremax_agents_map') }}"
+            class="sync-agents__bulk"
+        >
+            <p><strong>{{ mapping.unmapped_count }} {{ t('redremax_agents_unlinked_count') }}</strong></p>
+            {% for row in mapping.unmapped_rows %}
+            <div class="sync-agents__bulk-row">
+                <div>
+                    <strong>{{ row.external_agent_id }}</strong>
+                    {% if row.external_name %}<div>{{ row.external_name }}</div>{% endif %}
+                    {% if row.external_email %}<div>{{ row.external_email }}</div>{% endif %}
+                    <p class="field-help">
+                        {{ t('redremax_agents_detected') }}: {{ row.property_count }}
+                        {% if row.example_addresses %}
+                        · {{ row.example_addresses | join(', ') }}
+                        {% endif %}
+                    </p>
+                </div>
+                <div>
+                    <label class="visually-hidden" for="bulk-{{ loop.index }}">{{ t('redremax_agents_link') }}</label>
+                    <input
+                        type="search"
+                        class="sync-agents__filter"
+                        placeholder="{{ t('redremax_agents_search') }}"
+                        data-agent-filter
+                        aria-controls="bulk-{{ loop.index }}"
+                    >
+                    <select id="bulk-{{ loop.index }}" name="map__{{ row.external_agent_id }}">
+                        <option value="">{{ t('redremax_agents_unlinked') }}</option>
+                        {% for agent in mapping.jrh_agents %}
+                        <option
+                            value="{{ agent.id }}"
+                            data-label="{{ agent.name }} {{ agent.email }}"
+                            {% if row.email_suggestion and agent.id == row.email_suggestion.agent_id %}selected{% endif %}
+                        >
+                            {{ agent.name }}{% if agent.email %} — {{ agent.email }}{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary">{{ t('redremax_agents_save') }}</button>
+        </form>
         {% endif %}
         {% endif %}
     </div>

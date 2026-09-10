@@ -29,6 +29,25 @@ def resolve_agent_id(organization_id, source, agent_ref, *, allow_email=True):
     return None, None
 
 
+def summarize_agent_resolution(organization_id, source, agent_refs):
+    """Count unique external agents. Never fuzzy-assigns."""
+    mapped = set()
+    unmapped = set()
+    for ref in agent_refs or []:
+        external_id = str((ref or {}).get("external_agent_id") or "").strip()
+        if not external_id:
+            continue
+        agent_id, _reason = resolve_agent_id(organization_id, source, ref)
+        if agent_id is None:
+            unmapped.add(external_id)
+        else:
+            mapped.add(external_id)
+    return {
+        "mapped_agents": len(mapped),
+        "unmapped_agents": len(unmapped),
+    }
+
+
 def suggest_agents_by_name(organization_id, name):
     """Manual suggestion only. Never used to assign during sync."""
     needle = " ".join(str(name or "").lower().split())
