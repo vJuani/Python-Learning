@@ -22,6 +22,44 @@
             }
         }());
     </script>
+    <script>
+        window.__jrhMediaFallback = function (img) {
+            if (!img || img.nodeType !== 1 || img.tagName !== "IMG") {
+                return;
+            }
+            if (img.getAttribute("data-media-fallback-applied") === "1") {
+                return;
+            }
+            img.setAttribute("data-media-fallback-applied", "1");
+            var label = img.getAttribute("data-fallback-label") || "";
+            var placeholder = document.createElement("span");
+            var classes = ["property-media-placeholder"];
+            if (img.classList.contains("property-media-placeholder--card")) {
+                classes.push("property-media-placeholder--card");
+            }
+            if (img.classList.contains("property-media-placeholder--small")) {
+                classes.push("property-media-placeholder--small");
+            }
+            if (img.classList.contains("property-gallery__hero")) {
+                classes.push("property-media-placeholder--hero");
+            }
+            placeholder.className = classes.join(" ");
+            placeholder.innerHTML = '<span class="property-media-placeholder__icon" aria-hidden="true"></span>';
+            if (label) {
+                var text = document.createElement("span");
+                text.className = "property-media-placeholder__label";
+                text.textContent = label;
+                placeholder.appendChild(text);
+                placeholder.setAttribute("title", label);
+                placeholder.setAttribute("aria-label", label);
+            } else {
+                placeholder.setAttribute("aria-hidden", "true");
+            }
+            if (img.parentNode) {
+                img.parentNode.replaceChild(placeholder, img);
+            }
+        };
+    </script>
     <title>{% block title %}{{ brand_name }}{% endblock %}</title>
     <link rel="manifest" href="{{ url_for('web_manifest') }}">
     <link

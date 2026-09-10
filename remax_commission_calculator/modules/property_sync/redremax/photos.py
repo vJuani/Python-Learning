@@ -51,19 +51,30 @@ def photo_external_id(url):
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def resolve_photo_source_url(raw):
+    """Prefer photos[].cdn. Use prefix only if it is already a valid URL."""
+    raw = raw or {}
+    for key in ("cdn", "prefix"):
+        value = str(raw.get(key) or "").strip()
+        if not value or not is_allowed_redremax_photo_url(value):
+            continue
+        return canonical_photo_url(value)
+    return None
+
+
 def map_photos(photos, *, limit=BETA_PHOTO_LIMIT):
     items = []
     if not isinstance(photos, list):
         return items
     for index, raw in enumerate(photos):
         raw = raw or {}
-        cdn = str(raw.get("cdn") or "").strip()
-        if not is_allowed_redremax_photo_url(cdn):
+        source_url = resolve_photo_source_url(raw)
+        if not source_url:
             continue
         items.append(
             {
-                "external_media_id": photo_external_id(cdn),
-                "original_url": canonical_photo_url(cdn),
+                "external_media_id": photo_external_id(source_url),
+                "original_url": source_url,
                 "url_kind": "stable",
                 "storage_strategy": "remote_reference",
                 "position": index,

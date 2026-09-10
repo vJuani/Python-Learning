@@ -61,7 +61,7 @@
         {% if acm_photos %}
         <div class="acm-hero__photos">
             {% for src in acm_photos[:4] %}
-            <img src="{{ src }}" alt="" loading="lazy" data-media-fallback data-fallback-label="{{ t('property_no_synced_photos') }}">
+            <img src="{{ src }}" alt="{{ t('property_photo_alt') }}" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-media-url="{{ src }}" data-media-fallback data-fallback-label="{{ t('property_photo_unavailable') }}" onerror="window.__jrhMediaFallback && window.__jrhMediaFallback(this)">
             {% endfor %}
         </div>
         {% endif %}
@@ -228,7 +228,7 @@
             </span>
         </div>
         {% if row.photo_url %}
-        <img class="acm-card__cover" src="{{ row.photo_url }}" alt="" loading="lazy" data-media-fallback data-fallback-label="{{ t('property_no_synced_photos') }}">
+        <img class="acm-card__cover" src="{{ row.photo_url }}" alt="{{ t('property_photo_alt') }}" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-media-url="{{ row.photo_url }}" data-media-fallback data-fallback-label="{{ t('property_photo_unavailable') }}" onerror="window.__jrhMediaFallback && window.__jrhMediaFallback(this)">
         {% endif %}
         <h3>{{ row.external_reference or row.snapshot_location or '—' }}</h3>
         <p class="field-help">

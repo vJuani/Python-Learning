@@ -39,7 +39,7 @@
                 {% for card in jrh_ask.cards %}
                 <li>
                     {% if card.image_url %}
-                    <img class="jrh-chat__card-cover" src="{{ card.image_url }}" alt="" loading="lazy" data-media-fallback data-fallback-label="{{ t('property_no_synced_photos') }}">
+                    <img class="jrh-chat__card-cover" src="{{ card.image_url }}" alt="{{ t('property_photo_alt') }}" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-media-url="{{ card.image_url }}" data-media-fallback data-fallback-label="{{ t('property_photo_unavailable') }}" onerror="window.__jrhMediaFallback && window.__jrhMediaFallback(this)">
                     {% endif %}
                     <strong>{{ card.title }}</strong>
                     {% if card.subtitle %}<span>{{ card.subtitle }}</span>{% endif %}

@@ -23,6 +23,7 @@ from modules.config import apply_config
 from modules.database import add_agent, add_organization, add_property, add_user, create_tables
 from modules.database.properties_repository import get_properties
 from modules.database.property_media_repository import (
+    STRATEGY_COPY,
     STRATEGY_REMOTE,
     list_property_media,
     upsert_property_media,
@@ -34,13 +35,16 @@ from modules.property_sync.demo_import_service import (
     preview_redremax_json_import,
 )
 from modules.property_sync.media import (
+    csp_allows_redremax_images,
+    describe_property_media,
     get_property_cover_media,
     get_property_media_for_generation,
+    get_property_media_url,
     media_display_src,
 )
 from modules.property_sync.public_listing import PublicListingMediaProvider
 from modules.property_sync.redremax.normalizer import RedRemaxPropertyNormalizer
-from modules.property_sync.redremax.photos import BETA_PHOTO_LIMIT, map_photos
+from modules.property_sync.redremax.photos import BETA_PHOTO_LIMIT, map_photos, resolve_photo_source_url
 from modules.property_sync.service import update_redremax_office
 from tests.redremax_listing_fixture import SANITIZED_LISTING
 from web_app import app
@@ -245,7 +249,7 @@ class PropertyPhotoTests(unittest.TestCase):
         add_property("Sin Foto 99", "CABA", self.org, agent_id=self.agent_id)
         client = self._login()
         html = client.get("/properties?q=Sin+Foto+99").get_data(as_text=True)
-        self.assertIn("Sin fotos sincronizadas", html)
+        self.assertIn("Sin foto disponible", html)
 
     def test_17_acm_gets_cover(self):
         listing = load_listing(id="AR.42.27.1.317", photo_count=3, primary_index=0)
@@ -327,3 +331,97 @@ class PropertyPhotoTests(unittest.TestCase):
             }
         )
         self.assertIsNone(src)
+
+    def test_cdn_saved_as_remote_url(self):
+        mapped = map_photos([photo(8, primary=True)])
+        self.assertTrue(mapped[0]["original_url"])
+        self.assertEqual(mapped[0]["storage_strategy"], "remote_reference")
+        info = describe_property_media({**mapped[0], "source": "redremax", "status": "active"})
+        self.assertTrue(info["has_remote_url"])
+        self.assertEqual(info["hostname"], "redremax-images.s3.amazonaws.com")
+        self.assertNotIn("https://", str(info["hostname"]))
+
+    def test_resolver_returns_remote_url(self):
+        mapped = map_photos([photo(9, primary=True)])[0]
+        mapped["source"] = "redremax"
+        self.assertEqual(get_property_media_url(mapped), mapped["original_url"])
+
+    def test_cover_and_gallery_use_same_url(self):
+        listing = load_listing(id="AR.42.27.1.330", photo_count=4, primary_index=2)
+        row = self._import(listing)
+        cover = get_property_cover_media(row)
+        cover_url = get_property_media_url(cover, row["id"])
+        self.assertIn("photo-2.jpg", cover_url)
+        client = self._login()
+        html = client.get(f"/properties/{row['id']}").get_data(as_text=True)
+        self.assertIn(f'data-media-url="{cover_url}"', html)
+        self.assertIn("property-gallery__hero", html)
+        self.assertIn("referrerpolicy=\"no-referrer\"", html)
+        self.assertIn("__jrhMediaFallback", html)
+        self.assertIn("redremax-images.s3.amazonaws.com", html)
+        self.assertNotIn("filter: brightness(0)", html)
+
+    def test_empty_gallery_uses_clear_placeholder(self):
+        row = add_property("Sin Galeria 77", "CABA", self.org, agent_id=self.agent_id)
+        client = self._login()
+        html = client.get(f"/properties/{row}").get_data(as_text=True)
+        self.assertIn("Sin foto disponible", html)
+        self.assertIn("property-media-placeholder", html)
+
+    def test_csp_allows_redremax_host(self):
+        self.assertTrue(csp_allows_redremax_images(None))
+        self.assertTrue(
+            csp_allows_redremax_images(
+                "default-src 'self'; img-src 'self' data: blob: https://redremax-images.s3.amazonaws.com"
+            )
+        )
+        self.assertFalse(
+            csp_allows_redremax_images("default-src 'self'; img-src 'self' data:")
+        )
+        client = self._login()
+        page = client.get("/properties")
+        self.assertTrue(
+            csp_allows_redremax_images(page.headers.get("Content-Security-Policy"))
+        )
+
+    def test_local_media_still_resolves(self):
+        property_id = add_property("Local Media", "CABA", self.org, agent_id=self.agent_id)
+        media = upsert_property_media(
+            self.org,
+            property_id,
+            source="manual",
+            external_media_id="local-1",
+            storage_key="organizations/1/media/local.png",
+            storage_strategy=STRATEGY_COPY,
+            is_cover=True,
+            position=0,
+        )
+        with app.test_request_context():
+            src = get_property_media_url(media, property_id)
+        self.assertTrue(src)
+        self.assertTrue(src.startswith("/"))
+        self.assertNotIn("redremax-images", src)
+
+    def test_prefix_used_only_when_cdn_missing(self):
+        prefix_url = "https://redremax-images.s3.amazonaws.com/listings/from-prefix.jpg"
+        chosen = resolve_photo_source_url(
+            {"cdn": "", "prefix": prefix_url, "fileName": "x.jpg", "path": "/x.jpg"}
+        )
+        self.assertEqual(chosen, prefix_url)
+        cdn_url = "https://redremax-images.s3.amazonaws.com/listings/from-cdn.jpg"
+        self.assertEqual(
+            resolve_photo_source_url({"cdn": cdn_url, "prefix": prefix_url}),
+            cdn_url,
+        )
+        self.assertIsNone(resolve_photo_source_url({"fileName": "x.jpg", "path": "/x.jpg"}))
+
+    def test_css_does_not_paint_photos_black(self):
+        css = (Path(__file__).resolve().parents[1] / "static/css/properties-page.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("brightness(0)", css)
+        self.assertNotIn("mix-blend-mode: multiply", css)
+        self.assertIn("mix-blend-mode: normal", css)
+        self.assertIn("background: #243044", css)
+        self.assertNotIn("background: #000", css)
+        self.assertNotIn("background:#000", css)

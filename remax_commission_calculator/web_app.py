@@ -5077,17 +5077,27 @@ def properties_new():
 
 def _property_gallery_for_detail(property_data):
     from modules.property_sync.media import (
+        describe_property_media,
         get_property_media_for_generation,
-        media_display_src,
+        get_property_media_url,
     )
 
     gallery = []
+    debug = []
+    property_id = (property_data or {}).get("id")
     for item in get_property_media_for_generation(property_data, limit=5):
-        src = media_display_src(item, property_data.get("id"))
+        src = get_property_media_url(item, property_id)
+        debug.append(describe_property_media(item, property_id))
         if not src:
             continue
-        gallery.append({"src": src, "id": item.get("id")})
-    return gallery
+        gallery.append(
+            {
+                "src": src,
+                "id": item.get("id"),
+                "remote": str(item.get("storage_strategy") or "") == "remote_reference",
+            }
+        )
+    return gallery, debug
 
 
 @app.route("/properties/<int:property_id>")
@@ -5142,13 +5152,16 @@ def properties_detail(property_id):
         except PropertyMediaError:
             can_use_property_media = False
 
+    property_gallery, property_media_debug = _property_gallery_for_detail(property_data)
+
     return render_template(
         "properties/detail.html",
         property_data=decorate_property_for_display(
             property_data,
             language=language,
         ),
-        property_gallery=_property_gallery_for_detail(property_data),
+        property_gallery=property_gallery,
+        property_media_debug=property_media_debug if is_admin() else [],
         property_display_id=format_property_display_id(
             property_data["id"]
         ),

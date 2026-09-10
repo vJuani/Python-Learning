@@ -22,14 +22,14 @@ from modules.validators import date_to_sortable
 
 
 def _attach_property_covers(organization_id, rows):
-    from modules.property_sync.media import list_covers_for_properties, media_display_src
+    from modules.property_sync.media import get_property_media_url, list_covers_for_properties
 
     ids = [row.get("id") for row in rows or [] if row.get("id")]
     covers = list_covers_for_properties(organization_id, ids)
     for row in rows or []:
         cover = covers.get(int(row["id"])) if row.get("id") else None
         row["cover"] = cover
-        row["cover_url"] = media_display_src(cover, row.get("id"))
+        row["cover_url"] = get_property_media_url(cover, row.get("id"))
 
 
 RESIDENTIAL_TYPES = frozenset({"apartment", "house", "ph", "land"})

@@ -117,10 +117,12 @@ Beta strategy: `REMOTE_REFERENCE`, maximum **5** photos per property.
 Cover policy: explicit manual override → RedREMAX primary → first valid
 media. Identity is the SHA-256 of the canonical HTTPS URL, not position.
 
-Frontend list/detail/ACM/JRH cards use the same cover helper. Broken
-remote URLs fall back to the “Sin fotos sincronizadas” placeholder and
-do not delete `PropertyMedia`. Brochure may fetch an allowlisted image
-once per PDF (in-memory cache). `PublicListingMediaProvider` is disabled.
+Frontend list/detail/ACM/JRH cards use `get_property_media_url()`.
+Remote `<img>` tags send `referrerpolicy="no-referrer"` so S3 hotlink
+rules do not see the JRH host. Broken remotes become the clear
+“Sin foto disponible” placeholder and do not delete `PropertyMedia`.
+Brochure may fetch an allowlisted image once per PDF (in-memory cache).
+`PublicListingMediaProvider` is disabled.
 
 V1 strategy: `REMOTE_REFERENCE`.
 

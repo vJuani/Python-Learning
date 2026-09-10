@@ -869,7 +869,7 @@ def _format_listing_price(item):
 
 
 def _attach_property_card_covers(organization_id, cards):
-    from modules.property_sync.media import list_covers_for_properties, media_display_src
+    from modules.property_sync.media import get_property_media_url, list_covers_for_properties
 
     ids = []
     for card in cards or []:
@@ -891,7 +891,7 @@ def _attach_property_card_covers(organization_id, cards):
             cover = covers.get(int(pid))
         except (TypeError, ValueError):
             cover = None
-        src = media_display_src(cover, pid)
+        src = get_property_media_url(cover, pid)
         if src:
             card["image_url"] = src
     return cards

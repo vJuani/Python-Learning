@@ -550,8 +550,8 @@ def _attach_acm_photos(view, organization_id, property_data, enriched):
     from modules.property_sync.media import (
         get_property_cover_media,
         get_property_media_for_generation,
+        get_property_media_url,
         list_covers_for_properties,
-        media_display_src,
     )
 
     property_id = (property_data or {}).get("id")
@@ -561,10 +561,10 @@ def _attach_acm_photos(view, organization_id, property_data, enriched):
         if property_data
         else []
     )
-    cover_src = media_display_src(cover, property_id)
+    cover_src = get_property_media_url(cover, property_id)
     extras = []
     for item in gallery:
-        src = media_display_src(item, property_id)
+        src = get_property_media_url(item, property_id)
         if src and src != cover_src:
             extras.append(src)
         if len(extras) >= 3:
@@ -582,7 +582,7 @@ def _attach_acm_photos(view, organization_id, property_data, enriched):
     for row in enriched or []:
         linked_id = row.get("comparable_property_id")
         linked_cover = covers.get(int(linked_id)) if linked_id else None
-        row["photo_url"] = media_display_src(linked_cover, linked_id)
+        row["photo_url"] = get_property_media_url(linked_cover, linked_id)
 
 
 def _acm_map_payload(subject, rows, language="es"):

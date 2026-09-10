@@ -164,6 +164,24 @@ def pick_cover_media(items):
     return rows[0]
 
 
+def csp_allows_redremax_images(header_value):
+    """True when CSP is absent or img-src includes the RedREMAX photo host."""
+    raw = str(header_value or "").strip()
+    if not raw:
+        return True
+    parts = [part.strip() for part in raw.split(";") if part.strip()]
+    img_src = next(
+        (part for part in parts if part.lower().startswith("img-src")),
+        "",
+    )
+    if not img_src:
+        return True
+    tokens = img_src.split()
+    if "*" in tokens:
+        return True
+    return "redremax-images.s3.amazonaws.com" in img_src.lower()
+
+
 def get_property_cover_media(property_or_org, property_id=None):
     organization_id, resolved_id = _property_identity(property_or_org, property_id)
     if organization_id is None or resolved_id is None:
@@ -186,28 +204,52 @@ def is_displayable_media(item):
     return is_safe_media_url(url, require_https=True)
 
 
-def media_display_src(item, property_id=None):
-    """Safe URL for <img>. Remote RedREMAX only if host is allowlisted."""
-    if not is_displayable_media(item):
+def get_property_media_url(media, property_id=None):
+    """Single <img src> resolver. Local managed file, else remote URL, else None."""
+    if not is_displayable_media(media):
         return None
-    url = (item.get("original_url") or "").strip()
-    if item.get("storage_strategy") == STRATEGY_REMOTE or (
-        url and not item.get("storage_key")
-    ):
-        return url
-    if item.get("storage_key") and property_id and item.get("id"):
-        try:
-            from flask import has_request_context, url_for
+    url = (media.get("original_url") or media.get("remote_url") or "").strip()
+    if media.get("storage_key") and property_id and media.get("id"):
+        if media.get("storage_strategy") != STRATEGY_REMOTE:
+            try:
+                from flask import has_request_context, url_for
 
-            if has_request_context():
-                return url_for(
-                    "property_gallery_file",
-                    property_id=property_id,
-                    media_id=item["id"],
-                )
-        except Exception:
-            return None
+                if has_request_context():
+                    return url_for(
+                        "property_gallery_file",
+                        property_id=property_id,
+                        media_id=media["id"],
+                    )
+            except Exception:
+                return None
+    if media.get("storage_strategy") == STRATEGY_REMOTE or (
+        url and not media.get("storage_key")
+    ):
+        return url or None
     return url or None
+
+
+def media_display_src(item, property_id=None):
+    return get_property_media_url(item, property_id)
+
+
+def describe_property_media(item, property_id=None):
+    """Admin/dev debug. Never includes the full remote URL."""
+    from urllib.parse import urlparse
+
+    url = ((item or {}).get("original_url") or (item or {}).get("remote_url") or "").strip()
+    host = (urlparse(url).hostname or "").lower() if url else ""
+    return {
+        "id": (item or {}).get("id"),
+        "source": (item or {}).get("source"),
+        "media_type": (item or {}).get("media_type"),
+        "is_cover": bool((item or {}).get("is_cover")),
+        "position": (item or {}).get("position"),
+        "has_remote_url": bool(url),
+        "hostname": host,
+        "status": (item or {}).get("status"),
+        "renderable": bool(get_property_media_url(item, property_id or (item or {}).get("property_id"))),
+    }
 
 
 def get_property_media_for_generation(property_row, limit=5):

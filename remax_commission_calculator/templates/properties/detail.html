@@ -83,25 +83,57 @@
     </div>
     {% if property_gallery %}
     <div class="property-gallery__stage">
-        <img
-            class="property-gallery__hero"
-            src="{{ property_gallery[0].src }}"
-            alt=""
-            data-media-fallback
-            data-fallback-label="{{ t('property_no_synced_photos') }}"
-        >
+        <div class="property-gallery__hero-wrap">
+            <img
+                class="property-gallery__hero"
+                src="{{ property_gallery[0].src }}"
+                alt="{{ t('property_photo_alt') }}"
+                decoding="async"
+                referrerpolicy="no-referrer"
+                data-media-url="{{ property_gallery[0].src }}"
+                data-media-fallback
+                data-fallback-label="{{ t('property_photo_unavailable') }}"
+                onerror="window.__jrhMediaFallback && window.__jrhMediaFallback(this)"
+            >
+        </div>
         {% if property_gallery|length > 1 %}
         <div class="property-gallery__thumbs">
             {% for item in property_gallery %}
-            <button type="button" class="property-gallery__thumb{% if loop.first %} is-active{% endif %}" data-gallery-src="{{ item.src }}">
-                <img src="{{ item.src }}" alt="" loading="lazy" data-media-fallback data-fallback-label="{{ t('property_no_synced_photos') }}">
+            <button type="button" class="property-gallery__thumb{% if loop.first %} is-active{% endif %}" data-media-url="{{ item.src }}">
+                <img
+                    src="{{ item.src }}"
+                    alt="{{ t('property_photo_alt') }}"
+                    loading="lazy"
+                    decoding="async"
+                    referrerpolicy="no-referrer"
+                    data-media-url="{{ item.src }}"
+                    data-media-fallback
+                    data-fallback-label="{{ t('property_photo_unavailable') }}"
+                    onerror="window.__jrhMediaFallback && window.__jrhMediaFallback(this)"
+                >
             </button>
             {% endfor %}
         </div>
         {% endif %}
     </div>
     {% else %}
-    <p class="property-gallery__empty">{{ t('property_no_synced_photos') }}</p>
+    <div class="property-gallery__empty property-media-placeholder property-media-placeholder--hero">
+        <span class="property-media-placeholder__icon" aria-hidden="true"></span>
+        <span class="property-media-placeholder__label">{{ t('property_photo_unavailable') }}</span>
+    </div>
+    {% endif %}
+    {% if is_admin() and property_media_debug %}
+    <aside class="property-media-debug" aria-label="{{ t('property_media_debug_title') }}">
+        {% for item in property_media_debug %}
+        <p>
+            Media #{{ item.id }}
+            · Source: {{ item.source }}
+            · Remote: {% if item.has_remote_url %}Sí{% else %}No{% endif %}
+            · Host: {{ item.hostname or '—' }}
+            · Renderable: {% if item.renderable %}Sí{% else %}No{% endif %}
+        </p>
+        {% endfor %}
+    </aside>
     {% endif %}
 </section>
 {% endif %}
