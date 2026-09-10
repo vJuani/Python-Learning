@@ -1,11 +1,12 @@
 {% if detail.branding %}
-<article class="pd-agent" data-pd-agent>
+{% set actions = detail.agent_actions or {} %}
+<article class="pd-agent" data-pd-agent data-agent-viewer="{{ actions.viewer or '' }}">
     {% if detail.branding.has_photo %}
     <img
         src="{{ url_for('agent_profile_photo', agent_id=detail.branding.agent_id) }}"
         alt="{{ detail.branding.name }}"
-        width="72"
-        height="96"
+        width="88"
+        height="110"
     >
     {% else %}
     <div class="pd-agent__avatar" aria-hidden="true">{{ detail.agent_initials }}</div>
@@ -21,13 +22,14 @@
         <p>{{ detail.branding.email }}</p>
         {% endif %}
         <div class="pd-agent__actions">
-            {% if detail.branding.phone %}
-            <a class="btn btn-small btn-primary" href="tel:{{ detail.branding.phone }}">{{ t('property_agent_contact') }}</a>
-            {% elif detail.branding.email %}
-            <a class="btn btn-small btn-primary" href="mailto:{{ detail.branding.email }}">{{ t('property_agent_contact') }}</a>
+            {% if actions.show_contact and actions.contact_href %}
+            <a class="btn btn-small btn-primary" href="{{ actions.contact_href }}">{{ t(actions.contact_key) }}</a>
             {% endif %}
-            {% if detail.show_agent_profile %}
-            <a class="btn btn-small btn-secondary" href="{{ url_for('agents_detail', agent_id=detail.branding.agent_id) }}">{{ t('property_agent_profile') }}</a>
+            {% if actions.profile_endpoint %}
+            <a class="btn btn-small btn-secondary" href="{{ url_for(actions.profile_endpoint, **actions.profile_args) }}">{{ t(actions.profile_key) }}</a>
+            {% endif %}
+            {% if actions.edit_endpoint %}
+            <a class="btn btn-small btn-secondary" href="{{ url_for(actions.edit_endpoint, **actions.edit_args) }}">{{ t(actions.edit_key) }}</a>
             {% endif %}
         </div>
     </div>

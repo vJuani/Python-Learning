@@ -5172,6 +5172,7 @@ def properties_detail(property_id):
         organization_id=organization_id,
         user=current_user,
         language=language,
+        is_guest=get_guest_access() is not None,
     )
     if is_agent() and current_user is not None:
         from modules.jrh_ai_context import load_context, store_context

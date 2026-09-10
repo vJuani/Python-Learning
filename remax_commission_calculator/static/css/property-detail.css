@@ -216,26 +216,29 @@ body.is-property-detail-page .jrh-float {
 
 .pd-agent {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.7rem;
+    grid-template-columns: 5.6rem 1fr;
+    gap: 0.75rem;
     align-items: center;
-    padding: 0.75rem;
+    padding: 0.8rem;
     border-radius: 1rem;
     background: #fff;
     box-shadow: 0 8px 22px rgba(10, 22, 51, 0.05);
 }
 
 .pd-agent img {
-    width: 3.6rem;
+    width: 5.4rem;
     height: auto;
+    max-height: 6.4rem;
     object-fit: contain;
     background: transparent;
+    border-radius: 0;
+    filter: none;
 }
 
 .pd-agent__avatar {
-    width: 3.6rem;
-    height: 3.6rem;
-    border-radius: 999px;
+    width: 4.4rem;
+    height: 4.4rem;
+    border-radius: 0.85rem;
     display: grid;
     place-items: center;
     background: #e8eef6;

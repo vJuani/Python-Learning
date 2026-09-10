@@ -9,12 +9,15 @@ from datetime import datetime
 from modules.agent_branding import get_agent_branding
 from modules.formatting import format_listing_money, format_money
 from modules.i18n import translate
+from modules.property_agent_actions import get_property_agent_actions
 from modules.property_types import normalize_property_type
 
 
 _POSTAL_RE = re.compile(r"\s*\([^)]+\)\s*")
 _NUMERIC_RE = re.compile(r"^\d+$")
 _COUNTRY_SKIP = {"argentina", "argentine republic", "ar"}
+_UNIT_TOKEN_RE = re.compile(r"\b(?:piso|dpto|depto|dto\.?|uf|unidad)\b", re.I)
+_STREET_TITLE_RE = re.compile(r"^(?P<title>.+?\d+[a-zA-Z]?)\s+(?P<rest>.+)$")
 
 
 def parse_external_metadata(property_row):
@@ -42,8 +45,42 @@ def compact_property_title(property_row):
     address = str((property_row or {}).get("address") or "").strip()
     if not address:
         return ""
-    first = address.split(",")[0].strip()
-    return _POSTAL_RE.sub("", first).strip() or first
+    first = _POSTAL_RE.sub("", address.split(",")[0]).strip()
+    match = _STREET_TITLE_RE.match(first)
+    if match and _UNIT_TOKEN_RE.search(match.group("rest")):
+        return match.group("title").strip()
+    return first
+
+
+def compact_property_unit(property_row, language="es"):
+    meta = parse_external_metadata(property_row)
+    bits = []
+    floor = str(meta.get("floor") or "").strip()
+    apartment = str(meta.get("apartment") or "").strip()
+    if floor:
+        bits.append(
+            floor
+            if _UNIT_TOKEN_RE.search(floor)
+            else translate("property_floor_n", language=language, n=floor)
+        )
+    if apartment:
+        bits.append(
+            apartment
+            if _UNIT_TOKEN_RE.search(apartment)
+            else translate("property_unit_n", language=language, n=apartment)
+        )
+    if bits:
+        return " · ".join(bits)
+    address = str((property_row or {}).get("address") or "").strip()
+    first = _POSTAL_RE.sub("", address.split(",")[0] if address else "").strip()
+    match = _STREET_TITLE_RE.match(first)
+    if match and _UNIT_TOKEN_RE.search(match.group("rest")):
+        rest = re.sub(r"\s+", " ", match.group("rest")).strip()
+        rest = re.sub(r"\b(dpto|depto|dto)\.?\b", "Dpto", rest, flags=re.I)
+        rest = re.sub(r"\bpiso\b", "Piso", rest, flags=re.I)
+        parts = re.split(r"\s+(?=(?:Piso|Dpto|UF|Unidad)\b)", rest)
+        return " · ".join(part.strip() for part in parts if part.strip())
+    return ""
 
 
 def compact_property_location(property_row):
@@ -332,11 +369,16 @@ def _acm_summary(latest_acm, language="es"):
     }
 
 
-def build_property_detail_view(property_row, *, organization_id, user, language="es"):
+def build_property_detail_view(property_row, *, organization_id, user, language="es", is_guest=False):
     row = dict(property_row or {})
     meta = parse_external_metadata(row)
     agent_id = row.get("agent_id")
-    branding = get_agent_branding(agent_id, organization_id, language=language)
+    branding = get_agent_branding(
+        agent_id,
+        organization_id,
+        language=language,
+        agent_login_only=True,
+    )
     current_agent_id = (user or {}).get("agent_id") if (user or {}).get("role") == "agent" else None
     latest_acm = latest_acm_for_property(
         organization_id,
@@ -366,6 +408,12 @@ def build_property_detail_view(property_row, *, organization_id, user, language=
         "branding": branding,
         "agent_initials": agent_initials((branding or {}).get("name")),
         "show_agent_profile": _can_view_agent_profile(user, agent_id),
+        "agent_actions": get_property_agent_actions(
+            user,
+            row,
+            is_guest=is_guest or (user or {}).get("role") == "guest",
+            branding=branding,
+        ),
         "latest_acm": _acm_summary(latest_acm, language),
         "price_history": history,
         "sync_ago": relative_sync_label(row.get("last_synced_at"), language),

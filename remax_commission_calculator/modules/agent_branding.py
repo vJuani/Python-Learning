@@ -29,14 +29,20 @@ def _full_name(user, agent):
     return (agent or {}).get("name") or ""
 
 
-def get_agent_branding(agent_id, organization_id, *, language="es"):
-    """Contact + photo for the Agent record. Never uses current_user."""
+def get_agent_branding(agent_id, organization_id, *, language="es", agent_login_only=False):
+    """Contact + photo for the Agent record. Never uses current_user.
+
+    When agent_login_only=True, ignore staff/admin users that share agent_id
+    so a listing never inherits the wrong email or phone.
+    """
     if agent_id in (None, ""):
         return None
     agent = get_agent_record(agent_id, organization_id)
     if agent is None:
         return None
     user = get_agent_login_user(agent_id, organization_id)
+    if agent_login_only and user and user.get("role") != ROLE_AGENT:
+        user = None
     settings = get_organization_settings(organization_id) or {}
     agent_type = str(agent.get("type") or "").strip().lower()
     title_key = AGENT_TITLE_KEYS.get(agent_type, "agent_branding_title_agent")

@@ -7,19 +7,14 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from modules.database.organization_settings_repository import (
-    get_organization_settings,
-)
-from modules.database.properties_repository import get_property_record
-from modules.database.users_repository import get_user_by_agent_id
 from modules.i18n import translate
-from modules.operation_summary import _brand_logo_path
-from modules.property_inventory import decorate_property_for_display
 from modules.property_media_access import (
     PropertyMediaError,
     require_property_media_access,
 )
+from modules.database.properties_repository import get_property_record
 from modules.pdf_property_brochure import build_property_brochure_pdf
+from modules.property_presentation import build_property_presentation_assets
 
 
 def _present(value):
@@ -57,52 +52,13 @@ def resolve_property_agent_contact(property_data):
     branding = get_agent_branding(
         (property_data or {}).get("agent_id"),
         (property_data or {}).get("organization_id"),
+        agent_login_only=True,
     )
     if not branding:
         return None
     if not any((branding.get("name"), branding.get("phone"), branding.get("email"))):
         return None
     return branding
-
-
-def _chip_values(property_data, language):
-    chips = []
-    if property_data.get("property_type"):
-        chips.append(
-            translate(
-                f"property_type_{property_data['property_type']}",
-                language=language,
-            )
-        )
-    if property_data.get("purpose_label"):
-        chips.append(property_data["purpose_label"])
-    chips.extend(property_data.get("fact_parts") or [])
-    if property_data.get("area_label"):
-        chips.append(property_data["area_label"])
-    if property_data.get("parking_label"):
-        chips.append(property_data["parking_label"])
-    chips.extend(property_data.get("feature_labels") or [])
-    return [item for item in chips if _present(item)]
-
-
-def _fact_values(property_data, language):
-    facts = []
-    mapping = (
-        ("rooms", "property_rooms", None),
-        ("bedrooms", "property_bedrooms", None),
-        ("bathrooms", "property_bathrooms", None),
-        ("total_m2", "property_total_m2", " m²"),
-        ("covered_m2", "property_covered_m2", " m²"),
-        ("parking_spaces", "property_parking_spaces", None),
-    )
-    for field, label_key, suffix in mapping:
-        value = property_data.get(field)
-        if not _present(value):
-            continue
-        label = translate(label_key, language=language)
-        rendered = f"{label} {value}{suffix or ''}"
-        facts.append(rendered)
-    return facts
 
 
 def generate_property_brochure(
@@ -124,100 +80,46 @@ def generate_property_brochure(
         is_guest=is_guest,
     )
 
-    display = decorate_property_for_display(property_data, language=language)
-    settings = get_organization_settings(organization_id) or {}
-    brand_name = (
-        (settings.get("display_name") or "").strip()
-        or None
+    assets = build_property_presentation_assets(
+        property_data,
+        language=language,
+        include_agent=bool(include_agent_contact),
     )
-    logo_path = _brand_logo_path(settings.get("logo_path"))
-    zone_parts = [
-        part
-        for part in (
-            display.get("neighborhood"),
-            display.get("jurisdiction"),
-        )
-        if _present(part)
-    ]
-    agent_payload = None
-    if include_agent_contact:
-        contact = resolve_property_agent_contact(property_data)
-        if contact:
-            agent_payload = {
-                **contact,
-                "role": translate(
-                    "property_brochure_agent_role",
-                    language=language,
-                ),
-            }
+    display = assets["property"]
+    org = assets["organization_branding"]
+    agent = assets["agent_branding"] if include_agent_contact else None
+    if agent:
+        agent = {
+            **agent,
+            "role": translate("property_brochure_agent_role", language=language),
+        }
 
     payload = {
-        "title": display.get("address") or "Property",
-        "brand_name": brand_name,
-        "logo_path": str(logo_path) if logo_path else None,
-        "code": (
-            display.get("external_id")
-            if _present(display.get("external_id"))
-            else None
-        ),
-        "address": display.get("address"),
-        "zone": " · ".join(zone_parts) if zone_parts else None,
-        "price": display.get("price_display"),
-        "chips": _chip_values(display, language),
-        "facts": _fact_values(display, language),
-        "facts_title": translate(
-            "property_brochure_facts",
-            language=language,
-        ),
-        "description": (
-            display.get("description")
-            if _present(display.get("description"))
-            else None
-        ),
-        "description_title": translate(
-            "property_description",
-            language=language,
-        ),
-        "gallery_title": translate(
-            "property_brochure_gallery",
-            language=language,
-        ),
-        "agent_title": translate(
-            "property_brochure_agent_title",
-            language=language,
-        ),
-        "agent": agent_payload,
-        "footer": brand_name,
-        "hero_image": None,
-        "gallery": [],
+        "title": assets["title"] or display.get("address") or "Property",
+        "unit_line": assets["unit_line"] or None,
+        "location_line": assets["location_line"] or None,
+        "full_address": assets["full_address"],
+        "eyebrow": assets["eyebrow"],
+        "brand_name": org.get("name"),
+        "organization": org,
+        "platform_name": assets["platform_name"],
+        "platform_logo": str(assets["platform_logo"]) if assets.get("platform_logo") else None,
+        "mls": assets["mls"],
+        "generated_on": assets["generated_on"],
+        "sheet_label": assets["sheet_label"],
+        "price": assets["formatted_price"],
+        "chips": assets["key_features"],
+        "highlights": assets["highlights"],
+        "features": assets["extra_features"],
+        "about_label": assets["about_label"],
+        "features_label": assets["features_label"],
+        "location_label": assets["location_label"],
+        "advisor_label": assets["advisor_label"],
+        "description": assets["description"],
+        "agent": agent,
+        "hero_image": assets["cover"],
+        "gallery": assets["gallery"],
     }
-
-    try:
-        from modules.property_sync.media import (
-            get_property_media_for_generation,
-            resolve_media_filesystem_path,
-        )
-
-        from modules.property_sync.remote_media import fetch_allowed_image_bytes
-
-        media_items = get_property_media_for_generation(property_data, limit=5)
-        cache = {}
-        gallery_payloads = []
-        for item in media_items:
-            path = resolve_media_filesystem_path(item)
-            if path is not None:
-                gallery_payloads.append(str(path))
-                continue
-            remote = fetch_allowed_image_bytes(
-                item.get("original_url"), cache=cache
-            )
-            if remote:
-                gallery_payloads.append(remote)
-        if gallery_payloads:
-            payload["hero_image"] = gallery_payloads[0]
-            payload["gallery"] = gallery_payloads[1:]
-    except Exception:
-        pass
 
     pdf_bytes = build_property_brochure_pdf(payload)
     if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
@@ -225,8 +127,9 @@ def generate_property_brochure(
 
     return {
         "pdf_bytes": pdf_bytes,
-        "filename": brochure_filename(display, brand_name),
+        "filename": brochure_filename(display, org.get("name")),
         "property": display,
-        "include_agent_contact": bool(include_agent_contact and agent_payload),
-        "agent": agent_payload,
+        "include_agent_contact": bool(include_agent_contact and agent),
+        "agent": agent,
+        "assets": assets,
     }
