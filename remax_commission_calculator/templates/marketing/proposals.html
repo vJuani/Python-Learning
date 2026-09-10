@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('marketing_proposals_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="mkt-kicker">{{ t('marketing_kicker') }}</p>
+        <h2>{{ t('marketing_proposals_title') }}</h2>
+        <p class="field-help">{{ view.property_address }} · {{ t('marketing_format_' ~ view.format) }}</p>
+    </div>
+</section>
+
+<section class="mkt-proposals" data-mkt-proposals>
+    {% for asset in view.assets %}
+    <article class="mkt-proposal">
+        <p class="mkt-proposal__label">{{ asset.template_label }}</p>
+        <a class="mkt-proposal__frame mkt-proposal__frame--{{ asset.format }}" href="{{ url_for('marketing_asset', asset_id=asset.id) }}">
+            <img src="{{ url_for('marketing_preview', asset_id=asset.id) }}" alt="{{ asset.template_label }}">
+        </a>
+        <form method="post" action="{{ url_for('marketing_select', asset_id=asset.id) }}">
+            <button type="submit" class="btn btn-primary">{{ t('marketing_choose') }}</button>
+        </form>
+    </article>
+    {% endfor %}
+</section>
+{% endblock %}

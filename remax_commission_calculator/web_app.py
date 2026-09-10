@@ -415,8 +415,8 @@ def require_authenticated_user():
     if request.endpoint in PUBLIC_ENDPOINTS:
         return None
 
-    # Agent-only ACM: never leak the tool via a login redirect.
-    if request.endpoint and str(request.endpoint).startswith("acm"):
+    # Agent-only ACM / Marketing: never leak the tool via a login redirect.
+    if request.endpoint and str(request.endpoint).startswith(("acm", "marketing")):
         return None
 
     if get_current_user() is not None:
@@ -8283,6 +8283,7 @@ register_property_media_routes(
 
 from modules.acm_routes import register_acm_routes
 from modules.agent_photo_routes import register_agent_photo_routes
+from modules.marketing_routes import register_marketing_routes
 
 register_agent_photo_routes(
     app,
@@ -8294,6 +8295,15 @@ register_agent_photo_routes(
 )
 
 register_acm_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+    },
+)
+
+register_marketing_routes(
     app,
     helpers={
         "require_user_organization": require_user_organization,

@@ -100,6 +100,12 @@ Agent saying "debo fee?" or "q debo de fee?" is self + fee.
 Staff "qué debe Barreiro de fee?" is that agent + fee.
 
 START_ACM = create a comparative market analysis now from a property or operation. Never invent prices. Do not ask extra setup questions.
+
+START_MARKETING_CONTENT = generate Instagram/WhatsApp/flyer marketing creatives for an existing listing. Never invent photos or facts. Prefer this over CREATE_TASK when the user says creame/haceme/armame plus historia, post, contenido, flyer or Instagram.
+Examples:
+- creame una historia de Santamarina
+- haceme un post de esta propiedad
+- armame contenido para Instagram
 DOWNLOAD_ACM = download the latest ACM PDF. include_agent=false if they said without their details.
 QUERY_ACM = show the latest ACM.
 ACM_EXPLAIN = explain already calculated ACM numbers. Never invent a new price.

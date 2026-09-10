@@ -1910,6 +1910,10 @@ def create_postgres_schema():
 
         migrate_agent_profile_photo_postgres(cursor)
 
+        from .marketing_migration import migrate_marketing_postgres
+
+        migrate_marketing_postgres(cursor)
+
         for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),
             ("snapshot_parking", "INTEGER"),

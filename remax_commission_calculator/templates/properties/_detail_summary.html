@@ -52,6 +52,7 @@
         <a class="btn btn-primary" href="{{ url_for('acm_new', property_id=property_data.id) }}">{{ t('acm_create') }}</a>
         {% endif %}
         {% if can_use_property_media %}
+        <a class="btn btn-primary" href="{{ url_for('marketing_new', property_id=property_data.id) }}">{{ t('marketing_create') }}</a>
         <button type="button" class="btn btn-secondary" data-brochure-open>{{ t('property_brochure_download') }}</button>
         {% endif %}
         <button

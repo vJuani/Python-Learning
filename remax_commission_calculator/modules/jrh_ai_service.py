@@ -30,6 +30,7 @@ from modules.jrh_ai_intents import (
     QUERY_PROPERTIES,
     QUERY_PROPERTY_NEEDS,
     START_ACM,
+    START_MARKETING_CONTENT,
     START_AGENT_PAYMENT,
     START_INVOICE,
     QUERY_ACM,
@@ -222,6 +223,7 @@ def ask_jrh(
         START_INVOICE: _handle_start_invoice,
         START_AGENT_PAYMENT: _handle_start_payment,
         START_ACM: _handle_start_acm,
+        START_MARKETING_CONTENT: _handle_start_marketing,
         QUERY_ACM: _handle_query_acm,
         ACM_EXPLAIN: _handle_acm_explain,
         ACM_REMOVE_COMPARABLE: _handle_acm_remove,
@@ -2089,6 +2091,168 @@ def _handle_start_acm(
         language=language,
     )
     return _acm_ready_result(view, language=language, confidence=confidence, prompt=prompt)
+
+
+def _marketing_query_from_prompt(prompt, entities):
+    import re
+
+    query = (
+        entities.get("address")
+        or entities.get("property_text")
+        or entities.get("location_text")
+        or ""
+    )
+    if query:
+        return " ".join(str(query).split())
+    cleaned = re.sub(
+        r"(creame una historia de|creame un post de|haceme un post de|"
+        r"haceme una historia de|armame contenido para|armame contenido de|"
+        r"contenido para instagram de|contenido para|creame contenido de|"
+        r"haceme un flyer de|flyer de|estado de whatsapp de|esta propiedad|"
+        r"un post de|una historia de)",
+        " ",
+        prompt or "",
+        flags=re.IGNORECASE,
+    )
+    return " ".join(cleaned.split())
+
+
+def _handle_start_marketing(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    prompt,
+    confidence,
+    session=None,
+    **_kwargs,
+):
+    from modules.database.properties_repository import get_property_record
+    from modules.entity_match import UNIQUE_MIN
+    from modules.marketing_context import assert_marketing_access, MarketingError
+
+    if not user or not (is_admin(user) or (is_agent(user) and agent_id)):
+        return _result(
+            START_MARKETING_CONTENT,
+            "needs_attention",
+            language=language,
+            message_key="access_denied",
+            confidence=confidence,
+        )
+    fmt = entities.get("marketing_format") or "story"
+    query = _marketing_query_from_prompt(prompt, entities)
+    matches = []
+    if (
+        not query
+        and entities.get("previous_kind") == "property"
+        and entities.get("previous_id")
+    ):
+        if is_admin(user):
+            row = get_property_record(entities["previous_id"], organization_id)
+            if row:
+                matches = [{"id": row["id"], "address": row.get("address"), "name": row.get("address")}]
+        else:
+            owned = _owned_property_match(
+                organization_id, entities.get("previous_id"), agent_id
+            )
+            if owned:
+                matches = [owned]
+    if not matches and query:
+        matches = _resolve_acm_properties(
+            organization_id,
+            query,
+            user=user,
+            agent_id=None if is_admin(user) else agent_id,
+            entities=entities,
+        )
+    if not matches:
+        return _result(
+            START_MARKETING_CONTENT,
+            "needs_attention",
+            language=language,
+            message_key="marketing_jrh_missing",
+            confidence=confidence,
+        )
+    top_score = matches[0].get("match_score")
+    if len(matches) > 1 or (top_score is not None and top_score < UNIQUE_MIN):
+        return _result(
+            START_MARKETING_CONTENT,
+            "needs_attention",
+            language=language,
+            message_key="marketing_jrh_ambiguous",
+            candidates=[
+                {
+                    "id": item.get("property_id") or item.get("id"),
+                    "name": item.get("address") or item.get("name") or "",
+                    "kind": "property",
+                }
+                for item in matches[:8]
+            ],
+            cards=[
+                {
+                    "title": item.get("address") or item.get("name") or "",
+                    "subtitle": item.get("neighborhood") or "",
+                    "href_name": "marketing_new",
+                    "href_args": {
+                        "property_id": item.get("property_id") or item.get("id"),
+                        "format": fmt,
+                    },
+                }
+                for item in matches[:5]
+            ],
+            confidence=confidence,
+            data={"count": len(matches)},
+        )
+    chosen = matches[0]
+    property_id = chosen.get("property_id") or chosen.get("id")
+    row = get_property_record(property_id, organization_id)
+    if row is None:
+        return _result(
+            START_MARKETING_CONTENT,
+            "needs_attention",
+            language=language,
+            message_key="marketing_err_property_missing",
+            confidence=confidence,
+        )
+    try:
+        assert_marketing_access(user, row)
+    except MarketingError:
+        return _result(
+            START_MARKETING_CONTENT,
+            "needs_attention",
+            language=language,
+            message_key="access_denied",
+            confidence=confidence,
+        )
+    address = row.get("address") or ""
+    return _result(
+        START_MARKETING_CONTENT,
+        "ready",
+        language=language,
+        message_key="marketing_jrh_ready",
+        cards=[
+            {
+                "title": address,
+                "subtitle": row.get("neighborhood") or "",
+                "href_name": "marketing_new",
+                "href_args": {"property_id": property_id, "format": fmt},
+            }
+        ],
+        actions=[
+            {
+                "label_key": "marketing_jrh_cta",
+                "href_name": "marketing_new",
+                "href_args": {"property_id": property_id, "format": fmt},
+            }
+        ],
+        confirm_required=False,
+        wrote=False,
+        confidence=confidence,
+        entity={"kind": "property", "id": property_id, "label": address},
+        data={"address": address, "format": fmt, "wrote": False},
+    )
 
 
 def _handle_download_acm(

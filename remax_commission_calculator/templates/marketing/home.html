@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('marketing_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header mkt-hero">
+    <div class="page-header-text">
+        <p class="mkt-kicker">{{ t('marketing_kicker') }}</p>
+        <h2>{{ t('marketing_headline') }}</h2>
+        <p class="field-help">{{ t('marketing_subtitle') }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('marketing_new') }}" class="btn btn-primary">{{ t('marketing_create') }}</a>
+    </div>
+</section>
+
+{% if view.history %}
+<section class="mkt-history" aria-label="{{ t('marketing_history') }}">
+    {% for item in view.history %}
+    <article class="mkt-history__row">
+        <div>
+            <h3>{{ item.property_address or item.headline or t('marketing_title') }}</h3>
+            <p>{{ item.format_label }} · {{ item.when_label }}</p>
+        </div>
+        <div class="mkt-history__actions">
+            <a class="btn btn-secondary" href="{{ url_for('marketing_asset', asset_id=item.id) }}">{{ t('marketing_view') }}</a>
+            {% if item.storage_key %}
+            <a class="btn btn-primary" href="{{ url_for('marketing_download_png', asset_id=item.id) }}">{{ t('marketing_download') }}</a>
+            {% endif %}
+        </div>
+    </article>
+    {% endfor %}
+</section>
+{% else %}
+<p class="field-help">{{ t('marketing_empty') }}</p>
+{% endif %}
+{% endblock %}

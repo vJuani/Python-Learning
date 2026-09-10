@@ -151,6 +151,7 @@ def register_jrh_routes(app, helpers):
             jrh_chip_actions=build_jrh_chip_actions(
                 can_acm=bool(is_agent(user) and agent_id),
                 can_productivity=bool(is_agent(user) and agent_id),
+                can_marketing=bool((is_agent(user) and agent_id) or is_admin(user)),
             ),
             jrh_now_label=now_label,
         )

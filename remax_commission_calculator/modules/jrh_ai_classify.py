@@ -24,6 +24,7 @@ from modules.jrh_ai_intents import (
     QUERY_PROPERTY_NEEDS,
     START_AGENT_PAYMENT,
     START_ACM,
+    START_MARKETING_CONTENT,
     START_INVOICE,
     QUERY_ACM,
     ACM_EXPLAIN,
@@ -179,6 +180,7 @@ EXPLICIT_NEW_INTENTS = frozenset(
         CREATE_TASK,
         START_AGENT_PAYMENT,
         START_ACM,
+        START_MARKETING_CONTENT,
         QUERY_PRODUCTIVITY,
         QUERY_CONTACT,
         QUERY_CONTACT_HISTORY,
@@ -560,11 +562,33 @@ def has_contact_shared_signal(text):
     )
 
 
+def detect_marketing_content(text):
+    folded = fold_text(text)
+    if re.search(r"\bacm\b|comparativo|tasame|tasar", folded):
+        return None
+    if re.search(r"historia(?:\s+de)?\s+instagram|instagram\s+stor|creame\s+(?:una\s+)?historia|haceme\s+(?:una\s+)?historia", folded):
+        return "story"
+    if re.search(r"estado(?:\s+de)?\s+whatsapp|whatsapp", folded):
+        return "status"
+    if re.search(r"\bflyer\b|folleto", folded):
+        return "flyer"
+    if re.search(r"(?:un|el|una)\s+post|post\s+(?:de|para|instagram)|haceme\s+(?:un\s+)?post|post\s+de\s+esta", folded):
+        return "post"
+    if re.search(
+        r"contenido(?:\s+para)?(?:\s+instagram)?|armame\s+contenido|creame\s+contenido|marketing",
+        folded,
+    ):
+        return "pack"
+    return None
+
+
 def has_create_task_signal(text):
     folded = fold_text(text)
     if _looks_like_agenda_query(folded):
         return False
     if has_contact_need_create_signal(text):
+        return False
+    if detect_marketing_content(text):
         return False
     if has_property_inventory_signal(text) and not CREATE_TASK_RE.search(folded):
         return False
@@ -1257,6 +1281,10 @@ def classify_intent(prompt, *, context=None):
     if has_create_task_signal(text):
         scores[CREATE_TASK] = 0.88
         entities["title"] = text
+    marketing = detect_marketing_content(text)
+    if marketing:
+        scores[START_MARKETING_CONTENT] = 0.96
+        entities["marketing_format"] = marketing
     last = (context or {}).get("last_entity") or {}
     if last.get("kind") in {"property", "acm", "operation", "contact"} and last.get("id"):
         entities["previous_kind"] = last.get("kind")
@@ -1471,7 +1499,15 @@ def apply_intent_guards(parsed, prompt, context=None):
         START_ACM,
         DOWNLOAD_ACM,
     }
-    if rule_intent in acm_followups and result.get("intent") in {
+    if rule_intent == START_MARKETING_CONTENT and result.get("intent") in {
+        CREATE_TASK,
+        QUERY_PROPERTIES,
+        FALLBACK,
+    }:
+        result["intent"] = START_MARKETING_CONTENT
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.96)
+        result["guard"] = "marketing_content"
+    elif rule_intent in acm_followups and result.get("intent") in {
         QUERY_PROPERTIES,
         FALLBACK,
         START_ACM,

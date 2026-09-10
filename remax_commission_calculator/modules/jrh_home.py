@@ -186,11 +186,12 @@ def build_agent_home(
         "quick_actions": build_jrh_chip_actions(
             can_acm=True,
             can_productivity=True,
+            can_marketing=True,
         ),
     }
 
 
-def build_jrh_chip_actions(*, can_acm=False, can_productivity=False):
+def build_jrh_chip_actions(*, can_acm=False, can_productivity=False, can_marketing=False):
     """Shared Home + /jrh composer chips. Staff-only actions stay off."""
     actions = [
         {
@@ -221,6 +222,14 @@ def build_jrh_chip_actions(*, can_acm=False, can_productivity=False):
                 "label_key": "jrh_ask_quick_acm",
                 "example_key": "jrh_ask_ex_acm",
                 "acm": True,
+            }
+        )
+    if can_marketing:
+        actions.append(
+            {
+                "key": "marketing",
+                "label_key": "jrh_ask_quick_marketing",
+                "example_key": "jrh_ask_ex_marketing",
             }
         )
     if can_productivity:
