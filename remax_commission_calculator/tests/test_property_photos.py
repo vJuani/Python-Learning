@@ -249,7 +249,7 @@ class PropertyPhotoTests(unittest.TestCase):
         add_property("Sin Foto 99", "CABA", self.org, agent_id=self.agent_id)
         client = self._login()
         html = client.get("/properties?q=Sin+Foto+99").get_data(as_text=True)
-        self.assertIn("Sin foto disponible", html)
+        self.assertIn("Sin fotos sincronizadas", html)
 
     def test_17_acm_gets_cover(self):
         listing = load_listing(id="AR.42.27.1.317", photo_count=3, primary_index=0)
@@ -365,7 +365,7 @@ class PropertyPhotoTests(unittest.TestCase):
         row = add_property("Sin Galeria 77", "CABA", self.org, agent_id=self.agent_id)
         client = self._login()
         html = client.get(f"/properties/{row}").get_data(as_text=True)
-        self.assertIn("Sin foto disponible", html)
+        self.assertIn("Sin fotos sincronizadas", html)
         self.assertIn("property-media-placeholder", html)
 
     def test_csp_allows_redremax_host(self):
@@ -425,3 +425,42 @@ class PropertyPhotoTests(unittest.TestCase):
         self.assertIn("background: #243044", css)
         self.assertNotIn("background: #000", css)
         self.assertNotIn("background:#000", css)
+
+    def test_mock_example_url_is_not_renderable(self):
+        item = {
+            "source": "mock_network",
+            "storage_strategy": STRATEGY_REMOTE,
+            "original_url": "https://example.com/mock/MOCK-001/0.png",
+            "is_cover": True,
+        }
+        self.assertIsNone(get_property_media_url(item))
+        info = describe_property_media(item)
+        self.assertEqual(info["hostname"], "example.com")
+        self.assertFalse(info["renderable"])
+
+    def test_mock_property_uses_placeholder(self):
+        from modules.property_sync.mock import reset_mock_catalog
+        from modules.property_sync.service import ensure_mock_integration, run_property_sync
+
+        reset_mock_catalog()
+        ensure_mock_integration(self.org)
+        run_property_sync(self.org)
+        italia = find_by_external(self.org, "MOCK-001")
+        self.assertIsNotNone(italia)
+        self.assertEqual(get_property_media_for_generation(italia), [])
+        client = self._login()
+        html = client.get(f"/properties/{italia['id']}").get_data(as_text=True)
+        self.assertIn("Sin fotos sincronizadas", html)
+        self.assertNotIn("example.com/mock", html)
+        list_html = client.get("/properties?q=Italia+1341").get_data(as_text=True)
+        self.assertIn("Sin fotos sincronizadas", list_html)
+        self.assertNotIn("example.com/mock", list_html)
+
+    def test_redremax_s3_media_is_renderable(self):
+        mapped = map_photos([photo(11, primary=True)])[0]
+        mapped["source"] = "redremax"
+        self.assertTrue(describe_property_media(mapped)["renderable"])
+        self.assertIn(
+            "redremax-images.s3.amazonaws.com",
+            get_property_media_url(mapped),
+        )

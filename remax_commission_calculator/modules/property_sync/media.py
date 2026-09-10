@@ -189,18 +189,50 @@ def get_property_cover_media(property_or_org, property_id=None):
     return pick_cover_media(list_property_media(organization_id, resolved_id))
 
 
+PLACEHOLDER_MEDIA_HOSTS = frozenset(
+    {
+        "example.com",
+        "www.example.com",
+        "example.invalid",
+        "www.example.invalid",
+        "example.org",
+        "www.example.org",
+    }
+)
+
+
+def _media_source(item):
+    return str((item or {}).get("source") or "").strip().lower()
+
+
+def _media_hostname(item):
+    from urllib.parse import urlparse
+
+    url = ((item or {}).get("original_url") or (item or {}).get("remote_url") or "").strip()
+    if not url:
+        return ""
+    return (urlparse(url).hostname or "").strip().lower()
+
+
 def is_displayable_media(item):
+    """True only when this media may be used as a real <img> src."""
     if not item:
         return False
-    if item.get("storage_key"):
-        return True
-    url = (item.get("original_url") or "").strip()
-    if not url:
+    source = _media_source(item)
+    if source == "mock_network":
         return False
-    if str(item.get("source") or "").strip() == "redremax":
+    host = _media_hostname(item)
+    if host in PLACEHOLDER_MEDIA_HOSTS or host.endswith(".example.com"):
+        return False
+    url = (item.get("original_url") or item.get("remote_url") or "").strip()
+    if source == "redremax":
         from modules.property_sync.redremax.photos import is_allowed_redremax_photo_url
 
         return is_allowed_redremax_photo_url(url)
+    if item.get("storage_key"):
+        return True
+    if not url:
+        return False
     return is_safe_media_url(url, require_https=True)
 
 
@@ -235,10 +267,11 @@ def media_display_src(item, property_id=None):
 
 def describe_property_media(item, property_id=None):
     """Admin/dev debug. Never includes the full remote URL."""
-    from urllib.parse import urlparse
-
     url = ((item or {}).get("original_url") or (item or {}).get("remote_url") or "").strip()
-    host = (urlparse(url).hostname or "").lower() if url else ""
+    host = _media_hostname(item)
+    renderable = is_displayable_media(item) and bool(
+        get_property_media_url(item, property_id or (item or {}).get("property_id"))
+    )
     return {
         "id": (item or {}).get("id"),
         "source": (item or {}).get("source"),
@@ -248,7 +281,7 @@ def describe_property_media(item, property_id=None):
         "has_remote_url": bool(url),
         "hostname": host,
         "status": (item or {}).get("status"),
-        "renderable": bool(get_property_media_url(item, property_id or (item or {}).get("property_id"))),
+        "renderable": renderable,
     }
 
 

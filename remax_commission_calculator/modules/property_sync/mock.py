@@ -24,7 +24,6 @@ MINI_PNG = (
 def _photo(external_id, index, cover=False):
     return {
         "external_media_id": f"{external_id}-p{index}",
-        "original_url": f"https://example.com/mock/{external_id}/{index}.png",
         "url_kind": "local_fixture",
         "position": index,
         "is_cover": cover,
@@ -63,7 +62,7 @@ def default_catalog():
             "latitude": -34.4939,
             "longitude": -58.5078,
             "updated_at": "2026-09-01T10:00:00",
-            "media": _photos("MOCK-001", 4),
+            "media": [],
         },
         {
             "external_id": "MOCK-002",
@@ -87,7 +86,7 @@ def default_catalog():
             "latitude": -34.5956,
             "longitude": -58.3772,
             "updated_at": "2026-09-01T11:00:00",
-            "media": _photos("MOCK-002", 3),
+            "media": [],
         },
         {
             "external_id": "MOCK-003",
@@ -108,7 +107,7 @@ def default_catalog():
             "latitude": -34.5489,
             "longitude": -58.4628,
             "updated_at": "2026-09-01T12:00:00",
-            "media": _photos("MOCK-003", 2),
+            "media": [],
         },
         {
             "external_id": "MOCK-004",
@@ -127,7 +126,7 @@ def default_catalog():
             "total_surface": 240,
             "description": "Casa en San Isidro.",
             "updated_at": "2026-09-01T13:00:00",
-            "media": _photos("MOCK-004", 2),
+            "media": [],
         },
         {
             "external_id": "MOCK-005",
@@ -146,7 +145,7 @@ def default_catalog():
             "total_surface": 75,
             "description": "Tres ambientes en Olivos.",
             "updated_at": "2026-09-01T14:00:00",
-            "media": _photos("MOCK-005", 1),
+            "media": [],
         },
     ]
 
@@ -181,6 +180,11 @@ def update_mock_property(external_id, **changes):
             item.update(changes)
             return item
     raise KeyError(external_id)
+
+
+def attach_mock_fixture_photos(external_id, count=4):
+    """Sync-pipeline fixtures only. Not production-displayable photos."""
+    return update_mock_property(external_id, media=_photos(external_id, count))
 
 
 def remove_mock_photo(external_id, external_media_id):

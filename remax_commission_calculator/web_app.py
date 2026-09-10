@@ -5076,6 +5076,7 @@ def properties_new():
 
 
 def _property_gallery_for_detail(property_data):
+    from modules.database.property_media_repository import list_property_media
     from modules.property_sync.media import (
         describe_property_media,
         get_property_media_for_generation,
@@ -5083,11 +5084,10 @@ def _property_gallery_for_detail(property_data):
     )
 
     gallery = []
-    debug = []
     property_id = (property_data or {}).get("id")
+    organization_id = (property_data or {}).get("organization_id")
     for item in get_property_media_for_generation(property_data, limit=5):
         src = get_property_media_url(item, property_id)
-        debug.append(describe_property_media(item, property_id))
         if not src:
             continue
         gallery.append(
@@ -5097,6 +5097,12 @@ def _property_gallery_for_detail(property_data):
                 "remote": str(item.get("storage_strategy") or "") == "remote_reference",
             }
         )
+    debug = []
+    if organization_id is not None and property_id is not None:
+        debug = [
+            describe_property_media(item, property_id)
+            for item in list_property_media(organization_id, property_id)
+        ]
     return gallery, debug
 
 

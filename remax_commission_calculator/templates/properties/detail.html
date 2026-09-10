@@ -92,7 +92,7 @@
                 referrerpolicy="no-referrer"
                 data-media-url="{{ property_gallery[0].src }}"
                 data-media-fallback
-                data-fallback-label="{{ t('property_photo_unavailable') }}"
+                data-fallback-label="{{ t('property_no_synced_photos') }}"
                 onerror="window.__jrhMediaFallback && window.__jrhMediaFallback(this)"
             >
         </div>
@@ -108,7 +108,7 @@
                     referrerpolicy="no-referrer"
                     data-media-url="{{ item.src }}"
                     data-media-fallback
-                    data-fallback-label="{{ t('property_photo_unavailable') }}"
+                    data-fallback-label="{{ t('property_no_synced_photos') }}"
                     onerror="window.__jrhMediaFallback && window.__jrhMediaFallback(this)"
                 >
             </button>
@@ -119,7 +119,7 @@
     {% else %}
     <div class="property-gallery__empty property-media-placeholder property-media-placeholder--hero">
         <span class="property-media-placeholder__icon" aria-hidden="true"></span>
-        <span class="property-media-placeholder__label">{{ t('property_photo_unavailable') }}</span>
+        <span class="property-media-placeholder__label">{{ t('property_no_synced_photos') }}</span>
     </div>
     {% endif %}
     {% if is_admin() and property_media_debug %}

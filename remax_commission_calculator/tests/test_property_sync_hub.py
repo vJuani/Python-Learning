@@ -41,6 +41,7 @@ from modules.property_sync.connector import get_connector
 from modules.property_sync.media import get_property_media_for_generation
 from modules.property_sync.mock import (
     MockPropertySourceConnector,
+    attach_mock_fixture_photos,
     remove_mock_photo,
     reset_mock_catalog,
     set_mock_raise_on_list,
@@ -133,7 +134,7 @@ class PropertySyncHubTests(unittest.TestCase):
         italia = self._by_external(org, "MOCK-001")
         self.assertIsNotNone(italia)
         self.assertEqual(italia["listing_price"], 250000)
-        self.assertEqual(len(list_property_media(org, italia["id"])), 4)
+        self.assertEqual(len(list_property_media(org, italia["id"])), 0)
 
     def test_second_identical_sync_creates_zero(self):
         org = self._fresh_org()
@@ -201,6 +202,7 @@ class PropertySyncHubTests(unittest.TestCase):
 
     def test_media_first_sync_creates_and_second_does_not_duplicate(self):
         org = self._fresh_org()
+        attach_mock_fixture_photos("MOCK-001", 4)
         run_property_sync(org)
         italia = self._by_external(org, "MOCK-001")
         first = list_property_media(org, italia["id"])
@@ -212,6 +214,7 @@ class PropertySyncHubTests(unittest.TestCase):
 
     def test_removed_media_safely_marked(self):
         org = self._fresh_org()
+        attach_mock_fixture_photos("MOCK-001", 4)
         run_property_sync(org)
         italia = self._by_external(org, "MOCK-001")
         remove_mock_photo("MOCK-001", "MOCK-001-p3")
@@ -364,7 +367,7 @@ class PropertySyncHubTests(unittest.TestCase):
         run_property_sync(org)
         italia = self._by_external(org, "MOCK-001")
         media = get_property_media_for_generation(italia)
-        self.assertGreaterEqual(len(media), 1)
+        self.assertEqual(len(media), 0)
         brochure = generate_property_brochure(
             italia["id"],
             org,
