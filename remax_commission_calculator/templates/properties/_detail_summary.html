@@ -1,0 +1,91 @@
+<div class="pd-summary" data-pd-summary>
+    <div class="pd-badges">
+        <span class="pd-badge pd-badge--source">{{ detail.source_badge }}</span>
+        {% if detail.status_label %}
+        <span class="pd-badge">{{ detail.status_label }}</span>
+        {% endif %}
+        {% if property_data.is_synced %}
+        <span class="pd-badge pd-badge--sync" title="{{ t('property_sync_tooltip') }}">{{ t('sync_badge_synced') }}</span>
+        {% endif %}
+        {% if detail.mls %}
+        <span class="pd-badge pd-badge--mls">{{ t('property_mls') }} #{{ detail.mls }}</span>
+        {% endif %}
+    </div>
+
+    {% if detail.type_label or property_data.purpose_label %}
+    <p class="pd-kicker">
+        {% if detail.type_label %}{{ detail.type_label }}{% endif %}
+        {% if detail.type_label and property_data.purpose_label %} · {% endif %}
+        {% if property_data.purpose_label %}{{ property_data.purpose_label|upper }}{% endif %}
+    </p>
+    {% endif %}
+
+    <h1 class="pd-title">{{ detail.title or property_display_id }}</h1>
+    {% if detail.location_line %}
+    <p class="pd-place">{{ detail.location_line }}</p>
+    {% endif %}
+    {% if detail.secondary_line %}
+    <p class="pd-place">{{ detail.secondary_line }}</p>
+    {% endif %}
+
+    {% if property_data.listing_price is not none %}
+    <p class="pd-price money money-emphasis">{{ property_data.listing_price|listing_money(property_data.listing_currency) }}</p>
+    {% if not property_data.currency_known %}
+    <p class="field-help">{{ t('listing_currency_unknown') }}</p>
+    {% endif %}
+    {% endif %}
+
+    {% if detail.maintenance %}
+    <p class="pd-expenses">{{ t('property_expenses') }} {{ detail.maintenance }}</p>
+    {% endif %}
+
+    {% if detail.chips %}
+    <ul class="pd-chips">
+        {% for chip in detail.chips %}
+        <li>{{ chip }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="pd-actions">
+        {% if is_agent() %}
+        <a class="btn btn-primary" href="{{ url_for('acm_new', property_id=property_data.id) }}">{{ t('acm_create') }}</a>
+        {% endif %}
+        {% if can_use_property_media %}
+        <button type="button" class="btn btn-secondary" data-brochure-open>{{ t('property_brochure_download') }}</button>
+        {% endif %}
+        <button
+            type="button"
+            class="btn btn-secondary"
+            data-pd-share
+            data-share-title="{{ detail.title }}"
+            data-share-url="{{ request.url }}"
+        >{{ t('property_share') }}</button>
+        {% if property_data.maps_directions_url %}
+        <a class="btn btn-secondary" href="{{ property_data.maps_directions_url }}" target="_blank" rel="noopener">{{ t('property_location_directions') }}</a>
+        {% endif %}
+        <div class="pd-more" data-pd-more>
+            <button type="button" class="btn btn-secondary" data-pd-more-toggle aria-expanded="false" aria-haspopup="true">{{ t('property_more_actions') }}</button>
+            <div class="pd-more__menu" role="menu">
+                {% if can_edit_property %}
+                <a href="{{ url_for('properties_edit', property_id=property_data.id) }}" role="menuitem">{{ t('edit') }}</a>
+                {% endif %}
+                {% if is_agent() %}
+                <a href="{{ url_for('agenda_new', property_id=property_data.id, next=request.path) }}" role="menuitem">{{ t('property_create_visit') }}</a>
+                {% endif %}
+                <button
+                    type="button"
+                    role="menuitem"
+                    data-pd-copy="{{ request.url }}"
+                    data-copied-label="{{ t('property_link_copied') }}"
+                >{{ t('property_copy_link') }}</button>
+            </div>
+        </div>
+    </div>
+
+    {% if is_agent() %}
+    <a class="pd-jrh" href="{{ url_for('jrh_ask') }}#jrh-ask-prompt">✨ {{ t('property_ask_jrh') }}</a>
+    {% endif %}
+
+    {% include "properties/_detail_agent.html" %}
+</div>

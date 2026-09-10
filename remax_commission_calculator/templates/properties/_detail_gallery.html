@@ -1,0 +1,85 @@
+<section
+    class="pd-gallery property-gallery{% if not property_gallery or property_gallery|length == 1 %} pd-gallery--solo{% endif %}"
+    data-property-gallery
+    data-pd-gallery
+    aria-label="{{ t('property_gallery_title') }}"
+>
+    {% if property_gallery %}
+        {% for item in property_gallery %}
+        <span hidden data-pd-src="{{ item.src }}"></span>
+        {% endfor %}
+        <button type="button" class="pd-gallery__hero-btn" data-pd-open="0" aria-label="{{ t('property_see_all_photos') }}">
+            <img
+                class="pd-gallery__hero property-gallery__hero"
+                src="{{ property_gallery[0].src }}"
+                alt="{{ t('property_photo_alt') }}"
+                decoding="async"
+                fetchpriority="high"
+                referrerpolicy="no-referrer"
+                data-pd-hero
+                data-media-url="{{ property_gallery[0].src }}"
+                data-media-fallback
+                data-fallback-label="{{ t('property_no_photos') }}"
+                onerror="window.__jrhMediaFallback && window.__jrhMediaFallback(this)"
+            >
+        </button>
+        {% if property_gallery|length > 1 %}
+        <div class="pd-gallery__side">
+            {% for item in property_gallery[1:5] %}
+            <button type="button" data-pd-open="{{ loop.index }}" aria-label="{{ t('property_photo_alt') }}">
+                <img
+                    src="{{ item.src }}"
+                    alt="{{ t('property_photo_alt') }}"
+                    loading="lazy"
+                    decoding="async"
+                    referrerpolicy="no-referrer"
+                    data-media-url="{{ item.src }}"
+                    data-media-fallback
+                    data-fallback-label="{{ t('property_no_photos') }}"
+                    onerror="window.__jrhMediaFallback && window.__jrhMediaFallback(this)"
+                >
+                {% if loop.last and detail.extra_photo_count %}
+                <span class="pd-gallery__more">{{ t('property_more_photos', n=detail.extra_photo_count) }}</span>
+                {% endif %}
+            </button>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <span
+            class="pd-gallery__count"
+            data-pd-counter
+            data-template="{{ t('property_photo_counter', current='{current}', total='{total}') }}"
+        >{{ t('property_photo_counter', current=1, total=property_gallery|length) }}</span>
+        <button type="button" class="pd-gallery__all" data-pd-open="0">{{ t('property_see_all_photos') }}</button>
+    {% else %}
+        <div class="pd-gallery__empty property-gallery__empty property-media-placeholder property-media-placeholder--hero">
+            <span class="property-media-placeholder__label">{{ t('property_no_photos') }}</span>
+        </div>
+    {% endif %}
+    {% if is_admin() and property_media_debug %}
+    <aside class="property-media-debug" aria-label="{{ t('property_media_debug_title') }}">
+        {% for item in property_media_debug %}
+        <p>
+            Media #{{ item.id }}
+            · Source: {{ item.source }}
+            · Remote: {% if item.has_remote_url %}Sí{% else %}No{% endif %}
+            · Host: {{ item.hostname or '—' }}
+            · Renderable: {% if item.renderable %}Sí{% else %}No{% endif %}
+        </p>
+        {% endfor %}
+    </aside>
+    {% endif %}
+</section>
+
+{% if property_gallery %}
+<dialog class="pd-modal" data-pd-lightbox aria-label="{{ t('property_gallery_title') }}">
+    <button type="button" class="aa-dialog__close" data-pd-lightbox-close>×</button>
+    <img data-pd-lightbox-img src="{{ property_gallery[0].src }}" alt="{{ t('property_photo_alt') }}" referrerpolicy="no-referrer">
+    {% if property_gallery|length > 1 %}
+    <div class="pd-actions">
+        <button type="button" class="btn btn-secondary" data-pd-lightbox-prev>{{ t('back') }}</button>
+        <button type="button" class="btn btn-secondary" data-pd-lightbox-next>→</button>
+    </div>
+    {% endif %}
+</dialog>
+{% endif %}

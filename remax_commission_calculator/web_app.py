@@ -289,6 +289,7 @@ from modules.property_inventory import (
     decorate_property_for_display,
     identity_fields_changed,
 )
+from modules.property_detail_view import build_property_detail_view
 from modules.property_types import (
     COMMERCIAL_STATUSES,
     LISTING_CURRENCIES,
@@ -5098,12 +5099,12 @@ def _property_gallery_for_detail(property_data):
             }
         )
     debug = []
+    media_total = 0
     if organization_id is not None and property_id is not None:
-        debug = [
-            describe_property_media(item, property_id)
-            for item in list_property_media(organization_id, property_id)
-        ]
-    return gallery, debug
+        all_media = list_property_media(organization_id, property_id)
+        media_total = len(all_media)
+        debug = [describe_property_media(item, property_id) for item in all_media]
+    return gallery, debug, media_total
 
 
 @app.route("/properties/<int:property_id>")
@@ -5158,14 +5159,40 @@ def properties_detail(property_id):
         except PropertyMediaError:
             can_use_property_media = False
 
-    property_gallery, property_media_debug = _property_gallery_for_detail(property_data)
+    property_gallery, property_media_debug, media_total = _property_gallery_for_detail(property_data)
+    decorated = decorate_property_for_display(
+        property_data,
+        language=language,
+    )
+    decorated["media_total"] = media_total
+    decorated["gallery_count"] = len(property_gallery)
+    current_user = get_current_user()
+    detail = build_property_detail_view(
+        decorated,
+        organization_id=organization_id,
+        user=current_user,
+        language=language,
+    )
+    if is_agent() and current_user is not None:
+        from modules.jrh_ai_context import load_context, store_context
+
+        ctx = load_context(session)
+        store_context(
+            session,
+            intent=ctx.get("last_intent") or "",
+            entity={
+                "kind": "property",
+                "id": property_data["id"],
+                "label": detail.get("title") or property_data.get("address"),
+            },
+            prompt=ctx.get("last_prompt") or "",
+            pending_invoice=ctx.get("pending_invoice"),
+        )
 
     return render_template(
         "properties/detail.html",
-        property_data=decorate_property_for_display(
-            property_data,
-            language=language,
-        ),
+        property_data=decorated,
+        detail=detail,
         property_gallery=property_gallery,
         property_media_debug=property_media_debug if is_admin() else [],
         property_display_id=format_property_display_id(

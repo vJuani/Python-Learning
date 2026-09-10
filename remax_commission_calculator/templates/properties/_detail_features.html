@@ -1,0 +1,30 @@
+{% if detail.characteristics %}
+<section class="pd-section" data-pd-features>
+    <h3>{{ t('property_features_title') }}</h3>
+    <div class="pd-facts">
+        {% for label, value in detail.characteristics %}
+        <article>
+            <span>{{ label }}</span>
+            <strong>{{ value }}</strong>
+        </article>
+        {% endfor %}
+    </div>
+    {% if detail.features_extra %}
+    <h3>{{ t('property_features_extra') }}</h3>
+    <ul class="pd-extra">
+        {% for label in detail.features_extra %}
+        <li>{{ label }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</section>
+{% elif detail.features_extra %}
+<section class="pd-section" data-pd-features>
+    <h3>{{ t('property_features_extra') }}</h3>
+    <ul class="pd-extra">
+        {% for label in detail.features_extra %}
+        <li>{{ label }}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}

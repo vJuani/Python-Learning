@@ -1,0 +1,48 @@
+<section class="pd-section" aria-labelledby="property-location-title" data-pd-location>
+    <h3 id="property-location-title">{{ t('property_location_title') }}</h3>
+    <div class="pd-location">
+        <div>
+            <p><strong>{{ detail.title or property_data.address }}</strong></p>
+            {% if detail.location_line %}
+            <p>{{ detail.location_line }}</p>
+            {% endif %}
+            {% if detail.secondary_line %}
+            <p class="field-help">{{ detail.secondary_line }}</p>
+            {% endif %}
+            <p class="field-help">{{ detail.full_address }}</p>
+            <div class="pd-actions">
+                {% if property_data.has_coordinates %}
+                <a class="btn btn-secondary" href="{{ url_for('properties_list', nearby_id=property_data.id, radius_km=1, near=property_data.address) }}">{{ t('property_nearby') }}</a>
+                {% endif %}
+                {% if property_data.maps_directions_url %}
+                <a class="btn btn-primary" href="{{ property_data.maps_directions_url }}" target="_blank" rel="noopener">{{ t('property_location_directions') }}</a>
+                {% endif %}
+                {% if property_data.maps_open_url %}
+                <a class="btn btn-secondary" href="{{ property_data.maps_open_url }}" target="_blank" rel="noopener">{{ t('property_location_open') }}</a>
+                {% endif %}
+            </div>
+            {% if not property_data.has_coordinates %}
+            <p class="field-help">
+                {% if property_data.geocode_status == 'stale' %}
+                {{ t('property_location_stale') }}
+                {% elif maps is defined and maps.configured %}
+                {{ t('property_location_ungeocoded') }}
+                {% else %}
+                {{ t('property_location_maps_off') }}
+                {% endif %}
+            </p>
+            {% endif %}
+        </div>
+        {% if property_data.show_map %}
+        <div
+            class="pd-map property-location__map"
+            data-jrh-maps
+            data-maps-mode="embed"
+            data-maps-key="{{ maps.browser_key if maps is defined else '' }}"
+            data-maps-lat="{{ property_data.latitude }}"
+            data-maps-lng="{{ property_data.longitude }}"
+            data-maps-title="{{ detail.full_address or property_data.address }}"
+        ></div>
+        {% endif %}
+    </div>
+</section>

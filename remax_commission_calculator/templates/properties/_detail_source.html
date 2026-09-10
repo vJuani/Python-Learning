@@ -1,0 +1,15 @@
+{% if property_data.is_synced or detail.source_key not in ('', 'manual') %}
+<section class="pd-section pd-source" data-pd-source>
+    <h3>{{ t('property_source_info') }}</h3>
+    <p>{{ detail.source_badge }}</p>
+    {% if detail.mls %}
+    <p>{{ t('property_mls') }} #{{ detail.mls }}</p>
+    {% endif %}
+    {% if detail.sync_ago %}
+    <p>{{ t('sync_last_updated') }}: {{ detail.sync_ago }}</p>
+    {% endif %}
+    {% if is_admin() and detail.sync_warning %}
+    <p>{{ t('property_sync_warning') }}</p>
+    {% endif %}
+</section>
+{% endif %}

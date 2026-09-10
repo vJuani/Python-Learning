@@ -386,7 +386,7 @@ class PropertyPhotoTests(unittest.TestCase):
         row = add_property("Sin Galeria 77", "CABA", self.org, agent_id=self.agent_id)
         client = self._login()
         html = client.get(f"/properties/{row}").get_data(as_text=True)
-        self.assertIn("Sin fotos sincronizadas", html)
+        self.assertIn("Sin fotos disponibles", html)
         self.assertIn("property-media-placeholder", html)
 
     def test_csp_allows_redremax_host(self):

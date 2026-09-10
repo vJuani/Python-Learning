@@ -1,0 +1,22 @@
+{% if is_agent() %}
+<section class="pd-section" data-pd-acm>
+    <div class="pd-acm">
+        <div>
+            <h3>{{ t('property_acm_card_title') }}</h3>
+            {% if detail.latest_acm %}
+            <p>{{ t('property_acm_last') }}: {{ detail.latest_acm.date_label }}</p>
+            {% if detail.latest_acm.value_label %}
+            <p>{{ t('property_value_ref') }}: {{ detail.latest_acm.value_label }}</p>
+            {% endif %}
+            {% else %}
+            <p>{{ t('property_acm_card_copy') }}</p>
+            {% endif %}
+        </div>
+        {% if detail.latest_acm %}
+        <a class="btn btn-primary" href="{{ url_for('acm_detail', acm_id=detail.latest_acm.id) }}">{{ t('property_acm_open') }}</a>
+        {% else %}
+        <a class="btn btn-primary" href="{{ url_for('acm_new', property_id=property_data.id) }}">{{ t('acm_create') }}</a>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
