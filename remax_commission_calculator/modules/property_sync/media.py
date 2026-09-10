@@ -168,7 +168,11 @@ def pick_cover_media(items):
 
 
 def csp_allows_redremax_images(header_value):
-    """True when CSP is absent or img-src includes the RedREMAX photo host."""
+    """True when CSP is absent or img-src includes a RedREMAX photo host."""
+    from urllib.parse import urlparse
+
+    from modules.property_sync.redremax.mapping import REDREMAX_ALLOWED_IMAGE_HOSTS
+
     raw = str(header_value or "").strip()
     if not raw:
         return True
@@ -179,10 +183,19 @@ def csp_allows_redremax_images(header_value):
     )
     if not img_src:
         return True
-    tokens = img_src.split()
+    tokens = []
+    for token in img_src.split():
+        lowered = token.lower()
+        if lowered in {"img-src", "'self'", "data:", "blob:", "*"}:
+            tokens.append(lowered)
+            continue
+        parsed = urlparse(token if "://" in token else f"https://{token}")
+        host = (parsed.hostname or "").strip().lower()
+        if host:
+            tokens.append(host)
     if "*" in tokens:
         return True
-    return "redremax-images.s3.amazonaws.com" in img_src.lower()
+    return any(host in tokens for host in REDREMAX_ALLOWED_IMAGE_HOSTS)
 
 
 def get_property_cover_media(property_or_org, property_id=None):

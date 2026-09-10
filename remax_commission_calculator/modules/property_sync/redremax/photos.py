@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from urllib.parse import urlparse, urlunparse
 
-from modules.property_sync.redremax.mapping import PHOTO_HOST_ALLOWLIST
+from modules.property_sync.redremax.mapping import REDREMAX_ALLOWED_IMAGE_HOSTS
 
 BETA_PHOTO_LIMIT = 5
 
@@ -35,8 +35,13 @@ def canonical_photo_url(url):
 
 
 def photo_host(url):
+    """Hostname only: lowercase, no scheme/path/port."""
     parsed = urlparse(str(url or "").strip())
     return (parsed.hostname or "").strip().lower()
+
+
+def is_allowed_redremax_photo_host(host):
+    return str(host or "").strip().lower() in REDREMAX_ALLOWED_IMAGE_HOSTS
 
 
 def is_allowed_redremax_photo_url(url):
@@ -47,8 +52,7 @@ def is_allowed_redremax_photo_url(url):
     parsed = urlparse(canonical)
     if parsed.scheme != "https":
         return False
-    host = (parsed.hostname or "").lower()
-    return host in PHOTO_HOST_ALLOWLIST
+    return is_allowed_redremax_photo_host(parsed.hostname)
 
 
 def photo_external_id(url):
@@ -67,8 +71,7 @@ def _reject_reason(url):
         return "not_url"
     if parsed.scheme != "https":
         return "http"
-    host = (parsed.hostname or "").lower()
-    if host not in PHOTO_HOST_ALLOWLIST:
+    if not is_allowed_redremax_photo_host(parsed.hostname):
         return "invalid_host"
     return None
 

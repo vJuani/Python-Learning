@@ -396,6 +396,11 @@ class PropertyPhotoTests(unittest.TestCase):
                 "default-src 'self'; img-src 'self' data: blob: https://redremax-images.s3.amazonaws.com"
             )
         )
+        self.assertTrue(
+            csp_allows_redremax_images(
+                "default-src 'self'; img-src 'self' data: blob: https://redremax-images.s3-us-west-1.amazonaws.com"
+            )
+        )
         self.assertFalse(
             csp_allows_redremax_images("default-src 'self'; img-src 'self' data:")
         )
@@ -631,3 +636,87 @@ class PropertyPhotoTests(unittest.TestCase):
         self.assertEqual(rejected_preview["photos_rejected"], 1)
         self.assertEqual(rejected_preview["photo_notes"][0]["code"], "photos_rejected")
         self.assertEqual(rejected_preview["unknown_hosts"], ["evil.example"])
+
+    def test_classic_and_west1_hosts_are_allowed(self):
+        classic = map_photos([photo(1, host="redremax-images.s3.amazonaws.com", primary=True)])
+        west = map_photos(
+            [photo(1, host="redremax-images.s3-us-west-1.amazonaws.com", primary=True)]
+        )
+        self.assertEqual(len(classic), 1)
+        self.assertEqual(len(west), 1)
+        self.assertIn("redremax-images.s3.amazonaws.com", classic[0]["original_url"])
+        self.assertIn("redremax-images.s3-us-west-1.amazonaws.com", west[0]["original_url"])
+
+    def test_foreign_s3_and_generic_amazonaws_hosts_are_rejected(self):
+        self.assertEqual(
+            map_photos([photo(1, host="fake-bucket.s3-us-west-1.amazonaws.com")]),
+            [],
+        )
+        self.assertEqual(map_photos([photo(1, host="other-bucket.s3.amazonaws.com")]), [])
+        self.assertEqual(map_photos([photo(1, host="s3.amazonaws.com")]), [])
+        self.assertEqual(map_photos([photo(1, host="amazonaws.com")]), [])
+        sneak = map_photos(
+            [
+                {
+                    "cdn": "https://evil.example/listings/x.jpg?next=https://redremax-images.s3.amazonaws.com/x.jpg",
+                    "primary": True,
+                }
+            ]
+        )
+        self.assertEqual(sneak, [])
+
+    def test_unchanged_property_repairs_west1_media_without_duplicate(self):
+        listing = load_listing(id="AR.42.27.301.206", photo_count=0)
+        row = self._import(listing)
+        self.assertEqual(list_property_media(self.org, row["id"]), [])
+        listing = load_listing(id="AR.42.27.301.206", photo_count=0)
+        listing["photos"] = [
+            photo(
+                index,
+                primary=(index == 0),
+                host="redremax-images.s3-us-west-1.amazonaws.com",
+            )
+            for index in range(8)
+        ]
+        preview = preview_redremax_json_import(
+            self.org,
+            [json_upload(listings_envelope([listing]))],
+            created_by=self.admin,
+        )
+        self.assertEqual(preview["created"], 0)
+        self.assertEqual(preview["updated"], 0)
+        self.assertEqual(preview["unchanged"], 1)
+        self.assertEqual(preview["photos_detected"], 8)
+        self.assertEqual(preview["photos_valid"], 8)
+        self.assertEqual(preview["photos_new"], 5)
+        self.assertEqual(preview["photos_rejected"], 0)
+        result = confirm_redremax_json_import(self.org, preview["confirm_token"])
+        self.assertEqual(result["created"], 0)
+        self.assertEqual(result["updated"], 0)
+        self.assertEqual(result["unchanged"], 1)
+        self.assertEqual(result["photos_created"], 5)
+        media = list_property_media(self.org, row["id"])
+        self.assertEqual(len(media), 5)
+        self.assertTrue(
+            all(
+                "redremax-images.s3-us-west-1.amazonaws.com" in (item["original_url"] or "")
+                for item in media
+            )
+        )
+        second = preview_redremax_json_import(
+            self.org,
+            [json_upload(listings_envelope([listing]), "again.json")],
+            created_by=self.admin,
+        )
+        confirm_redremax_json_import(self.org, second["confirm_token"])
+        self.assertEqual(len(list_property_media(self.org, row["id"])), 5)
+        self.assertEqual(
+            len(
+                [
+                    item
+                    for item in get_properties(self.org, include_all_statuses=True)
+                    if item.get("external_id") == "AR.42.27.301.206"
+                ]
+            ),
+            1,
+        )

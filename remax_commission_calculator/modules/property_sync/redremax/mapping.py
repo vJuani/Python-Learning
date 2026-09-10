@@ -7,7 +7,13 @@ from modules.property_types import LISTING_PURPOSES, PROPERTY_TYPES
 
 PROVIDER_REDREMAX = "redremax"
 DEFAULT_API_BASE_URL = "https://api-ar.redremax.com"
-PHOTO_HOST_ALLOWLIST = frozenset({"redremax-images.s3.amazonaws.com"})
+REDREMAX_ALLOWED_IMAGE_HOSTS = frozenset(
+    {
+        "redremax-images.s3.amazonaws.com",
+        "redremax-images.s3-us-west-1.amazonaws.com",
+    }
+)
+PHOTO_HOST_ALLOWLIST = REDREMAX_ALLOWED_IMAGE_HOSTS
 LOCATION_SOURCE = "external_redremax"
 
 # Observed: "sale". JRH listing_purpose stays "sale" (UI label: Venta).
