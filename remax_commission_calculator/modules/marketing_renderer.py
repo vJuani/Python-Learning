@@ -1,4 +1,4 @@
-"""Deterministic Pillow marketing renderer. LLM never positions pixels."""
+"""Deterministic Pillow marketing renderer. Matches JRH flyer language."""
 
 from __future__ import annotations
 
@@ -18,10 +18,11 @@ from modules.property_sync.remote_media import fetch_allowed_image_bytes
 NAVY = (10, 22, 51)
 ELECTRIC = (13, 71, 255)
 WHITE = (255, 255, 255)
-SOFT = (238, 243, 255)
-INK = (51, 65, 92)
+SOFT = (244, 247, 252)
+INK = (17, 28, 51)
 MUTED = (91, 107, 124)
-GOLD = (214, 196, 160)
+GOLD = (196, 164, 92)
+LINE = (226, 232, 240)
 
 FORMAT_SIZES = {
     "story": (1080, 1920),
@@ -31,32 +32,39 @@ FORMAT_SIZES = {
 }
 
 STYLE_ACCENT = {
-    "elegant": GOLD,
+    "elegant": ELECTRIC,
     "modern": ELECTRIC,
     "minimal": ELECTRIC,
 }
 
 
-def _font_path(bold=False):
-    candidates = (
-        (
-            Path(r"C:\Windows\Fonts\segoeuib.ttf")
-            if bold
-            else Path(r"C:\Windows\Fonts\segoeui.ttf")
-        ),
-        Path(r"C:\Windows\Fonts\arialbd.ttf") if bold else Path(r"C:\Windows\Fonts\arial.ttf"),
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
-        if bold
-        else Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-    )
+def _font_path(bold=False, italic=False):
+    if italic:
+        candidates = (
+            Path(r"C:\Windows\Fonts\segoeuiz.ttf"),
+            Path(r"C:\Windows\Fonts\segoesc.ttf"),
+            Path(r"C:\Windows\Fonts\calibrii.ttf"),
+        )
+    elif bold:
+        candidates = (
+            Path(r"C:\Windows\Fonts\segoeuib.ttf"),
+            Path(r"C:\Windows\Fonts\arialbd.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        )
+    else:
+        candidates = (
+            Path(r"C:\Windows\Fonts\segoeui.ttf"),
+            Path(r"C:\Windows\Fonts\arial.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        )
     for path in candidates:
         if path.is_file():
             return str(path)
     return None
 
 
-def font(size, *, bold=False):
-    path = _font_path(bold)
+def font(size, *, bold=False, italic=False):
+    path = _font_path(bold=bold, italic=italic)
     if path:
         return ImageFont.truetype(path, size)
     return ImageFont.load_default()
@@ -111,7 +119,7 @@ def load_property_photos(photo_rows, *, cache=None):
                 image = _open_image(remote)
             if image is None:
                 continue
-            images.append(image.convert("RGB"))
+            images.append(ImageEnhance.Contrast(image.convert("RGB")).enhance(1.04))
         except Exception:
             continue
     return images
@@ -122,16 +130,6 @@ def load_agent_photo(path):
     if image is None:
         return None
     return _as_rgba(image)
-
-
-def _vertical_fade(width, height, start_alpha=0, end_alpha=220, color=NAVY):
-    gradient = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(gradient)
-    for index in range(height):
-        ratio = index / max(1, height - 1)
-        alpha = int(start_alpha + (end_alpha - start_alpha) * ratio)
-        draw.line([(0, index), (width, index)], fill=(*color, alpha))
-    return gradient
 
 
 def _text_width(draw, text, used_font):
@@ -155,13 +153,6 @@ def _wrap(draw, text, used_font, max_width):
     return lines
 
 
-def _draw_text(draw, xy, text, used_font, fill=WHITE, shadow=True):
-    x, y = xy
-    if shadow:
-        draw.text((x + 1, y + 2), text, font=used_font, fill=(0, 0, 0, 110))
-    draw.text((x, y), text, font=used_font, fill=fill)
-
-
 @lru_cache(maxsize=12)
 def _logo_rgba(path):
     image = _open_image(path)
@@ -170,194 +161,419 @@ def _logo_rgba(path):
     return _as_rgba(image).copy()
 
 
-def _paste_logo(canvas, logo_path, *, box, xy=(48, 48)):
-    image = _logo_rgba(str(logo_path)) if logo_path else None
+def _rounded_mask(width, height, radius):
+    mask = Image.new("L", (width, height), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, width - 1, height - 1), radius=max(1, radius), fill=255
+    )
+    return mask
+
+
+def _circle_mask(diameter):
+    mask = Image.new("L", (diameter, diameter), 0)
+    ImageDraw.Draw(mask).ellipse((1, 1, diameter - 2, diameter - 2), fill=255)
+    return mask
+
+
+def paste_rounded(canvas, image, xy, size, radius=28):
     if image is None:
         return
+    fitted = fit_cover(image.convert("RGB"), size[0], size[1]).convert("RGBA")
+    fitted.putalpha(_rounded_mask(size[0], size[1], radius))
+    canvas.paste(fitted, xy, fitted)
+
+
+def paste_circle(canvas, image, xy, diameter):
+    if image is None:
+        return
+    fitted = fit_cover(image.convert("RGBA"), diameter, diameter)
+    fitted.putalpha(_circle_mask(diameter))
+    canvas.paste(fitted, xy, fitted)
+
+
+def _u(width, value):
+    return max(1, int(value * width / 1080))
+
+
+def _paste_logo(canvas, logo_path, *, box, xy):
+    image = _logo_rgba(str(logo_path)) if logo_path else None
+    if image is None:
+        return False
     image = image.copy()
     image.thumbnail(box, Image.Resampling.LANCZOS)
     canvas.paste(image, xy, image)
+    return True
 
 
-def _paste_agent(canvas, agent, *, xy, size=168, show_photo=True):
+def _wordmark(draw, xy, brand, *, fill=NAVY, size=36):
+    x, y = xy
+    draw.text((x, y), brand or "JRH One", font=font(size, bold=True), fill=fill)
+
+
+def _header(canvas, facts, *, accent, invert=False):
+    width, _height = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    pad = _u(width, 48)
+    if invert:
+        draw.rounded_rectangle(
+            (0, 0, width, _u(width, 118)),
+            0,
+            fill=NAVY,
+        )
+        fill = WHITE
+    else:
+        fill = NAVY
+    placed = _paste_logo(
+        canvas,
+        facts.get("organization_logo"),
+        box=(_u(width, 220), _u(width, 64)),
+        xy=(pad, _u(width, 28)),
+    )
+    if not placed:
+        _wordmark(draw, (pad, _u(width, 34)), facts.get("brand_name"), fill=fill, size=_u(width, 34))
+    purpose = (facts.get("purpose_label") or "").upper()
+    if purpose:
+        badge_w = _text_width(draw, purpose, font(_u(width, 20), bold=True)) + _u(width, 48)
+        bx = width - pad - badge_w
+        by = _u(width, 36)
+        draw.rounded_rectangle(
+            (bx, by, bx + badge_w, by + _u(width, 46)),
+            _u(width, 23),
+            fill=NAVY if not invert else ELECTRIC,
+        )
+        draw.text(
+            (bx + _u(width, 24), by + _u(width, 10)),
+            purpose,
+            font=font(_u(width, 20), bold=True),
+            fill=WHITE,
+        )
+
+
+def _feature_icons(draw, chips, xy, *, width, color=ELECTRIC, text_fill=INK):
+    if not chips:
+        return
+    x, y = xy
+    gap = _u(width, 28)
+    icon = _u(width, 22)
+    used = font(_u(width, 22))
+    for chip in chips[:4]:
+        _draw_icon(draw, (x, y + 2), color, icon)
+        draw.text((x + icon + 8, y), chip, font=used, fill=text_fill)
+        x += icon + 8 + _text_width(draw, chip, used) + gap
+
+
+def _draw_icon(draw, xy, color, size):
+    x, y = xy
+    draw.rounded_rectangle((x, y, x + size, y + size), 6, outline=color, width=2)
+    draw.line((x + 4, y + size * 0.55, x + size - 4, y + size * 0.55), fill=color, width=2)
+
+
+def _cta_pill(draw, xy, text, *, width, accent=ELECTRIC, min_w=None):
+    if not text:
+        return
+    used = font(_u(width, 26), bold=True)
+    label = f"{text}  →"
+    tw = _text_width(draw, label, used)
+    pad_x = _u(width, 36)
+    pill_w = max(min_w or 0, tw + pad_x * 2)
+    x, y = xy
+    h = _u(width, 64)
+    draw.rounded_rectangle((x, y, x + pill_w, y + h), h // 2, fill=accent)
+    draw.text((x + (pill_w - tw) // 2, y + _u(width, 16)), label, font=used, fill=WHITE)
+
+
+def _agent_block(canvas, agent, *, xy, width, show_photo=True, circular=False, size=180):
     if not agent:
         return
     x, y = xy
     photo = load_agent_photo(agent.get("photo_path")) if show_photo else None
+    photo_h = size if circular else int(size * 1.18)
     if photo is not None:
-        photo = fit_cover(photo, size, int(size * 1.15))
-        canvas.paste(photo, (x, y), photo if photo.mode == "RGBA" else None)
-        text_x = x + size + 22
+        if circular:
+            paste_circle(canvas, photo, (x, y), size)
+        else:
+            paste_rounded(canvas, photo, (x, y), (size, photo_h), radius=_u(width, 28))
+        text_y = y + photo_h + _u(width, 12)
     else:
-        text_x = x
+        text_y = y
     draw = ImageDraw.Draw(canvas)
-    name_font = font(28, bold=True)
-    meta_font = font(22)
-    _draw_text(draw, (text_x, y + 18), agent.get("name") or "", name_font)
-    contact = agent.get("phone") or agent.get("email") or ""
-    if contact:
-        _draw_text(draw, (text_x, y + 58), contact, meta_font, fill=SOFT)
+    name = agent.get("name") or ""
+    title = agent.get("title") or ""
+    draw.text((x, text_y), name, font=font(_u(width, 24), bold=True), fill=NAVY)
+    if title:
+        draw.text(
+            (x, text_y + _u(width, 32)),
+            title,
+            font=font(_u(width, 16)),
+            fill=MUTED,
+        )
 
 
-def _facts_line(facts):
-    return "  ·  ".join(facts.get("chips") or [])
-
-
-def _draw_price_block(draw, facts, options, *, xy, accent, large=False):
+def _address_block(draw, facts, copy, *, xy, width, max_width, light=False):
     x, y = xy
-    if options.get("show_price") and facts.get("price_label"):
-        _draw_text(draw, (x, y), facts["price_label"], font(86 if large else 64, bold=True))
-        y += 96 if large else 74
-    purpose = (facts.get("purpose_label") or "").upper()
-    if purpose:
-        _draw_text(draw, (x, y), purpose, font(26, bold=True), fill=accent)
-        y += 40
+    title_fill = WHITE if light else NAVY
+    mute = SOFT if light else MUTED
+    kicker = (copy.get("headline") or facts.get("type_label") or "").upper()
+    if kicker:
+        draw.text((x, y), kicker, font=font(_u(width, 20), bold=True), fill=ELECTRIC if not light else WHITE)
+        y += _u(width, 34)
+    title = facts.get("title") or copy.get("headline") or ""
+    title_font = font(_u(width, 64), bold=True)
+    for line in _wrap(draw, title, title_font, max_width)[:2]:
+        draw.text((x, y), line, font=title_font, fill=title_fill)
+        y += _u(width, 70)
+    loc = facts.get("location_line") or facts.get("locality") or ""
+    if loc:
+        draw.text((x, y + 4), f"●  {loc}", font=font(_u(width, 24)), fill=mute)
+        y += _u(width, 40)
     return y
 
 
-def _base_canvas(size, color=NAVY):
-    return Image.new("RGBA", size, (*color, 255))
+def _price(draw, facts, options, *, xy, width, fill=NAVY, size=72):
+    if not (options.get("show_price") and facts.get("price_label")):
+        return
+    draw.text(xy, facts["price_label"], font=font(_u(width, size), bold=True), fill=fill)
 
 
 def render_editorial(size, photos, facts, copy, agent, options, style):
+    """Hero + overlay title, two thumbs, agent card. Reference flyer 1."""
     width, height = size
-    canvas = _base_canvas(size)
-    cover = photos[0] if photos else None
-    if cover is not None:
-        photo = fit_cover(cover, width, height)
-        photo = ImageEnhance.Contrast(photo).enhance(1.06)
-        canvas.paste(photo.convert("RGBA"), (0, 0))
-    top = _vertical_fade(width, 180, 90, 0)
-    canvas.alpha_composite(top, (0, 0))
-    fade = _vertical_fade(width, int(height * 0.42), 0, 210)
-    canvas.alpha_composite(fade, (0, height - fade.height))
+    canvas = Image.new("RGBA", size, WHITE)
     draw = ImageDraw.Draw(canvas)
     accent = STYLE_ACCENT.get(style, ELECTRIC)
-    _paste_logo(canvas, facts.get("organization_logo"), box=(220, 72))
-    y = _draw_price_block(
-        draw, facts, options, xy=(56, int(height * 0.52)), accent=accent, large=True
-    )
-    title_font = font(54, bold=True)
-    for line in _wrap(draw, copy.get("headline") or facts.get("title"), title_font, width - 120)[:3]:
-        _draw_text(draw, (56, y), line, title_font)
-        y += 64
-    loc = facts.get("location_line") or facts.get("locality") or ""
-    if loc:
-        _draw_text(draw, (56, y + 8), loc, font(30), fill=SOFT)
-        y += 50
-    chips = _facts_line(facts)
-    if chips and options.get("show_features", True):
-        _draw_text(draw, (56, y + 8), chips, font(26), fill=SOFT)
+    pad = _u(width, 48)
+    _header(canvas, facts, accent=accent)
+    hero_top = _u(width, 130)
+    hero_h = int(height * 0.42)
+    if photos:
+        paste_rounded(
+            canvas,
+            photos[0],
+            (pad, hero_top),
+            (width - pad * 2, hero_h),
+            radius=_u(width, 36),
+        )
+        tint = Image.new("RGBA", (width - pad * 2, hero_h), (0, 0, 0, 0))
+        tdraw = ImageDraw.Draw(tint)
+        fade_h = int(hero_h * 0.48)
+        for index in range(fade_h):
+            ratio = index / max(1, fade_h - 1)
+            tdraw.line(
+                [(0, hero_h - fade_h + index), (width - pad * 2, hero_h - fade_h + index)],
+                fill=(10, 22, 51, int(20 + 200 * ratio)),
+            )
+        alpha = _rounded_mask(width - pad * 2, hero_h, _u(width, 36))
+        tint_alpha = tint.split()[-1]
+        merged = Image.new("L", tint.size, 0)
+        merged.paste(tint_alpha, (0, 0), alpha)
+        tint.putalpha(merged)
+        canvas.paste(tint, (pad, hero_top), tint)
+        overlay_draw = ImageDraw.Draw(canvas)
+        _address_block(
+            overlay_draw,
+            facts,
+            copy,
+            xy=(pad + _u(width, 36), hero_top + hero_h - _u(width, 280)),
+            width=width,
+            max_width=width - pad * 2 - _u(width, 80),
+            light=True,
+        )
+        if options.get("show_features", True):
+            _feature_icons(
+                overlay_draw,
+                facts.get("chips") or [],
+                (pad + _u(width, 36), hero_top + hero_h - _u(width, 70)),
+                width=width,
+                color=WHITE,
+                text_fill=WHITE,
+            )
+    y = hero_top + hero_h + _u(width, 36)
+    _price(draw, facts, options, xy=(pad, y), width=width, size=78)
+    y += _u(width, 100)
+    thumbs_h = _u(width, 220)
+    remaining = photos[1:3]
+    if remaining:
+        thumb_w = (width - pad * 2 - _u(width, 240) - _u(width, 24)) // max(1, len(remaining))
+        for index, photo in enumerate(remaining):
+            paste_rounded(
+                canvas,
+                photo,
+                (pad + index * (thumb_w + 12), y),
+                (thumb_w, thumbs_h),
+                radius=_u(width, 24),
+            )
     if options.get("include_agent") and agent:
-        _paste_agent(
+        _agent_block(
             canvas,
             agent,
-            xy=(56, height - 230),
+            xy=(width - pad - _u(width, 200), y - _u(width, 10)),
+            width=width,
             show_photo=options.get("show_agent_photo", True),
+            size=_u(width, 200),
         )
+    y += thumbs_h + _u(width, 36)
+    _cta_pill(
+        draw,
+        (pad, y),
+        copy.get("cta") or "Consultá por esta propiedad",
+        width=width,
+        accent=accent,
+        min_w=width - pad * 2 - _u(width, 280),
+    )
+    footer_top = height - _u(width, 110)
+    draw.rectangle((0, footer_top, width, height), fill=NAVY)
+    _paste_logo(
+        canvas,
+        facts.get("organization_logo"),
+        box=(_u(width, 180), _u(width, 50)),
+        xy=(pad, footer_top + _u(width, 28)),
+    )
+    draw.text(
+        (pad + _u(width, 200), footer_top + _u(width, 40)),
+        facts.get("brand_name") or "JRH One",
+        font=font(_u(width, 22), bold=True),
+        fill=WHITE,
+    )
     return canvas.convert("RGB")
 
 
 def render_visual(size, photos, facts, copy, agent, options, style):
+    """Asymmetric collage + price + agent. Reference flyer 3."""
     width, height = size
-    canvas = _base_canvas(size, NAVY)
+    canvas = Image.new("RGBA", size, WHITE)
     draw = ImageDraw.Draw(canvas)
     accent = STYLE_ACCENT.get(style, ELECTRIC)
-    margin = 36
-    gallery = photos[:3] or photos[:1]
-    top = 150
-    body_h = int(height * 0.58)
+    pad = _u(width, 48)
+    _header(canvas, facts, accent=accent)
+    top = _u(width, 136)
+    gallery_h = int(height * 0.38)
+    gallery = photos[:3]
     if len(gallery) == 1:
-        photo = fit_cover(gallery[0], width - margin * 2, body_h)
-        canvas.paste(photo.convert("RGBA"), (margin, top))
-    else:
-        left_w = int((width - margin * 2 - 16) * 0.62)
-        right_w = width - margin * 2 - 16 - left_w
-        left = fit_cover(gallery[0], left_w, body_h)
-        canvas.paste(left.convert("RGBA"), (margin, top))
-        stack_h = (body_h - 16) // 2
+        paste_rounded(
+            canvas, gallery[0], (pad, top), (width - pad * 2, gallery_h), radius=_u(width, 32)
+        )
+    elif gallery:
+        left_w = int((width - pad * 2 - 16) * 0.62)
+        right_w = width - pad * 2 - 16 - left_w
+        paste_rounded(
+            canvas, gallery[0], (pad, top), (left_w, gallery_h), radius=_u(width, 28)
+        )
         extra = gallery[1:3]
+        stack_h = (gallery_h - 16) // max(1, len(extra))
         for index, image in enumerate(extra):
-            tile = fit_cover(image, right_w, stack_h)
-            canvas.paste(
-                tile.convert("RGBA"),
-                (margin + left_w + 16, top + index * (stack_h + 16)),
+            paste_rounded(
+                canvas,
+                image,
+                (pad + left_w + 16, top + index * (stack_h + 16)),
+                (right_w, stack_h),
+                radius=_u(width, 24),
             )
-    _paste_logo(canvas, facts.get("organization_logo"), box=(200, 64))
-    purpose = (facts.get("purpose_label") or "").upper()
-    if purpose:
-        _draw_text(draw, (width - 280, 56), purpose, font(24, bold=True), fill=accent)
-    y = top + body_h + 36
-    if options.get("show_price") and facts.get("price_label"):
-        _draw_text(draw, (margin, y), facts["price_label"], font(58, bold=True))
-        y += 70
-    for line in _wrap(draw, copy.get("headline") or facts.get("title"), font(40, bold=True), width - 80)[:2]:
-        _draw_text(draw, (margin, y), line, font(40, bold=True))
-        y += 50
+    y = _address_block(
+        draw,
+        facts,
+        copy,
+        xy=(pad, top + gallery_h + _u(width, 28)),
+        width=width,
+        max_width=width - pad * 2 - (_u(width, 280) if agent else 0),
+    )
     if options.get("show_features", True):
-        chips = _facts_line(facts)
-        if chips:
-            _draw_text(draw, (margin, y + 6), chips, font(24), fill=SOFT)
+        _feature_icons(draw, facts.get("chips") or [], (pad, y + 8), width=width)
+        y += _u(width, 56)
+    _price(draw, facts, options, xy=(pad, y + 8), width=width, size=82)
     if options.get("include_agent") and agent:
-        _paste_agent(
+        _agent_block(
             canvas,
             agent,
-            xy=(margin, height - 210),
-            size=140,
+            xy=(width - pad - _u(width, 220), y - _u(width, 20)),
+            width=width,
             show_photo=options.get("show_agent_photo", True),
+            size=_u(width, 210),
         )
+    y += _u(width, 130)
+    _cta_pill(
+        draw,
+        (pad, min(y, height - _u(width, 160))),
+        copy.get("cta") or "Escribinos",
+        width=width,
+        accent=accent,
+    )
     return canvas.convert("RGB")
 
 
 def render_minimal(size, photos, facts, copy, agent, options, style):
+    """One hero, lots of air, chips, price + CTA, circular agent. Reference flyer 8."""
     width, height = size
-    canvas = Image.new("RGB", size, WHITE)
+    canvas = Image.new("RGBA", size, WHITE)
     draw = ImageDraw.Draw(canvas)
     accent = STYLE_ACCENT.get(style, ELECTRIC)
-    pad = 72 if style == "minimal" else 56
-    photo_h = int(height * 0.56)
+    pad = _u(width, 52)
+    _header(canvas, facts, accent=accent)
+    top = _u(width, 136)
+    hero_h = int(height * 0.36)
     if photos:
-        photo = fit_cover(photos[0], width - pad * 2, photo_h)
-        canvas.paste(photo, (pad, pad))
-    y = pad + photo_h + 40
-    navy_draw = ImageDraw.Draw(canvas)
-    purpose = (facts.get("purpose_label") or "").upper()
+        paste_rounded(
+            canvas, photos[0], (pad, top), (width - pad * 2, hero_h), radius=_u(width, 36)
+        )
+    y = top + hero_h + _u(width, 28)
+    purpose = " · ".join(
+        part
+        for part in (
+            (facts.get("type_label") or "").upper(),
+            (facts.get("purpose_label") or "").upper(),
+        )
+        if part
+    )
     if purpose:
-        navy_draw.text((pad, y), purpose, font=font(22, bold=True), fill=accent)
-        y += 36
-    title_font = font(48, bold=True)
-    for line in _wrap(draw, copy.get("headline") or facts.get("title"), title_font, width - pad * 2)[:2]:
-        navy_draw.text((pad, y), line, font=title_font, fill=NAVY)
-        y += 56
-    if options.get("show_price") and facts.get("price_label"):
-        navy_draw.text((pad, y + 8), facts["price_label"], font=font(56, bold=True), fill=NAVY)
-        y += 72
+        draw.text((pad, y), purpose, font=font(_u(width, 20), bold=True), fill=MUTED)
+        y += _u(width, 32)
+    title_font = font(_u(width, 58), bold=True)
+    for line in _wrap(draw, facts.get("title") or "", title_font, width - pad * 2)[:2]:
+        draw.text((pad, y), line, font=title_font, fill=NAVY)
+        y += _u(width, 64)
     loc = facts.get("location_line") or ""
     if loc:
-        navy_draw.text((pad, y), loc, font=font(26), fill=INK)
-        y += 40
-    if options.get("show_features", True) and facts.get("chips"):
-        navy_draw.text((pad, y), _facts_line(facts), font=font(24), fill=MUTED)
+        draw.text((pad, y), f"●  {loc}", font=font(_u(width, 24)), fill=MUTED)
+        y += _u(width, 40)
+    script = copy.get("headline") or ""
+    if script:
+        draw.text((pad, y), script, font=font(_u(width, 28), italic=True), fill=ELECTRIC)
+        y += _u(width, 46)
+    if options.get("show_features", True):
+        _feature_icons(draw, facts.get("chips") or [], (pad, y), width=width)
+        y += _u(width, 58)
+    _price(draw, facts, options, xy=(pad, y), width=width, size=70)
+    price_w = _text_width(draw, facts.get("price_label") or "", font(_u(width, 70), bold=True))
+    _cta_pill(
+        draw,
+        (pad + price_w + _u(width, 28), y + _u(width, 12)),
+        copy.get("cta") or "Consultá",
+        width=width,
+        accent=accent,
+    )
+    y += _u(width, 110)
+    thumbs = photos[1:3]
+    thumb_h = _u(width, 200)
+    if thumbs:
+        thumb_w = _u(width, 250)
+        for index, photo in enumerate(thumbs):
+            paste_rounded(
+                canvas,
+                photo,
+                (pad + index * (thumb_w + 16), y),
+                (thumb_w, thumb_h),
+                radius=_u(width, 24),
+            )
     if options.get("include_agent") and agent:
-        name = agent.get("name") or ""
-        contact = agent.get("phone") or agent.get("email") or ""
-        navy_draw.text((pad, height - 140), name, font=font(26, bold=True), fill=NAVY)
-        if contact:
-            navy_draw.text((pad, height - 100), contact, font=font(22), fill=INK)
-        photo = (
-            load_agent_photo(agent.get("photo_path"))
-            if options.get("show_agent_photo", True)
-            else None
+        _agent_block(
+            canvas,
+            agent,
+            xy=(width - pad - _u(width, 200), y),
+            width=width,
+            show_photo=options.get("show_agent_photo", True),
+            circular=True,
+            size=_u(width, 168),
         )
-        if photo is not None:
-            fitted = fit_cover(photo, 120, 140)
-            canvas.paste(fitted, (width - pad - 120, height - 200), fitted)
-    logo = _open_image(facts.get("organization_logo"))
-    if logo is not None:
-        logo = _as_rgba(logo)
-        logo.thumbnail((180, 56), Image.Resampling.LANCZOS)
-        canvas.paste(logo, (width - pad - logo.width, 36), logo)
-    return canvas
+    return canvas.convert("RGB")
 
 
 RENDERERS = {

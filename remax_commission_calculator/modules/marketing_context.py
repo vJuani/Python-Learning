@@ -82,16 +82,40 @@ def _marketing_price_label(amount, currency, language):
     return re.sub(r"[.,]00$", "", label)
 
 
+def _count_chip(value, singular, plural):
+    if value in (None, ""):
+        return None
+    try:
+        number = int(value) if float(value) == int(float(value)) else value
+    except (TypeError, ValueError):
+        number = value
+    label = singular if str(number) == "1" else plural
+    return f"{number} {label}"
+
+
 def _chips(display, language):
     chips = []
-    rooms = display.get("rooms")
-    if rooms not in (None, ""):
-        chips.append(f"{rooms} {translate('property_rooms', language=language).lower()}")
-    bedrooms = display.get("bedrooms")
-    if bedrooms not in (None, ""):
-        chips.append(
-            f"{bedrooms} {translate('property_bedrooms', language=language).lower()}"
-        )
+    rooms = _count_chip(
+        display.get("rooms"),
+        "ambiente",
+        translate("property_rooms", language=language).lower(),
+    )
+    if rooms:
+        chips.append(rooms)
+    bedrooms = _count_chip(
+        display.get("bedrooms"),
+        "dormitorio",
+        translate("property_bedrooms", language=language).lower(),
+    )
+    if bedrooms:
+        chips.append(bedrooms)
+    bathrooms = _count_chip(
+        display.get("bathrooms"),
+        "baño",
+        translate("property_bathrooms", language=language).lower(),
+    )
+    if bathrooms:
+        chips.append(bathrooms)
     area = display.get("covered_m2")
     if area in (None, ""):
         area = display.get("total_m2")
