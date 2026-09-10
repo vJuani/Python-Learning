@@ -55,6 +55,14 @@ A `401`/`403` fails the run with a safe Staff message. It does **not**
 archive or deactivate properties. Logs go to stdout (Railway) and never
 include the token, `Authorization`, cookies, or response headers.
 
+Staff **Diagnosticar conexión** repeats the same listings GET and shows
+only: base URL, endpoint, office ID, token configured yes/no, HTTP
+status, and a sanitized body snippet (max 1000 chars).
+
+`test_connection` query matches the known browser listings call, with
+`pagesize=1`. JRH sends `Accept` + `Authorization: Bearer <token>` only.
+It does not send browser cookies or `JSESSIONID`.
+
 ## Pagination
 
 The API returns `data.results`, `data.page`, `data.pageSize`,

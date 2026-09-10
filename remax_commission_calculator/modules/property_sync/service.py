@@ -238,7 +238,12 @@ def test_property_source_connection(organization_id, provider):
             provider,
             status=STATUS_ERROR,
             last_error=error.message_key,
-            config_updates={"last_connection_ok": False},
+            config_updates={
+                "last_connection_ok": False,
+                "last_diagnostic": _diagnostic_from_error(
+                    connector, office_id, error
+                ),
+            },
         )
         raise PropertySyncError(error.message_key, error.status_code)
     except RedRemaxConfigError as error:
@@ -253,7 +258,12 @@ def test_property_source_connection(organization_id, provider):
             provider,
             status=STATUS_ERROR,
             last_error=error.message_key,
-            config_updates={"last_connection_ok": False},
+            config_updates={
+                "last_connection_ok": False,
+                "last_diagnostic": _diagnostic_from_error(
+                    connector, office_id, error
+                ),
+            },
         )
         raise PropertySyncError(error.message_key, 400)
     except RedRemaxError as error:
@@ -268,7 +278,12 @@ def test_property_source_connection(organization_id, provider):
             provider,
             status=STATUS_ERROR,
             last_error=error.message_key,
-            config_updates={"last_connection_ok": False},
+            config_updates={
+                "last_connection_ok": False,
+                "last_diagnostic": _diagnostic_from_error(
+                    connector, office_id, error
+                ),
+            },
         )
         raise PropertySyncError(error.message_key, error.status_code)
     except Exception:
@@ -293,9 +308,69 @@ def test_property_source_connection(organization_id, provider):
         config_updates={
             "last_connection_ok": True,
             "last_connection_test_at": _now_iso(),
+            "last_diagnostic": {
+                "base_url": getattr(connector, "client", None)
+                and connector.client.base_url,
+                "endpoint": "/listings/api/listings",
+                "office_id": office_id,
+                "token_configured": True,
+                "http_status": 200,
+                "safe_response_message": "HTTP 200",
+                "at": _now_iso(),
+            },
         },
     )
     return result
+
+
+def diagnose_redremax_connection(organization_id):
+    organization_id = require_organization_id(organization_id)
+    ensure_redremax_integration(organization_id)
+    integration = get_property_integration(organization_id, PROVIDER_REDREMAX)
+    if integration is None:
+        raise PropertySyncError("sync_err_not_configured", 400)
+    connector = get_connector(PROVIDER_REDREMAX)
+    office_id = str((integration.get("config") or {}).get("external_office_id") or "").strip()
+    logger.info(
+        "RedREMAX diagnose start org_id=%s office_id=%s",
+        organization_id,
+        office_id or "-",
+    )
+    report = connector.diagnose_connection(integration)
+    report = {
+        "base_url": report.get("base_url") or "",
+        "endpoint": report.get("endpoint") or "/listings/api/listings",
+        "office_id": report.get("office_id") or office_id,
+        "token_configured": bool(report.get("token_configured")),
+        "http_status": report.get("http_status"),
+        "safe_response_message": report.get("safe_response_message") or "",
+        "at": _now_iso(),
+    }
+    set_integration_status(
+        organization_id,
+        PROVIDER_REDREMAX,
+        status=integration.get("status") or STATUS_DISCONNECTED,
+        last_error=integration.get("last_error"),
+        config_updates={"last_diagnostic": report},
+    )
+    return report
+
+
+def _diagnostic_from_error(connector, office_id, error):
+    base_url = ""
+    client = getattr(connector, "client", None)
+    if client is not None:
+        base_url = getattr(client, "base_url", "") or ""
+    return {
+        "base_url": base_url,
+        "endpoint": "/listings/api/listings",
+        "office_id": office_id or "",
+        "token_configured": bool(getattr(client, "resolved_token", lambda: None)()),
+        "http_status": getattr(error, "status_code", None),
+        "safe_response_message": getattr(error, "safe_message", None)
+        or getattr(error, "message_key", ""),
+        "at": _now_iso(),
+    }
 
 
 def dry_run_property_sync(organization_id, provider):
@@ -941,6 +1016,7 @@ def integration_dashboard(organization_id, language="es"):
                 "auth_state": auth_state,
                 "external_office_id": config.get("external_office_id") or "",
                 "last_dry_run": config.get("last_dry_run") or {},
+                "last_diagnostic": config.get("last_diagnostic") or {},
                 "architecture_ready": provider == PROVIDER_REDREMAX,
                 "auth_configured": (
                     default_auth_provider().is_configured()

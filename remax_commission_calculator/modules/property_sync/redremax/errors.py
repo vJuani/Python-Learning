@@ -2,15 +2,16 @@
 
 
 class RedRemaxError(Exception):
-    def __init__(self, message_key, status_code=400):
+    def __init__(self, message_key, status_code=400, *, safe_message=None):
         super().__init__(message_key)
         self.message_key = message_key
         self.status_code = status_code
+        self.safe_message = safe_message
 
 
 class RedRemaxAuthError(RedRemaxError):
-    def __init__(self, message_key="redremax_err_auth", status_code=401):
-        super().__init__(message_key, status_code)
+    def __init__(self, message_key="redremax_err_auth", status_code=401, *, safe_message=None):
+        super().__init__(message_key, status_code, safe_message=safe_message)
 
 
 class RedRemaxConfigError(RedRemaxError):

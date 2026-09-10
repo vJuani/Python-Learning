@@ -45,8 +45,10 @@ from modules.property_sync.redremax.filters import RedRemaxSyncFilterConfig
 from modules.property_sync.redremax.mapping import PROVIDER_REDREMAX
 from modules.property_sync.redremax.normalizer import RedRemaxPropertyNormalizer
 from modules.property_sync.redremax.privacy import is_external_price_publicly_usable
+from modules.property_sync.redremax.safe_log import safe_response_snippet
 from modules.property_sync.service import (
     compute_auth_state,
+    diagnose_redremax_connection,
     dry_run_property_sync,
     ensure_redremax_integration,
     run_property_sync,
@@ -508,6 +510,110 @@ class RedRemaxConnectorTests(unittest.TestCase):
         self.assertTrue(provider.is_configured())
         self.assertFalse(provider.is_production_ready())
         self.assertEqual(provider.get_access_token(), TOKEN)
+
+    def test_test_connection_uses_browser_listing_params(self):
+        captured = {}
+
+        def transport(url, headers, timeout):
+            captured["url"] = url
+            captured["headers"] = dict(headers)
+            return TransportResponse(
+                200,
+                json.dumps(listings_envelope([])).encode("utf-8"),
+                {},
+            )
+
+        connector = self._install(transport)
+        connector.test_connection({"config": {"external_office_id": OFFICE}})
+        query = self._query(captured["url"])
+        self.assertEqual(urlparse(captured["url"]).path, "/listings/api/listings")
+        self.assertEqual(query.get("associateStatus"), ["active"])
+        self.assertEqual(query.get("combineStatus"), ["Activas"])
+        self.assertEqual(
+            query.get("excludeStatus"),
+            ["expired", "completed", "canceled", "deleted", "draft"],
+        )
+        self.assertEqual(query.get("orderby"), ["-created_on"])
+        self.assertEqual(query.get("page"), ["1"])
+        self.assertEqual(query.get("pagesize"), ["1"])
+        self.assertEqual(query.get("withClients"), ["false"])
+        self.assertEqual(query.get("withStats"), ["true"])
+        self.assertEqual(query.get("avoidUnits"), ["true"])
+        self.assertEqual(query.get("byoffice"), [OFFICE])
+        self.assertNotIn("agent", query)
+        self.assertEqual(captured["headers"]["Authorization"], f"Bearer {TOKEN}")
+        self.assertEqual(list(captured["headers"]), ["Accept", "Authorization"])
+
+    def test_403_exposes_sanitized_body_not_secrets(self):
+        payload = {
+            "message": "Forbidden: missing office claim",
+            "authorization": "Bearer eyJaaaaaaaa.bbbbbbbb.cccccccc",
+            "cookie": "JSESSIONID=abc123",
+        }
+        transport = FakeTransport(status_for={1: 403})
+
+        def wrap(url, headers, timeout):
+            response = transport(url, headers, timeout)
+            return TransportResponse(
+                403,
+                json.dumps(payload).encode("utf-8"),
+                {"content-type": "application/json"},
+            )
+
+        client = RedRemaxClient(
+            auth_provider=ConfiguredRedRemaxTokenProvider(TOKEN),
+            transport=wrap,
+            base_url="https://redremax.test.invalid",
+            sleeper=lambda _seconds: None,
+        )
+        with self.assertRaises(RedRemaxAuthError) as raised:
+            client.get_listings(office_id=OFFICE, page=1, page_size=1)
+        self.assertEqual(raised.exception.message_key, "redremax_err_auth_403")
+        self.assertIn("HTTP 403", raised.exception.safe_message)
+        self.assertIn("Forbidden", raised.exception.safe_message)
+        self.assertNotIn(TOKEN, raised.exception.safe_message)
+        self.assertNotIn("eyJaaaaaaaa", raised.exception.safe_message)
+        self.assertNotIn("JSESSIONID", raised.exception.safe_message)
+        blob = " ".join(self.logs)
+        self.assertNotIn(TOKEN, blob)
+        self.assertIn("status=403", blob)
+
+    def test_safe_snippet_truncates_and_skips_binary(self):
+        long_text = "Forbidden " + ("x" * 2000)
+        snippet = safe_response_snippet(
+            long_text.encode("utf-8"), "text/plain"
+        )
+        self.assertLessEqual(len(snippet), 1001)
+        self.assertTrue(snippet.endswith("…"))
+        self.assertEqual(
+            safe_response_snippet(b"\x00\x01\x02", "application/octet-stream"),
+            "",
+        )
+
+    def test_diagnose_connection_returns_safe_report(self):
+        payload = {"error": "Forbidden"}
+        transport = FakeTransport(status_for={1: 403})
+
+        def wrap(url, headers, timeout):
+            transport(url, headers, timeout)
+            return TransportResponse(
+                403,
+                json.dumps(payload).encode("utf-8"),
+                {"content-type": "application/json"},
+            )
+
+        self._install(wrap)
+        before = len(get_properties(self.org))
+        report = diagnose_redremax_connection(self.org)
+        self.assertEqual(report["base_url"], "https://redremax.test.invalid")
+        self.assertEqual(report["endpoint"], "/listings/api/listings")
+        self.assertEqual(report["office_id"], OFFICE)
+        self.assertTrue(report["token_configured"])
+        self.assertEqual(report["http_status"], 403)
+        self.assertIn("HTTP 403", report["safe_response_message"])
+        self.assertIn("Forbidden", report["safe_response_message"])
+        self.assertNotIn(TOKEN, json.dumps(report))
+        self.assertEqual(len(get_properties(self.org)), before)
 
     def test_sensitive_payload_stripped_by_normalizer(self):
         payload = load_fixture()

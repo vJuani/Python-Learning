@@ -19,6 +19,12 @@ from modules.property_sync.redremax.auth import (
 from modules.property_sync.redremax.errors import RedRemaxAuthError, RedRemaxError
 from modules.property_sync.redremax.filters import LISTINGS_PATH, RedRemaxSyncFilterConfig
 from modules.property_sync.redremax.mapping import DEFAULT_API_BASE_URL
+from modules.property_sync.redremax.safe_log import (
+    format_safe_http_message,
+    safe_content_type,
+    safe_query_pairs,
+    safe_response_snippet,
+)
 
 
 ENV_BASE_URL = "REDREMAX_API_BASE_URL"
@@ -126,48 +132,16 @@ class RedRemaxClient:
             agent=agent,
         )
         url = f"{self.base_url}{LISTINGS_PATH}?{urlencode(pairs, doseq=True)}"
-        logger.info("RedREMAX base_url=%s", self.base_url)
-        logger.info(
-            "RedREMAX auth configured=%s office_id=%s",
-            bool(self.resolved_token()),
-            office_id,
-        )
+        token_configured = bool(self.resolved_token())
+        self._log_request_meta(pairs, office_id=office_id, token_configured=token_configured)
         try:
             response = self._get_with_retries(url, office_id=office_id)
         except RedRemaxError:
             raise
         except Exception as error:
             self._raise_network_error(error, office_id)
-        logger.info(
-            "RedREMAX response status=%s office_id=%s",
-            response.status_code,
-            office_id,
-        )
-        if response.status_code == 401:
-            logger.warning(
-                "RedREMAX authentication failed status=401 office_id=%s",
-                office_id,
-            )
-            raise RedRemaxAuthError("redremax_err_auth_401", 401)
-        if response.status_code == 403:
-            logger.warning(
-                "RedREMAX authorization failed status=403 office_id=%s",
-                office_id,
-            )
-            raise RedRemaxAuthError("redremax_err_auth_403", 403)
-        if response.status_code == 429:
-            logger.warning(
-                "RedREMAX rate limited status=429 office_id=%s",
-                office_id,
-            )
-            raise RedRemaxError("redremax_err_rate_limited", 429)
-        if response.status_code >= 400:
-            logger.error(
-                "RedREMAX HTTP error status=%s office_id=%s",
-                response.status_code,
-                office_id,
-            )
-            raise RedRemaxError("redremax_err_http", response.status_code)
+        self._log_response(response, office_id)
+        self._raise_for_status(response, office_id)
         try:
             payload = json.loads(response.body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -178,6 +152,120 @@ class RedRemaxClient:
             )
             raise RedRemaxError("redremax_err_invalid_json", 502) from error
         return parse_listings_payload(payload)
+
+    def diagnose_listings(self, *, office_id, filters=None):
+        """Probe listings without raising. Returns a safe admin report only."""
+        filters = filters or RedRemaxSyncFilterConfig()
+        pairs = filters.query_pairs(office_id=office_id, page=1, page_size=1)
+        token_configured = bool(self.resolved_token())
+        report = {
+            "base_url": self.base_url,
+            "endpoint": LISTINGS_PATH,
+            "office_id": office_id,
+            "token_configured": token_configured,
+            "http_status": None,
+            "safe_response_message": "",
+            "content_type": "",
+            "query": safe_query_pairs(pairs),
+        }
+        if not office_id:
+            report["safe_response_message"] = "missing office_id"
+            return report
+        if not token_configured:
+            report["safe_response_message"] = "token_configured=false"
+            return report
+        url = f"{self.base_url}{LISTINGS_PATH}?{urlencode(pairs, doseq=True)}"
+        self._log_request_meta(pairs, office_id=office_id, token_configured=True)
+        try:
+            response = self._get_with_retries(url, office_id=office_id)
+        except RedRemaxError as error:
+            report["http_status"] = error.status_code
+            report["safe_response_message"] = error.safe_message or error.message_key
+            return report
+        except Exception as error:
+            try:
+                self._raise_network_error(error, office_id)
+            except RedRemaxError as mapped:
+                report["http_status"] = mapped.status_code
+                report["safe_response_message"] = mapped.message_key
+                return report
+        self._log_response(response, office_id)
+        content_type = safe_content_type(response.headers)
+        snippet = safe_response_snippet(response.body, content_type)
+        report["http_status"] = response.status_code
+        report["content_type"] = content_type
+        report["safe_response_message"] = format_safe_http_message(
+            response.status_code, snippet
+        )
+        return report
+
+    def _log_request_meta(self, pairs, *, office_id, token_configured):
+        logger.info("RedREMAX base_url=%s", self.base_url)
+        logger.info(
+            "RedREMAX request method=GET path=%s office_id=%s token_configured=%s",
+            LISTINGS_PATH,
+            office_id,
+            token_configured,
+        )
+        logger.info(
+            "RedREMAX query=%s",
+            "&".join(f"{key}={value}" for key, value in safe_query_pairs(pairs)),
+        )
+
+    def _log_response(self, response, office_id):
+        content_type = safe_content_type(response.headers)
+        snippet = safe_response_snippet(response.body, content_type)
+        logger.info(
+            "RedREMAX response status=%s office_id=%s content_type=%s",
+            response.status_code,
+            office_id,
+            content_type or "-",
+        )
+        if response.status_code >= 400 and snippet:
+            logger.warning(
+                "RedREMAX response_body_safe status=%s office_id=%s body=%s",
+                response.status_code,
+                office_id,
+                snippet,
+            )
+
+    def _raise_for_status(self, response, office_id):
+        content_type = safe_content_type(response.headers)
+        snippet = safe_response_snippet(response.body, content_type)
+        safe_message = format_safe_http_message(response.status_code, snippet)
+        if response.status_code == 401:
+            logger.warning(
+                "RedREMAX authentication failed status=401 office_id=%s",
+                office_id,
+            )
+            raise RedRemaxAuthError(
+                "redremax_err_auth_401", 401, safe_message=safe_message
+            )
+        if response.status_code == 403:
+            logger.warning(
+                "RedREMAX authorization failed status=403 office_id=%s",
+                office_id,
+            )
+            raise RedRemaxAuthError(
+                "redremax_err_auth_403", 403, safe_message=safe_message
+            )
+        if response.status_code == 429:
+            logger.warning(
+                "RedREMAX rate limited status=429 office_id=%s",
+                office_id,
+            )
+            raise RedRemaxError(
+                "redremax_err_rate_limited", 429, safe_message=safe_message
+            )
+        if response.status_code >= 400:
+            logger.error(
+                "RedREMAX HTTP error status=%s office_id=%s",
+                response.status_code,
+                office_id,
+            )
+            raise RedRemaxError(
+                "redremax_err_http", response.status_code, safe_message=safe_message
+            )
 
     def _get_with_retries(self, url, *, office_id):
         headers = self._headers()

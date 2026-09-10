@@ -17,6 +17,7 @@ from modules.property_sync.media import resolve_media_filesystem_path
 from modules.property_sync.service import (
     PropertySyncError,
     SyncInProgressError,
+    diagnose_redremax_connection,
     dry_run_property_sync,
     integration_dashboard,
     require_sync_admin,
@@ -97,6 +98,21 @@ def register_property_sync_routes(app, helpers):
         try:
             test_property_source_connection(organization_id, provider)
             flash_i18n("redremax_test_ok", "success")
+        except PropertySyncError as error:
+            flash_i18n(error.message_key, "error")
+        return redirect(url_for("settings_property_integrations"))
+
+    @app.route("/settings/integrations/properties/diagnose", methods=["POST"])
+    @admin_required
+    def settings_property_integrations_diagnose():
+        try:
+            _admin_user()
+        except PropertySyncError:
+            abort(403)
+        organization_id = require_user_organization()
+        try:
+            diagnose_redremax_connection(organization_id)
+            flash_i18n("redremax_diagnose_done", "success")
         except PropertySyncError as error:
             flash_i18n(error.message_key, "error")
         return redirect(url_for("settings_property_integrations"))

@@ -75,6 +75,24 @@
         {% endif %}
     </p>
 
+    {% if item.last_diagnostic %}
+    <div class="sync-dry-run">
+        <p><strong>{{ t('redremax_diagnose_title') }}</strong></p>
+        <ul>
+            <li>{{ t('redremax_diagnose_base_url') }}: {{ item.last_diagnostic.base_url }}</li>
+            <li>{{ t('redremax_diagnose_endpoint') }}: {{ item.last_diagnostic.endpoint }}</li>
+            <li>{{ t('redremax_office_id') }}: {{ item.last_diagnostic.office_id }}</li>
+            <li>{{ t('redremax_diagnose_token') }}:
+                {% if item.last_diagnostic.token_configured %}{{ t('yes') }}{% else %}{{ t('no') }}{% endif %}
+            </li>
+            <li>{{ t('redremax_diagnose_status') }}: {{ item.last_diagnostic.http_status or '—' }}</li>
+            {% if item.last_diagnostic.safe_response_message %}
+            <li>{{ t('redremax_diagnose_message') }}: {{ item.last_diagnostic.safe_response_message }}</li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+
     {% if item.last_dry_run %}
     <div class="sync-dry-run">
         <p><strong>{{ t('redremax_dry_run_done') }}</strong></p>
@@ -92,6 +110,9 @@
         <form method="post" action="{{ url_for('settings_property_integrations_test') }}">
             <input type="hidden" name="provider" value="{{ item.provider }}">
             <button type="submit" class="btn btn-secondary">{{ t('redremax_test_connection') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('settings_property_integrations_diagnose') }}">
+            <button type="submit" class="btn btn-secondary">{{ t('redremax_diagnose') }}</button>
         </form>
         <form method="post" action="{{ url_for('settings_property_integrations_dry_run') }}">
             <input type="hidden" name="provider" value="{{ item.provider }}">

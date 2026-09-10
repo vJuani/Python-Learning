@@ -94,6 +94,17 @@ class RedRemaxConnector(PropertySourceConnector):
             "source_total_items": page.get("total_items") or 0,
         }
 
+    def diagnose_connection(self, integration):
+        office_id = configured_office_id(integration)
+        logger.info(
+            "RedREMAX diagnose_connection start office_id=%s",
+            office_id or "-",
+        )
+        return self.client.diagnose_listings(
+            office_id=office_id,
+            filters=self.filters,
+        )
+
     def list_properties(self, integration, *, updated_since=None, cursor=None):
         office_id = configured_office_id(integration)
         if not office_id:
