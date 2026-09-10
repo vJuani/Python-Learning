@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from flask import (
     abort,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -14,15 +15,17 @@ from flask import (
 from modules.auth import get_current_user, is_admin, is_agent, is_guest_session
 from modules.marketing_context import MarketingError
 from modules.marketing_service import (
-    generate_marketing_proposals,
     get_asset_view,
-    get_generation_view,
+    get_batch_status,
+    get_batch_view,
     list_marketing_home,
     prepare_create_view,
     require_asset_access,
     resolve_asset_file,
+    retry_marketing_item,
     select_marketing_asset,
-    update_asset_copy,
+    start_marketing_batch,
+    vary_marketing_asset,
 )
 from modules.database.marketing_repository import get_marketing_asset
 
@@ -64,6 +67,7 @@ def register_marketing_routes(app, helpers):
             user,
             language=get_current_language(),
         )
+        view["idempotency_key"] = request.args.get("k") or ""
         return render_template("marketing/home.html", view=view)
 
     @app.route("/marketing/new", methods=["GET"])
@@ -79,17 +83,12 @@ def register_marketing_routes(app, helpers):
                 organization_id,
                 user,
                 property_id=property_id,
+                prompt=request.args.get("prompt"),
                 language=language,
             )
         except MarketingError as error:
             return _handle(error)
-        return render_template(
-            "marketing/new.html",
-            view=view,
-            selected_format=request.args.get("format") or "story",
-            selected_style=request.args.get("style") or "elegant",
-            selected_tone=request.args.get("tone") or "professional",
-        )
+        return render_template("marketing/new.html", view=view)
 
     @app.route("/marketing/generate", methods=["POST"])
     def marketing_generate():
@@ -98,16 +97,21 @@ def register_marketing_routes(app, helpers):
             return _forbidden()
         organization_id = require_user_organization()
         property_id = request.form.get("property_id", type=int)
+        prompt = (request.form.get("prompt") or "").strip()
         if not property_id:
             flash_i18n("marketing_err_property_missing", "error")
             return redirect(url_for("marketing_new"))
+        if not prompt:
+            flash_i18n("marketing_err_prompt_missing", "error")
+            return redirect(url_for("marketing_new", property_id=property_id))
         try:
-            result = generate_marketing_proposals(
+            result = start_marketing_batch(
                 organization_id,
                 user,
                 property_id=property_id,
-                form=request.form,
+                prompt=prompt,
                 language=get_current_language(),
+                idempotency_key=(request.form.get("idempotency_key") or "").strip() or None,
             )
         except MarketingError as error:
             return _handle(error, "marketing_new")
@@ -122,7 +126,7 @@ def register_marketing_routes(app, helpers):
             return _forbidden()
         organization_id = require_user_organization()
         try:
-            view = get_generation_view(
+            view = get_batch_view(
                 organization_id,
                 user,
                 generation_id,
@@ -131,6 +135,25 @@ def register_marketing_routes(app, helpers):
         except MarketingError as error:
             return _handle(error)
         return render_template("marketing/proposals.html", view=view)
+
+    @app.route("/marketing/batch/<batch_id>/status")
+    def marketing_batch_status(batch_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            payload = get_batch_status(
+                organization_id,
+                user,
+                batch_id,
+                language=get_current_language(),
+            )
+        except MarketingError as error:
+            if error.status_code == 403:
+                return _forbidden()
+            return jsonify({"error": error.message_key}), error.status_code
+        return jsonify(payload)
 
     @app.route("/marketing/assets/<int:asset_id>")
     def marketing_asset(asset_id):
@@ -161,24 +184,42 @@ def register_marketing_routes(app, helpers):
             return _handle(error)
         return redirect(url_for("marketing_asset", asset_id=asset_id))
 
-    @app.route("/marketing/assets/<int:asset_id>/edit", methods=["POST"])
-    def marketing_edit(asset_id):
+    @app.route("/marketing/assets/<int:asset_id>/retry", methods=["POST"])
+    def marketing_retry(asset_id):
         user = _marketing_user()
         if user is None:
             return _forbidden()
         organization_id = require_user_organization()
         try:
-            update_asset_copy(
+            asset = retry_marketing_item(
                 organization_id,
                 user,
                 asset_id,
-                request.form,
                 language=get_current_language(),
             )
         except MarketingError as error:
             return _handle(error)
-        flash_i18n("marketing_saved", "success")
-        return redirect(url_for("marketing_asset", asset_id=asset_id))
+        return redirect(url_for("marketing_proposals", generation_id=asset.get("generation_id")))
+
+    @app.route("/marketing/assets/<int:asset_id>/vary", methods=["POST"])
+    def marketing_vary(asset_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            result = vary_marketing_asset(
+                organization_id,
+                user,
+                asset_id,
+                request.form.get("prompt"),
+                language=get_current_language(),
+            )
+        except MarketingError as error:
+            return _handle(error)
+        return redirect(
+            url_for("marketing_proposals", generation_id=result["generation_id"])
+        )
 
     def _send_asset(asset_id, *, kind, as_attachment):
         user = _marketing_user()

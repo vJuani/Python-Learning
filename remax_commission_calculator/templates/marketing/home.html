@@ -6,6 +6,10 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
 {% endblock %}
 
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/marketing.js') }}" defer></script>
+{% endblock %}
+
 {% block content %}
 <section class="page-header mkt-hero">
     <div class="page-header-text">
@@ -13,27 +17,54 @@
         <h2>{{ t('marketing_headline') }}</h2>
         <p class="field-help">{{ t('marketing_subtitle') }}</p>
     </div>
-    <div class="page-actions">
-        <a href="{{ url_for('marketing_new') }}" class="btn btn-primary">{{ t('marketing_create') }}</a>
-    </div>
 </section>
 
+<form class="mkt-prompt" method="post" action="{{ url_for('marketing_generate') }}" data-mkt-prompt>
+    {% if view.property_count == 1 %}
+    <input type="hidden" name="property_id" value="{{ view.properties[0].id }}">
+    {% elif view.properties %}
+    <label class="mkt-prompt__property">
+        <span>{{ t('marketing_choose_property') }}</span>
+        <select name="property_id" required>
+            <option value="">{{ t('marketing_choose_property') }}</option>
+            {% for item in view.properties %}
+            <option value="{{ item.id }}">{{ item.address }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% endif %}
+    <label class="mkt-prompt__ask">
+        <span>{{ t('marketing_step_format') }}</span>
+        <textarea name="prompt" rows="4" required placeholder="{{ t('marketing_prompt_placeholder') }}">{{ view.default_prompt }}</textarea>
+    </label>
+    <input type="hidden" name="idempotency_key" value="{{ view.idempotency_key or '' }}">
+    <div class="mkt-chips" data-mkt-chips>
+        <button type="button" class="mkt-chip" data-chip="Haceme 3 historias">{{ t('marketing_chip_stories') }}</button>
+        <button type="button" class="mkt-chip" data-chip="Haceme 3 posts">{{ t('marketing_chip_posts') }}</button>
+        <button type="button" class="mkt-chip" data-chip="Haceme 3 flyers">{{ t('marketing_chip_flyers') }}</button>
+        <button type="button" class="mkt-chip" data-chip="{{ view.default_prompt }}" data-chip-replace="1">{{ t('marketing_format_pack') }}</button>
+        <button type="button" class="mkt-chip" data-chip="más minimalista">{{ t('marketing_chip_minimal') }}</button>
+        <button type="button" class="mkt-chip" data-chip="usando mi foto">{{ t('marketing_chip_agent') }}</button>
+        <button type="button" class="mkt-chip" data-chip="sin precio">{{ t('marketing_chip_no_price') }}</button>
+    </div>
+    <button type="submit" class="btn btn-primary" {% if not view.can_create %}disabled{% endif %}>{{ t('marketing_generate_ai') }}</button>
+</form>
+
 {% if view.history %}
-<section class="mkt-history" aria-label="{{ t('marketing_history') }}">
-    {% for item in view.history %}
-    <article class="mkt-history__row">
-        <div>
-            <h3>{{ item.property_address or item.headline or t('marketing_title') }}</h3>
-            <p>{{ item.format_label }} · {{ item.when_label }}</p>
-        </div>
-        <div class="mkt-history__actions">
-            <a class="btn btn-secondary" href="{{ url_for('marketing_asset', asset_id=item.id) }}">{{ t('marketing_view') }}</a>
+<section class="mkt-gallery" aria-label="{{ t('marketing_history') }}">
+    <h3>{{ t('marketing_history') }}</h3>
+    <div class="mkt-gallery__grid">
+        {% for item in view.history %}
+        <a class="mkt-gallery__card mkt-proposal__frame--{{ item.format }}" href="{{ url_for('marketing_asset', asset_id=item.id) }}">
             {% if item.storage_key %}
-            <a class="btn btn-primary" href="{{ url_for('marketing_download_png', asset_id=item.id) }}">{{ t('marketing_download') }}</a>
+            <img src="{{ url_for('marketing_preview', asset_id=item.id) }}" alt="{{ item.property_address or item.headline }}">
+            {% else %}
+            <span class="mkt-gallery__failed">{{ t('marketing_item_failed') }}</span>
             {% endif %}
-        </div>
-    </article>
-    {% endfor %}
+            <span>{{ item.property_address or item.headline }} · {{ item.format_label }}</span>
+        </a>
+        {% endfor %}
+    </div>
 </section>
 {% else %}
 <p class="field-help">{{ t('marketing_empty') }}</p>

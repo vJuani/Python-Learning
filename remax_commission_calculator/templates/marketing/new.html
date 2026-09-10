@@ -6,125 +6,65 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
 {% endblock %}
 
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/marketing.js') }}" defer></script>
+{% endblock %}
+
 {% block content %}
-<section class="page-header">
+<section class="page-header mkt-hero">
     <div class="page-header-text">
         <p class="mkt-kicker">{{ t('marketing_kicker') }}</p>
         <h2>{{ t('marketing_create') }}</h2>
-        {% if view.property %}
-        <p class="field-help">{{ view.context.facts.title if view.context else view.property.address }}</p>
-        {% endif %}
     </div>
 </section>
+
+{% if view.property and view.context %}
+<article class="mkt-property">
+    {% if view.cover and view.cover.src %}
+    <img src="{{ view.cover.src }}" alt="{{ view.context.facts.title }}">
+    {% endif %}
+    <div>
+        <h3>{{ view.context.facts.title }}</h3>
+        <p>{{ view.context.facts.location_line }}</p>
+        {% if view.context.facts.price_label %}
+        <p class="mkt-property__price">{{ view.context.facts.price_label }}</p>
+        {% endif %}
+    </div>
+</article>
+{% endif %}
 
 {% if view.missing_photos %}
 <p class="mkt-warn" role="alert">{{ t('marketing_no_photos') }}</p>
 {% endif %}
 
-<form class="mkt-wizard" method="post" action="{{ url_for('marketing_generate') }}">
+<form class="mkt-prompt" method="post" action="{{ url_for('marketing_generate') }}" data-mkt-prompt>
     {% if view.property %}
     <input type="hidden" name="property_id" value="{{ view.property.id }}">
     {% else %}
-    <fieldset class="mkt-step">
-        <legend>{{ t('marketing_choose_property') }}</legend>
-        <label>
-            <span class="visually-hidden">{{ t('marketing_choose_property') }}</span>
-            <select name="property_id" required>
-                <option value="">{{ t('marketing_choose_property') }}</option>
-                {% for item in view.properties %}
-                <option value="{{ item.id }}">{{ item.address }}</option>
-                {% endfor %}
-            </select>
-        </label>
-    </fieldset>
+    <label class="mkt-prompt__property">
+        <span>{{ t('marketing_choose_property') }}</span>
+        <select name="property_id" required>
+            <option value="">{{ t('marketing_choose_property') }}</option>
+            {% for item in view.properties %}
+            <option value="{{ item.id }}">{{ item.address }}</option>
+            {% endfor %}
+        </select>
+    </label>
     {% endif %}
-
-    <fieldset class="mkt-step">
-        <legend>{{ t('marketing_step_format') }}</legend>
-        <div class="mkt-choices">
-            {% for fmt in view.formats %}
-            <label class="mkt-choice">
-                <input type="radio" name="format" value="{{ fmt }}" {% if selected_format == fmt %}checked{% endif %}>
-                <span>{{ t('marketing_format_' ~ fmt) }}</span>
-            </label>
-            {% endfor %}
-        </div>
-    </fieldset>
-
-    <fieldset class="mkt-step">
-        <legend>{{ t('marketing_step_style') }}</legend>
-        <div class="mkt-choices">
-            {% for style in view.styles %}
-            <label class="mkt-choice">
-                <input type="radio" name="style" value="{{ style }}" {% if selected_style == style %}checked{% endif %}>
-                <span>{{ t('marketing_style_' ~ style) }}</span>
-            </label>
-            {% endfor %}
-        </div>
-    </fieldset>
-
-    <fieldset class="mkt-step">
-        <legend>{{ t('marketing_step_tone') }}</legend>
-        <div class="mkt-choices">
-            {% for tone in view.tones %}
-            <label class="mkt-choice">
-                <input type="radio" name="tone" value="{{ tone }}" {% if selected_tone == tone %}checked{% endif %}>
-                <span>{{ t('marketing_tone_' ~ tone) }}</span>
-            </label>
-            {% endfor %}
-        </div>
-    </fieldset>
-
-    {% if view.context %}
-    <fieldset class="mkt-step">
-        <legend>{{ t('marketing_options') }}</legend>
-        {% if view.context.facts.price_policy.warning %}
-        <p class="mkt-warn">{{ t('marketing_price_private') }}</p>
-        {% endif %}
-        <label class="mkt-toggle">
-            <input type="hidden" name="show_price" value="0">
-            <input type="checkbox" name="show_price" value="1" {% if view.context.facts.price_policy.default_show %}checked{% endif %}>
-            <span>{{ t('marketing_show_price') }}</span>
-        </label>
-        <label class="mkt-toggle">
-            <input type="hidden" name="show_features" value="0">
-            <input type="checkbox" name="show_features" value="1" checked>
-            <span>{{ t('marketing_show_features') }}</span>
-        </label>
-        <label class="mkt-toggle">
-            <input type="hidden" name="include_agent" value="0">
-            <input type="checkbox" name="include_agent" value="1" checked>
-            <span>{{ t('marketing_include_agent') }}</span>
-        </label>
-        <label class="mkt-toggle">
-            <input type="hidden" name="show_agent_photo" value="0">
-            <input type="checkbox" name="show_agent_photo" value="1" checked>
-            <span>{{ t('marketing_show_agent_photo') }}</span>
-        </label>
-    </fieldset>
-    {% endif %}
-
-    {% if view.wizard_photos %}
-    <fieldset class="mkt-step">
-        <legend>{{ t('marketing_photos_selected') }}</legend>
-        <div class="mkt-photos" data-mkt-photos>
-            {% for photo in view.wizard_photos %}
-            <label class="mkt-photo">
-                <input type="checkbox" name="photo_ids" value="{{ photo.id }}" {% if photo.selected %}checked{% endif %}>
-                {% if photo.src %}
-                <img src="{{ photo.src }}" alt="">
-                {% else %}
-                <span class="mkt-photo__fallback">{{ loop.index }}</span>
-                {% endif %}
-                <span>{% if photo.is_cover %}{{ t('marketing_cover') }}{% else %}{{ loop.index }}{% endif %}</span>
-            </label>
-            {% endfor %}
-        </div>
-    </fieldset>
-    {% endif %}
-
-    <div class="mkt-wizard__actions">
-        <button type="submit" class="btn btn-primary" {% if view.missing_photos %}disabled{% endif %}>{{ t('marketing_generate') }}</button>
+    <label class="mkt-prompt__ask">
+        <span>{{ t('marketing_step_format') }}</span>
+        <textarea name="prompt" rows="5" required placeholder="{{ t('marketing_prompt_placeholder') }}">{{ view.prompt }}</textarea>
+    </label>
+    <input type="hidden" name="idempotency_key" value="{{ view.idempotency_key }}">
+    <div class="mkt-chips" data-mkt-chips>
+        <button type="button" class="mkt-chip" data-chip="Haceme 3 historias">{{ t('marketing_chip_stories') }}</button>
+        <button type="button" class="mkt-chip" data-chip="Haceme 3 posts">{{ t('marketing_chip_posts') }}</button>
+        <button type="button" class="mkt-chip" data-chip="Haceme 3 flyers">{{ t('marketing_chip_flyers') }}</button>
+        <button type="button" class="mkt-chip" data-chip="{{ view.default_prompt }}" data-chip-replace="1">{{ t('marketing_format_pack') }}</button>
+        <button type="button" class="mkt-chip" data-chip="más minimalista">{{ t('marketing_chip_minimal') }}</button>
+        <button type="button" class="mkt-chip" data-chip="usando mi foto">{{ t('marketing_chip_agent') }}</button>
+        <button type="button" class="mkt-chip" data-chip="sin precio">{{ t('marketing_chip_no_price') }}</button>
     </div>
+    <button type="submit" class="btn btn-primary" {% if view.missing_photos %}disabled{% endif %}>{{ t('marketing_generate_ai') }}</button>
 </form>
 {% endblock %}

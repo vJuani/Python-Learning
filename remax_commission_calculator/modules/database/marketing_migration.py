@@ -62,13 +62,44 @@ def _column_exists(cursor, table_name, column_name):
     return any(row[1] == column_name for row in rows)
 
 
+BATCHES_SQL = """
+CREATE TABLE IF NOT EXISTS marketing_batches (
+    id TEXT PRIMARY KEY,
+    organization_id INTEGER NOT NULL,
+    property_id INTEGER NOT NULL,
+    agent_id INTEGER,
+    created_by_user_id INTEGER,
+    prompt TEXT,
+    request_json TEXT,
+    idempotency_key TEXT,
+    status TEXT NOT NULL DEFAULT 'queued',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+)
+"""
+
+
 def migrate_marketing_sqlite():
     connection = get_connection()
     cursor = connection.cursor()
     try:
         cursor.execute(MARKETING_ASSETS_SQL)
+        cursor.execute(BATCHES_SQL)
         for statement in INDEXES:
             cursor.execute(statement)
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_marketing_batches_org
+            ON marketing_batches (organization_id, created_at)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_marketing_batches_idem
+            ON marketing_batches (organization_id, idempotency_key)
+            WHERE idempotency_key IS NOT NULL AND TRIM(idempotency_key) != ''
+            """
+        )
         connection.commit()
     except Exception:
         connection.rollback()
@@ -88,6 +119,26 @@ def migrate_marketing_postgres(cursor):
         .replace("property_id INTEGER NOT NULL", "property_id BIGINT NOT NULL")
     )
     cursor.execute(sql)
+    pg_batches = (
+        BATCHES_SQL.replace("organization_id INTEGER NOT NULL", "organization_id BIGINT NOT NULL")
+        .replace("property_id INTEGER NOT NULL", "property_id BIGINT NOT NULL")
+        .replace("agent_id INTEGER,", "agent_id BIGINT,")
+        .replace("created_by_user_id INTEGER,", "created_by_user_id BIGINT,")
+    )
+    cursor.execute(pg_batches)
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_marketing_batches_org
+        ON marketing_batches (organization_id, created_at)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketing_batches_idem
+        ON marketing_batches (organization_id, idempotency_key)
+        WHERE idempotency_key IS NOT NULL AND BTRIM(idempotency_key) != ''
+        """
+    )
     for statement in INDEXES:
         cursor.execute(statement.replace("TRIM(", "BTRIM("))
 

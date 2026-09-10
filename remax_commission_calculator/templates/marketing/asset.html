@@ -18,6 +18,7 @@
         <p class="field-help">{{ asset.format_label }} · {{ asset.when_label }}</p>
     </div>
     <div class="page-actions">
+        {% if asset.ready %}
         <a class="btn btn-primary" href="{{ url_for('marketing_download_png', asset_id=asset.id) }}">{{ t('marketing_download_png') }}</a>
         {% if asset.pdf_storage_key %}
         <a class="btn btn-secondary" href="{{ url_for('marketing_download_pdf', asset_id=asset.id) }}">{{ t('marketing_download_pdf') }}</a>
@@ -30,14 +31,26 @@
             data-share-title="{{ asset.headline }}"
             hidden
         >{{ t('marketing_share') }}</button>
-        <a class="btn btn-secondary" href="{{ url_for('marketing_new', property_id=asset.property_id, format=asset.format) }}">{{ t('marketing_another') }}</a>
+        {% endif %}
+        <a class="btn btn-secondary" href="{{ url_for('marketing_new', property_id=asset.property_id) }}">{{ t('marketing_another') }}</a>
     </div>
 </section>
 
+{% if asset.failed %}
+<div class="mkt-fail mkt-fail--page">
+    <p>{{ t('marketing_item_failed') }}</p>
+    <form method="post" action="{{ url_for('marketing_retry', asset_id=asset.id) }}">
+        <button type="submit" class="btn btn-primary">{{ t('marketing_retry') }}</button>
+    </form>
+</div>
+{% endif %}
+
 <div class="mkt-asset">
+    {% if asset.ready %}
     <figure class="mkt-asset__preview mkt-proposal__frame mkt-proposal__frame--{{ asset.format }}">
         <img src="{{ url_for('marketing_preview', asset_id=asset.id) }}" alt="{{ asset.headline }}">
     </figure>
+    {% endif %}
 
     <div class="mkt-asset__side">
         <section class="mkt-caption">
@@ -46,41 +59,14 @@
             <button type="button" class="btn btn-secondary" data-mkt-copy data-copy-target="mkt-caption" data-copied="{{ t('marketing_copied') }}">{{ t('marketing_copy_caption') }}</button>
         </section>
 
-        <form class="mkt-editor" method="post" action="{{ url_for('marketing_edit', asset_id=asset.id) }}">
-            <h3>{{ t('marketing_edit_text') }}</h3>
+        <form class="mkt-vary" method="post" action="{{ url_for('marketing_vary', asset_id=asset.id) }}">
+            <h3>{{ t('marketing_vary') }}</h3>
+            <p class="field-help">{{ t('marketing_vary_help') }}</p>
             <label>
-                {{ t('marketing_field_headline') }}
-                <input type="text" name="headline" value="{{ asset.copy_snapshot.headline or '' }}" maxlength="56">
+                <span class="visually-hidden">{{ t('marketing_vary') }}</span>
+                <textarea name="prompt" rows="3" required placeholder="{{ t('marketing_vary_placeholder') }}"></textarea>
             </label>
-            <label>
-                {{ t('marketing_field_subheadline') }}
-                <input type="text" name="subheadline" value="{{ asset.copy_snapshot.subheadline or '' }}" maxlength="96">
-            </label>
-            <label>
-                {{ t('marketing_field_cta') }}
-                <input type="text" name="cta" value="{{ asset.copy_snapshot.cta or '' }}" maxlength="36">
-            </label>
-            <label class="mkt-toggle">
-                <input type="hidden" name="show_price" value="0">
-                <input type="checkbox" name="show_price" value="1" {% if asset.options.show_price %}checked{% endif %}>
-                <span>{{ t('marketing_show_price') }}</span>
-            </label>
-            <label class="mkt-toggle">
-                <input type="hidden" name="show_features" value="0">
-                <input type="checkbox" name="show_features" value="1" {% if asset.options.show_features %}checked{% endif %}>
-                <span>{{ t('marketing_show_features') }}</span>
-            </label>
-            <label class="mkt-toggle">
-                <input type="hidden" name="include_agent" value="0">
-                <input type="checkbox" name="include_agent" value="1" {% if asset.options.include_agent %}checked{% endif %}>
-                <span>{{ t('marketing_include_agent') }}</span>
-            </label>
-            <label class="mkt-toggle">
-                <input type="hidden" name="show_agent_photo" value="0">
-                <input type="checkbox" name="show_agent_photo" value="1" {% if asset.options.show_agent_photo %}checked{% endif %}>
-                <span>{{ t('marketing_show_agent_photo') }}</span>
-            </label>
-            <button type="submit" class="btn btn-primary">{{ t('marketing_save_edit') }}</button>
+            <button type="submit" class="btn btn-primary">{{ t('marketing_vary_submit') }}</button>
         </form>
     </div>
 </div>

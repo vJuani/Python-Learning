@@ -36,12 +36,17 @@ from modules.marketing_context import (
     build_property_marketing_context,
     context_to_snapshot,
 )
+from modules.marketing_art_director import plan_item
 from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy
+from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider
 from modules.marketing_renderer import FORMAT_SIZES, render_marketing_image
+from modules.marketing_request import DEFAULT_PROMPT, parse_marketing_request
 from modules.marketing_service import (
     can_view_asset,
     generate_marketing_proposals,
     resolve_asset_file,
+    start_marketing_batch,
+    vary_marketing_asset,
 )
 from modules.property_sync.media import get_property_media_for_generation
 from web_app import app
@@ -186,16 +191,25 @@ class MarketingIaTests(unittest.TestCase):
 
     def _form(self, **overrides):
         data = {
+            "prompt": "Haceme 3 historias, todas diferentes, premium, sin descripción larga y usando mi foto.",
             "format": "story",
-            "style": "elegant",
-            "tone": "professional",
             "show_price": "1",
             "include_agent": "1",
-            "show_agent_photo": "1",
-            "show_features": "1",
         }
         data.update(overrides)
         return data
+
+    def _pack_prompt(self):
+        return (
+            "Haceme:\n"
+            "3 opciones de historia de Instagram/WhatsApp,\n"
+            "3 posts de Instagram,\n"
+            "3 flyers.\n"
+            "Quiero que los 9 sean diferentes.\n"
+            "No pongas descripciones largas.\n"
+            "Usá las fotos reales de la propiedad y mi foto.\n"
+            "Que se vean premium."
+        )
 
     def test_01_marketing_context_facts(self):
         context = build_property_marketing_context(self._property())
@@ -272,33 +286,47 @@ class MarketingIaTests(unittest.TestCase):
         image = Image.open(path)
         self.assertEqual(image.size, FORMAT_SIZES["story"])
 
-    def test_10_post_dimensions(self):
-        result = generate_marketing_proposals(
+    def test_10_post_and_flyer_dimensions(self):
+        result = start_marketing_batch(
             self.org,
             self._user(self.agent_user_id),
             property_id=self.property_id,
-            form=self._form(format="post"),
+            prompt="Haceme 1 post y 1 flyer, diferentes y premium.",
         )
-        image = Image.open(resolve_asset_file(result["assets"][0]))
-        self.assertEqual(image.size, FORMAT_SIZES["post"])
+        formats = {item["format"]: item for item in result["assets"]}
+        self.assertEqual(Image.open(resolve_asset_file(formats["post"])).size, FORMAT_SIZES["post"])
+        self.assertEqual(Image.open(resolve_asset_file(formats["flyer"])).size, FORMAT_SIZES["flyer"])
 
-    def test_11_status_dimensions(self):
-        result = generate_marketing_proposals(
+    def test_11_parser_pack_and_variation(self):
+        parsed = parse_marketing_request(self._pack_prompt())
+        self.assertEqual(parsed["story_count"], 3)
+        self.assertEqual(parsed["post_count"], 3)
+        self.assertEqual(parsed["flyer_count"], 3)
+        self.assertTrue(parsed["with_agent"])
+        self.assertEqual(parsed["copy_density"], "low")
+        vary = parse_marketing_request("más minimalista", variation=True)
+        self.assertEqual(vary["story_count"], 0)
+        self.assertEqual(vary["post_count"], 0)
+        self.assertEqual(vary["flyer_count"], 0)
+        no_agent = parse_marketing_request("Haceme 3 historias sin mi foto")
+        self.assertFalse(no_agent["with_agent"])
+
+    def test_12_unique_directions_and_order(self):
+        result = start_marketing_batch(
             self.org,
             self._user(self.agent_user_id),
             property_id=self.property_id,
-            form=self._form(format="status"),
+            prompt=self._pack_prompt(),
         )
-        image = Image.open(resolve_asset_file(result["assets"][0]))
-        self.assertEqual(image.size, FORMAT_SIZES["status"])
-
-    def test_12_three_variants(self):
-        result = generate_marketing_proposals(
-            self.org, self._user(self.agent_user_id), property_id=self.property_id, form=self._form()
-        )
-        templates = [item["template"] for item in result["assets"]]
-        self.assertEqual(templates, ["editorial", "visual", "minimal"])
-        self.assertEqual(len({item["id"] for item in result["assets"]}), 3)
+        self.assertEqual(len(result["assets"]), 9)
+        formats = [item["format"] for item in result["assets"]]
+        self.assertEqual(formats, ["story"] * 3 + ["post"] * 3 + ["flyer"] * 3)
+        for group in result["groups"]:
+            directions = [
+                (item.get("options") or {}).get("visual_direction") for item in group["items"]
+            ]
+            self.assertEqual(len(directions), len(set(directions)), directions)
+        self.assertEqual([group["format"] for group in result["groups"]], ["story", "post", "flyer"])
 
     def test_13_snapshot_immutable(self):
         result = generate_marketing_proposals(
@@ -348,47 +376,62 @@ class MarketingIaTests(unittest.TestCase):
         self.assertLessEqual(len(copy["hashtags"]), 6)
         self.assertNotIn("90.000", copy["headline"])
 
-    def test_15_image_failure_safe(self):
-        context = build_property_marketing_context(self._property())
-        context["photos"] = [
-            {"storage_key": "missing/nope.jpg", "original_url": None},
-            context["photos"][0],
-        ]
-        payload, size = render_marketing_image(
-            context,
-            generate_marketing_copy(context),
-            fmt="story",
-            template="editorial",
-            style="elegant",
-            options={"show_price": True, "include_agent": True, "show_agent_photo": True},
-        )
-        self.assertGreater(len(payload), 1000)
-        self.assertEqual(size, FORMAT_SIZES["story"])
+    def test_15_image_failure_isolated(self):
+        calls = {"n": 0}
+        original = MockMarketingImageProvider.generate_background
+
+        def flaky(self, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise MarketingImageError("forced")
+            return original(self, **kwargs)
+
+        MockMarketingImageProvider.generate_background = flaky
+        try:
+            result = start_marketing_batch(
+                self.org,
+                self._user(self.agent_user_id),
+                property_id=self.property_id,
+                prompt="Haceme 3 historias diferentes.",
+            )
+        finally:
+            MockMarketingImageProvider.generate_background = original
+        statuses = [item["pipeline_status"] for item in result["assets"]]
+        self.assertIn("failed", statuses)
+        self.assertIn("completed", statuses)
+        self.assertEqual(len(result["assets"]), 3)
+        failed = next(item for item in result["assets"] if item["failed"])
+        self.assertIsNone(resolve_asset_file(failed))
 
     def test_16_missing_agent_photo_safe(self):
-        context = build_property_marketing_context(self._property())
-        context["agent"]["photo_path"] = None
-        context["agent"]["has_photo"] = False
-        payload, _size = render_marketing_image(
-            context,
-            generate_marketing_copy(context),
-            fmt="story",
-            template="editorial",
-            style="elegant",
-            options={"show_price": True, "include_agent": True, "show_agent_photo": True},
-        )
-        self.assertGreater(len(payload), 1000)
-
-    def test_17_png_generation(self):
-        result = generate_marketing_proposals(
-            self.org, self._user(self.agent_user_id), property_id=self.property_id, form=self._form()
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme 1 historia sin mi foto.",
         )
         path = resolve_asset_file(result["assets"][0])
         self.assertTrue(path.is_file())
-        self.assertEqual(path.suffix, ".png")
-        self.assertFalse(str(result["assets"][0]["storage_key"]).startswith("data:"))
+        self.assertFalse((result["assets"][0].get("options") or {}).get("include_agent"))
 
-    def test_18_permissions(self):
+    def test_17_png_generation_and_facts(self):
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme 1 flyer premium usando mi foto.",
+        )
+        asset = result["assets"][0]
+        path = resolve_asset_file(asset)
+        self.assertTrue(path.is_file())
+        self.assertEqual(path.suffix, ".png")
+        self.assertFalse(str(asset["storage_key"]).startswith("data:"))
+        facts = asset["property_snapshot"]["facts"]
+        self.assertEqual(facts["title"], "Santamarina 1335")
+        self.assertEqual(facts["price_label"], "USD 90.000")
+        self.assertEqual((asset.get("copy_snapshot") or {}).get("description"), "")
+
+    def test_18_permissions_and_one_prompt_ui(self):
         result = generate_marketing_proposals(
             self.org, self._user(self.agent_user_id), property_id=self.property_id, form=self._form()
         )
@@ -407,7 +450,15 @@ class MarketingIaTests(unittest.TestCase):
             sess["user_id"] = self.agent_user_id
         ok = client.get("/marketing")
         self.assertEqual(ok.status_code, 200)
-        self.assertIn("Crear contenido".encode("utf-8"), ok.data)
+        self.assertIn("JRH IA".encode("utf-8"), ok.data)
+        self.assertIn("¿Qué querés crear?".encode("utf-8"), ok.data)
+        self.assertNotIn("Elegí el estilo".encode("utf-8"), ok.data)
+        create = client.get(f"/marketing/new?property_id={self.property_id}")
+        self.assertEqual(create.status_code, 200)
+        self.assertIn("Santamarina 1335".encode("utf-8"), create.data)
+        self.assertIn("Generar con IA".encode("utf-8"), create.data)
+        self.assertNotIn(b'name="format"', create.data)
+        self.assertNotIn(b'name="style"', create.data)
 
     def test_19_jrh_property_context(self):
         self.assertEqual(detect_marketing_content("creame una historia de Santamarina"), "story")
@@ -423,25 +474,29 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(with_context["entities"].get("previous_kind"), "property")
         self.assertEqual(with_context["entities"].get("previous_id"), self.property_id)
 
-    def test_20_mobile_render_and_qa(self):
+    def test_20_qa_nine_outputs(self):
         QA_DIR.mkdir(parents=True, exist_ok=True)
-        for fmt in ("story", "post", "status"):
-            result = generate_marketing_proposals(
-                self.org,
-                self._user(self.agent_user_id),
-                property_id=self.property_id,
-                form=self._form(format=fmt),
-            )
-            expected = FORMAT_SIZES[fmt]
-            for asset in result["assets"]:
-                path = resolve_asset_file(asset)
-                with Image.open(path) as image:
-                    self.assertEqual(image.size, expected)
-                dest = QA_DIR / f"{fmt}_{asset['template']}.png"
-                dest.write_bytes(path.read_bytes())
-        self.assertTrue((QA_DIR / "story_editorial.png").is_file())
-        self.assertTrue((QA_DIR / "post_visual.png").is_file())
-        self.assertTrue((QA_DIR / "status_minimal.png").is_file())
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt=self._pack_prompt(),
+        )
+        self.assertEqual(len(result["assets"]), 9)
+        names = []
+        for index, asset in enumerate(result["assets"], start=1):
+            path = resolve_asset_file(asset)
+            self.assertIsNotNone(path)
+            expected = FORMAT_SIZES[asset["format"]]
+            with Image.open(path) as image:
+                self.assertEqual(image.size, expected)
+            dest = QA_DIR / f"{index:02d}_{asset['format']}_{asset['template']}.png"
+            dest.write_bytes(path.read_bytes())
+            names.append(dest.name)
+        self.assertEqual(len(names), 9)
+        self.assertTrue(any(name.startswith("01_story") for name in names))
+        self.assertTrue(any(name.startswith("04_post") for name in names))
+        self.assertTrue(any(name.startswith("07_flyer") for name in names))
 
     def test_21_private_price_default_hidden(self):
         connection = get_connection()
@@ -454,6 +509,13 @@ class MarketingIaTests(unittest.TestCase):
         context = build_property_marketing_context(self._property())
         self.assertTrue(context["facts"]["price_policy"]["private"])
         self.assertFalse(context["facts"]["price_policy"]["default_show"])
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme 1 post premium.",
+        )
+        self.assertFalse((result["assets"][0].get("options") or {}).get("show_price"))
         connection = get_connection()
         connection.execute(
             "UPDATE properties SET external_metadata_json = NULL WHERE id = ? AND organization_id = ?",
@@ -467,6 +529,45 @@ class MarketingIaTests(unittest.TestCase):
         snapshot = context_to_snapshot(context)
         self.assertEqual(snapshot["facts"]["listing_price"], 90000)
         self.assertEqual(snapshot["photo_count"], 5)
+
+    def test_23_idempotency_and_vary(self):
+        token = "qa-idem-santamarina"
+        first = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme 2 posts diferentes.",
+            idempotency_key=token,
+        )
+        second = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme 2 posts diferentes.",
+            idempotency_key=token,
+        )
+        self.assertEqual(first["generation_id"], second["generation_id"])
+        self.assertEqual(len(first["assets"]), len(second["assets"]))
+        varied = vary_marketing_asset(
+            self.org,
+            self._user(self.agent_user_id),
+            first["assets"][0]["id"],
+            "más minimalista",
+        )
+        self.assertEqual(len(varied["assets"]), 1)
+        self.assertEqual(varied["assets"][0]["format"], "post")
+        self.assertNotEqual(varied["generation_id"], first["generation_id"])
+
+    def test_24_art_director_diversity(self):
+        context = build_property_marketing_context(self._property())
+        used = set()
+        request = parse_marketing_request(DEFAULT_PROMPT)
+        planned = [
+            plan_item(context, request, fmt="story", index=index, used_directions=used)
+            for index in range(1, 4)
+        ]
+        directions = [item["visual_direction"] for item in planned]
+        self.assertEqual(len(set(directions)), 3)
 
 
 if __name__ == "__main__":

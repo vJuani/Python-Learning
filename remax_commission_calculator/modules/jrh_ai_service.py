@@ -2197,7 +2197,7 @@ def _handle_start_marketing(
                     "href_name": "marketing_new",
                     "href_args": {
                         "property_id": item.get("property_id") or item.get("id"),
-                        "format": fmt,
+                        "prompt": prompt or "",
                     },
                 }
                 for item in matches[:5]
@@ -2237,14 +2237,14 @@ def _handle_start_marketing(
                 "title": address,
                 "subtitle": row.get("neighborhood") or "",
                 "href_name": "marketing_new",
-                "href_args": {"property_id": property_id, "format": fmt},
+                "href_args": {"property_id": property_id, "prompt": prompt or ""},
             }
         ],
         actions=[
             {
                 "label_key": "marketing_jrh_cta",
                 "href_name": "marketing_new",
-                "href_args": {"property_id": property_id, "format": fmt},
+                "href_args": {"property_id": property_id, "prompt": prompt or ""},
             }
         ],
         confirm_required=False,

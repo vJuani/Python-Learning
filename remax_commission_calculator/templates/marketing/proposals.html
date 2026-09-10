@@ -6,26 +6,65 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
 {% endblock %}
 
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/marketing.js') }}" defer></script>
+{% endblock %}
+
 {% block content %}
-<section class="page-header">
+<section class="page-header mkt-hero">
     <div class="page-header-text">
         <p class="mkt-kicker">{{ t('marketing_kicker') }}</p>
-        <h2>{{ t('marketing_proposals_title') }}</h2>
-        <p class="field-help">{{ view.property_address }} · {{ t('marketing_format_' ~ view.format) }}</p>
+        <h2>{{ t('marketing_working_title') if view.creating else t('marketing_proposals_title') }}</h2>
+        <p class="field-help">{{ view.property_address }}{% if view.prompt %} · {{ view.prompt }}{% endif %}</p>
     </div>
 </section>
 
-<section class="mkt-proposals" data-mkt-proposals>
-    {% for asset in view.assets %}
-    <article class="mkt-proposal">
-        <p class="mkt-proposal__label">{{ asset.template_label }}</p>
-        <a class="mkt-proposal__frame mkt-proposal__frame--{{ asset.format }}" href="{{ url_for('marketing_asset', asset_id=asset.id) }}">
-            <img src="{{ url_for('marketing_preview', asset_id=asset.id) }}" alt="{{ asset.template_label }}">
-        </a>
-        <form method="post" action="{{ url_for('marketing_select', asset_id=asset.id) }}">
-            <button type="submit" class="btn btn-primary">{{ t('marketing_choose') }}</button>
-        </form>
-    </article>
-    {% endfor %}
+<div
+    class="mkt-progress"
+    data-mkt-batch="{{ view.generation_id }}"
+    data-mkt-status-url="{{ url_for('marketing_batch_status', batch_id=view.generation_id) }}"
+    {% if not view.creating %}data-mkt-done="1"{% endif %}
+>
+    <p class="mkt-progress__step" data-step="analyze">✓ {{ t('marketing_step_analyze') }}</p>
+    <p class="mkt-progress__step" data-step="photos">✓ {{ t('marketing_step_photos') }}</p>
+    <p class="mkt-progress__step" data-step="creating">
+        <span data-creating-mark>{% if view.creating %}●{% else %}✓{% endif %}</span>
+        {{ t('marketing_step_creating') }} {{ view.total }}
+    </p>
+</div>
+
+{% for group in view.groups %}
+<section class="mkt-group" data-mkt-group="{{ group.format }}">
+    <h3>{{ group.label }}</h3>
+    <div class="mkt-proposals">
+        {% for asset in group.items %}
+        <article class="mkt-proposal" data-mkt-item="{{ asset.id }}" data-status="{{ asset.pipeline_status }}">
+            <p class="mkt-proposal__label">{{ asset.format_label }} {{ asset.options.format_index or loop.index }} · {{ asset.template_label }}</p>
+            <div class="mkt-proposal__frame mkt-proposal__frame--{{ asset.format }}" data-mkt-frame>
+                {% if asset.ready %}
+                <a href="{{ url_for('marketing_asset', asset_id=asset.id) }}">
+                    <img src="{{ url_for('marketing_preview', asset_id=asset.id) }}" alt="{{ asset.format_label }}">
+                </a>
+                {% elif asset.failed %}
+                <div class="mkt-fail">
+                    <p>{{ t('marketing_item_failed') }}</p>
+                    <form method="post" action="{{ url_for('marketing_retry', asset_id=asset.id) }}">
+                        <button type="submit" class="btn btn-secondary">{{ t('marketing_retry') }}</button>
+                    </form>
+                </div>
+                {% else %}
+                <p class="mkt-wait">{{ t('marketing_item_generating') }}</p>
+                {% endif %}
+            </div>
+            {% if asset.ready %}
+            <div class="mkt-proposal__actions">
+                <a class="btn btn-primary" href="{{ url_for('marketing_download_png', asset_id=asset.id) }}">{{ t('marketing_download') }}</a>
+                <a class="btn btn-secondary" href="{{ url_for('marketing_asset', asset_id=asset.id) }}">{{ t('marketing_vary') }}</a>
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
 </section>
+{% endfor %}
 {% endblock %}
