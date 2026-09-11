@@ -36,6 +36,7 @@ from modules.marketing_context import (
     build_property_marketing_context,
     context_to_snapshot,
 )
+from jinja2 import Environment
 from modules.marketing_art_director import plan_item
 from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy
 from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider
@@ -43,6 +44,7 @@ from modules.marketing_renderer import FORMAT_SIZES, render_marketing_image
 from modules.marketing_request import DEFAULT_PROMPT, parse_marketing_request
 from modules.marketing_service import (
     can_view_asset,
+    ensure_json_serializable,
     generate_marketing_proposals,
     resolve_asset_file,
     start_marketing_batch,
@@ -323,7 +325,7 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(formats, ["story"] * 3 + ["post"] * 3 + ["flyer"] * 3)
         for group in result["groups"]:
             directions = [
-                (item.get("options") or {}).get("visual_direction") for item in group["items"]
+                (item.get("options") or {}).get("visual_direction") for item in group["assets"]
             ]
             self.assertEqual(len(directions), len(set(directions)), directions)
         self.assertEqual([group["format"] for group in result["groups"]], ["story", "post", "flyer"])
@@ -568,6 +570,101 @@ class MarketingIaTests(unittest.TestCase):
         ]
         directions = [item["visual_direction"] for item in planned]
         self.assertEqual(len(set(directions)), 3)
+
+    def test_25_dict_items_method_is_not_iterable(self):
+        group = {
+            "format": "story",
+            "label": "Historias",
+            "items": [{"id": 1}, {"id": 2}],
+        }
+        self.assertTrue(callable(group.items))
+        with self.assertRaises(TypeError) as caught:
+            for _asset in group.items:
+                pass
+        self.assertIn("not iterable", str(caught.exception))
+        materialized = list(group.items())
+        self.assertEqual(len(materialized), 3)
+        values = list(group.values())
+        self.assertEqual(values[-1], [{"id": 1}, {"id": 2}])
+
+    def test_26_generation_page_does_not_iterate_dict_items(self):
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme 1 historia y 1 post.",
+        )
+        template = Environment().from_string(
+            "{% for group in view.groups %}{% for asset in group.assets %}{{ asset.id }}{% endfor %}{% endfor %}"
+        )
+        rendered = template.render(view=result)
+        self.assertTrue(rendered)
+        broken = Environment().from_string(
+            "{% for group in view.groups %}{% for asset in group.items %}{{ asset }}{% endfor %}{% endfor %}"
+        )
+        with self.assertRaises(TypeError):
+            broken.render(view={"groups": [{"format": "story", "items": [1]}]})
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["user_id"] = self.agent_user_id
+        page = client.get(f"/marketing/generation/{result['generation_id']}")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b"mkt-proposal", page.data)
+        self.assertIn(b"Historias", page.data)
+        self.assertTrue(result["assets"][0].get("ready"))
+        preview = client.get(f"/marketing/assets/{result['assets'][0]['id']}/preview")
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.mimetype, "image/png")
+
+    def test_27_art_direction_and_metadata_are_json_serializable(self):
+        context = build_property_marketing_context(self._property())
+        request = parse_marketing_request(DEFAULT_PROMPT)
+        art = plan_item(context, request, fmt="story", index=1, used_directions=set())
+        payload = ensure_json_serializable(
+            {
+                "art_direction": art,
+                "copy_snapshot": {"headline": art.get("headline"), "hashtags": []},
+                "property_snapshot": context_to_snapshot(context),
+            },
+            path="metadata",
+        )
+        json.dumps(payload)
+        with self.assertRaises(TypeError):
+            ensure_json_serializable({"features": {}.items}, path="features")
+        with self.assertRaises(TypeError):
+            ensure_json_serializable({"values": {}.values}, path="values")
+
+    def test_28_failed_item_does_not_500_generation_page(self):
+        original = MockMarketingImageProvider.generate_background
+        calls = {"n": 0}
+
+        def flaky(self, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise MarketingImageError("forced")
+            return original(self, **kwargs)
+
+        MockMarketingImageProvider.generate_background = flaky
+        try:
+            result = start_marketing_batch(
+                self.org,
+                self._user(self.agent_user_id),
+                property_id=self.property_id,
+                prompt="Haceme 3 historias diferentes.",
+            )
+        finally:
+            MockMarketingImageProvider.generate_background = original
+        self.assertEqual(len(result["assets"]), 3)
+        self.assertTrue(any(item.get("failed") for item in result["assets"]))
+        self.assertTrue(any(item.get("ready") for item in result["assets"]))
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["user_id"] = self.agent_user_id
+        page = client.get(f"/marketing/generation/{result['generation_id']}")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("No pude generar esta variante.".encode("utf-8"), page.data)
+        self.assertIn("Reintentar".encode("utf-8"), page.data)
+        self.assertIn(b"mkt-proposal", page.data)
 
 
 if __name__ == "__main__":

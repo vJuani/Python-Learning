@@ -269,3 +269,4 @@ def configure_logging(app):
     logging.getLogger("werkzeug").setLevel(
         log_level
     )
+    logging.getLogger("PIL").setLevel(logging.WARNING)

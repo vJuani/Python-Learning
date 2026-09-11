@@ -37,7 +37,7 @@
 <section class="mkt-group" data-mkt-group="{{ group.format }}">
     <h3>{{ group.label }}</h3>
     <div class="mkt-proposals">
-        {% for asset in group.items %}
+        {% for asset in group.assets %}
         <article class="mkt-proposal" data-mkt-item="{{ asset.id }}" data-status="{{ asset.pipeline_status }}">
             <p class="mkt-proposal__label">{{ asset.format_label }} {{ asset.options.format_index or loop.index }} · {{ asset.template_label }}</p>
             <div class="mkt-proposal__frame mkt-proposal__frame--{{ asset.format }}" data-mkt-frame>

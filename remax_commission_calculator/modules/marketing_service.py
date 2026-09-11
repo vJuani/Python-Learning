@@ -48,6 +48,24 @@ from modules.marketing_request import DEFAULT_PROMPT, expand_items, parse_market
 
 logger = logging.getLogger(__name__)
 
+
+def ensure_json_serializable(value, *, path="root"):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {
+            str(key): ensure_json_serializable(nested, path=f"{path}.{key}")
+            for key, nested in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [
+            ensure_json_serializable(nested, path=f"{path}[{index}]")
+            for index, nested in enumerate(value)
+        ]
+    if callable(value):
+        raise TypeError(f"non-json-serializable callable at {path}")
+    raise TypeError(f"non-json-serializable {type(value).__name__} at {path}")
+
 FORMAT_ORDER = ("story", "status", "post", "flyer")
 PIPELINE_QUEUED = "queued"
 PIPELINE_GENERATING = "generating"
@@ -104,8 +122,8 @@ def _pipeline_status(asset):
 def _decorate_asset(asset, language="es"):
     item = dict(asset or {})
     fmt = item.get("format") or "story"
-    options = item.get("options") or {}
-    copy = item.get("copy_snapshot") or {}
+    options = item.get("options") if isinstance(item.get("options"), dict) else {}
+    copy = item.get("copy_snapshot") if isinstance(item.get("copy_snapshot"), dict) else {}
     item["format_label"] = translate(f"marketing_format_{fmt}", language=language)
     item["template_label"] = options.get("visual_direction") or item.get("template") or ""
     item["when_label"] = _relative_day(item.get("created_at"), language)
@@ -115,7 +133,34 @@ def _decorate_asset(asset, language="es"):
     item["ready"] = item["pipeline_status"] == PIPELINE_COMPLETED and bool(item.get("storage_key"))
     item["source"] = options.get("source") or "ai"
     item["sort_index"] = options.get("sort_index") or 0
+    item["options"] = options
+    item["copy_snapshot"] = copy
     return item
+
+
+def _safe_decorate_asset(item, language="es"):
+    try:
+        return _decorate_asset(item, language)
+    except Exception:
+        logger.exception(
+            "Marketing generation item failed batch_id=%s item_id=%s stage=%s",
+            (item or {}).get("generation_id"),
+            (item or {}).get("id"),
+            "rendering",
+        )
+        fallback = dict(item or {})
+        fallback["pipeline_status"] = PIPELINE_FAILED
+        fallback["failed"] = True
+        fallback["ready"] = False
+        fallback["format_label"] = fallback.get("format") or ""
+        fallback["template_label"] = ""
+        fallback["headline"] = ""
+        fallback["when_label"] = ""
+        fallback["options"] = fallback.get("options") if isinstance(fallback.get("options"), dict) else {}
+        fallback["copy_snapshot"] = (
+            fallback.get("copy_snapshot") if isinstance(fallback.get("copy_snapshot"), dict) else {}
+        )
+        return fallback
 
 
 def _group_assets(assets, language="es"):
@@ -134,7 +179,7 @@ def _group_assets(assets, language="es"):
             {
                 "format": fmt,
                 "label": translate(f"marketing_group_{fmt}", language=language),
-                "items": items,
+                "assets": items,
             }
         )
     return groups
@@ -318,17 +363,20 @@ def _update_options(asset, **fields):
         update_marketing_asset(
             asset["id"],
             asset["organization_id"],
-            options_json=options,
+            options_json=ensure_json_serializable(options, path="options"),
         )
     return get_marketing_asset(asset["id"], asset["organization_id"])
 
 
 def _process_item(organization_id, asset_id):
+    stage = "asset_loading"
     asset = get_marketing_asset(asset_id, organization_id)
     if asset is None:
         return None
+    batch_id = asset.get("generation_id")
     asset = _update_options(asset, pipeline_status=PIPELINE_GENERATING, error=None)
     try:
+        stage = "image_generation"
         provider = get_marketing_image_provider()
         art = _art_from_asset(asset)
         fmt = asset["format"]
@@ -338,11 +386,13 @@ def _process_item(organization_id, asset_id):
             size=size,
             visual_direction=art.get("visual_direction"),
         )
+        stage = "composition"
         asset = _update_options(asset, pipeline_status=PIPELINE_COMPOSITING, source=get_marketing_image_provider_name())
         art["background_png"] = background
         context = _context_from_asset(asset)
         options = dict(asset.get("options") or {})
         png_bytes, _size = compose_marketing_image(context, art, fmt=fmt, options=options)
+        stage = "persistence"
         storage_key = _write_bytes(organization_id, asset_id, "creative.png", png_bytes)
         pdf_key = None
         if fmt == "flyer":
@@ -361,15 +411,17 @@ def _process_item(organization_id, asset_id):
                 organization_id,
                 storage_key=storage_key,
                 pdf_storage_key=pdf_key,
-                options_json=options,
+                options_json=ensure_json_serializable(options, path="options"),
             )
-    except Exception as error:
-        logger.info("marketing_item_failed asset=%s error=%s", asset_id, error)
-        message = "marketing_err_item_failed"
-        if isinstance(error, MarketingImageError):
-            message = "marketing_err_item_failed"
+    except Exception:
+        logger.exception(
+            "Marketing generation item failed batch_id=%s item_id=%s stage=%s",
+            batch_id,
+            asset_id,
+            stage,
+        )
         asset = get_marketing_asset(asset_id, organization_id) or asset
-        _update_options(asset, pipeline_status=PIPELINE_FAILED, error=message)
+        _update_options(asset, pipeline_status=PIPELINE_FAILED, error="marketing_err_item_failed")
     return get_marketing_asset(asset_id, organization_id)
 
 
@@ -413,8 +465,11 @@ def _run_batch(organization_id, batch_id):
     limit = _concurrency()
     if _run_sync() or limit == 1:
         for asset in assets:
+            if _pipeline_status(asset) == PIPELINE_FAILED:
+                continue
             _process_item(organization_id, asset["id"])
             _refresh_batch_status(organization_id, batch_id)
+        _refresh_batch_status(organization_id, batch_id)
         return
     semaphore = threading.Semaphore(limit)
 
@@ -425,6 +480,8 @@ def _run_batch(organization_id, batch_id):
 
     threads = []
     for asset in assets:
+        if _pipeline_status(asset) == PIPELINE_FAILED:
+            continue
         thread = threading.Thread(
             target=_worker,
             args=(asset["id"],),
@@ -514,7 +571,7 @@ def start_marketing_batch(
             batch_id=batch_id,
             property_id=property_data["id"],
             prompt=parsed.get("prompt") or prompt,
-            request=request_payload,
+            request=ensure_json_serializable(request_payload, path="request"),
             idempotency_key=token,
             agent_id=property_data.get("agent_id"),
             created_by_user_id=(user or {}).get("id"),
@@ -532,51 +589,88 @@ def start_marketing_batch(
     sort_index = 0
     for item in items:
         sort_index += 1
-        art = plan_item(
-            context,
-            parsed,
-            fmt=item["format"],
-            index=item["index"],
-            used_directions=used,
-        )
-        item_options = dict(options)
-        item_options.update(
-            {
-                "pipeline_status": PIPELINE_QUEUED,
-                "visual_direction": art.get("visual_direction"),
-                "background_style": art.get("background_style"),
-                "layout": art.get("layout") or {},
-                "sort_index": sort_index,
-                "format_index": item["index"],
-                "prompt": parsed.get("prompt") or prompt,
-                "reference_asset_id": reference_asset_id,
-                "source": get_marketing_image_provider_name(),
+        try:
+            art = plan_item(
+                context,
+                parsed,
+                fmt=item["format"],
+                index=item["index"],
+                used_directions=used,
+            )
+            item_options = dict(options)
+            item_options.update(
+                {
+                    "pipeline_status": PIPELINE_QUEUED,
+                    "visual_direction": art.get("visual_direction"),
+                    "background_style": art.get("background_style"),
+                    "layout": art.get("layout") or {},
+                    "sort_index": sort_index,
+                    "format_index": item["index"],
+                    "prompt": parsed.get("prompt") or prompt,
+                    "reference_asset_id": reference_asset_id,
+                    "source": get_marketing_image_provider_name(),
+                }
+            )
+            copy = {
+                "headline": art.get("headline") or "",
+                "subheadline": art.get("short_hook") or "",
+                "description": "",
+                "cta": art.get("cta") or "",
+                "caption": art.get("headline") or "",
+                "hashtags": [],
             }
-        )
-        copy = {
-            "headline": art.get("headline") or "",
-            "subheadline": art.get("short_hook") or "",
-            "description": "",
-            "cta": art.get("cta") or "",
-            "caption": art.get("headline") or "",
-            "hashtags": [],
-        }
-        create_marketing_asset(
-            organization_id,
-            property_id=property_data["id"],
-            generation_id=batch_id,
-            format=item["format"],
-            style=art.get("visual_direction") or "premium",
-            tone=parsed.get("visual_direction") or "premium varied",
-            template=art.get("visual_direction") or "direction",
-            copy_snapshot=copy,
-            property_snapshot=snapshot,
-            agent_branding_snapshot=context.get("agent") or {},
-            options=item_options,
-            agent_id=property_data.get("agent_id"),
-            created_by_user_id=(user or {}).get("id"),
-            status=STATUS_GENERATED,
-        )
+            create_marketing_asset(
+                organization_id,
+                property_id=property_data["id"],
+                generation_id=batch_id,
+                format=item["format"],
+                style=art.get("visual_direction") or "premium",
+                tone=parsed.get("visual_direction") or "premium varied",
+                template=art.get("visual_direction") or "direction",
+                copy_snapshot=ensure_json_serializable(copy, path="copy_snapshot"),
+                property_snapshot=ensure_json_serializable(snapshot, path="property_snapshot"),
+                agent_branding_snapshot=ensure_json_serializable(
+                    context.get("agent") or {}, path="agent_branding_snapshot"
+                ),
+                options=ensure_json_serializable(item_options, path="options"),
+                agent_id=property_data.get("agent_id"),
+                created_by_user_id=(user or {}).get("id"),
+                status=STATUS_GENERATED,
+            )
+        except Exception:
+            logger.exception(
+                "Marketing generation item failed batch_id=%s item_id=%s stage=%s",
+                batch_id,
+                None,
+                "art_direction",
+            )
+            create_marketing_asset(
+                organization_id,
+                property_id=property_data["id"],
+                generation_id=batch_id,
+                format=item["format"],
+                style="premium",
+                tone="premium varied",
+                template="direction",
+                copy_snapshot={},
+                property_snapshot=ensure_json_serializable(snapshot, path="property_snapshot"),
+                agent_branding_snapshot=ensure_json_serializable(
+                    context.get("agent") or {}, path="agent_branding_snapshot"
+                ),
+                options=ensure_json_serializable(
+                    {
+                        **options,
+                        "pipeline_status": PIPELINE_FAILED,
+                        "error": "marketing_err_item_failed",
+                        "sort_index": sort_index,
+                        "format_index": item["index"],
+                    },
+                    path="options",
+                ),
+                agent_id=property_data.get("agent_id"),
+                created_by_user_id=(user or {}).get("id"),
+                status=STATUS_GENERATED,
+            )
     if _run_sync():
         _run_batch(organization_id, batch_id)
     else:
@@ -643,7 +737,7 @@ def get_batch_view(organization_id, user, batch_id, *, language="es"):
     ]
     if batch is None and not assets:
         raise MarketingError("marketing_err_asset_missing", 404)
-    decorated = [_decorate_asset(item, language) for item in assets]
+    decorated = [_safe_decorate_asset(item, language) for item in assets]
     decorated.sort(key=lambda item: (FORMAT_ORDER.index(item["format"]) if item["format"] in FORMAT_ORDER else 9, item.get("sort_index") or 0))
     first = decorated[0] if decorated else {}
     completed = sum(1 for item in decorated if item.get("ready"))
@@ -709,7 +803,7 @@ def get_batch_status(organization_id, user, batch_id, *, language="es"):
             {
                 "format": group["format"],
                 "label": group["label"],
-                "items": [item["id"] for item in group["items"]],
+                "assets": [item["id"] for item in group["assets"]],
             }
             for group in view["groups"]
         ],
