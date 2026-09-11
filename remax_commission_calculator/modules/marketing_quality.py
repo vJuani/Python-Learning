@@ -40,6 +40,7 @@ def validate_creative(
     options=None,
     references=None,
     agent_photo_sent=False,
+    agent_photo_composited=None,
 ):
     options = options or {}
     reasons = []
@@ -55,9 +56,12 @@ def validate_creative(
     if _edge_variance(image) < 180:
         reasons.append("flat_composition")
     refs = list(references or [])
-    if options.get("include_agent") and options.get("show_agent_photo"):
+    agent_expected = bool(options.get("include_agent") and options.get("show_agent_photo"))
+    if agent_expected:
         if not agent_photo_sent and not any(item.get("role") == "agent" for item in refs):
             reasons.append("agent_missing")
+        if agent_photo_composited is False and options.get("agent_photo_loaded"):
+            reasons.append("agent_not_composited")
     if not any(str(item.get("role") or "").startswith("property") for item in refs):
         reasons.append("property_missing")
     score = 88
@@ -67,11 +71,15 @@ def validate_creative(
         score -= 18
     if "agent_missing" in reasons:
         score -= 24
+    if "agent_not_composited" in reasons:
+        score -= 24
     if "property_missing" in reasons:
         score -= 30
     if "wrong_size" in reasons:
         score -= 10
     ok = score >= QUALITY_THRESHOLD and "unreadable" not in reasons
+    if "agent_not_composited" in reasons or "agent_missing" in reasons:
+        ok = False
     if not ok:
         logger.info("marketing quality rejected score=%s reasons=%s", score, reasons[:4])
     return {
@@ -79,4 +87,6 @@ def validate_creative(
         "score": max(0, min(100, score)),
         "reasons": reasons,
         "status": "completed" if ok else "failed_quality",
+        "agent_expected": agent_expected,
+        "agent_present": bool(agent_photo_sent or agent_photo_composited),
     }

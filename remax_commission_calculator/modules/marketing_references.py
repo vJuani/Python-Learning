@@ -8,31 +8,57 @@ from pathlib import Path
 
 from PIL import Image
 
-from modules.config import get_private_upload_root
-from modules.marketing_renderer import load_agent_photo, load_property_photos
-from modules.property_sync.media import resolve_media_filesystem_path
+from modules.agent_branding import get_agent_presentation_asset
+from modules.marketing_renderer import load_property_photos
 
 logger = logging.getLogger(__name__)
 
 STYLE_DIR = Path(__file__).resolve().parent.parent / "marketing_style_references"
 
 
-def _png_bytes(image):
+def _png_bytes(image, *, keep_alpha=False):
     if image is None:
         return None
     buffer = io.BytesIO()
-    image.convert("RGB").save(buffer, format="PNG")
+    if keep_alpha and image.mode in {"RGBA", "LA"}:
+        image.save(buffer, format="PNG")
+    else:
+        image.convert("RGB").save(buffer, format="PNG")
     return buffer.getvalue()
 
 
-def _open_path_bytes(path):
+def _open_path_image(path):
     if not path:
         return None
     try:
         image = Image.open(path)
-        return _png_bytes(image)
+        image.load()
+        return image
     except Exception:
         return None
+
+
+def _open_path_bytes(path, *, keep_alpha=False):
+    image = _open_path_image(path)
+    return _png_bytes(image, keep_alpha=keep_alpha)
+
+
+def resolve_listing_agent_photo(agent):
+    """Exact ACM/ficha file. Does not invent or search a different portrait."""
+    path = (agent or {}).get("photo_path")
+    if path:
+        image = _open_path_image(path)
+        if image is not None:
+            return image, path, (agent or {}).get("photo_variant") or "display"
+    agent_id = (agent or {}).get("agent_id")
+    organization_id = (agent or {}).get("organization_id")
+    if not agent_id or not organization_id:
+        return None, None, "none"
+    fresh = get_agent_presentation_asset(agent_id, organization_id, agent_login_only=True)
+    if not fresh:
+        return None, None, "none"
+    image = _open_path_image(fresh.get("photo_path"))
+    return image, fresh.get("photo_path"), fresh.get("photo_variant") or "none"
 
 
 def collect_reference_images(context, options):
@@ -67,18 +93,18 @@ def collect_reference_images(context, options):
         )
     agent = (context or {}).get("agent") or {}
     want_photo = bool(options.get("show_agent_photo") and options.get("include_agent"))
-    agent_path = agent.get("photo_path")
-    agent_present = bool(agent.get("has_photo") or agent_path)
-    agent_image = load_agent_photo(agent_path) if want_photo and agent_path else None
-    agent_bytes = _png_bytes(agent_image) if agent_image is not None else None
+    agent_image, agent_path, variant = (None, None, "none")
+    if want_photo:
+        agent_image, agent_path, variant = resolve_listing_agent_photo(agent)
+    agent_bytes = _png_bytes(agent_image, keep_alpha=True) if agent_image is not None else None
     if want_photo and agent_bytes:
         references.append(
             {
                 "role": "agent",
                 "label": (
                     f"Image {len(references) + 1}: professional portrait of the real "
-                    "estate agent. The agent must appear recognizably. Do not invent "
-                    "another person or face."
+                    "estate agent. Use this exact person. Reserve space; the final "
+                    "renderer will overlay this same cutout. Do not invent another face."
                 ),
                 "bytes": agent_bytes,
                 "mime": "image/png",
@@ -104,17 +130,24 @@ def collect_reference_images(context, options):
             }
         )
     logger.info(
-        "marketing refs property=%s agent_photo_present=%s agent_photo_loaded=%s style=%s",
+        "marketing refs property=%s property_agent_id=%s agent_branding_found=%s "
+        "agent_photo_found=%s agent_photo_variant=%s agent_photo_loaded=%s style=%s",
         sum(1 for item in references if str(item["role"]).startswith("property")),
-        bool(agent_present),
+        agent.get("agent_id"),
+        bool(agent.get("agent_id")),
+        bool(agent_path or agent.get("has_photo")),
+        variant,
         bool(agent_bytes),
         bool(style_bytes),
     )
     return {
         "references": references,
-        "agent_photo_present": bool(agent_present),
+        "agent_photo_present": bool(agent.get("has_photo") or agent_path),
         "agent_photo_loaded": bool(agent_bytes),
         "agent_photo_requested": want_photo,
+        "agent_photo_variant": variant,
+        "property_agent_id": agent.get("agent_id"),
+        "agent_branding_found": bool(agent.get("agent_id")),
         "property_photo_count": sum(1 for item in references if str(item["role"]).startswith("property")),
     }
 
@@ -124,5 +157,5 @@ def agent_overlay_image(context, options):
         return None
     if not (options or {}).get("include_agent"):
         return None
-    agent = (context or {}).get("agent") or {}
-    return load_agent_photo(agent.get("photo_path"))
+    image, _path, _variant = resolve_listing_agent_photo((context or {}).get("agent") or {})
+    return image

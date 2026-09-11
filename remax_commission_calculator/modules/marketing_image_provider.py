@@ -99,23 +99,24 @@ class MockMarketingImageProvider(MarketingImageProvider):
         canvas = Image.new("RGBA", size, (*WHITE, 255))
         draw = ImageDraw.Draw(canvas)
         direction = visual_direction or ""
-        if direction in {"luxury_editorial", "editorial_dark", "photo_lifestyle"}:
+        if direction in {"property_hero", "luxury_minimal", "luxury_editorial", "editorial_dark", "photo_lifestyle"}:
             draw.rectangle((0, 0, width, height), fill=(*NAVY, 255))
         photos = []
         agent = None
         for item in refs:
             try:
-                opened = Image.open(io.BytesIO(item["bytes"])).convert("RGB")
+                opened = Image.open(io.BytesIO(item["bytes"]))
+                opened.load()
             except Exception:
                 continue
             if item.get("role") == "agent":
                 agent = opened
             elif str(item.get("role") or "").startswith("property"):
-                photos.append(opened)
-        if direction in {"luxury_editorial", "editorial_dark"} and photos:
-            canvas.paste(fit_cover(photos[0], width, int(height * 0.78)), (0, 0))
-            draw.rectangle((0, int(height * 0.72), width, height), fill=(*NAVY, 255))
-        elif direction in {"bright_architectural", "bright_geometric", "bold_grid"} and photos:
+                photos.append(opened.convert("RGB"))
+        if direction in {"property_hero", "luxury_minimal", "luxury_editorial", "editorial_dark"} and photos:
+            canvas.paste(fit_cover(photos[0], width, int(height * 0.82)), (0, 0))
+            draw.rectangle((0, int(height * 0.78), width, height), fill=(*NAVY, 255))
+        elif direction in {"clean_collage", "bright_architectural", "bright_geometric", "bold_grid"} and photos:
             canvas.paste(fit_cover(photos[0], int(width * 0.62), int(height * 0.58)), (int(width * 0.04), int(height * 0.08)))
             if len(photos) > 1:
                 canvas.paste(fit_cover(photos[1], int(width * 0.30), int(height * 0.27)), (int(width * 0.68), int(height * 0.08)))
@@ -287,14 +288,15 @@ def finished_ad_prompt(art, fmt, *, references=None, options=None, used_directio
         f"{agent_line} "
         "Use a sophisticated JRH One visual language: navy, electric blue, white, "
         "but do NOT force all designs into the same geometric template. "
-        "Prioritize photography, strong hierarchy, editorial typography, "
-        "intentional negative space, and premium composition. "
+        "This is a commercial real-estate advertisement, not an editorial magazine page. "
+        "Very little text. Do not write addresses, prices, rooms, names, phones or claims "
+        "such as apto crédito or excelente ubicación — facts are overlaid later. "
         "Do not draw or invent the JRH One logo. Leave appropriate brand space. "
-        "Do not render addresses, prices, phone numbers or names — those are added later. "
-        "A short decorative headline treatment is allowed. "
+        "Reserve a clear area for the real agent cutout. "
         "Avoid generic SaaS cards, huge empty spaces, tiny text, repeated curved shapes, "
         "stock-template appearance, duplicated logos, fake interface buttons, "
-        "giant HTML buttons, dashboard chrome, microscopic labels, and empty white canvases. "
+        "giant HTML buttons, dashboard chrome, microscopic labels, empty white canvases, "
+        "and invented amenities. "
         f"Do not repeat previous directions: {avoid or 'none'}. "
         f"Reference map:\n{labels}"
     )

@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import re
 
-from modules.agent_branding import get_agent_branding
-from modules.agent_photo import resolve_agent_photo_path
+from modules.agent_branding import get_agent_presentation_asset
 from modules.branding import get_brand_name, resolve_brand_logo_path
-from modules.database.agents_repository import get_agent_record
 from modules.database.organization_settings_repository import get_organization_settings
 from modules.formatting import format_listing_money
 from modules.i18n import translate
@@ -143,7 +141,7 @@ def _price_policy(meta, display):
 
 
 def _agent_snapshot(property_data, language):
-    branding = get_agent_branding(
+    branding = get_agent_presentation_asset(
         property_data.get("agent_id"),
         property_data.get("organization_id"),
         language=language,
@@ -151,17 +149,19 @@ def _agent_snapshot(property_data, language):
     )
     if not branding:
         return None
-    agent = get_agent_record(branding.get("agent_id"), branding.get("organization_id"))
-    photo = resolve_agent_photo_path(agent) if agent else None
     return {
         "agent_id": branding.get("agent_id"),
+        "organization_id": branding.get("organization_id"),
         "name": branding.get("name"),
         "phone": branding.get("phone"),
         "email": branding.get("email"),
         "instagram": branding.get("instagram"),
+        "linkedin": branding.get("linkedin"),
         "title": branding.get("title"),
-        "has_photo": bool(branding.get("has_photo") and photo),
-        "photo_path": str(photo) if photo else None,
+        "has_photo": bool(branding.get("has_photo")),
+        "photo_path": branding.get("photo_path"),
+        "photo_variant": branding.get("photo_variant") or "none",
+        "profile_photo_key": branding.get("profile_photo_key"),
         "organization": branding.get("organization"),
     }
 

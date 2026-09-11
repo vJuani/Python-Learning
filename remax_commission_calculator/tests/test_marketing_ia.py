@@ -19,10 +19,12 @@ os.environ.pop("DATABASE_URL", None)
 os.environ["JRH_AI_PROVIDER"] = "mock"
 os.environ.pop("OPENAI_API_KEY", None)
 
+from modules.agent_branding import get_agent_presentation_asset
+from modules.agent_photo import resolve_agent_photo_path
 from modules.auth import ROLE_ADMIN, ROLE_AGENT, hash_password
 from modules.config import apply_config
 from modules.database import add_agent, add_organization, add_property, add_user, create_tables
-from modules.database.agents_repository import update_agent_profile_photo
+from modules.database.agents_repository import get_agent_record, update_agent_profile_photo
 from modules.database.connection import get_connection
 from modules.database.marketing_repository import get_marketing_asset, update_marketing_asset
 from modules.database.properties_repository import get_property_record, update_property
@@ -40,6 +42,7 @@ from jinja2 import Environment
 from modules.marketing_art_director import plan_item
 from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy
 from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider, get_marketing_image_model
+from modules.marketing_quality import validate_creative
 from modules.marketing_references import collect_reference_images
 from modules.marketing_renderer import FORMAT_SIZES, render_marketing_image
 from modules.marketing_photo_selector import select_photos_for_item
@@ -257,6 +260,10 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("José", agent["name"])
         self.assertTrue(agent["has_photo"])
         self.assertTrue(agent["photo_path"])
+        presentation = get_agent_presentation_asset(self.agent_id, self.org, agent_login_only=True)
+        acm_path = resolve_agent_photo_path(get_agent_record(self.agent_id, self.org))
+        self.assertEqual(agent["photo_path"], str(acm_path))
+        self.assertEqual(presentation["photo_path"], str(acm_path))
 
     def test_06_other_agent_not_leaked(self):
         context = build_property_marketing_context(self._property())
@@ -309,7 +316,7 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(parsed["post_count"], 3)
         self.assertEqual(parsed["flyer_count"], 3)
         self.assertTrue(parsed["with_agent"])
-        self.assertEqual(parsed["copy_density"], "low")
+        self.assertEqual(parsed["copy_density"], "very_low")
         vary = parse_marketing_request("más minimalista", variation=True)
         self.assertEqual(vary["story_count"], 0)
         self.assertEqual(vary["post_count"], 0)
@@ -764,11 +771,14 @@ class MarketingIaTests(unittest.TestCase):
             property_id=self.property_id,
             prompt="Haceme una historia premium, con mis datos y mi foto, sin descripción larga.",
         )
+        self.assertEqual(len(result["assets"]), 1)
+        self.assertEqual(result["assets"][0]["format"], "story")
         options = result["assets"][0].get("options") or {}
         self.assertTrue(options.get("include_agent"))
         self.assertTrue(options.get("show_agent_photo"))
         self.assertTrue(options.get("agent_photo_loaded"))
         self.assertTrue(options.get("agent_photo_sent_to_provider"))
+        self.assertTrue(options.get("agent_photo_composited"))
         self.assertTrue((MockMarketingImageProvider.last_call or {}).get("agent_photo_sent_to_provider"))
         self.assertGreaterEqual((MockMarketingImageProvider.last_call or {}).get("property_refs") or 0, 1)
         path = resolve_asset_file(result["assets"][0])
@@ -802,6 +812,132 @@ class MarketingIaTests(unittest.TestCase):
         self.assertGreaterEqual(packed["property_photo_count"], 1)
         self.assertTrue(any(item["role"] == "agent" for item in packed["references"]))
 
+    def test_34_explicit_one_story_not_pack(self):
+        parsed = parse_marketing_request("haceme UNA historia con mi foto y mis datos")
+        self.assertTrue(parsed["explicit_formats"])
+        self.assertEqual(parsed["story_count"], 1)
+        self.assertEqual(parsed["post_count"], 0)
+        self.assertEqual(parsed["flyer_count"], 0)
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme una historia premium con mi foto y mis datos, sin descripción larga.",
+        )
+        self.assertEqual(len(result["assets"]), 1)
+        self.assertEqual(result["assets"][0]["format"], "story")
+        self.assertTrue(result.get("single"))
+        self.assertEqual([group["format"] for group in result["groups"]], ["story"])
+
+    def test_35_explicit_two_posts_and_one_flyer(self):
+        posts = parse_marketing_request("haceme dos posts")
+        self.assertEqual(posts["story_count"], 0)
+        self.assertEqual(posts["post_count"], 2)
+        self.assertEqual(posts["flyer_count"], 0)
+        flyer = parse_marketing_request("haceme un flyer")
+        self.assertEqual(flyer["story_count"], 0)
+        self.assertEqual(flyer["post_count"], 0)
+        self.assertEqual(flyer["flyer_count"], 1)
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="haceme dos posts",
+        )
+        self.assertEqual(len(result["assets"]), 2)
+        self.assertEqual({item["format"] for item in result["assets"]}, {"post"})
+
+    def test_36_con_mis_datos_enables_photo_and_contact(self):
+        config = agent_presentation_config("subilo con mis datos")
+        self.assertTrue(config["show_agent"])
+        self.assertTrue(config["show_photo"])
+        self.assertTrue(config["show_name"])
+        self.assertTrue(config["show_phone"])
+        self.assertTrue(config["show_email"])
+        photo = agent_presentation_config("usá mi foto")
+        self.assertTrue(photo["show_photo"])
+        no_face = agent_presentation_config("Haceme una historia sin mi foto pero con mis datos")
+        self.assertTrue(no_face["show_agent"])
+        self.assertFalse(no_face["show_photo"])
+        self.assertTrue(no_face["show_name"])
+        only_listing = agent_presentation_config("Haceme una historia sin mis datos")
+        self.assertFalse(only_listing["show_agent"])
+        self.assertFalse(only_listing["show_photo"])
+        self.assertFalse(only_listing["show_name"])
+
+    def test_37_agent_photo_is_property_agent_not_current_user(self):
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.admin_id),
+            property_id=self.property_id,
+            prompt="Haceme una historia con mi foto y mis datos",
+        )
+        snapshot = result["assets"][0].get("agent_branding_snapshot") or {}
+        self.assertEqual(snapshot.get("agent_id"), self.agent_id)
+        self.assertEqual(snapshot.get("email"), "jose.barreiro@example.com")
+        self.assertNotEqual(snapshot.get("email"), "mkt.admin@example.com")
+        self.assertTrue((result["assets"][0].get("options") or {}).get("agent_photo_composited"))
+
+    def test_38_quality_detects_missing_composited_agent(self):
+        verdict = validate_creative(
+            _quality_png(),
+            size=FORMAT_SIZES["story"],
+            options={"include_agent": True, "show_agent_photo": True, "agent_photo_loaded": True},
+            references=[{"role": "property_hero"}, {"role": "agent"}],
+            agent_photo_sent=True,
+            agent_photo_composited=False,
+        )
+        self.assertFalse(verdict["ok"])
+        self.assertIn("agent_not_composited", verdict["reasons"])
+
+    def test_39_single_story_result_ui_hides_empty_format_tabs(self):
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme una historia premium con mi foto y mis datos, sin descripción larga.",
+        )
+        self.assertTrue(result["single"])
+        html = Path(__file__).resolve().parent.parent.joinpath("templates", "marketing", "new.html").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("view.single", html)
+        self.assertIn("marketing_ready_single_", html)
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["user_id"] = self.agent_user_id
+        page = client.get(f"/marketing/generation/{result['generation_id']}")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Tu historia está lista.".encode("utf-8"), page.data)
+        self.assertNotIn(b"Posts (0)", page.data)
+        self.assertNotIn(b"Flyers (0)", page.data)
+        self.assertNotIn(b"mkt-tabs", page.data)
+
+    def test_40_no_agent_photo_when_data_only(self):
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme una historia sin mi foto pero con mis datos",
+        )
+        options = result["assets"][0].get("options") or {}
+        self.assertTrue(options.get("include_agent"))
+        self.assertFalse(options.get("show_agent_photo"))
+        self.assertFalse(options.get("agent_photo_sent_to_provider"))
+        self.assertFalse(options.get("agent_photo_composited"))
+        snapshot = result["assets"][0].get("agent_branding_snapshot") or {}
+        self.assertIn("José", snapshot.get("name") or "")
+
+
+def _quality_png():
+    buffer = __import__("io").BytesIO()
+    image = Image.new("RGB", FORMAT_SIZES["story"], (18, 28, 48))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((40, 40, 900, 1400), fill=(80, 90, 110))
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
 
 if __name__ == "__main__":
     unittest.main()
+

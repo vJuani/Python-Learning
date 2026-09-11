@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from modules.agent_photo import image_has_alpha, resolve_agent_photo_path
 from modules.auth import ROLE_AGENT
 from modules.database.agents_repository import get_agent_record
 from modules.database.organization_settings_repository import get_organization_settings
@@ -74,6 +75,35 @@ def get_agent_branding(agent_id, organization_id, *, language="es", agent_login_
         value = branding.get(key)
         if isinstance(value, str) and not value.strip():
             branding[key] = None
+    return branding
+
+
+def get_agent_presentation_asset(agent_id, organization_id, *, language="es", agent_login_only=True):
+    """Same professional photo ACM and ficha already resolve. Never current_user."""
+    branding = get_agent_branding(
+        agent_id,
+        organization_id,
+        language=language,
+        agent_login_only=agent_login_only,
+    )
+    if not branding:
+        return None
+    agent = get_agent_record(branding.get("agent_id"), branding.get("organization_id"))
+    photo = resolve_agent_photo_path(agent) if agent else None
+    original = resolve_agent_photo_path(agent, original=True) if agent else None
+    if photo and image_has_alpha(photo):
+        variant = "transparent"
+    elif photo and branding.get("profile_photo_key"):
+        variant = "display"
+    elif original:
+        variant = "original"
+    else:
+        variant = "none"
+    branding["photo_path"] = str(photo) if photo else None
+    branding["photo_original_path"] = str(original) if original else None
+    branding["photo_variant"] = variant
+    branding["has_photo"] = bool(photo)
+    branding["profile_photo"] = branding.get("photo_path")
     return branding
 
 

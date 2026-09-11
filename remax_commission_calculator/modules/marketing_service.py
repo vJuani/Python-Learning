@@ -50,7 +50,13 @@ from modules.marketing_quality import validate_creative
 from modules.marketing_references import collect_reference_images
 from modules.marketing_photo_selector import select_photos_for_item
 from modules.marketing_renderer import FORMAT_SIZES, png_to_pdf_bytes
-from modules.marketing_request import DEFAULT_PROMPT, MAX_BATCH_ITEMS, expand_items, parse_marketing_request
+from modules.marketing_request import (
+    DEFAULT_PROMPT,
+    MAX_BATCH_ITEMS,
+    counts_match_request,
+    expand_items,
+    parse_marketing_request,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -308,7 +314,7 @@ def _options_from_request(parsed, context):
         "show_email": presentation.get("show_email", False),
         "show_features": parsed.get("copy_density") != "none",
         "photo_ids": [],
-        "copy_density": parsed.get("copy_density") or "low",
+        "copy_density": parsed.get("copy_density") or "very_low",
         "variation_strength": parsed.get("variation_strength") or "high",
         "temporary": True,
         "agent_presentation": presentation,
@@ -418,20 +424,12 @@ def _concurrency():
 def _items_from_request(parsed, *, reference=None):
     items = expand_items(parsed)
     if items:
+        if parsed.get("explicit_formats") and not counts_match_request(parsed, items):
+            logger.info("marketing counts mismatch explicit request")
         return items
     if reference:
         return [{"format": reference.get("format") or "story", "index": 1}]
-    return [
-        {"format": "story", "index": 1},
-        {"format": "story", "index": 2},
-        {"format": "story", "index": 3},
-        {"format": "post", "index": 1},
-        {"format": "post", "index": 2},
-        {"format": "post", "index": 3},
-        {"format": "flyer", "index": 1},
-        {"format": "flyer", "index": 2},
-        {"format": "flyer", "index": 3},
-    ]
+    return [{"format": "story", "index": 1}]
 
 
 def _context_from_asset(asset):
@@ -498,13 +496,21 @@ def _process_item(organization_id, asset_id, *, retry=False):
         references = packed["references"]
         agent_sent = any(item.get("role") == "agent" for item in references)
         logger.info(
-            "marketing item=%s agent_photo_present=%s agent_photo_loaded=%s agent_photo_sent_to_provider=%s",
+            "marketing item=%s property_agent_id=%s agent_branding_found=%s "
+            "agent_photo_found=%s agent_photo_variant=%s agent_photo_loaded=%s "
+            "agent_photo_sent_to_provider=%s",
             asset_id,
+            packed.get("property_agent_id"),
+            packed.get("agent_branding_found"),
             packed.get("agent_photo_present"),
+            packed.get("agent_photo_variant"),
             packed.get("agent_photo_loaded"),
             agent_sent,
         )
+        options["property_agent_id"] = packed.get("property_agent_id")
+        options["agent_branding_found"] = packed.get("agent_branding_found")
         options["agent_photo_present"] = packed.get("agent_photo_present")
+        options["agent_photo_variant"] = packed.get("agent_photo_variant")
         options["agent_photo_loaded"] = packed.get("agent_photo_loaded")
         options["agent_photo_sent_to_provider"] = agent_sent
         stage = "image_generation"
@@ -558,7 +564,38 @@ def _process_item(organization_id, asset_id, *, retry=False):
         )
         art["background_png"] = generated
         options = dict(asset.get("options") or {}) | options
-        png_bytes, _size = compose_marketing_image(context, art, fmt=fmt, options=options)
+        png_bytes, _size, compose_meta = compose_marketing_image(context, art, fmt=fmt, options=options)
+        agent_composited = bool(compose_meta.get("agent_photo_composited"))
+        options["agent_photo_composited"] = agent_composited
+        logger.info(
+            "marketing item=%s agent_photo_composited=%s",
+            asset_id,
+            agent_composited,
+        )
+        final_quality = validate_creative(
+            png_bytes,
+            size=size,
+            options=options,
+            references=references,
+            agent_photo_sent=agent_sent,
+            agent_photo_composited=agent_composited,
+        )
+        options["quality_score"] = final_quality.get("score")
+        if not final_quality.get("ok"):
+            if not retry:
+                logger.info("marketing quality retry after compose item=%s", asset_id)
+                return _process_item(organization_id, asset_id, retry=True)
+            options["pipeline_status"] = PIPELINE_FAILED_QUALITY
+            options["error"] = "marketing_err_quality"
+            with _DB_LOCK:
+                update_marketing_asset(
+                    asset_id,
+                    organization_id,
+                    storage_key=None,
+                    pdf_storage_key=None,
+                    options_json=ensure_json_serializable(options, path="options"),
+                )
+            return get_marketing_asset(asset_id, organization_id)
         stage = "persistence"
         storage_key = _write_bytes(
             organization_id,
@@ -969,6 +1006,8 @@ def get_batch_view(organization_id, user, batch_id, *, language="es"):
         "property_id": (batch or {}).get("property_id") or first.get("property_id"),
         "property_address": first.get("property_address"),
         "creating": status in {"queued", "generating"},
+        "single": total == 1,
+        "single_format": first.get("format") if total == 1 else None,
     }
 
 
