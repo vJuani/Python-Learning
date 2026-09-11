@@ -62,24 +62,39 @@ def resolve_listing_agent_photo(agent):
 
 
 def collect_reference_images(context, options):
-    """Return labeled visual inputs. Property and agent photos are real files."""
+    """Labeled inputs: approved style, real property, real agent."""
+    from modules.marketing_visual_spec import STYLE_REFERENCE_LABEL, approved_style_path
+
     photos = list((context or {}).get("photos") or [])
     loaded = load_property_photos(photos)
     references = []
+    style_path = approved_style_path()
+    style_bytes = _open_path_bytes(style_path)
+    if style_bytes:
+        references.append(
+            {
+                "role": "style",
+                "label": f"Reference A: APPROVED JRH STYLE. {STYLE_REFERENCE_LABEL}",
+                "bytes": style_bytes,
+                "mime": "image/jpeg",
+                "name": "jrh-approved-style.jpg",
+            }
+        )
     for index, image in enumerate(loaded[:3]):
         payload = _png_bytes(image)
         if not payload:
             continue
+        letter = "BCD"[index]
         if index == 0:
             label = (
-                "Image 1: main property photograph. "
-                "This is the actual property being advertised."
+                f"Reference {letter}: REAL PROPERTY HERO. "
+                "This is the actual property being advertised. Use it prominently."
             )
             role = "property_hero"
         else:
             label = (
-                f"Image {index + 1}: additional photograph of the SAME property. "
-                "Do not invent another listing."
+                f"Reference {letter}: REAL PROPERTY SECONDARY of the SAME listing. "
+                "Do not invent another property."
             )
             role = "property_extra"
         references.append(
@@ -102,31 +117,13 @@ def collect_reference_images(context, options):
             {
                 "role": "agent",
                 "label": (
-                    f"Image {len(references) + 1}: professional portrait of the real "
-                    "estate agent. Use this exact person. Reserve space; the final "
-                    "renderer will overlay this same cutout. Do not invent another face."
+                    "Reference D: REAL AGENT PORTRAIT. This is the exact person. "
+                    "The final compositor will overlay this same cutout. "
+                    "Do not invent another face."
                 ),
                 "bytes": agent_bytes,
                 "mime": "image/png",
                 "name": "agent-portrait.png",
-            }
-        )
-    style_path = next(
-        (item for item in sorted(STYLE_DIR.glob("*")) if item.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}),
-        None,
-    ) if STYLE_DIR.is_dir() else None
-    style_bytes = _open_path_bytes(style_path)
-    if style_bytes:
-        references.append(
-            {
-                "role": "style",
-                "label": (
-                    f"Image {len(references) + 1}: visual style reference only. "
-                    "Do not copy its property or people."
-                ),
-                "bytes": style_bytes,
-                "mime": "image/png",
-                "name": "style-reference.png",
             }
         )
     logger.info(

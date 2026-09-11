@@ -270,34 +270,29 @@ def get_marketing_image_provider():
 
 
 def finished_ad_prompt(art, fmt, *, references=None, options=None, used_directions=None):
-    direction = (art or {}).get("visual_direction") or "luxury_editorial"
-    brief = (art or {}).get("creative_brief") or (art or {}).get("background_style") or ""
+    from modules.marketing_visual_spec import STYLE_REFERENCE_LABEL, AVOID
+
+    direction = (art or {}).get("visual_direction") or "editorial_navy"
+    brief = (art or {}).get("visual_brief") or (art or {}).get("layout") or {}
     labels = "\n".join(item.get("label") or "" for item in (references or []) if item.get("label"))
-    avoid = ", ".join(sorted(used_directions or []))
+    avoid = ", ".join(sorted(set(list(used_directions or []) + list(AVOID))))
     agent_line = (
-        "Image labeled as the real-estate agent must appear recognizably. Do not invent another face."
+        "The REAL AGENT portrait must stay that exact person. Reserve space for the final cutout."
         if any(item.get("role") == "agent" for item in (references or []))
         else "Do not include any agent portrait or invented person."
     )
     return (
-        "You are an award-winning art director specializing in premium real-estate advertising. "
-        "Create a finished, publication-ready real-estate advertisement. "
-        "The design must look like it came from a high-end creative agency, not a SaaS template. "
-        f"Format: {fmt} vertical advertisement. Visual direction: {direction}. {brief} "
-        "Use the supplied REAL property photographs prominently. "
+        "You are an award-winning art director for premium real-estate advertising. "
+        "Match the APPROVED JRH STYLE reference in polish, hierarchy, photographic "
+        "prominence and agent integration. Do not copy its property, person, text or exact layout. "
+        f"{STYLE_REFERENCE_LABEL} "
+        f"Format: {fmt} 9:16-aware vertical ad. Direction: {direction}. "
+        f"Brief: {brief}. "
+        "REAL property photos must dominate. Do not invent another listing. "
         f"{agent_line} "
-        "Use a sophisticated JRH One visual language: navy, electric blue, white, "
-        "but do NOT force all designs into the same geometric template. "
-        "This is a commercial real-estate advertisement, not an editorial magazine page. "
-        "Very little text. Do not write addresses, prices, rooms, names, phones or claims "
-        "such as apto crédito or excelente ubicación — facts are overlaid later. "
-        "Do not draw or invent the JRH One logo. Leave appropriate brand space. "
-        "Reserve a clear area for the real agent cutout. "
-        "Avoid generic SaaS cards, huge empty spaces, tiny text, repeated curved shapes, "
-        "stock-template appearance, duplicated logos, fake interface buttons, "
-        "giant HTML buttons, dashboard chrome, microscopic labels, empty white canvases, "
-        "and invented amenities. "
-        f"Do not repeat previous directions: {avoid or 'none'}. "
+        "Do not render addresses, prices, names or the JRH logo — the compositor adds those. "
+        "Very low copy. One short decorative headline is allowed. "
+        f"Avoid: {avoid}. "
         f"Reference map:\n{labels}"
     )
 

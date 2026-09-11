@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import tempfile
@@ -39,10 +40,16 @@ from modules.marketing_context import (
     context_to_snapshot,
 )
 from jinja2 import Environment
-from modules.marketing_art_director import plan_item
+from modules.marketing_art_director import STORY_DIRECTIONS, plan_item
 from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy
+from modules.marketing_composer import compose_marketing_image
 from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider, get_marketing_image_model
 from modules.marketing_quality import validate_creative
+from modules.marketing_visual_spec import (
+    STYLE_REFERENCE_LABEL,
+    approved_style_path,
+    build_visual_brief,
+)
 from modules.marketing_references import collect_reference_images
 from modules.marketing_renderer import FORMAT_SIZES, render_marketing_image
 from modules.marketing_photo_selector import select_photos_for_item
@@ -927,6 +934,93 @@ class MarketingIaTests(unittest.TestCase):
         self.assertFalse(options.get("agent_photo_composited"))
         snapshot = result["assets"][0].get("agent_branding_snapshot") or {}
         self.assertIn("José", snapshot.get("name") or "")
+
+    def test_41_canonical_jrh_layout_matches_approved_model(self):
+        context = build_property_marketing_context(self._property())
+        with_photo = compose_marketing_image(
+            context,
+            {"cta": "Consultame"},
+            fmt="story",
+            options={"include_agent": True, "show_agent_photo": True, "show_name": True, "show_price": True},
+        )
+        png, size, meta = with_photo
+        self.assertEqual(size, FORMAT_SIZES["story"])
+        self.assertTrue(meta.get("agent_photo_composited"))
+        image = Image.open(io.BytesIO(png)).convert("RGB")
+        sample = image.resize((24, 40))
+        dark = sum(1 for pixel in sample.getdata() if pixel[2] > pixel[0] and pixel[0] < 80)
+        self.assertGreater(dark, 80)
+        without = compose_marketing_image(
+            context,
+            {"cta": "Consultame"},
+            fmt="story",
+            options={"include_agent": True, "show_agent_photo": False, "show_name": True, "show_price": True},
+        )
+        self.assertFalse(without[2].get("agent_photo_composited"))
+        QA_DIR.mkdir(parents=True, exist_ok=True)
+        (QA_DIR / "canonical_story_with_agent.png").write_bytes(png)
+        (QA_DIR / "canonical_story_no_photo.png").write_bytes(without[0])
+
+    def test_42_visual_spec_and_three_compositions(self):
+        self.assertTrue(approved_style_path() and approved_style_path().is_file())
+        self.assertIn("VISUAL STYLE REFERENCE ONLY", STYLE_REFERENCE_LABEL)
+        self.assertEqual(len(STORY_DIRECTIONS), 3)
+        self.assertEqual(len(set(STORY_DIRECTIONS)), 3)
+        context = build_property_marketing_context(self._property())
+        packed = collect_reference_images(
+            context,
+            {"include_agent": True, "show_agent_photo": True},
+        )
+        self.assertTrue(any(item["role"] == "style" for item in packed["references"]))
+        self.assertTrue(any("VISUAL STYLE REFERENCE ONLY" in (item.get("label") or "") for item in packed["references"]))
+        used = set()
+        request = parse_marketing_request(
+            "Haceme UNA historia de Instagram premium, con mi foto y mis datos. Quiero poco texto."
+        )
+        self.assertEqual(request["story_count"], 1)
+        planned = [
+            plan_item(context, request, fmt="story", index=index, used_directions=used)
+            for index in range(1, 4)
+        ]
+        directions = [item["visual_direction"] for item in planned]
+        self.assertEqual(len(set(directions)), 3)
+        self.assertTrue(all(item.get("visual_brief") for item in planned))
+        QA_DIR.mkdir(parents=True, exist_ok=True)
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt=(
+                "Haceme UNA historia de Instagram premium, con mi foto y mis datos. "
+                "Quiero poco texto. Que tenga el nivel visual de la referencia aprobada."
+            ),
+        )
+        self.assertEqual(len(result["assets"]), 1)
+        self.assertEqual(result["assets"][0]["format"], "story")
+        options = result["assets"][0].get("options") or {}
+        self.assertTrue(options.get("agent_photo_composited"))
+        path = resolve_asset_file(result["assets"][0])
+        self.assertTrue(path and path.is_file())
+        generated = path.read_bytes()
+        (QA_DIR / "qa_one_story_approved_level.png").write_bytes(generated)
+        verdict = validate_creative(
+            generated,
+            size=FORMAT_SIZES["story"],
+            options=options,
+            references=packed["references"],
+            agent_photo_sent=True,
+            agent_photo_composited=True,
+        )
+        self.assertTrue(verdict["ok"], verdict)
+        reference = Image.open(approved_style_path()).convert("RGB")
+        output = Image.open(io.BytesIO(generated)).convert("RGB")
+        pair = Image.new("RGB", (1080 * 2 + 40, 1920), (10, 22, 51))
+        pair.paste(reference.resize((1080, 1920), Image.Resampling.LANCZOS), (0, 0))
+        pair.paste(output.resize((1080, 1920), Image.Resampling.LANCZOS), (1120, 0))
+        pair.save(QA_DIR / "qa_reference_vs_story.png")
+        brief = build_visual_brief("story", "editorial_navy")
+        self.assertEqual(brief["text_density"], "very_low")
+        self.assertEqual(brief["quality_target"], "approved_jrh_story")
 
 
 def _quality_png():

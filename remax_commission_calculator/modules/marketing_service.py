@@ -518,51 +518,29 @@ def _process_item(organization_id, asset_id, *, retry=False):
         art = _art_from_asset(asset)
         fmt = asset["format"]
         size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
-        prompt = finished_ad_prompt(
-            art,
-            fmt,
-            references=references,
-            options=options,
-            used_directions=[options.get("visual_direction")],
-        )
-        generated = provider.generate_creative(
-            prompt=prompt,
-            size=size,
-            visual_direction=art.get("visual_direction"),
-            references=references,
-        )
-        stage = "quality"
-        quality = validate_creative(
-            generated,
-            size=size,
-            options=options,
-            references=references,
-            agent_photo_sent=agent_sent,
-        )
-        options["quality_score"] = quality.get("score")
-        if not quality.get("ok"):
-            if not retry:
-                logger.info("marketing quality retry item=%s", asset_id)
-                return _process_item(organization_id, asset_id, retry=True)
-            options["pipeline_status"] = PIPELINE_FAILED_QUALITY
-            options["error"] = "marketing_err_quality"
-            with _DB_LOCK:
-                update_marketing_asset(
-                    asset_id,
-                    organization_id,
-                    storage_key=None,
-                    pdf_storage_key=None,
-                    options_json=ensure_json_serializable(options, path="options"),
-                )
-            return get_marketing_asset(asset_id, organization_id)
+        options["layout_engine"] = "jrh_listing"
+        if get_marketing_image_provider_name() != "openai":
+            prompt = finished_ad_prompt(
+                art,
+                fmt,
+                references=references,
+                options=options,
+                used_directions=[options.get("visual_direction")],
+            )
+            provider.generate_creative(
+                prompt=prompt,
+                size=size,
+                visual_direction=art.get("visual_direction"),
+                references=references,
+            )
         stage = "composition"
         asset = _update_options(
             asset,
             pipeline_status=PIPELINE_COMPOSITING,
             source=get_marketing_image_provider_name(),
             agent_photo_sent_to_provider=agent_sent,
+            layout_engine="jrh_listing",
         )
-        art["background_png"] = generated
         options = dict(asset.get("options") or {}) | options
         png_bytes, _size, compose_meta = compose_marketing_image(context, art, fmt=fmt, options=options)
         agent_composited = bool(compose_meta.get("agent_photo_composited"))

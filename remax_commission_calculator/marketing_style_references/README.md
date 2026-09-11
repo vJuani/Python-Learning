@@ -1,7 +1,8 @@
 # Marketing style references
 
-Development-only visual guidance for the Creative Engine.
+Development-only visual guidance. Never shown in the Agent UI.
 
-- Do not show these files in the Agent UI.
-- Do not copy people or listings from these images.
-- Optional: drop one approved PNG/JPG here so the image provider can use it as a mood reference.
+- `jrh-approved-story.jpg` is the official approved JRH Creative AI style reference.
+- It teaches polish, hierarchy, photographic prominence and Agent integration.
+- Do not copy its property, person, text or exact layout.
+- The compositor always uses live PropertyMedia and the listing Agent.
