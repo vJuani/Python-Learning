@@ -1,0 +1,22 @@
+[
+    {
+        "id": "PROP-000001",
+        "address": "Eduardo Madero 875",
+        "jurisdiction": "PBA"
+    },
+    {
+        "id": "PROP-000002",
+        "address": "Av del Libertador 15200",
+        "jurisdiction": "PBA"
+    },
+    {
+        "id": "PROP-000003",
+        "address": "Monroe 2587",
+        "jurisdiction": "CABA"
+    },
+    {
+        "id": "PROP-000004",
+        "address": "Av Cabildo 2400",
+        "jurisdiction": "CABA"
+    }
+]

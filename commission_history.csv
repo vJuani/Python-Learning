@@ -1,0 +1,3 @@
+﻿id,date,agent,agent_type,property_id,property,jurisdiction,was_invoiced,vat_amount,sale_price,commission_rate,total_commission,commission_after_abao,abao,martillero,agent_payment,office_payment,office_total
+COM-000001,13/08/2026,Nieves Achard,RAPP,PROP-000001,Eduardo Madero 875,PBA,no,0,585000.0,6.0,35100.0,35100.0,0,0,15795.0,19305.0,19305.0
+COM-000002,14/08/2026,Nieves Achard,RAPP,PROP-000001,Eduardo Madero 875,PBA,no,0,550000.0,6.0,33000.0,33000.0,0,0,14850.0,18150.0,18150.0
