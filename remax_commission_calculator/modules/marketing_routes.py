@@ -15,10 +15,10 @@ from flask import (
 from modules.auth import get_current_user, is_admin, is_agent, is_guest_session
 from modules.marketing_context import MarketingError
 from modules.marketing_service import (
+    asset_download_name,
+    cleanup_expired_marketing_assets,
     get_asset_view,
     get_batch_status,
-    get_batch_view,
-    list_marketing_home,
     prepare_create_view,
     require_asset_access,
     resolve_asset_file,
@@ -48,7 +48,7 @@ def register_marketing_routes(app, helpers):
             return user
         return None
 
-    def _handle(error, fallback_endpoint="marketing_home"):
+    def _handle(error, fallback_endpoint="marketing_new"):
         if error.status_code == 403:
             return _forbidden()
         if error.status_code == 404:
@@ -56,19 +56,20 @@ def register_marketing_routes(app, helpers):
         flash_i18n(error.message_key, "error")
         return redirect(url_for(fallback_endpoint))
 
+    def _composer_url(result=None, **query):
+        if result:
+            query.setdefault("generation_id", result.get("generation_id"))
+            query.setdefault("property_id", result.get("property_id"))
+        return url_for("marketing_new", **{key: value for key, value in query.items() if value})
+
     @app.route("/marketing")
     def marketing_home():
         user = _marketing_user()
         if user is None:
             return _forbidden()
         organization_id = require_user_organization()
-        view = list_marketing_home(
-            organization_id,
-            user,
-            language=get_current_language(),
-        )
-        view["idempotency_key"] = request.args.get("k") or ""
-        return render_template("marketing/home.html", view=view)
+        cleanup_expired_marketing_assets(organization_id)
+        return redirect(url_for("marketing_new"))
 
     @app.route("/marketing/new", methods=["GET"])
     def marketing_new():
@@ -78,6 +79,7 @@ def register_marketing_routes(app, helpers):
         organization_id = require_user_organization()
         language = get_current_language()
         property_id = request.args.get("property_id", type=int)
+        generation_id = (request.args.get("generation_id") or "").strip() or None
         try:
             view = prepare_create_view(
                 organization_id,
@@ -85,6 +87,7 @@ def register_marketing_routes(app, helpers):
                 property_id=property_id,
                 prompt=request.args.get("prompt"),
                 language=language,
+                generation_id=generation_id,
             )
         except MarketingError as error:
             return _handle(error)
@@ -104,6 +107,10 @@ def register_marketing_routes(app, helpers):
         if not prompt:
             flash_i18n("marketing_err_prompt_missing", "error")
             return redirect(url_for("marketing_new", property_id=property_id))
+        include_values = request.form.getlist("include_agent")
+        include_agent = None
+        if include_values:
+            include_agent = include_values[-1] not in {"0", "off", "false", ""}
         try:
             result = start_marketing_batch(
                 organization_id,
@@ -112,12 +119,11 @@ def register_marketing_routes(app, helpers):
                 prompt=prompt,
                 language=get_current_language(),
                 idempotency_key=(request.form.get("idempotency_key") or "").strip() or None,
+                include_agent=include_agent if include_values else None,
             )
         except MarketingError as error:
             return _handle(error, "marketing_new")
-        return redirect(
-            url_for("marketing_proposals", generation_id=result["generation_id"])
-        )
+        return redirect(_composer_url(result))
 
     @app.route("/marketing/generation/<generation_id>")
     def marketing_proposals(generation_id):
@@ -126,15 +132,15 @@ def register_marketing_routes(app, helpers):
             return _forbidden()
         organization_id = require_user_organization()
         try:
-            view = get_batch_view(
+            view = prepare_create_view(
                 organization_id,
                 user,
-                generation_id,
+                generation_id=generation_id,
                 language=get_current_language(),
             )
         except MarketingError as error:
             return _handle(error)
-        return render_template("marketing/proposals.html", view=view)
+        return render_template("marketing/new.html", view=view)
 
     @app.route("/marketing/batch/<batch_id>/status")
     def marketing_batch_status(batch_id):
@@ -199,7 +205,12 @@ def register_marketing_routes(app, helpers):
             )
         except MarketingError as error:
             return _handle(error)
-        return redirect(url_for("marketing_proposals", generation_id=asset.get("generation_id")))
+        return redirect(
+            _composer_url(
+                generation_id=asset.get("generation_id"),
+                property_id=asset.get("property_id"),
+            )
+        )
 
     @app.route("/marketing/assets/<int:asset_id>/vary", methods=["POST"])
     def marketing_vary(asset_id):
@@ -217,9 +228,7 @@ def register_marketing_routes(app, helpers):
             )
         except MarketingError as error:
             return _handle(error)
-        return redirect(
-            url_for("marketing_proposals", generation_id=result["generation_id"])
-        )
+        return redirect(_composer_url(result))
 
     def _send_asset(asset_id, *, kind, as_attachment):
         user = _marketing_user()
@@ -236,7 +245,7 @@ def register_marketing_routes(app, helpers):
         if path is None:
             abort(404)
         mime = "application/pdf" if kind == "pdf" else "image/png"
-        download_name = f"jrh-{asset.get('format')}-{asset_id}.{kind}"
+        download_name = asset_download_name(asset, kind=kind)
         return send_file(
             path,
             mimetype=mime,

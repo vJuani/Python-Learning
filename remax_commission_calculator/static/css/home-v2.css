@@ -6,8 +6,29 @@
     overflow-x: clip;
 }
 
-.home-v2__hello {
+.home-shortcuts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
     margin: 0 0 18px;
+}
+.home-shortcuts__card {
+    display: grid;
+    gap: 4px;
+    background: #fff;
+    border: 1px solid #d7e2ee;
+    border-radius: 18px;
+    padding: 14px 14px 16px;
+    text-decoration: none;
+    color: #0a1633;
+    min-height: 5.4rem;
+}
+.home-shortcuts__card strong { font-size: 0.95rem; }
+.home-shortcuts__card span { color: #5b6b7c; font-size: 0.78rem; }
+.home-shortcuts__card--featured {
+    border-color: #0d47ff;
+    box-shadow: inset 0 0 0 1px #0d47ff, 0 10px 24px rgba(13, 71, 255, 0.12);
+    background: #eef3ff;
 }
 
 .home-v2__hello .agenda-hero__hello {

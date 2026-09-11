@@ -1,3 +1,28 @@
+.mkt-composer {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 0.4rem 0 3rem;
+}
+.mkt-composer__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1.1rem;
+}
+.mkt-composer__head h1 {
+    margin: 0.15rem 0 0.35rem;
+    color: #0a1633;
+    font-size: clamp(1.35rem, 3vw, 1.85rem);
+}
+.mkt-close {
+    color: #5b6b7c;
+    text-decoration: none;
+    font-weight: 700;
+    padding: 0.35rem 0.6rem;
+    border-radius: 999px;
+}
+.mkt-close:hover { color: #0a1633; background: #eef3ff; }
 .mkt-kicker {
     margin: 0;
     text-transform: uppercase;
@@ -32,6 +57,7 @@
     border-radius: 12px;
     background: #0a1633;
 }
+.mkt-property h2,
 .mkt-property h3 { margin: 0 0 0.2rem; color: #0a1633; }
 .mkt-property p { margin: 0; color: #5b6b7c; }
 .mkt-property__price { font-weight: 700; color: #0a1633 !important; }
@@ -168,6 +194,76 @@
     color: #0a1633;
 }
 .mkt-vary { display: grid; gap: 0.7rem; margin-top: 1.2rem; }
+.mkt-property__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.45rem !important;
+}
+.mkt-property__badges span {
+    background: #eef3ff;
+    color: #0a1633;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+.mkt-agent-toggle {
+    display: flex;
+    gap: 0.7rem;
+    align-items: center;
+    font-weight: 500;
+}
+.mkt-agent-toggle small {
+    display: block;
+    color: #5b6b7c;
+    font-weight: 500;
+}
+.mkt-agent-toggle__photo {
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 999px;
+    background: #0a1633;
+    flex: 0 0 auto;
+}
+.mkt-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 0 0 1rem;
+}
+.mkt-tabs a {
+    color: #0d47ff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.92rem;
+}
+.mkt-temp-note {
+    color: #5b6b7c;
+    font-size: 0.85rem;
+    background: #eef3ff;
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
+}
+body.is-creative-page .jrh-float {
+    display: none !important;
+}
+@media (min-width: 901px) {
+    body.is-creative-page.has-app-rail .app-rail {
+        display: none;
+    }
+    body.is-creative-page.has-app-rail {
+        padding-left: 0;
+    }
+}
+@media (max-width: 900px) {
+    body.is-creative-page .mobile-bottom-nav {
+        display: none;
+    }
+    body.is-creative-page.has-mobile-bottom-nav {
+        padding-bottom: 0;
+    }
+}
 @media (max-width: 800px) {
     .mkt-asset { grid-template-columns: 1fr; }
     .mkt-proposals {

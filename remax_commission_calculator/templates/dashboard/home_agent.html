@@ -115,6 +115,25 @@
             {% endif %}
         </section>
 
+        <section class="home-shortcuts" aria-label="{{ t('dashboard_quick_actions_title') }}">
+            <a class="home-shortcuts__card" href="{{ url_for('properties_list') }}">
+                <strong>{{ t('home_shortcut_search') }}</strong>
+                <span>{{ t('home_shortcut_search_help') }}</span>
+            </a>
+            <a class="home-shortcuts__card home-shortcuts__card--featured" href="{{ url_for('marketing_new') }}">
+                <strong>{{ t('home_shortcut_create') }}</strong>
+                <span>{{ t('home_shortcut_create_help') }}</span>
+            </a>
+            <a class="home-shortcuts__card" href="{{ url_for('agenda_index') }}">
+                <strong>{{ t('agenda_title') }}</strong>
+                <span>{{ t('home_shortcut_agenda_help') }}</span>
+            </a>
+            <a class="home-shortcuts__card" href="{{ url_for('operations_list') }}">
+                <strong>{{ t('nav_my_operations') }}</strong>
+                <span>{{ t('home_shortcut_operations_help') }}</span>
+            </a>
+        </section>
+
         <section class="jrh-today home-card">
             <div class="home-card__header">
                 <h2>{{ t('jrh_today_title') }}</h2>

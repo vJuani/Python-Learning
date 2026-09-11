@@ -51,9 +51,12 @@ def _asset_dict(row):
         "options": _parse_json(row[14]),
         "storage_key": row[15],
         "pdf_storage_key": row[16],
-        "created_at": row[17],
-        "updated_at": row[18],
-        "property_address": row[19] if len(row) > 19 else None,
+        "temporary": bool(row[17]) if len(row) > 17 and row[17] is not None else True,
+        "saved": bool(row[18]) if len(row) > 18 and row[18] is not None else False,
+        "expires_at": row[19] if len(row) > 19 else None,
+        "created_at": row[20] if len(row) > 20 else row[17],
+        "updated_at": row[21] if len(row) > 21 else row[18],
+        "property_address": row[22] if len(row) > 22 else (row[19] if len(row) > 19 else None),
     }
 
 
@@ -62,7 +65,8 @@ BASE_SELECT = """
            a.generation_id, a.format, a.style, a.tone, a.template, a.status,
            a.copy_snapshot_json, a.property_snapshot_json,
            a.agent_branding_snapshot_json, a.options_json, a.storage_key,
-           a.pdf_storage_key, a.created_at, a.updated_at, p.address
+           a.pdf_storage_key, a.temporary, a.saved, a.expires_at,
+           a.created_at, a.updated_at, p.address
     FROM marketing_assets AS a
     LEFT JOIN properties AS p
         ON p.id = a.property_id
@@ -88,6 +92,9 @@ def create_marketing_asset(
     status=STATUS_GENERATED,
     storage_key=None,
     pdf_storage_key=None,
+    temporary=True,
+    saved=False,
+    expires_at=None,
 ):
     organization_id = require_organization_id(organization_id)
     now = _now_iso()
@@ -102,9 +109,9 @@ def create_marketing_asset(
                 generation_id, format, style, tone, template, status,
                 copy_snapshot_json, property_snapshot_json,
                 agent_branding_snapshot_json, options_json, storage_key,
-                pdf_storage_key, created_at, updated_at
+                pdf_storage_key, temporary, saved, expires_at, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 organization_id,
@@ -123,6 +130,9 @@ def create_marketing_asset(
                 json.dumps(options or {}, ensure_ascii=False),
                 storage_key,
                 pdf_storage_key,
+                1 if temporary else 0,
+                1 if saved else 0,
+                expires_at,
                 now,
                 now,
             ),
@@ -189,6 +199,9 @@ def update_marketing_asset(asset_id, organization_id, **fields):
         "storage_key",
         "pdf_storage_key",
         "agent_branding_snapshot_json",
+        "temporary",
+        "saved",
+        "expires_at",
     }
     assignments = []
     params = []
@@ -348,3 +361,39 @@ def update_marketing_batch(batch_id, organization_id, **fields):
     finally:
         connection.close()
     return get_marketing_batch(batch_id, organization_id)
+
+
+def list_expired_marketing_assets(organization_id=None, *, now=None, limit=80):
+    now = now or _now_iso()
+    sql = BASE_SELECT + """
+        WHERE a.temporary = 1 AND COALESCE(a.saved, 0) = 0
+          AND a.expires_at IS NOT NULL AND a.expires_at <= ?
+    """
+    params = [now]
+    if organization_id is not None:
+        sql += " AND a.organization_id = ?"
+        params.append(require_organization_id(organization_id))
+    sql += " ORDER BY a.expires_at LIMIT ?"
+    params.append(int(limit))
+    connection = get_connection()
+    try:
+        rows = connection.execute(sql, params).fetchall()
+    finally:
+        connection.close()
+    return [_asset_dict(row) for row in rows]
+
+
+def delete_marketing_asset(asset_id, organization_id):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "DELETE FROM marketing_assets WHERE id = ? AND organization_id = ?",
+            (asset_id, organization_id),
+        )
+        connection.commit()
+        return cursor.rowcount > 0
+    finally:
+        connection.close()
+

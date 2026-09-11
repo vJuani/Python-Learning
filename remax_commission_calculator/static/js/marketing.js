@@ -37,7 +37,7 @@
           return response.blob();
         })
         .then(function (blob) {
-          var file = new File([blob], "jrh-marketing.png", { type: "image/png" });
+          var file = new File([blob], button.getAttribute("data-share-name") || "jrh-content.png", { type: "image/png" });
           var payload = { title: title, files: [file] };
           if (canShareFiles() && navigator.canShare(payload)) {
             return navigator.share(payload);
@@ -127,6 +127,11 @@
           if (!payload.creating) {
             root.setAttribute("data-mkt-done", "1");
             if (mark) mark.textContent = "✓";
+            var finish = root.querySelector('[data-step="finish"]');
+            if (finish) finish.textContent = finish.textContent.replace("○", "✓");
+            window.setTimeout(function () {
+              window.location.reload();
+            }, 400);
             return;
           }
           window.setTimeout(tick, 1200);

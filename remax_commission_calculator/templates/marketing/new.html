@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block body_class %}is-creative-page {% endblock %}
+
 {% block title %}{{ t('marketing_create') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
@@ -11,60 +13,151 @@
 {% endblock %}
 
 {% block content %}
-<section class="page-header mkt-hero">
-    <div class="page-header-text">
-        <p class="mkt-kicker">{{ t('marketing_kicker') }}</p>
-        <h2>{{ t('marketing_create') }}</h2>
-    </div>
-</section>
-
-{% if view.property and view.context %}
-<article class="mkt-property">
-    {% if view.cover and view.cover.src %}
-    <img src="{{ view.cover.src }}" alt="{{ view.context.facts.title }}">
-    {% endif %}
-    <div>
-        <h3>{{ view.context.facts.title }}</h3>
-        <p>{{ view.context.facts.location_line }}</p>
-        {% if view.context.facts.price_label %}
-        <p class="mkt-property__price">{{ view.context.facts.price_label }}</p>
+<section class="mkt-composer">
+    <header class="mkt-composer__head">
+        <div>
+            <p class="mkt-kicker">{{ t('marketing_kicker') }}</p>
+            {% if view.batch %}
+            {% set address = view.property_address or (view.context.facts.title if view.context else '') %}
+            <h1>{{ t('marketing_working_title') if view.creating else t('marketing_ready_title') }}</h1>
+            <p class="field-help">{% if view.creating %}{{ t('marketing_working_sub', n=view.total, address=address) }}{% else %}{{ t('marketing_ready_sub', n=view.total, address=address) }}{% endif %}</p>
+            {% else %}
+            <h1>{{ t('marketing_create') }}</h1>
+            {% endif %}
+        </div>
+        {% if view.property %}
+        <a class="mkt-close" href="{{ url_for('properties_detail', property_id=view.property.id) }}">{{ t('marketing_close') }}</a>
+        {% else %}
+        <a class="mkt-close" href="{{ url_for('dashboard') }}">{{ t('marketing_close') }}</a>
         {% endif %}
-    </div>
-</article>
-{% endif %}
+    </header>
 
-{% if view.missing_photos %}
-<p class="mkt-warn" role="alert">{{ t('marketing_no_photos') }}</p>
-{% endif %}
-
-<form class="mkt-prompt" method="post" action="{{ url_for('marketing_generate') }}" data-mkt-prompt>
-    {% if view.property %}
-    <input type="hidden" name="property_id" value="{{ view.property.id }}">
-    {% else %}
-    <label class="mkt-prompt__property">
-        <span>{{ t('marketing_choose_property') }}</span>
-        <select name="property_id" required>
-            <option value="">{{ t('marketing_choose_property') }}</option>
-            {% for item in view.properties %}
-            <option value="{{ item.id }}">{{ item.address }}</option>
-            {% endfor %}
-        </select>
-    </label>
+    {% if view.property and view.context %}
+    <article class="mkt-property">
+        {% if view.cover and view.cover.src %}
+        <img src="{{ view.cover.src }}" alt="{{ view.context.facts.title }}">
+        {% endif %}
+        <div>
+            <h2>{{ view.context.facts.title }}</h2>
+            <p>{{ view.context.facts.location_line }}</p>
+            {% if view.context.facts.price_label %}
+            <p class="mkt-property__price">{{ view.context.facts.price_label }}</p>
+            {% endif %}
+            <p class="mkt-property__badges">
+                {% if view.context.facts.type_label %}<span>{{ view.context.facts.type_label }}</span>{% endif %}
+                {% if view.context.facts.purpose_label %}<span>{{ view.context.facts.purpose_label }}</span>{% endif %}
+            </p>
+        </div>
+    </article>
     {% endif %}
-    <label class="mkt-prompt__ask">
-        <span>{{ t('marketing_step_format') }}</span>
-        <textarea name="prompt" rows="5" required placeholder="{{ t('marketing_prompt_placeholder') }}">{{ view.prompt }}</textarea>
-    </label>
-    <input type="hidden" name="idempotency_key" value="{{ view.idempotency_key }}">
-    <div class="mkt-chips" data-mkt-chips>
-        <button type="button" class="mkt-chip" data-chip="Haceme 3 historias">{{ t('marketing_chip_stories') }}</button>
-        <button type="button" class="mkt-chip" data-chip="Haceme 3 posts">{{ t('marketing_chip_posts') }}</button>
-        <button type="button" class="mkt-chip" data-chip="Haceme 3 flyers">{{ t('marketing_chip_flyers') }}</button>
-        <button type="button" class="mkt-chip" data-chip="{{ view.default_prompt }}" data-chip-replace="1">{{ t('marketing_format_pack') }}</button>
-        <button type="button" class="mkt-chip" data-chip="más minimalista">{{ t('marketing_chip_minimal') }}</button>
-        <button type="button" class="mkt-chip" data-chip="usando mi foto">{{ t('marketing_chip_agent') }}</button>
-        <button type="button" class="mkt-chip" data-chip="sin precio">{{ t('marketing_chip_no_price') }}</button>
+
+    {% if view.missing_photos %}
+    <p class="mkt-warn" role="alert">{{ t('marketing_no_photos') }}</p>
+    {% endif %}
+
+    {% if view.batch %}
+    <div
+        class="mkt-progress"
+        data-mkt-batch="{{ view.generation_id }}"
+        data-mkt-status-url="{{ url_for('marketing_batch_status', batch_id=view.generation_id) }}"
+        {% if not view.creating %}data-mkt-done="1"{% endif %}
+    >
+        <p class="mkt-progress__step" data-step="analyze">✓ {{ t('marketing_step_analyze') }}</p>
+        <p class="mkt-progress__step" data-step="photos">✓ {{ t('marketing_step_photos') }}</p>
+        <p class="mkt-progress__step" data-step="creating">
+            <span data-creating-mark>{% if view.creating %}●{% else %}✓{% endif %}</span>
+            {{ t('marketing_step_creating') }}
+        </p>
+        <p class="mkt-progress__step" data-step="finish">{% if view.creating %}○{% else %}✓{% endif %} {{ t('marketing_step_finish') }}</p>
     </div>
-    <button type="submit" class="btn btn-primary" {% if view.missing_photos %}disabled{% endif %}>{{ t('marketing_generate_ai') }}</button>
-</form>
+
+    <nav class="mkt-tabs" aria-label="{{ t('marketing_proposals_title') }}">
+        {% for group in view.groups %}
+        <a href="#mkt-{{ group.format }}">{{ group.label }} ({{ group.assets|length }})</a>
+        {% endfor %}
+    </nav>
+
+    {% for group in view.groups %}
+    <section class="mkt-group" id="mkt-{{ group.format }}" data-mkt-group="{{ group.format }}">
+        <h3>{{ group.label }}</h3>
+        <div class="mkt-proposals">
+            {% for asset in group.assets %}
+            <article class="mkt-proposal" data-mkt-item="{{ asset.id }}" data-status="{{ asset.pipeline_status }}">
+                <p class="mkt-proposal__label">{{ asset.format_label }} {{ asset.options.format_index or loop.index }}</p>
+                <div class="mkt-proposal__frame mkt-proposal__frame--{{ asset.format }}" data-mkt-frame>
+                    {% if asset.ready %}
+                    <a href="{{ url_for('marketing_asset', asset_id=asset.id) }}">
+                        <img src="{{ url_for('marketing_preview', asset_id=asset.id) }}" alt="{{ asset.format_label }} {{ loop.index }}">
+                    </a>
+                    {% elif asset.failed %}
+                    <div class="mkt-fail">
+                        <p>{{ t('marketing_item_failed') }}</p>
+                        <form method="post" action="{{ url_for('marketing_retry', asset_id=asset.id) }}">
+                            <button type="submit" class="btn btn-secondary">{{ t('marketing_retry') }}</button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <p class="mkt-wait">{% if asset.pipeline_status == 'queued' %}{{ t('marketing_item_queued') }}{% else %}{{ t('marketing_item_generating') }}{% endif %}</p>
+                    {% endif %}
+                </div>
+                {% if asset.ready %}
+                <div class="mkt-proposal__actions">
+                    <a class="btn btn-primary" href="{{ url_for('marketing_download_png', asset_id=asset.id) }}">{{ t('marketing_download') }}</a>
+                    <button type="button" class="btn btn-secondary" data-mkt-share data-share-url="{{ url_for('marketing_download_png', asset_id=asset.id, _external=True) }}" data-share-title="{{ view.property_address }}" data-share-name="{{ asset.download_name if asset.download_name is defined else 'jrh-content.png' }}" hidden>{{ t('marketing_share') }}</button>
+                    <a class="btn btn-secondary" href="{{ url_for('marketing_asset', asset_id=asset.id) }}">{{ t('marketing_vary') }}</a>
+                </div>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+    <p class="mkt-temp-note">{{ t('marketing_temp_note') }}</p>
+    {% else %}
+
+    <form class="mkt-prompt" method="post" action="{{ url_for('marketing_generate') }}" data-mkt-prompt>
+        {% if view.property %}
+        <input type="hidden" name="property_id" value="{{ view.property.id }}">
+        {% else %}
+        <label class="mkt-prompt__property">
+            <span>{{ t('marketing_choose_property') }}</span>
+            <select name="property_id" required>
+                <option value="">{{ t('marketing_choose_property') }}</option>
+                {% for item in view.properties %}
+                <option value="{{ item.id }}">{{ item.address }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        {% endif %}
+        <label class="mkt-prompt__ask">
+            <span>{{ t('marketing_step_format') }}</span>
+            <textarea name="prompt" rows="5" maxlength="500" required placeholder="{{ t('marketing_prompt_placeholder') }}">{{ view.prompt }}</textarea>
+        </label>
+        <input type="hidden" name="idempotency_key" value="{{ view.idempotency_key }}">
+        <div class="mkt-chips" data-mkt-chips>
+            <button type="button" class="mkt-chip" data-chip="{{ view.default_prompt }}" data-chip-replace="1">{{ t('marketing_format_pack') }}</button>
+            <button type="button" class="mkt-chip" data-chip="Haceme 3 historias">{{ t('marketing_chip_stories') }}</button>
+            <button type="button" class="mkt-chip" data-chip="Haceme 3 posts">{{ t('marketing_chip_posts') }}</button>
+            <button type="button" class="mkt-chip" data-chip="Haceme 3 flyers">{{ t('marketing_chip_flyers') }}</button>
+            <button type="button" class="mkt-chip" data-chip="usando mi foto">{{ t('marketing_chip_agent') }}</button>
+            <button type="button" class="mkt-chip" data-chip="más minimalista">{{ t('marketing_chip_minimal') }}</button>
+            <button type="button" class="mkt-chip" data-chip="sin precio">{{ t('marketing_chip_no_price') }}</button>
+        </div>
+        {% if view.context and view.context.agent %}
+        <label class="mkt-agent-toggle">
+            {% if view.context.agent.has_photo %}
+            <span class="mkt-agent-toggle__photo" aria-hidden="true"></span>
+            {% endif %}
+            <input type="hidden" name="include_agent" value="0">
+            <input type="checkbox" name="include_agent" value="1" checked>
+            <span>
+                <strong>{{ t('marketing_include_agent') }}</strong>
+                <small>{{ t('marketing_include_agent_help') }}</small>
+            </span>
+        </label>
+        {% endif %}
+        <button type="submit" class="btn btn-primary" {% if view.missing_photos %}disabled{% endif %}>{{ t('marketing_generate_ai') }}</button>
+    </form>
+    {% endif %}
+</section>
 {% endblock %}

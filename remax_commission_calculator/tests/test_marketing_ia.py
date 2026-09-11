@@ -24,7 +24,7 @@ from modules.config import apply_config
 from modules.database import add_agent, add_organization, add_property, add_user, create_tables
 from modules.database.agents_repository import update_agent_profile_photo
 from modules.database.connection import get_connection
-from modules.database.marketing_repository import get_marketing_asset
+from modules.database.marketing_repository import get_marketing_asset, update_marketing_asset
 from modules.database.properties_repository import get_property_record, update_property
 from modules.database.property_media_repository import STRATEGY_COPY, upsert_property_media
 from modules.database.users_repository import get_user_by_id
@@ -41,9 +41,12 @@ from modules.marketing_art_director import plan_item
 from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy
 from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider
 from modules.marketing_renderer import FORMAT_SIZES, render_marketing_image
-from modules.marketing_request import DEFAULT_PROMPT, parse_marketing_request
+from modules.marketing_photo_selector import select_photos_for_item
+from modules.marketing_request import DEFAULT_PROMPT, expand_items, parse_marketing_request
 from modules.marketing_service import (
+    asset_download_name,
     can_view_asset,
+    cleanup_expired_marketing_assets,
     ensure_json_serializable,
     generate_marketing_proposals,
     resolve_asset_file,
@@ -310,8 +313,21 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(vary["story_count"], 0)
         self.assertEqual(vary["post_count"], 0)
         self.assertEqual(vary["flyer_count"], 0)
-        no_agent = parse_marketing_request("Haceme 3 historias sin mi foto")
+        no_photo = parse_marketing_request("Haceme 3 historias sin mi foto")
+        self.assertTrue(no_photo["with_agent"])
+        self.assertFalse(no_photo["with_agent_photo"])
+        no_agent = parse_marketing_request("Haceme 3 historias sin agente")
         self.assertFalse(no_agent["with_agent"])
+        self.assertEqual(parse_marketing_request("haceme 3 estados de WhatsApp")["story_count"], 3)
+        self.assertEqual(parse_marketing_request("quiero 2 publicaciones")["post_count"], 2)
+        self.assertEqual(parse_marketing_request("armame 1 volante")["flyer_count"], 1)
+        vague = parse_marketing_request("haceme algo lindo")
+        self.assertEqual(vague["story_count"], 1)
+        self.assertEqual(vague["post_count"], 1)
+        self.assertEqual(vague["flyer_count"], 1)
+        huge = parse_marketing_request("haceme 50 historias")
+        self.assertEqual(huge["story_count"], 12)
+        self.assertEqual(len(expand_items(huge)), 12)
 
     def test_12_unique_directions_and_order(self):
         result = start_marketing_batch(
@@ -414,7 +430,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         path = resolve_asset_file(result["assets"][0])
         self.assertTrue(path.is_file())
-        self.assertFalse((result["assets"][0].get("options") or {}).get("include_agent"))
+        self.assertFalse((result["assets"][0].get("options") or {}).get("show_agent_photo"))
 
     def test_17_png_generation_and_facts(self):
         result = start_marketing_batch(
@@ -450,17 +466,25 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(denied.status_code, 403)
         with client.session_transaction() as sess:
             sess["user_id"] = self.agent_user_id
-        ok = client.get("/marketing")
+        ok = client.get("/marketing", follow_redirects=True)
         self.assertEqual(ok.status_code, 200)
         self.assertIn("JRH IA".encode("utf-8"), ok.data)
-        self.assertIn("¿Qué querés crear?".encode("utf-8"), ok.data)
+        self.assertIn("¿Qué querés que JRH haga?".encode("utf-8"), ok.data)
         self.assertNotIn("Elegí el estilo".encode("utf-8"), ok.data)
+        self.assertNotIn("Historial".encode("utf-8"), ok.data)
         create = client.get(f"/marketing/new?property_id={self.property_id}")
         self.assertEqual(create.status_code, 200)
         self.assertIn("Santamarina 1335".encode("utf-8"), create.data)
         self.assertIn("Generar con IA".encode("utf-8"), create.data)
         self.assertNotIn(b'name="format"', create.data)
         self.assertNotIn(b'name="style"', create.data)
+        home = client.get("/")
+        self.assertEqual(home.status_code, 200)
+        self.assertIn("Crear contenido con IA".encode("utf-8"), home.data)
+        self.assertNotIn(b">Marketing</span>", home.data)
+        detail = client.get(f"/properties/{self.property_id}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertIn("Crear con JRH IA".encode("utf-8"), detail.data)
 
     def test_19_jrh_property_context(self):
         self.assertEqual(detect_marketing_content("creame una historia de Santamarina"), "story")
@@ -662,9 +686,69 @@ class MarketingIaTests(unittest.TestCase):
             sess["user_id"] = self.agent_user_id
         page = client.get(f"/marketing/generation/{result['generation_id']}")
         self.assertEqual(page.status_code, 200)
-        self.assertIn("No pude generar esta variante.".encode("utf-8"), page.data)
+        self.assertIn("No pude generar esta propuesta.".encode("utf-8"), page.data)
         self.assertIn("Reintentar".encode("utf-8"), page.data)
         self.assertIn(b"mkt-proposal", page.data)
+
+
+    def test_29_temporary_assets_filenames_and_cleanup(self):
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme 1 historia premium usando mi foto.",
+        )
+        asset = result["assets"][0]
+        self.assertTrue(asset.get("temporary"))
+        self.assertTrue(asset.get("expires_at"))
+        name = asset_download_name(asset)
+        self.assertTrue(name.startswith("santamarina-1335-story-"))
+        self.assertTrue(name.endswith(".png"))
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["user_id"] = self.agent_user_id
+        download = client.get(f"/marketing/assets/{asset['id']}/download.png")
+        self.assertEqual(download.status_code, 200)
+        self.assertIn("santamarina-1335-story-", download.headers.get("Content-Disposition", ""))
+        composer = client.get(
+            f"/marketing/new?property_id={self.property_id}&generation_id={result['generation_id']}"
+        )
+        self.assertEqual(composer.status_code, 200)
+        self.assertIn(b"mkt-proposal", composer.data)
+        self.assertNotIn(b"BRIGHT_GEOMETRIC", composer.data)
+        update_marketing_asset(asset["id"], self.org, expires_at="2000-01-01T00:00:00")
+        removed = cleanup_expired_marketing_assets(self.org)
+        self.assertGreaterEqual(removed, 1)
+        self.assertIsNone(get_marketing_asset(asset["id"], self.org))
+
+    def test_30_photo_selector_and_private_price_lock(self):
+        context = build_property_marketing_context(self._property())
+        first = select_photos_for_item(context["photos"], fmt="story", index=0)
+        second = select_photos_for_item(context["photos"], fmt="story", index=1)
+        self.assertTrue(first)
+        self.assertEqual(first[0]["id"], context["photos"][0]["id"])
+        self.assertNotEqual([item["id"] for item in first], [item["id"] for item in second])
+        connection = get_connection()
+        connection.execute(
+            "UPDATE properties SET external_metadata_json = ? WHERE id = ? AND organization_id = ?",
+            (json.dumps({"external_price_exposure": "private"}), self.property_id, self.org),
+        )
+        connection.commit()
+        connection.close()
+        locked = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme 1 post y poné el precio.",
+        )
+        self.assertFalse((locked["assets"][0].get("options") or {}).get("show_price"))
+        connection = get_connection()
+        connection.execute(
+            "UPDATE properties SET external_metadata_json = NULL WHERE id = ? AND organization_id = ?",
+            (self.property_id, self.org),
+        )
+        connection.commit()
+        connection.close()
 
 
 if __name__ == "__main__":

@@ -6,8 +6,9 @@ import logging
 import os
 import re
 import threading
+import unicodedata
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from modules.auth import is_admin, is_agent
@@ -17,9 +18,11 @@ from modules.database.marketing_repository import (
     STATUS_SELECTED,
     create_marketing_asset,
     create_marketing_batch,
+    delete_marketing_asset,
     find_batch_by_idempotency,
     get_marketing_asset,
     get_marketing_batch,
+    list_expired_marketing_assets,
     list_generation_assets,
     list_marketing_assets,
     update_marketing_asset,
@@ -43,8 +46,9 @@ from modules.marketing_image_provider import (
     get_marketing_image_provider,
     get_marketing_image_provider_name,
 )
+from modules.marketing_photo_selector import select_photos_for_item
 from modules.marketing_renderer import FORMAT_SIZES, png_to_pdf_bytes
-from modules.marketing_request import DEFAULT_PROMPT, expand_items, parse_marketing_request
+from modules.marketing_request import DEFAULT_PROMPT, MAX_BATCH_ITEMS, expand_items, parse_marketing_request
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +128,9 @@ def _decorate_asset(asset, language="es"):
     fmt = item.get("format") or "story"
     options = item.get("options") if isinstance(item.get("options"), dict) else {}
     copy = item.get("copy_snapshot") if isinstance(item.get("copy_snapshot"), dict) else {}
-    item["format_label"] = translate(f"marketing_format_{fmt}", language=language)
+    item["format_label"] = translate(f"marketing_format_{fmt}_short", language=language)
+    if item["format_label"] == f"marketing_format_{fmt}_short":
+        item["format_label"] = translate(f"marketing_format_{fmt}", language=language)
     item["template_label"] = options.get("visual_direction") or item.get("template") or ""
     item["when_label"] = _relative_day(item.get("created_at"), language)
     item["headline"] = copy.get("headline") or ""
@@ -133,6 +139,7 @@ def _decorate_asset(asset, language="es"):
     item["ready"] = item["pipeline_status"] == PIPELINE_COMPLETED and bool(item.get("storage_key"))
     item["source"] = options.get("source") or "ai"
     item["sort_index"] = options.get("sort_index") or 0
+    item["download_name"] = asset_download_name(item)
     item["options"] = options
     item["copy_snapshot"] = copy
     return item
@@ -216,8 +223,23 @@ def prepare_create_view(
     property_id=None,
     prompt=None,
     language="es",
+    generation_id=None,
 ):
     organization_id = require_organization_id(organization_id)
+    cleanup_expired_marketing_assets(organization_id)
+    if generation_id:
+        view = get_batch_view(organization_id, user, generation_id, language=language)
+        if property_id is None:
+            property_id = view.get("property_id")
+    else:
+        view = {
+            "batch": None,
+            "generation_id": None,
+            "assets": [],
+            "groups": [],
+            "creating": False,
+            "total": 0,
+        }
     property_data = None
     if property_id:
         property_data = get_property_record(property_id, organization_id)
@@ -240,16 +262,21 @@ def prepare_create_view(
         cover = next((item for item in photos if item.get("is_cover") or item.get("selected")), None)
         if cover is None and photos:
             cover = photos[0]
-    return {
-        "property": property_data,
-        "properties": properties,
-        "context": context,
-        "missing_photos": missing_photos,
-        "cover": cover,
-        "prompt": (prompt or "").strip() or (DEFAULT_PROMPT if property_data else ""),
-        "default_prompt": DEFAULT_PROMPT,
-        "idempotency_key": uuid.uuid4().hex,
-    }
+    view.update(
+        {
+            "property": property_data,
+            "properties": properties,
+            "context": context,
+            "missing_photos": missing_photos,
+            "cover": cover,
+            "prompt": (prompt or view.get("prompt") or "").strip()
+            or (DEFAULT_PROMPT if property_data else ""),
+            "default_prompt": DEFAULT_PROMPT,
+            "idempotency_key": uuid.uuid4().hex,
+            "can_create": bool(property_data or properties),
+        }
+    )
+    return view
 
 
 def _truthy(value, *, default=True):
@@ -262,34 +289,103 @@ def _options_from_request(parsed, context):
     facts = (context or {}).get("facts") or {}
     policy = facts.get("price_policy") or {}
     show_price = parsed.get("show_price") is not False
-    if policy.get("private") and not re.search(
-        r"con precio|mostr[aeá].*precio",
-        (parsed.get("prompt") or ""),
-        re.IGNORECASE,
-    ):
+    if policy.get("private"):
         show_price = False
     include_agent = parsed.get("with_agent") is not False
+    show_agent_photo = include_agent and parsed.get("with_agent_photo") is not False
     return {
         "show_price": show_price,
         "include_agent": include_agent,
-        "show_agent_photo": include_agent,
+        "show_agent_photo": show_agent_photo,
         "show_features": parsed.get("copy_density") != "none",
         "photo_ids": [],
         "copy_density": parsed.get("copy_density") or "low",
         "variation_strength": parsed.get("variation_strength") or "high",
+        "temporary": True,
     }
 
 
-def _write_bytes(organization_id, asset_id, filename, payload):
+def marketing_ttl_hours():
+    try:
+        value = int(os.environ.get("MARKETING_ASSET_TTL_HOURS") or 6)
+    except (TypeError, ValueError):
+        value = 6
+    return max(1, min(24, value))
+
+
+def _expires_at_iso():
+    return (datetime.utcnow() + timedelta(hours=marketing_ttl_hours())).replace(
+        microsecond=0
+    ).isoformat()
+
+
+def asset_download_name(asset, *, kind="png"):
+    facts = ((asset or {}).get("property_snapshot") or {}).get("facts") or {}
+    address = facts.get("title") or (asset or {}).get("property_address") or "propiedad"
+    folded = unicodedata.normalize("NFKD", str(address))
+    ascii_text = folded.encode("ascii", "ignore").decode("ascii").lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_text).strip("-") or "propiedad"
+    fmt = str((asset or {}).get("format") or "story")
+    index = ((asset or {}).get("options") or {}).get("format_index") or 1
+    try:
+        index = int(index)
+    except (TypeError, ValueError):
+        index = 1
+    ext = "pdf" if kind == "pdf" else "png"
+    return f"{slug}-{fmt}-{index:02d}.{ext}"
+
+
+def cleanup_expired_marketing_assets(organization_id=None, *, limit=40):
+    removed = 0
+    try:
+        expired = list_expired_marketing_assets(organization_id, limit=limit)
+    except Exception:
+        logger.info("marketing cleanup skipped")
+        return 0
+    root = Path(get_private_upload_root())
+    for asset in expired:
+        for key in (asset.get("storage_key"), asset.get("pdf_storage_key")):
+            if not key:
+                continue
+            path = root / key
+            try:
+                if path.is_file():
+                    path.unlink()
+            except OSError:
+                logger.info("marketing cleanup file skipped")
+        try:
+            delete_marketing_asset(asset["id"], asset["organization_id"])
+            removed += 1
+        except Exception:
+            logger.info("marketing cleanup row skipped")
+    if removed:
+        logger.info("marketing cleanup removed=%s", removed)
+    return removed
+
+
+def conversation_context(asset=None, *, prompt="", batch_id=None):
+    options = (asset or {}).get("options") or {}
+    return {
+        "property_id": (asset or {}).get("property_id"),
+        "batch_id": batch_id or (asset or {}).get("generation_id"),
+        "selected_asset_id": (asset or {}).get("id"),
+        "previous_prompt": options.get("prompt") or prompt,
+        "previous_art_direction": options.get("visual_direction"),
+    }
+
+
+def _write_bytes(organization_id, asset_id, filename, payload, *, generation_id=None):
+    folder = "tmp" if generation_id else "assets"
     root = (
         Path(get_private_upload_root())
         / "organizations"
         / str(organization_id)
         / "marketing"
-        / str(asset_id)
+        / folder
+        / str(generation_id or asset_id)
     )
     root.mkdir(parents=True, exist_ok=True)
-    path = root / filename
+    path = root / f"{asset_id}-{filename}"
     path.write_bytes(payload)
     return str(path.relative_to(get_private_upload_root())).replace("\\", "/")
 
@@ -391,9 +487,23 @@ def _process_item(organization_id, asset_id):
         art["background_png"] = background
         context = _context_from_asset(asset)
         options = dict(asset.get("options") or {})
+        selected = select_photos_for_item(
+            context.get("photos") or [],
+            fmt=fmt,
+            index=max(0, int(options.get("format_index") or 1) - 1),
+        )
+        if selected:
+            context["photos"] = selected
+            options["photo_ids"] = [item.get("id") for item in selected if item.get("id")]
         png_bytes, _size = compose_marketing_image(context, art, fmt=fmt, options=options)
         stage = "persistence"
-        storage_key = _write_bytes(organization_id, asset_id, "creative.png", png_bytes)
+        storage_key = _write_bytes(
+            organization_id,
+            asset_id,
+            "creative.png",
+            png_bytes,
+            generation_id=batch_id,
+        )
         pdf_key = None
         if fmt == "flyer":
             pdf_key = _write_bytes(
@@ -401,6 +511,7 @@ def _process_item(organization_id, asset_id):
                 asset_id,
                 "creative.pdf",
                 png_to_pdf_bytes(png_bytes),
+                generation_id=batch_id,
             )
         options["pipeline_status"] = PIPELINE_COMPLETED
         options["error"] = None
@@ -505,8 +616,10 @@ def start_marketing_batch(
     idempotency_key=None,
     reference_asset_id=None,
     variation=False,
+    include_agent=None,
 ):
     organization_id = require_organization_id(organization_id)
+    cleanup_expired_marketing_assets(organization_id)
     token = (idempotency_key or "").strip() or None
     if token:
         existing = find_batch_by_idempotency(organization_id, token)
@@ -523,6 +636,9 @@ def start_marketing_batch(
         )
         variation = True
     parsed = parse_marketing_request(prompt, language=language, variation=variation)
+    if include_agent is False:
+        parsed["with_agent"] = False
+        parsed["with_agent_photo"] = False
     if reference:
         folded = (parsed.get("prompt") or "").lower()
         if variation and not re.search(r"\d+", parsed.get("prompt") or ""):
@@ -543,6 +659,9 @@ def start_marketing_batch(
             parsed["flyer_count"] = 1 if fmt == "flyer" else 0
             parsed["status_count"] = 1 if fmt == "status" else 0
     items = _items_from_request(parsed, reference=reference)
+    if len(items) > MAX_BATCH_ITEMS:
+        items = items[:MAX_BATCH_ITEMS]
+        parsed["capped"] = True
     context = build_property_marketing_context(
         property_data,
         language=language,
@@ -565,6 +684,13 @@ def start_marketing_batch(
     request_payload = dict(parsed)
     request_payload["item_count"] = len(items)
     request_payload["reference_asset_id"] = reference_asset_id
+    request_payload["conversation"] = conversation_context(
+        reference,
+        prompt=parsed.get("prompt") or prompt,
+        batch_id=batch_id,
+    )
+    request_payload["temporary"] = True
+    expires_at = _expires_at_iso()
     try:
         create_marketing_batch(
             organization_id,
@@ -598,6 +724,11 @@ def start_marketing_batch(
                 used_directions=used,
             )
             item_options = dict(options)
+            selected_photos = select_photos_for_item(
+                context.get("photos") or [],
+                fmt=item["format"],
+                index=max(0, int(item["index"]) - 1),
+            )
             item_options.update(
                 {
                     "pipeline_status": PIPELINE_QUEUED,
@@ -609,6 +740,9 @@ def start_marketing_batch(
                     "prompt": parsed.get("prompt") or prompt,
                     "reference_asset_id": reference_asset_id,
                     "source": get_marketing_image_provider_name(),
+                    "temporary": True,
+                    "expires_at": expires_at,
+                    "photo_ids": [photo.get("id") for photo in selected_photos if photo.get("id")],
                 }
             )
             copy = {
@@ -636,6 +770,8 @@ def start_marketing_batch(
                 agent_id=property_data.get("agent_id"),
                 created_by_user_id=(user or {}).get("id"),
                 status=STATUS_GENERATED,
+                temporary=True,
+                expires_at=expires_at,
             )
         except Exception:
             logger.exception(
@@ -670,6 +806,8 @@ def start_marketing_batch(
                 agent_id=property_data.get("agent_id"),
                 created_by_user_id=(user or {}).get("id"),
                 status=STATUS_GENERATED,
+                temporary=True,
+                expires_at=expires_at,
             )
     if _run_sync():
         _run_batch(organization_id, batch_id)
@@ -708,9 +846,14 @@ def generate_marketing_proposals(
         else:
             prompt = DEFAULT_PROMPT
     if form.get("include_agent") in {"0", "off", "false"}:
-        prompt += " Sin mi foto."
+        prompt += " sin agente."
     if form.get("show_price") in {"0", "off", "false"}:
         prompt += " Sin precio."
+    include_agent = None
+    if form.get("include_agent") in {"0", "off", "false"}:
+        include_agent = False
+    elif form.get("include_agent") in {"1", "on", "true"}:
+        include_agent = True
     previous = os.environ.get("MARKETING_SYNC")
     os.environ["MARKETING_SYNC"] = "1"
     try:
@@ -721,6 +864,7 @@ def generate_marketing_proposals(
             prompt=prompt,
             language=language,
             idempotency_key=(form.get("idempotency_key") or "").strip() or None,
+            include_agent=include_agent,
         )
     finally:
         if previous is None:
@@ -779,11 +923,10 @@ def get_batch_status(organization_id, user, batch_id, *, language="es"):
                 "index": (asset.get("options") or {}).get("format_index") or asset.get("sort_index"),
                 "label": f"{asset['format_label']} {(asset.get('options') or {}).get('format_index') or ''}".strip(),
                 "pipeline_status": asset["pipeline_status"],
-                "visual_direction": (asset.get("options") or {}).get("visual_direction"),
                 "ready": asset["ready"],
                 "failed": asset["failed"],
-                "error": (asset.get("options") or {}).get("error"),
                 "preview_url": f"/marketing/assets/{asset['id']}/preview" if asset.get("storage_key") else None,
+                "download_url": f"/marketing/assets/{asset['id']}/download.png" if asset.get("ready") else None,
             }
         )
     return {
@@ -848,6 +991,7 @@ def get_asset_view(organization_id, user, asset_id, *, language="es"):
     item = _decorate_asset(asset, language)
     item["caption_text"] = caption_text(asset)
     item["width"], item["height"] = asset_dimensions(asset)
+    item["download_name"] = asset_download_name(asset)
     return item
 
 

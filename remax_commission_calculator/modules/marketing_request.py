@@ -15,7 +15,8 @@ DEFAULT_PROMPT = (
     "premium, sin descripción larga y usando mi foto."
 )
 
-MAX_PER_FORMAT = 6
+MAX_PER_FORMAT = 12
+MAX_BATCH_ITEMS = 12
 
 
 def _clamp(value, default=0):
@@ -33,6 +34,7 @@ def empty_request():
         "flyer_count": 0,
         "status_count": 0,
         "with_agent": True,
+        "with_agent_photo": True,
         "show_price": True,
         "copy_density": "low",
         "visual_direction": "premium varied",
@@ -51,6 +53,9 @@ def expand_items(parsed):
     ):
         for index in range(_clamp(parsed.get(key), 0)):
             items.append({"format": fmt, "index": index + 1})
+            if len(items) >= MAX_BATCH_ITEMS:
+                parsed["capped"] = True
+                return items
     return items
 
 
@@ -59,38 +64,58 @@ def _fallback_parse(prompt, *, variation=False):
     folded = text.lower()
     parsed = empty_request()
     parsed["prompt"] = text
-    parsed["with_agent"] = not re.search(r"sin (mi )?foto|sin agente|sin jose|sin josé", folded)
+    parsed["with_agent"] = not re.search(
+        r"sin agente|sin (mis )?datos|sin m[ií](?!\s+foto)|sin jose|sin josé",
+        folded,
+    )
+    parsed["with_agent_photo"] = parsed["with_agent"] and not re.search(
+        r"sin mi foto|sin foto|sin retrato",
+        folded,
+    )
     parsed["show_price"] = not re.search(r"sin precio|ocult(a|á) el precio", folded)
     if re.search(r"sin (mucho )?texto|sin descripci|poco texto|copy corto", folded):
         parsed["copy_density"] = "low"
-    if re.search(r"m[aá]s (jugado|oscuro|elegante)|regener", folded):
+    if re.search(r"m[aá]s (jugado|oscuro|elegante)|regener|minimal", folded):
         parsed["variation_strength"] = "high"
     pack = bool(re.search(r"pack|contenido para esta|publicidad", folded))
-    stories = re.search(r"(\d+)\s*(?:opciones(?:\s+de)?\s+)?(historias?|stories|story)", folded)
-    posts = re.search(r"(\d+)\s*(?:opciones(?:\s+de)?\s+)?(posts?|publicaciones)", folded)
-    flyers = re.search(r"(\d+)\s*(?:opciones(?:\s+de)?\s+)?(flyers?|folletos?)", folded)
-    statuses = re.search(r"(\d+)\s*(?:opciones(?:\s+de)?\s+)?(estados?|whatsapp)", folded)
+    stories = re.search(
+        r"(\d+)\s*(?:opciones(?:\s+de)?\s+)?(historias?|stories|story|estados?)",
+        folded,
+    )
+    posts = re.search(
+        r"(\d+)\s*(?:opciones(?:\s+de)?\s+)?(posts?|publicaciones|feeds?)",
+        folded,
+    )
+    flyers = re.search(
+        r"(\d+)\s*(?:opciones(?:\s+de)?\s+)?(flyers?|folletos?|volantes?|fichas?)",
+        folded,
+    )
     if stories:
         parsed["story_count"] = _clamp(stories.group(1))
     if posts:
         parsed["post_count"] = _clamp(posts.group(1))
     if flyers:
         parsed["flyer_count"] = _clamp(flyers.group(1))
-    if statuses:
-        parsed["status_count"] = _clamp(statuses.group(1))
-    if not variation and (pack or (not stories and not posts and not flyers and not statuses)):
+    if re.search(r"whatsapp", folded) and not stories and not parsed["story_count"]:
+        parsed["story_count"] = 3 if pack or "historia" in folded else parsed["story_count"]
+    if not variation and (pack or (not stories and not posts and not flyers)):
         if "historia" in folded and not stories:
             parsed["story_count"] = 3
         if "post" in folded and not posts:
             parsed["post_count"] = 3
-        if "flyer" in folded and not flyers:
-            parsed["flyer_count"] = 3
+        if "flyer" in folded or "volante" in folded:
+            if not flyers:
+                parsed["flyer_count"] = 3
         if not any((parsed["story_count"], parsed["post_count"], parsed["flyer_count"], parsed["status_count"])):
-            parsed["story_count"] = 3
-            parsed["post_count"] = 3
-            parsed["flyer_count"] = 3
-    if parsed["story_count"] and re.search(r"whatsapp|estado", folded) and not statuses:
-        parsed["status_count"] = 0
+            if re.search(r"algo lindo|algo para|contenido", folded) and not pack:
+                parsed["story_count"] = 1
+                parsed["post_count"] = 1
+                parsed["flyer_count"] = 1
+            else:
+                parsed["story_count"] = 3
+                parsed["post_count"] = 3
+                parsed["flyer_count"] = 3
+    parsed["status_count"] = 0
     return parsed
 
 
@@ -138,6 +163,7 @@ def parse_marketing_request(prompt, *, language="es", variation=False):
                 "flyer_count": _clamp(parsed.get("flyer_count"), fallback["flyer_count"]),
                 "status_count": _clamp(parsed.get("status_count"), fallback["status_count"]),
                 "with_agent": parsed.get("with_agent", fallback["with_agent"]) is not False,
+                "with_agent_photo": parsed.get("with_agent_photo", fallback.get("with_agent_photo", True)) is not False,
                 "show_price": parsed.get("show_price", fallback["show_price"]) is not False,
                 "copy_density": parsed.get("copy_density") or "low",
                 "visual_direction": parsed.get("visual_direction") or "premium varied",
@@ -153,3 +179,18 @@ def parse_marketing_request(prompt, *, language="es", variation=False):
     except Exception:
         logger.info("marketing_request fallback parse")
         return fallback
+
+
+def interpret_marketing_request(prompt, *, language="es", variation=False, context=None):
+    """Public interpreter used by Creative Composer and JRH IA."""
+    parsed = parse_marketing_request(prompt, language=language, variation=variation)
+    parsed["formats"] = {
+        "story": parsed.get("story_count") or 0,
+        "post": parsed.get("post_count") or 0,
+        "flyer": parsed.get("flyer_count") or 0,
+    }
+    parsed["freeform_direction"] = parsed.get("prompt") or ""
+    if context and ((context.get("facts") or {}).get("price_policy") or {}).get("private"):
+        parsed["show_price"] = False
+    return parsed
+

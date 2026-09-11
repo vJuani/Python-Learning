@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS marketing_assets (
     options_json TEXT,
     storage_key TEXT,
     pdf_storage_key TEXT,
+    temporary INTEGER NOT NULL DEFAULT 1,
+    saved INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
 
@@ -54,6 +57,16 @@ INDEXES = (
     CREATE INDEX IF NOT EXISTS idx_marketing_assets_property
     ON marketing_assets (organization_id, property_id, created_at)
     """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_marketing_assets_expires
+    ON marketing_assets (organization_id, temporary, expires_at)
+    """,
+)
+
+ASSET_COLUMNS = (
+    ("temporary", "INTEGER NOT NULL DEFAULT 1"),
+    ("saved", "INTEGER NOT NULL DEFAULT 0"),
+    ("expires_at", "TEXT"),
 )
 
 
@@ -85,6 +98,9 @@ def migrate_marketing_sqlite():
     try:
         cursor.execute(MARKETING_ASSETS_SQL)
         cursor.execute(BATCHES_SQL)
+        for name, definition in ASSET_COLUMNS:
+            if not _column_exists(cursor, "marketing_assets", name):
+                cursor.execute(f"ALTER TABLE marketing_assets ADD COLUMN {name} {definition}")
         for statement in INDEXES:
             cursor.execute(statement)
         cursor.execute(
@@ -119,6 +135,11 @@ def migrate_marketing_postgres(cursor):
         .replace("property_id INTEGER NOT NULL", "property_id BIGINT NOT NULL")
     )
     cursor.execute(sql)
+    for name, definition in ASSET_COLUMNS:
+        mapped = definition.replace("INTEGER", "SMALLINT")
+        cursor.execute(
+            f"ALTER TABLE marketing_assets ADD COLUMN IF NOT EXISTS {name} {mapped}"
+        )
     pg_batches = (
         BATCHES_SQL.replace("organization_id INTEGER NOT NULL", "organization_id BIGINT NOT NULL")
         .replace("property_id INTEGER NOT NULL", "property_id BIGINT NOT NULL")
