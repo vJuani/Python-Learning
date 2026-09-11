@@ -1,16 +1,18 @@
-"""Image generation abstraction. Backgrounds only — never the listing."""
+"""Image generation abstraction. Finished ads with real visual references."""
 
 from __future__ import annotations
 
 import io
+import json
 import logging
 import os
+import time
 import urllib.error
 import urllib.request
 
 from PIL import Image, ImageDraw
 
-from modules.marketing_renderer import ELECTRIC, NAVY, WHITE
+from modules.marketing_renderer import NAVY, WHITE, fit_cover, paste_rounded
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,7 @@ def get_marketing_image_model():
     return (
         os.environ.get("MARKETING_IMAGE_MODEL")
         or os.environ.get("OPENAI_IMAGE_MODEL")
-        or "gpt-image-2"
+        or "gpt-image-2.5-sunburst"
     ).strip()
 
 
@@ -35,46 +37,24 @@ def get_marketing_image_provider_name():
 
 
 def is_explicit_mock_provider():
-    name = get_marketing_image_provider_name()
-    return name == "mock"
+    return get_marketing_image_provider_name() == "mock"
 
 
-def _size_for_api(width, height):
-    def _snap(value):
-        return max(16, int(round(value / 16) * 16))
-
-    return f"{_snap(width)}x{_snap(height)}"
-
-
-def _paint_direction(size, direction):
-    width, height = size
-    image = Image.new("RGB", size, WHITE)
-    draw = ImageDraw.Draw(image)
-    if direction in {"editorial_dark", "photo_lifestyle"} and "dark" in (direction or ""):
-        image.paste(NAVY, (0, 0, width, height))
-        draw.ellipse((-width * 0.2, height * 0.55, width * 1.1, height * 1.3), fill=ELECTRIC)
-        return image
-    if direction == "editorial_dark":
-        image.paste(NAVY, (0, 0, width, height))
-        draw.rectangle((0, int(height * 0.62), width, height), fill=(8, 16, 40))
-        draw.rectangle((0, int(height * 0.62), _snap_line(width), int(height * 0.62) + 6), fill=ELECTRIC)
-        return image
-    if direction == "bold_grid":
-        draw.rectangle((0, 0, width, int(height * 0.1)), fill=NAVY)
-        draw.polygon([(width, 0), (width, int(height * 0.28)), (int(width * 0.55), 0)], fill=ELECTRIC)
-        return image
-    if direction == "modern_sales":
-        draw.rectangle((0, 0, int(width * 0.38), height), fill=NAVY)
-        draw.ellipse((int(width * 0.7), int(height * 0.7), width + 80, height + 80), fill=ELECTRIC)
-        return image
-    draw.rectangle((0, 0, width, int(height * 0.09)), fill=NAVY)
-    draw.pieslice((-80, -80, int(width * 0.55), int(height * 0.22)), 0, 180, fill=ELECTRIC)
-    draw.rectangle((0, int(height * 0.92), width, height), fill=NAVY)
-    return image
+def _api_size(width, height):
+    ratio = float(height) / float(width or 1)
+    if ratio >= 1.2:
+        return "1024x1536"
+    if ratio <= 0.85:
+        return "1536x1024"
+    return "1024x1024"
 
 
-def _snap_line(width):
-    return max(40, int(width * 0.28))
+def _fit_output(raw, size):
+    image = Image.open(io.BytesIO(raw)).convert("RGB")
+    fitted = fit_cover(image, size[0], size[1])
+    out = io.BytesIO()
+    fitted.save(out, format="PNG")
+    return out.getvalue()
 
 
 class MarketingImageError(Exception):
@@ -85,84 +65,240 @@ class MarketingImageProvider:
     def generate_background(self, *, prompt, size, visual_direction):
         raise NotImplementedError
 
+    def generate_creative(self, *, prompt, size, visual_direction=None, references=None):
+        return self.generate_background(
+            prompt=prompt,
+            size=size,
+            visual_direction=visual_direction,
+        )
+
 
 class MockMarketingImageProvider(MarketingImageProvider):
+    last_call = None
+
     def generate_background(self, *, prompt, size, visual_direction):
-        image = _paint_direction(size, visual_direction or "")
+        return self.generate_creative(
+            prompt=prompt,
+            size=size,
+            visual_direction=visual_direction,
+            references=None,
+        )
+
+    def generate_creative(self, *, prompt, size, visual_direction=None, references=None):
+        refs = list(references or [])
+        MockMarketingImageProvider.last_call = {
+            "prompt": prompt,
+            "size": size,
+            "visual_direction": visual_direction,
+            "reference_roles": [item.get("role") for item in refs],
+            "agent_photo_sent_to_provider": any(item.get("role") == "agent" for item in refs),
+            "property_refs": sum(1 for item in refs if str(item.get("role") or "").startswith("property")),
+            "model": "mock",
+        }
+        width, height = size
+        canvas = Image.new("RGBA", size, (*WHITE, 255))
+        draw = ImageDraw.Draw(canvas)
+        direction = visual_direction or ""
+        if direction in {"luxury_editorial", "editorial_dark", "photo_lifestyle"}:
+            draw.rectangle((0, 0, width, height), fill=(*NAVY, 255))
+        photos = []
+        agent = None
+        for item in refs:
+            try:
+                opened = Image.open(io.BytesIO(item["bytes"])).convert("RGB")
+            except Exception:
+                continue
+            if item.get("role") == "agent":
+                agent = opened
+            elif str(item.get("role") or "").startswith("property"):
+                photos.append(opened)
+        if direction in {"luxury_editorial", "editorial_dark"} and photos:
+            canvas.paste(fit_cover(photos[0], width, int(height * 0.78)), (0, 0))
+            draw.rectangle((0, int(height * 0.72), width, height), fill=(*NAVY, 255))
+        elif direction in {"bright_architectural", "bright_geometric", "bold_grid"} and photos:
+            canvas.paste(fit_cover(photos[0], int(width * 0.62), int(height * 0.58)), (int(width * 0.04), int(height * 0.08)))
+            if len(photos) > 1:
+                canvas.paste(fit_cover(photos[1], int(width * 0.30), int(height * 0.27)), (int(width * 0.68), int(height * 0.08)))
+            if len(photos) > 2:
+                canvas.paste(fit_cover(photos[2], int(width * 0.30), int(height * 0.27)), (int(width * 0.68), int(height * 0.38)))
+        elif photos:
+            canvas.paste(fit_cover(photos[0], width, int(height * 0.62)), (0, 0))
+            if len(photos) > 1:
+                canvas.paste(fit_cover(photos[1], int(width * 0.46), int(height * 0.18)), (int(width * 0.04), int(height * 0.66)))
+        if agent is not None:
+            paste_rounded(
+                canvas,
+                agent,
+                (int(width * 0.68), int(height * 0.66)),
+                (int(width * 0.24), int(width * 0.30)),
+                radius=26,
+            )
+        image = canvas.convert("RGB")
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
         return buffer.getvalue()
 
 
-class OpenAIImageProvider(MarketingImageProvider):
+class OpenAIMarketingImageProvider(MarketingImageProvider):
     def generate_background(self, *, prompt, size, visual_direction):
+        return self.generate_creative(
+            prompt=prompt,
+            size=size,
+            visual_direction=visual_direction,
+            references=None,
+        )
+
+    def generate_creative(self, *, prompt, size, visual_direction=None, references=None):
         api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         if not api_key:
             raise MarketingImageError("missing_openai_api_key")
+        refs = list(references or [])
+        model = get_marketing_image_model()
         width, height = size
+        api_size = _api_size(width, height)
+        logger.info(
+            "marketing_image provider=openai model=%s refs=%s agent_photo_sent_to_provider=%s",
+            model,
+            len(refs),
+            any(item.get("role") == "agent" for item in refs),
+        )
+        if refs:
+            raw = self._edits(api_key, model, prompt, api_size, refs)
+        else:
+            raw = self._generate(api_key, model, prompt, api_size)
+        return _fit_output(raw, size)
+
+    def _generate(self, api_key, model, prompt, api_size):
         payload = {
-            "model": get_marketing_image_model(),
+            "model": model,
             "prompt": prompt,
             "n": 1,
-            "size": _size_for_api(width, height),
-            "quality": os.environ.get("MARKETING_IMAGE_QUALITY", "medium"),
+            "size": api_size,
+            "quality": os.environ.get("MARKETING_IMAGE_QUALITY", "high"),
         }
         request = urllib.request.Request(
             "https://api.openai.com/v1/images/generations",
-            data=__import__("json").dumps(payload).encode("utf-8"),
+            data=json.dumps(payload).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
             method="POST",
         )
+        return self._read_image(request)
+
+    def _edits(self, api_key, model, prompt, api_size, refs):
+        try:
+            import requests
+        except ImportError as error:
+            raise MarketingImageError("openai_requests_missing") from error
+        files = [
+            ("image[]", (item.get("name") or f"ref-{index}.png", item["bytes"], item.get("mime") or "image/png"))
+            for index, item in enumerate(refs[:5])
+        ]
+        data = {
+            "model": model,
+            "prompt": prompt,
+            "n": "1",
+            "size": api_size,
+            "quality": os.environ.get("MARKETING_IMAGE_QUALITY", "high"),
+        }
         last_error = None
         for attempt in range(2):
             try:
-                with urllib.request.urlopen(request, timeout=90) as response:
-                    body = __import__("json").loads(response.read().decode("utf-8"))
-                last_error = None
-                break
+                response = requests.post(
+                    "https://api.openai.com/v1/images/edits",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    data=data,
+                    files=files,
+                    timeout=180,
+                )
+                if response.status_code in {429, 500, 502, 503} and attempt == 0:
+                    time.sleep(2)
+                    last_error = MarketingImageError(f"openai_http_{response.status_code}")
+                    continue
+                if response.status_code >= 400:
+                    raise MarketingImageError(f"openai_http_{response.status_code}")
+                body = response.json()
+                return self._decode_body(body)
+            except MarketingImageError:
+                raise
+            except Exception as error:
+                raise MarketingImageError("openai_request_failed") from error
+        raise last_error or MarketingImageError("openai_request_failed")
+
+    def _read_image(self, request):
+        last_error = None
+        for attempt in range(2):
+            try:
+                with urllib.request.urlopen(request, timeout=180) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                return self._decode_body(body)
             except urllib.error.HTTPError as error:
                 last_error = MarketingImageError(f"openai_http_{error.code}")
                 logger.info("marketing_image openai_http_%s attempt_%s", error.code, attempt)
                 if error.code in {429, 500, 502, 503} and attempt == 0:
-                    __import__("time").sleep(2)
+                    time.sleep(2)
                     continue
                 raise last_error from error
+            except MarketingImageError:
+                raise
             except Exception as error:
                 raise MarketingImageError("openai_request_failed") from error
-        if last_error:
-            raise last_error
+        raise last_error or MarketingImageError("openai_request_failed")
+
+    def _decode_body(self, body):
         b64 = ((body.get("data") or [{}])[0] or {}).get("b64_json")
         if not b64:
             raise MarketingImageError("openai_empty_image")
-        raw = __import__("base64").b64decode(b64)
-        image = Image.open(io.BytesIO(raw)).convert("RGB")
-        if image.size != size:
-            image = image.resize(size, Image.Resampling.LANCZOS)
-        out = io.BytesIO()
-        image.save(out, format="PNG")
-        return out.getvalue()
+        import base64
+
+        return base64.b64decode(b64)
+
+
+OpenAIImageProvider = OpenAIMarketingImageProvider
 
 
 def get_marketing_image_provider():
     name = get_marketing_image_provider_name()
     if name == "openai":
-        return OpenAIImageProvider()
+        return OpenAIMarketingImageProvider()
     if name == "mock":
         return MockMarketingImageProvider()
     raise MarketingImageError("image_provider_unavailable")
 
 
-def background_prompt(art, fmt):
-    style = (art or {}).get("background_style") or "premium navy and electric blue"
-    direction = (art or {}).get("visual_direction") or "premium"
-    return (
-        f"Premium real-estate GRAPHIC BACKGROUND only for a {fmt} creative. "
-        f"Direction: {direction}. Style: {style}. "
-        "Navy #0A1633, electric blue #0D47FF, white. Abstract shapes, curves, "
-        "editorial composition. NO photographs, NO interiors, NO buildings, "
-        "NO people, NO faces, NO logos, NO text, NO numbers, NO watermarks, "
-        "NO floor plans. Leave open areas for real photos and type."
+def finished_ad_prompt(art, fmt, *, references=None, options=None, used_directions=None):
+    direction = (art or {}).get("visual_direction") or "luxury_editorial"
+    brief = (art or {}).get("creative_brief") or (art or {}).get("background_style") or ""
+    labels = "\n".join(item.get("label") or "" for item in (references or []) if item.get("label"))
+    avoid = ", ".join(sorted(used_directions or []))
+    agent_line = (
+        "Image labeled as the real-estate agent must appear recognizably. Do not invent another face."
+        if any(item.get("role") == "agent" for item in (references or []))
+        else "Do not include any agent portrait or invented person."
     )
+    return (
+        "You are an award-winning art director specializing in premium real-estate advertising. "
+        "Create a finished, publication-ready real-estate advertisement. "
+        "The design must look like it came from a high-end creative agency, not a SaaS template. "
+        f"Format: {fmt} vertical advertisement. Visual direction: {direction}. {brief} "
+        "Use the supplied REAL property photographs prominently. "
+        f"{agent_line} "
+        "Use a sophisticated JRH One visual language: navy, electric blue, white, "
+        "but do NOT force all designs into the same geometric template. "
+        "Prioritize photography, strong hierarchy, editorial typography, "
+        "intentional negative space, and premium composition. "
+        "Do not draw or invent the JRH One logo. Leave appropriate brand space. "
+        "Do not render addresses, prices, phone numbers or names — those are added later. "
+        "A short decorative headline treatment is allowed. "
+        "Avoid generic SaaS cards, huge empty spaces, tiny text, repeated curved shapes, "
+        "stock-template appearance, duplicated logos, fake interface buttons, "
+        "giant HTML buttons, dashboard chrome, microscopic labels, and empty white canvases. "
+        f"Do not repeat previous directions: {avoid or 'none'}. "
+        f"Reference map:\n{labels}"
+    )
+
+
+def background_prompt(art, fmt):
+    return finished_ad_prompt(art, fmt)

@@ -1,5 +1,26 @@
+body.is-creative-page.has-app-rail {
+    display: block !important;
+    grid-template-columns: none !important;
+    padding-left: 0 !important;
+}
+body.is-creative-page.has-app-rail .app-rail {
+    display: none !important;
+}
+body.is-creative-page .app-main,
+body.is-creative-page.has-app-rail .app-main {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding-left: 0 !important;
+}
+body.is-creative-page .app-main-inner {
+    width: 100%;
+    max-width: 72rem;
+    margin: 0 auto;
+}
 .mkt-composer {
-    max-width: 52rem;
+    width: 100%;
+    max-width: 72rem;
     margin: 0 auto;
     padding: 0.4rem 0 3rem;
 }
@@ -48,7 +69,8 @@
     border-radius: 18px;
     padding: 0.9rem 1rem;
     margin-bottom: 1.1rem;
-    max-width: 42rem;
+    width: 100%;
+    max-width: none;
 }
 .mkt-property img {
     width: 4.5rem;
@@ -64,7 +86,8 @@
 .mkt-prompt {
     display: grid;
     gap: 0.85rem;
-    max-width: 46rem;
+    width: 100%;
+    max-width: none;
     background: #fff;
     border: 1px solid #d7e2ee;
     border-radius: 22px;
@@ -83,7 +106,12 @@
     color: #0a1633;
     resize: vertical;
 }
-.mkt-prompt textarea { min-height: 7.5rem; }
+.mkt-prompt textarea { min-height: 8.5rem; }
+.mkt-prompt .btn-primary {
+    width: 100%;
+    min-height: 3.1rem;
+    font-size: 1.05rem;
+}
 .mkt-chips { display: flex; flex-wrap: wrap; gap: 0.45rem; }
 .mkt-chip {
     border: 1px solid #c9d6e5;

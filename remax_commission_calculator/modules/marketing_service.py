@@ -42,10 +42,12 @@ from modules.marketing_context import (
 )
 from modules.marketing_image_provider import (
     MarketingImageError,
-    background_prompt,
+    finished_ad_prompt,
     get_marketing_image_provider,
     get_marketing_image_provider_name,
 )
+from modules.marketing_quality import validate_creative
+from modules.marketing_references import collect_reference_images
 from modules.marketing_photo_selector import select_photos_for_item
 from modules.marketing_renderer import FORMAT_SIZES, png_to_pdf_bytes
 from modules.marketing_request import DEFAULT_PROMPT, MAX_BATCH_ITEMS, expand_items, parse_marketing_request
@@ -76,6 +78,7 @@ PIPELINE_GENERATING = "generating"
 PIPELINE_COMPOSITING = "compositing"
 PIPELINE_COMPLETED = "completed"
 PIPELINE_FAILED = "failed"
+PIPELINE_FAILED_QUALITY = "failed_quality"
 _DB_LOCK = threading.Lock()
 _WORKERS = {}
 
@@ -135,7 +138,7 @@ def _decorate_asset(asset, language="es"):
     item["when_label"] = _relative_day(item.get("created_at"), language)
     item["headline"] = copy.get("headline") or ""
     item["pipeline_status"] = _pipeline_status(item)
-    item["failed"] = item["pipeline_status"] == PIPELINE_FAILED
+    item["failed"] = item["pipeline_status"] in {PIPELINE_FAILED, PIPELINE_FAILED_QUALITY}
     item["ready"] = item["pipeline_status"] == PIPELINE_COMPLETED and bool(item.get("storage_key"))
     item["source"] = options.get("source") or "ai"
     item["sort_index"] = options.get("sort_index") or 0
@@ -292,16 +295,23 @@ def _options_from_request(parsed, context):
     if policy.get("private"):
         show_price = False
     include_agent = parsed.get("with_agent") is not False
-    show_agent_photo = include_agent and parsed.get("with_agent_photo") is not False
+    presentation = parsed.get("agent_presentation") or {}
+    show_agent_photo = include_agent and (
+        parsed.get("with_agent_photo") is not False and presentation.get("show_photo", True)
+    )
     return {
         "show_price": show_price,
         "include_agent": include_agent,
         "show_agent_photo": show_agent_photo,
+        "show_name": presentation.get("show_name", True),
+        "show_phone": presentation.get("show_phone", True),
+        "show_email": presentation.get("show_email", False),
         "show_features": parsed.get("copy_density") != "none",
         "photo_ids": [],
         "copy_density": parsed.get("copy_density") or "low",
         "variation_strength": parsed.get("variation_strength") or "high",
         "temporary": True,
+        "agent_presentation": presentation,
     }
 
 
@@ -399,10 +409,10 @@ def _run_sync():
 
 def _concurrency():
     try:
-        value = int(os.environ.get("MARKETING_CONCURRENCY") or 3)
+        value = int(os.environ.get("MARKETING_CONCURRENCY") or 2)
     except (TypeError, ValueError):
-        value = 3
-    return max(1, min(3, value))
+        value = 2
+    return max(1, min(2, value))
 
 
 def _items_from_request(parsed, *, reference=None):
@@ -443,6 +453,7 @@ def _art_from_asset(asset):
     options = asset.get("options") or {}
     return {
         "visual_direction": options.get("visual_direction") or asset.get("template"),
+        "creative_brief": options.get("creative_brief") or options.get("background_style"),
         "background_style": options.get("background_style"),
         "layout": options.get("layout") or {},
         "headline": copy.get("headline") or "",
@@ -464,7 +475,7 @@ def _update_options(asset, **fields):
     return get_marketing_asset(asset["id"], asset["organization_id"])
 
 
-def _process_item(organization_id, asset_id):
+def _process_item(organization_id, asset_id, *, retry=False):
     stage = "asset_loading"
     asset = get_marketing_asset(asset_id, organization_id)
     if asset is None:
@@ -472,29 +483,81 @@ def _process_item(organization_id, asset_id):
     batch_id = asset.get("generation_id")
     asset = _update_options(asset, pipeline_status=PIPELINE_GENERATING, error=None)
     try:
-        stage = "image_generation"
-        provider = get_marketing_image_provider()
-        art = _art_from_asset(asset)
-        fmt = asset["format"]
-        size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
-        background = provider.generate_background(
-            prompt=background_prompt(art, fmt),
-            size=size,
-            visual_direction=art.get("visual_direction"),
-        )
-        stage = "composition"
-        asset = _update_options(asset, pipeline_status=PIPELINE_COMPOSITING, source=get_marketing_image_provider_name())
-        art["background_png"] = background
+        stage = "references"
         context = _context_from_asset(asset)
         options = dict(asset.get("options") or {})
         selected = select_photos_for_item(
             context.get("photos") or [],
-            fmt=fmt,
+            fmt=asset["format"],
             index=max(0, int(options.get("format_index") or 1) - 1),
         )
         if selected:
             context["photos"] = selected
             options["photo_ids"] = [item.get("id") for item in selected if item.get("id")]
+        packed = collect_reference_images(context, options)
+        references = packed["references"]
+        agent_sent = any(item.get("role") == "agent" for item in references)
+        logger.info(
+            "marketing item=%s agent_photo_present=%s agent_photo_loaded=%s agent_photo_sent_to_provider=%s",
+            asset_id,
+            packed.get("agent_photo_present"),
+            packed.get("agent_photo_loaded"),
+            agent_sent,
+        )
+        options["agent_photo_present"] = packed.get("agent_photo_present")
+        options["agent_photo_loaded"] = packed.get("agent_photo_loaded")
+        options["agent_photo_sent_to_provider"] = agent_sent
+        stage = "image_generation"
+        provider = get_marketing_image_provider()
+        art = _art_from_asset(asset)
+        fmt = asset["format"]
+        size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
+        prompt = finished_ad_prompt(
+            art,
+            fmt,
+            references=references,
+            options=options,
+            used_directions=[options.get("visual_direction")],
+        )
+        generated = provider.generate_creative(
+            prompt=prompt,
+            size=size,
+            visual_direction=art.get("visual_direction"),
+            references=references,
+        )
+        stage = "quality"
+        quality = validate_creative(
+            generated,
+            size=size,
+            options=options,
+            references=references,
+            agent_photo_sent=agent_sent,
+        )
+        options["quality_score"] = quality.get("score")
+        if not quality.get("ok"):
+            if not retry:
+                logger.info("marketing quality retry item=%s", asset_id)
+                return _process_item(organization_id, asset_id, retry=True)
+            options["pipeline_status"] = PIPELINE_FAILED_QUALITY
+            options["error"] = "marketing_err_quality"
+            with _DB_LOCK:
+                update_marketing_asset(
+                    asset_id,
+                    organization_id,
+                    storage_key=None,
+                    pdf_storage_key=None,
+                    options_json=ensure_json_serializable(options, path="options"),
+                )
+            return get_marketing_asset(asset_id, organization_id)
+        stage = "composition"
+        asset = _update_options(
+            asset,
+            pipeline_status=PIPELINE_COMPOSITING,
+            source=get_marketing_image_provider_name(),
+            agent_photo_sent_to_provider=agent_sent,
+        )
+        art["background_png"] = generated
+        options = dict(asset.get("options") or {}) | options
         png_bytes, _size = compose_marketing_image(context, art, fmt=fmt, options=options)
         stage = "persistence"
         storage_key = _write_bytes(
@@ -516,6 +579,7 @@ def _process_item(organization_id, asset_id):
         options["pipeline_status"] = PIPELINE_COMPLETED
         options["error"] = None
         options["source"] = get_marketing_image_provider_name()
+        options["model"] = os.environ.get("MARKETING_IMAGE_MODEL") or "gpt-image-2.5-sunburst"
         with _DB_LOCK:
             update_marketing_asset(
                 asset_id,
@@ -543,10 +607,10 @@ def _refresh_batch_status(organization_id, batch_id):
     statuses = {_pipeline_status(item) for item in assets}
     if statuses <= {PIPELINE_COMPLETED}:
         status = "completed"
-    elif statuses <= {PIPELINE_FAILED}:
+    elif statuses <= {PIPELINE_FAILED, PIPELINE_FAILED_QUALITY}:
         status = "failed"
-    elif PIPELINE_COMPLETED in statuses or PIPELINE_FAILED in statuses:
-        if statuses <= {PIPELINE_COMPLETED, PIPELINE_FAILED}:
+    elif PIPELINE_COMPLETED in statuses or PIPELINE_FAILED in statuses or PIPELINE_FAILED_QUALITY in statuses:
+        if statuses <= {PIPELINE_COMPLETED, PIPELINE_FAILED, PIPELINE_FAILED_QUALITY}:
             status = "completed"
         else:
             status = "generating"
@@ -733,6 +797,7 @@ def start_marketing_batch(
                 {
                     "pipeline_status": PIPELINE_QUEUED,
                     "visual_direction": art.get("visual_direction"),
+                    "creative_brief": art.get("creative_brief"),
                     "background_style": art.get("background_style"),
                     "layout": art.get("layout") or {},
                     "sort_index": sort_index,

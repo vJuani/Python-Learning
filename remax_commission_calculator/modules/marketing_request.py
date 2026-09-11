@@ -40,7 +40,43 @@ def empty_request():
         "visual_direction": "premium varied",
         "variation_strength": "high",
         "prompt": "",
+        "agent_presentation": default_agent_presentation(),
     }
+
+
+def default_agent_presentation():
+    return {
+        "show_agent": True,
+        "show_photo": True,
+        "show_name": True,
+        "show_phone": True,
+        "show_email": False,
+        "preferred_position": "auto",
+    }
+
+
+def agent_presentation_config(prompt, parsed=None):
+    folded = (prompt or "").lower()
+    config = default_agent_presentation()
+    if parsed:
+        config["show_agent"] = parsed.get("with_agent") is not False
+        config["show_photo"] = parsed.get("with_agent_photo") is not False
+    if re.search(r"sin agente|sin (mis )?datos|ni mis datos|sin m[ií](?!\s+foto)", folded):
+        config.update({"show_agent": False, "show_photo": False, "show_name": False, "show_phone": False, "show_email": False})
+    if re.search(r"con mis datos|subilo con mis|usando mis datos|con mi foto|usando mi foto", folded):
+        config["show_agent"] = True
+        config["show_name"] = True
+        if not re.search(r"sin mi foto|sin foto|sin retrato|sin (mi )?cara", folded):
+            config["show_photo"] = True
+    if re.search(r"sin mi foto|sin foto|sin retrato|sin (mi )?cara", folded):
+        config["show_photo"] = False
+    if re.search(r"solo mi (whatsapp|tel[eé]fono|celular)", folded):
+        config["show_agent"] = True
+        config["show_phone"] = True
+        config["show_email"] = False
+    if re.search(r"poneme abajo|abajo", folded):
+        config["preferred_position"] = "bottom"
+    return config
 
 
 def expand_items(parsed):
@@ -65,7 +101,7 @@ def _fallback_parse(prompt, *, variation=False):
     parsed = empty_request()
     parsed["prompt"] = text
     parsed["with_agent"] = not re.search(
-        r"sin agente|sin (mis )?datos|sin m[ií](?!\s+foto)|sin jose|sin josé",
+        r"sin agente|sin (mis )?datos|ni mis datos|sin m[ií](?!\s+foto)|sin jose|sin josé",
         folded,
     )
     parsed["with_agent_photo"] = parsed["with_agent"] and not re.search(
@@ -116,6 +152,9 @@ def _fallback_parse(prompt, *, variation=False):
                 parsed["post_count"] = 3
                 parsed["flyer_count"] = 3
     parsed["status_count"] = 0
+    parsed["agent_presentation"] = agent_presentation_config(text, parsed)
+    parsed["with_agent"] = parsed["agent_presentation"]["show_agent"]
+    parsed["with_agent_photo"] = parsed["agent_presentation"]["show_photo"]
     return parsed
 
 
@@ -190,6 +229,9 @@ def interpret_marketing_request(prompt, *, language="es", variation=False, conte
         "flyer": parsed.get("flyer_count") or 0,
     }
     parsed["freeform_direction"] = parsed.get("prompt") or ""
+    parsed["agent_presentation"] = parsed.get("agent_presentation") or agent_presentation_config(
+        parsed.get("prompt") or prompt, parsed
+    )
     if context and ((context.get("facts") or {}).get("price_policy") or {}).get("private"):
         parsed["show_price"] = False
     return parsed

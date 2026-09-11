@@ -39,10 +39,11 @@ from modules.marketing_context import (
 from jinja2 import Environment
 from modules.marketing_art_director import plan_item
 from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy
-from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider
+from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider, get_marketing_image_model
+from modules.marketing_references import collect_reference_images
 from modules.marketing_renderer import FORMAT_SIZES, render_marketing_image
 from modules.marketing_photo_selector import select_photos_for_item
-from modules.marketing_request import DEFAULT_PROMPT, expand_items, parse_marketing_request
+from modules.marketing_request import DEFAULT_PROMPT, agent_presentation_config, expand_items, parse_marketing_request
 from modules.marketing_service import (
     asset_download_name,
     can_view_asset,
@@ -396,7 +397,7 @@ class MarketingIaTests(unittest.TestCase):
 
     def test_15_image_failure_isolated(self):
         calls = {"n": 0}
-        original = MockMarketingImageProvider.generate_background
+        original = MockMarketingImageProvider.generate_creative
 
         def flaky(self, **kwargs):
             calls["n"] += 1
@@ -404,7 +405,7 @@ class MarketingIaTests(unittest.TestCase):
                 raise MarketingImageError("forced")
             return original(self, **kwargs)
 
-        MockMarketingImageProvider.generate_background = flaky
+        MockMarketingImageProvider.generate_creative = flaky
         try:
             result = start_marketing_batch(
                 self.org,
@@ -413,7 +414,7 @@ class MarketingIaTests(unittest.TestCase):
                 prompt="Haceme 3 historias diferentes.",
             )
         finally:
-            MockMarketingImageProvider.generate_background = original
+            MockMarketingImageProvider.generate_creative = original
         statuses = [item["pipeline_status"] for item in result["assets"]]
         self.assertIn("failed", statuses)
         self.assertIn("completed", statuses)
@@ -659,7 +660,7 @@ class MarketingIaTests(unittest.TestCase):
             ensure_json_serializable({"values": {}.values}, path="values")
 
     def test_28_failed_item_does_not_500_generation_page(self):
-        original = MockMarketingImageProvider.generate_background
+        original = MockMarketingImageProvider.generate_creative
         calls = {"n": 0}
 
         def flaky(self, **kwargs):
@@ -668,7 +669,7 @@ class MarketingIaTests(unittest.TestCase):
                 raise MarketingImageError("forced")
             return original(self, **kwargs)
 
-        MockMarketingImageProvider.generate_background = flaky
+        MockMarketingImageProvider.generate_creative = flaky
         try:
             result = start_marketing_batch(
                 self.org,
@@ -677,7 +678,7 @@ class MarketingIaTests(unittest.TestCase):
                 prompt="Haceme 3 historias diferentes.",
             )
         finally:
-            MockMarketingImageProvider.generate_background = original
+            MockMarketingImageProvider.generate_creative = original
         self.assertEqual(len(result["assets"]), 3)
         self.assertTrue(any(item.get("failed") for item in result["assets"]))
         self.assertTrue(any(item.get("ready") for item in result["assets"]))
@@ -749,6 +750,57 @@ class MarketingIaTests(unittest.TestCase):
         )
         connection.commit()
         connection.close()
+
+    def test_31_agent_data_prompt_sends_photo(self):
+        parsed = parse_marketing_request("Haceme una historia premium, subilo con mis datos y mi foto.")
+        config = agent_presentation_config(parsed["prompt"], parsed)
+        self.assertTrue(config["show_agent"])
+        self.assertTrue(config["show_photo"])
+        self.assertTrue(config["show_name"])
+        MockMarketingImageProvider.last_call = None
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme una historia premium, con mis datos y mi foto, sin descripción larga.",
+        )
+        options = result["assets"][0].get("options") or {}
+        self.assertTrue(options.get("include_agent"))
+        self.assertTrue(options.get("show_agent_photo"))
+        self.assertTrue(options.get("agent_photo_loaded"))
+        self.assertTrue(options.get("agent_photo_sent_to_provider"))
+        self.assertTrue((MockMarketingImageProvider.last_call or {}).get("agent_photo_sent_to_provider"))
+        self.assertGreaterEqual((MockMarketingImageProvider.last_call or {}).get("property_refs") or 0, 1)
+        path = resolve_asset_file(result["assets"][0])
+        self.assertTrue(path and path.is_file())
+
+    def test_32_no_agent_when_requested(self):
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            prompt="Haceme un post sin mi foto ni mis datos.",
+        )
+        options = result["assets"][0].get("options") or {}
+        self.assertFalse(options.get("include_agent"))
+        self.assertFalse(options.get("show_agent_photo"))
+        self.assertFalse(options.get("agent_photo_sent_to_provider"))
+
+    def test_33_composer_layout_is_centered_workspace(self):
+        css = Path(__file__).resolve().parent.parent.joinpath("static", "css", "marketing.css").read_text(encoding="utf-8")
+        self.assertIn("grid-template-columns: none", css)
+        self.assertIn("max-width: 72rem", css)
+        self.assertIn(".mkt-prompt .btn-primary", css)
+        self.assertIn("display: block !important", css)
+        self.assertEqual(get_marketing_image_model(), os.environ.get("MARKETING_IMAGE_MODEL") or "gpt-image-2.5-sunburst")
+        context = build_property_marketing_context(self._property())
+        packed = collect_reference_images(
+            context,
+            {"include_agent": True, "show_agent_photo": True},
+        )
+        self.assertTrue(packed["agent_photo_loaded"])
+        self.assertGreaterEqual(packed["property_photo_count"], 1)
+        self.assertTrue(any(item["role"] == "agent" for item in packed["references"]))
 
 
 if __name__ == "__main__":

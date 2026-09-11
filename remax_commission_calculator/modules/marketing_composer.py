@@ -1,11 +1,12 @@
-"""Compose real property/agent/logo/facts onto an AI graphic background."""
+"""Exact facts, one official logo, and the real agent portrait over AI art."""
 
 from __future__ import annotations
 
 import io
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 
+from modules.marketing_references import agent_overlay_image
 from modules.marketing_renderer import (
     ELECTRIC,
     FORMAT_SIZES,
@@ -13,110 +14,86 @@ from modules.marketing_renderer import (
     WHITE,
     MUTED,
     font,
-    fit_cover,
-    load_agent_photo,
-    load_property_photos,
-    paste_circle,
     paste_rounded,
-    png_to_pdf_bytes,
     _paste_logo,
-    _text_width,
     _u,
 )
 
 
-def _box(slot, width, height):
-    slot = slot or {}
-    return (
-        int(float(slot.get("x") or 0) * width),
-        int(float(slot.get("y") or 0) * height),
-        max(_u(width, 8), int(float(slot.get("w") or 0.2) * width)),
-        max(_u(width, 8), int(float(slot.get("h") or 0.08) * height)),
-    )
+def _scrim(canvas, box, color=(10, 22, 51, 168)):
+    overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    draw.rectangle(box, fill=color)
+    return Image.alpha_composite(canvas, overlay)
 
 
 def compose_marketing_image(context, art, *, fmt, options):
     size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
     width, height = size
-    background = (art or {}).get("background_png")
+    background = (art or {}).get("background_png") or (art or {}).get("creative_png")
     if background:
         canvas = Image.open(io.BytesIO(background)).convert("RGBA")
         if canvas.size != size:
             canvas = canvas.resize(size, Image.Resampling.LANCZOS)
     else:
-        canvas = Image.new("RGBA", size, WHITE)
-    layout = (art or {}).get("layout") or {}
+        canvas = Image.new("RGBA", size, (*WHITE, 255))
     facts = (context or {}).get("facts") or {}
-    photos = load_property_photos((context or {}).get("photos") or [])
-    theme = layout.get("text_theme") or art.get("text_theme") or "dark"
-    ink = WHITE if theme == "light" else NAVY
-    mute = (230, 236, 245) if theme == "light" else MUTED
-    for slot in layout.get("photo_slots") or []:
-        index = int(slot.get("photo_index") or 0)
-        if index >= len(photos):
-            continue
-        x, y, w, h = _box(slot, width, height)
-        radius = int(float(slot.get("radius") or 0.04) * min(w, h))
-        if radius <= 2:
-            fitted = fit_cover(photos[index], w, h).convert("RGBA")
-            canvas.paste(fitted, (x, y))
-        else:
-            paste_rounded(canvas, photos[index], (x, y), (w, h), radius=radius)
-    logo = layout.get("logo_slot")
-    if logo:
-        x, y, w, h = _box(logo, width, height)
-        _paste_logo(canvas, facts.get("organization_logo"), box=(w, h), xy=(x, y))
-    agent = (context or {}).get("agent") if options.get("include_agent") else None
-    agent_slot = layout.get("agent_slot")
-    if agent and options.get("show_agent_photo", True) and agent_slot:
-        x, y, w, h = _box(agent_slot, width, height)
-        photo = load_agent_photo(agent.get("photo_path"))
-        if photo is not None:
-            if agent_slot.get("shape") == "circle":
-                paste_circle(canvas, photo, (x, y), min(w, h))
-            else:
-                paste_rounded(canvas, photo, (x, y), (w, h), radius=_u(width, 22))
+    options = options or {}
+    direction = (art or {}).get("visual_direction") or ""
+    dark_band = direction in {
+        "luxury_editorial",
+        "editorial_dark",
+        "contemporary_lifestyle",
+        "photo_lifestyle",
+        "agent_lifestyle",
+    }
+    band_top = int(height * 0.70)
+    canvas = _scrim(
+        canvas,
+        (0, band_top, width, height),
+        (10, 22, 51, 200) if dark_band else (255, 255, 255, 214),
+    )
+    ink = WHITE if dark_band else NAVY
+    mute = (214, 222, 234) if dark_band else MUTED
     draw = ImageDraw.Draw(canvas)
+    logo_box = (_u(width, 170), _u(width, 46))
+    _paste_logo(canvas, facts.get("organization_logo"), box=logo_box, xy=(_u(width, 48), _u(width, 40)))
     title = facts.get("title") or ""
-    hook = art.get("headline") or ""
-    title_box = layout.get("title_anchor")
-    if title_box:
-        x, y, w, _h = _box(title_box, width, height)
-        if hook:
-            draw.text((x, y), hook, font=font(_u(width, 22), italic=True), fill=ELECTRIC)
-            y += _u(width, 32)
-        draw.text((x, y), title, font=font(_u(width, 48), bold=True), fill=ink)
-        loc = facts.get("location_line") or ""
-        if loc:
-            draw.text((x, y + _u(width, 56)), loc, font=font(_u(width, 22)), fill=mute)
-    if options.get("show_features", True) and facts.get("chips") and layout.get("features_anchor"):
-        x, y, _w, _h = _box(layout["features_anchor"], width, height)
-        draw.text((x, y), "   ·   ".join(facts["chips"][:4]), font=font(_u(width, 20)), fill=mute)
-    if options.get("show_price") and facts.get("price_label") and layout.get("price_anchor"):
-        x, y, _w, _h = _box(layout["price_anchor"], width, height)
-        draw.text((x, y), facts["price_label"], font=font(_u(width, 58), bold=True), fill=ink)
-    cta = art.get("cta")
-    cta_box = layout.get("cta_anchor")
-    if cta and cta_box:
-        x, y, w, h = _box(cta_box, width, height)
-        label = f"{cta}  →"
-        used = font(_u(width, 22), bold=True)
-        tw = _text_width(draw, label, used)
-        pill_w = max(w, tw + _u(width, 40))
-        draw.rounded_rectangle((x, y, x + pill_w, y + max(h, _u(width, 52))), max(h, 52) // 2, fill=ELECTRIC)
-        draw.text((x + (pill_w - tw) // 2, y + _u(width, 12)), label, font=used, fill=WHITE)
-    if agent and not options.get("show_agent_photo", True) and agent_slot:
-        x, y, _w, _h = _box(agent_slot, width, height)
-        draw.text((x, y), agent.get("name") or "", font=font(_u(width, 22), bold=True), fill=ink)
-    if agent and options.get("show_agent_photo", True) and agent_slot:
-        x, y, w, h = _box(agent_slot, width, height)
-        draw.text(
-            (x, y + h + _u(width, 6)),
-            agent.get("name") or "",
-            font=font(_u(width, 20), bold=True),
-            fill=ink,
-        )
-    rgb = canvas.convert("RGB")
+    location = facts.get("location_line") or ""
+    price = facts.get("price_label") if options.get("show_price") else ""
+    chips = (facts.get("chips") or [])[:4]
+    hook = (art or {}).get("headline") or ""
+    x = _u(width, 48)
+    y = band_top + _u(width, 36)
+    if hook:
+        draw.text((x, y), hook[:48], font=font(_u(width, 28), italic=True), fill=ELECTRIC)
+        y += _u(width, 40)
+    if title:
+        draw.text((x, y), title, font=font(_u(width, 62), bold=True), fill=ink)
+        y += _u(width, 74)
+    if location:
+        draw.text((x, y), location, font=font(_u(width, 28)), fill=mute)
+        y += _u(width, 40)
+    if price:
+        draw.text((x, y), price, font=font(_u(width, 72), bold=True), fill=ink)
+        y += _u(width, 82)
+    if options.get("show_features", True) and chips:
+        draw.text((x, y), "  ·  ".join(chips), font=font(_u(width, 26), bold=True), fill=mute)
+        y += _u(width, 40)
+    agent = (context or {}).get("agent") if options.get("include_agent") else None
+    if agent:
+        name = agent.get("name") or ""
+        phone = agent.get("phone") or "" if options.get("show_phone", True) else ""
+        photo = agent_overlay_image(context, options)
+        ax = width - _u(width, 280)
+        ay = height - _u(width, 320)
+        if photo is not None:
+            paste_rounded(canvas, photo, (ax, ay), (_u(width, 210), _u(width, 250)), radius=_u(width, 28))
+        if name:
+            draw.text((x, height - _u(width, 92)), name, font=font(_u(width, 26), bold=True), fill=ink)
+        if phone:
+            draw.text((x, height - _u(width, 56)), phone, font=font(_u(width, 22)), fill=mute)
+    rgb = ImageEnhance.Contrast(canvas.convert("RGB")).enhance(1.02)
     buffer = io.BytesIO()
     rgb.save(buffer, format="PNG", optimize=True)
     return buffer.getvalue(), size

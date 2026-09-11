@@ -91,9 +91,9 @@
                     </a>
                     {% elif asset.failed %}
                     <div class="mkt-fail">
-                        <p>{{ t('marketing_item_failed') }}</p>
+                        <p>{{ t('marketing_err_quality') if asset.pipeline_status == 'failed_quality' else t('marketing_item_failed') }}</p>
                         <form method="post" action="{{ url_for('marketing_retry', asset_id=asset.id) }}">
-                            <button type="submit" class="btn btn-secondary">{{ t('marketing_retry') }}</button>
+                            <button type="submit" class="btn btn-secondary">{{ t('marketing_retry_other') if asset.pipeline_status == 'failed_quality' else t('marketing_retry') }}</button>
                         </form>
                     </div>
                     {% else %}
