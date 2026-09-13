@@ -88,6 +88,7 @@ from modules.database import (
     update_agent,
     update_organization_settings,
     update_organization_billing_fields,
+    update_organization_marketing_fields,
     update_operation_status,
     update_property,
     update_user,
@@ -991,6 +992,18 @@ def settings_to_form_values(settings):
             ) is not None
             else 3
         ),
+        "marketing_brand_name": settings.get("marketing_brand_name") or "",
+        "marketing_logo_url": settings.get("marketing_logo_url") or "",
+        "marketing_logo_dark_url": settings.get("marketing_logo_dark_url") or "",
+        "marketing_logo_light_url": settings.get("marketing_logo_light_url") or "",
+        "legal_broker_name": settings.get("legal_broker_name") or "",
+        "legal_broker_license": settings.get("legal_broker_license") or "",
+        "legal_office_name": settings.get("legal_office_name") or "",
+        "legal_footer_line": settings.get("legal_footer_line") or "",
+        "marketing_phone": settings.get("marketing_phone") or "",
+        "marketing_instagram": settings.get("marketing_instagram") or "",
+        "marketing_whatsapp": settings.get("marketing_whatsapp") or "",
+        "marketing_email": settings.get("marketing_email") or "",
     }
 
 
@@ -3269,6 +3282,42 @@ def organization_settings():
                     "default_payment_condition",
                     "cuenta_corriente"
                 ).strip(),
+                "marketing_brand_name": request.form.get(
+                    "marketing_brand_name", ""
+                ).strip(),
+                "marketing_logo_url": request.form.get(
+                    "marketing_logo_url", ""
+                ).strip(),
+                "marketing_logo_dark_url": request.form.get(
+                    "marketing_logo_dark_url", ""
+                ).strip(),
+                "marketing_logo_light_url": request.form.get(
+                    "marketing_logo_light_url", ""
+                ).strip(),
+                "legal_broker_name": request.form.get(
+                    "legal_broker_name", ""
+                ).strip(),
+                "legal_broker_license": request.form.get(
+                    "legal_broker_license", ""
+                ).strip(),
+                "legal_office_name": request.form.get(
+                    "legal_office_name", ""
+                ).strip(),
+                "legal_footer_line": request.form.get(
+                    "legal_footer_line", ""
+                ).strip(),
+                "marketing_phone": request.form.get(
+                    "marketing_phone", ""
+                ).strip(),
+                "marketing_instagram": request.form.get(
+                    "marketing_instagram", ""
+                ).strip(),
+                "marketing_whatsapp": request.form.get(
+                    "marketing_whatsapp", ""
+                ).strip(),
+                "marketing_email": request.form.get(
+                    "marketing_email", ""
+                ).strip(),
             }
 
             return render_template(
@@ -3358,6 +3407,22 @@ def organization_settings():
             default_seller_commission_percent=parsed.get(
                 "default_seller_commission_percent"
             ),
+        )
+
+        update_organization_marketing_fields(
+            organization_id,
+            marketing_brand_name=parsed.get("marketing_brand_name"),
+            marketing_logo_url=parsed.get("marketing_logo_url"),
+            marketing_logo_dark_url=parsed.get("marketing_logo_dark_url"),
+            marketing_logo_light_url=parsed.get("marketing_logo_light_url"),
+            legal_broker_name=parsed.get("legal_broker_name"),
+            legal_broker_license=parsed.get("legal_broker_license"),
+            legal_office_name=parsed.get("legal_office_name"),
+            legal_footer_line=parsed.get("legal_footer_line"),
+            marketing_phone=parsed.get("marketing_phone"),
+            marketing_instagram=parsed.get("marketing_instagram"),
+            marketing_whatsapp=parsed.get("marketing_whatsapp"),
+            marketing_email=parsed.get("marketing_email"),
         )
 
         session["language"] = parsed[

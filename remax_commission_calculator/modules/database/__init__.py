@@ -231,6 +231,7 @@ from .organization_settings_repository import (
     set_registration_code,
     set_registration_enabled,
     update_organization_billing_fields,
+    update_organization_marketing_fields,
     update_organization_settings
 )
 

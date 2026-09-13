@@ -26,6 +26,8 @@ HARD_FAIL = {
     "agent_missing",
     "agent_not_composited",
     "wrong_language",
+    "system_brand_visible",
+    "missing_legal",
 }
 
 
@@ -171,6 +173,8 @@ def validate_creative(
         "property_missing": 30,
         "wrong_size": 10,
         "wrong_language": 30,
+        "system_brand_visible": 40,
+        "missing_legal": 28,
     }
     for reason in reasons:
         score -= penalties.get(reason, 8)

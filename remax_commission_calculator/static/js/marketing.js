@@ -128,6 +128,10 @@
           if (languageWarn && payload.language_retry) {
             languageWarn.hidden = false;
           }
+          var legalWarn = document.querySelector("[data-mkt-legal-review]");
+          if (legalWarn && payload.requires_legal_review) {
+            legalWarn.hidden = false;
+          }
           if (!payload.creating) {
             root.setAttribute("data-mkt-done", "1");
             if (mark) mark.textContent = "✓";

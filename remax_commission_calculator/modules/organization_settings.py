@@ -259,6 +259,23 @@ def validate_organization_settings_form(
     if default_seller_commission_percent is None:
         errors.append("settings_billing_tax_condition_invalid")
 
+    marketing_brand_name = form_data.get("marketing_brand_name", "").strip()
+    marketing_logo_url = form_data.get("marketing_logo_url", "").strip()
+    marketing_logo_dark_url = form_data.get(
+        "marketing_logo_dark_url", ""
+    ).strip()
+    marketing_logo_light_url = form_data.get(
+        "marketing_logo_light_url", ""
+    ).strip()
+    legal_broker_name = form_data.get("legal_broker_name", "").strip()
+    legal_broker_license = form_data.get("legal_broker_license", "").strip()
+    legal_office_name = form_data.get("legal_office_name", "").strip()
+    legal_footer_line = form_data.get("legal_footer_line", "").strip()
+    marketing_phone = form_data.get("marketing_phone", "").strip()
+    marketing_instagram = form_data.get("marketing_instagram", "").strip()
+    marketing_whatsapp = form_data.get("marketing_whatsapp", "").strip()
+    marketing_email = form_data.get("marketing_email", "").strip()
+
     if len(errors) > 0:
         return errors, None
 
@@ -287,6 +304,18 @@ def validate_organization_settings_form(
         "default_seller_commission_percent": (
             default_seller_commission_percent
         ),
+        "marketing_brand_name": marketing_brand_name,
+        "marketing_logo_url": marketing_logo_url,
+        "marketing_logo_dark_url": marketing_logo_dark_url,
+        "marketing_logo_light_url": marketing_logo_light_url,
+        "legal_broker_name": legal_broker_name,
+        "legal_broker_license": legal_broker_license,
+        "legal_office_name": legal_office_name,
+        "legal_footer_line": legal_footer_line,
+        "marketing_phone": marketing_phone,
+        "marketing_instagram": marketing_instagram,
+        "marketing_whatsapp": marketing_whatsapp,
+        "marketing_email": marketing_email,
     }
 
 

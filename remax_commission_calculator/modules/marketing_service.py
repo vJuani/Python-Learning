@@ -337,6 +337,9 @@ def _options_from_request(parsed, context):
         "cta": (parsed.get("cta") or "").strip(),
         "request_text": (parsed.get("request_text") or parsed.get("prompt") or "").strip(),
         "language": parsed.get("language") or (context or {}).get("language") or "es",
+        "creative_brand_name": facts.get("brand_name") or "",
+        "requires_legal_review": bool(facts.get("requires_legal_review")),
+        "publishable": bool(facts.get("publishable")),
     }
 
 
@@ -560,6 +563,14 @@ def _process_item(organization_id, asset_id, *, retry=False):
         options["language"] = generated.get("language") or options.get("language") or "es"
         if generated.get("language_retry"):
             options["language_retry"] = True
+        options["requires_legal_review"] = bool(
+            generated.get("requires_legal_review")
+            or ((context.get("facts") or {}).get("requires_legal_review"))
+        )
+        options["publishable"] = not options["requires_legal_review"]
+        options["creative_brand_name"] = (
+            (context.get("facts") or {}).get("brand_name") or ""
+        )
         from modules.marketing_image_provider import OpenAIMarketingImageProvider, MockMarketingImageProvider
 
         pipeline_audit = (
@@ -1061,7 +1072,15 @@ def get_batch_view(organization_id, user, batch_id, *, language="es"):
         "language_retry": any(
             (item.get("options") or {}).get("language_retry") for item in decorated
         ),
+        "requires_legal_review": any(
+            (item.get("options") or {}).get("requires_legal_review") for item in decorated
+        ),
         "creative_language": ((first.get("options") or {}).get("language") or language),
+        "creative_brand_name": (
+            (first.get("options") or {}).get("creative_brand_name")
+            or ((first.get("property_snapshot") or {}).get("facts") or {}).get("brand_name")
+            or ""
+        ),
     }
 
 
@@ -1097,6 +1116,7 @@ def get_batch_status(organization_id, user, batch_id, *, language="es"):
         "language_retry": any(
             (asset.get("options") or {}).get("language_retry") for asset in view["assets"]
         ),
+        "requires_legal_review": bool(view.get("requires_legal_review")),
         "steps": {
             "analyze": True,
             "photos": True,

@@ -76,6 +76,7 @@
         </p>
         <p class="mkt-progress__step" data-step="finish">{% if view.creating %}○{% else %}✓{% endif %} {{ t('marketing_step_finish') }}</p>
         <p class="mkt-warn" data-mkt-language-retry {% if not view.language_retry %}hidden{% endif %}>{{ t('marketing_language_retry') }}</p>
+        <p class="mkt-warn" data-mkt-legal-review {% if not view.requires_legal_review %}hidden{% endif %}>{{ t('marketing_requires_legal_review') }}</p>
     </div>
 
     {% if not view.single and view.groups|length > 1 %}
@@ -111,6 +112,9 @@
                     <p class="mkt-wait">{% if asset.pipeline_status == 'queued' %}{{ t('marketing_item_queued') }}{% else %}{{ t('marketing_item_generating') }}{% endif %}</p>
                     {% endif %}
                 </div>
+                {% if asset.ready and asset.options.requires_legal_review %}
+                <p class="mkt-warn">{{ t('marketing_requires_legal_review') }}</p>
+                {% endif %}
                 {% if asset.ready %}
                 <div class="mkt-proposal__actions">
                     <a class="btn btn-secondary" href="{{ url_for('marketing_preview', asset_id=asset.id) }}" target="_blank" rel="noopener">{{ t('marketing_preview') }}</a>

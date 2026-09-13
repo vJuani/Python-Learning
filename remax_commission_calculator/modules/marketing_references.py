@@ -9,7 +9,6 @@ from pathlib import Path
 from PIL import Image
 
 from modules.agent_branding import get_agent_presentation_asset
-from modules.branding import resolve_brand_logo_path
 from modules.marketing_renderer import load_property_photos
 
 logger = logging.getLogger(__name__)
@@ -116,18 +115,22 @@ def collect_reference_images(context, options):
                 "name": "agent-portrait.png",
             }
         )
-    logo_bytes = _open_path_bytes(resolve_brand_logo_path())
+    facts = (context or {}).get("facts") or {}
+    logo_bytes = _open_path_bytes(facts.get("organization_logo"), keep_alpha=True)
     if logo_bytes:
+        brand = facts.get("brand_name") or facts.get("organization_name") or "office"
         references.append(
             {
                 "role": "logo",
                 "label": (
-                    "Reference E: REAL JRH ONE LOGO. Small, elegant, never stretched, "
-                    "never flush to the edge, always inside the safe area."
+                    f"Reference E: REAL OFFICE LOGO for {brand}. "
+                    "Reproduce this exact mark. Small, elegant, never stretched, "
+                    "never flush to the edge, always inside the safe area. "
+                    "Do not invent a different logo and do not use any JRH One mark."
                 ),
                 "bytes": logo_bytes,
                 "mime": "image/png",
-                "name": "jrh-one-logo.png",
+                "name": "office-logo.png",
             }
         )
     style_path = approved_style_path()
@@ -136,10 +139,10 @@ def collect_reference_images(context, options):
         references.append(
             {
                 "role": "style",
-                "label": f"Reference F: APPROVED JRH STYLE. {STYLE_REFERENCE_LABEL}",
+                "label": f"Reference F: APPROVED STYLE QUALITY ONLY. {STYLE_REFERENCE_LABEL}",
                 "bytes": style_bytes,
                 "mime": "image/jpeg",
-                "name": "jrh-approved-style.jpg",
+                "name": "approved-style.jpg",
             }
         )
     logger.info(

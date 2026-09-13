@@ -30,7 +30,14 @@ from modules.database.connection import get_connection
 from modules.database.marketing_repository import get_marketing_asset, update_marketing_asset
 from modules.database.properties_repository import get_property_record, update_property
 from modules.database.property_media_repository import STRATEGY_COPY, upsert_property_media
+from modules.database.organization_settings_repository import update_organization_marketing_fields
 from modules.database.users_repository import get_user_by_id
+from modules.marketing_branding import (
+    DEMO_MARKETING_BRANDING,
+    is_system_brand_text,
+    resolve_marketing_branding,
+    validate_creative_branding,
+)
 from modules.jrh_ai_classify import classify_intent, detect_marketing_content
 from modules.jrh_ai_intents import CREATE_TASK, START_MARKETING_CONTENT
 from modules.marketing_context import (
@@ -219,6 +226,17 @@ class MarketingIaTests(unittest.TestCase):
             listing_price=50000,
             listing_purpose="sale",
             created_by_user_id=cls.admin_id,
+        )
+        cls.office_logo = Path(_TEST_TMP.name) / "office-logo.png"
+        _write_agent_png(cls.office_logo)
+        update_organization_marketing_fields(
+            cls.org,
+            marketing_brand_name=DEMO_MARKETING_BRANDING["marketing_brand_name"],
+            marketing_logo_url=str(cls.office_logo),
+            legal_broker_name=DEMO_MARKETING_BRANDING["legal_broker_name"],
+            legal_broker_license=DEMO_MARKETING_BRANDING["legal_broker_license"],
+            legal_office_name=DEMO_MARKETING_BRANDING["legal_office_name"],
+            legal_footer_line=DEMO_MARKETING_BRANDING["legal_footer_line"],
         )
 
     def _property(self):
@@ -1088,6 +1106,11 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("Spanish only", prompt)
         self.assertIn("Consultame ahora", prompt)
         self.assertNotIn("Discover Your Next Investment", prompt)
+        self.assertIn("RE/MAX Data House", prompt)
+        self.assertIn("Mauro Marvisi", prompt)
+        self.assertIn("CUCICBA", prompt)
+        self.assertNotIn("Place the JRH One", prompt)
+        self.assertNotIn("Brand: JRH One", prompt)
         english = build_marketing_image_prompt(
             context,
             "story",
@@ -1302,6 +1325,54 @@ class MarketingIaTests(unittest.TestCase):
         en_options = english["assets"][0].get("options") or {}
         self.assertEqual(en_options.get("language"), "en")
         self.assertEqual((english["assets"][0].get("copy_snapshot") or {}).get("cta"), "Inquire Now")
+
+    def test_49_creative_uses_organization_brand_not_jrh(self):
+        self.assertTrue(is_system_brand_text("JRH One"))
+        self.assertFalse(is_system_brand_text("RE/MAX Data House"))
+        empty = resolve_marketing_branding({}, apply_demo_fallback=True)
+        self.assertEqual(empty["brand_name"], "RE/MAX Data House")
+        self.assertEqual(empty["legal_broker_name"], "Mauro Marvisi")
+        self.assertNotEqual(empty["brand_name"], "JRH One")
+        context = build_property_marketing_context(self._property())
+        facts = context["facts"]
+        self.assertEqual(facts["brand_name"], "RE/MAX Data House")
+        self.assertEqual(facts["legal_broker_name"], "Mauro Marvisi")
+        self.assertIn("CUCICBA", facts["legal_footer_line"])
+        self.assertFalse(facts["requires_legal_review"])
+        self.assertTrue(facts["publishable"])
+        self.assertTrue(str(facts["organization_logo"]).endswith("office-logo.png"))
+        packed = collect_reference_images(
+            context,
+            {"include_agent": True, "show_agent_photo": True},
+        )
+        names = [item["name"] for item in packed["references"]]
+        self.assertIn("office-logo.png", names)
+        self.assertNotIn("jrh-one-logo.png", names)
+        prompt = build_marketing_image_prompt(context, "story", include_agent=True, language="es")
+        self.assertIn("CREATIVE BRAND LOCK", prompt)
+        self.assertIn("José Barreiro", prompt)
+        self.assertIn("Mauro Marvisi", prompt)
+        self.assertNotIn("JRH One wordmark", prompt)
+        copy = summarize_listing_copy(facts, context.get("agent"), language="es")
+        self.assertIn("Mauro", copy["legal_footer"])
+        flagged = validate_creative_branding(
+            planned_copy={"headline": "JRH One Luxury", "cta": "Now"},
+            branding=empty,
+        )
+        self.assertFalse(flagged["ok"])
+        self.assertIn("system_brand_visible", flagged["reasons"])
+        batch = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            formats=["story"],
+            count=1,
+            include_agent=True,
+            language="es",
+        )
+        options = batch["assets"][0].get("options") or {}
+        self.assertEqual(options.get("creative_brand_name"), "RE/MAX Data House")
+        self.assertFalse(options.get("requires_legal_review"))
 
 
 def _quality_png():

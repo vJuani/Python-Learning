@@ -167,7 +167,13 @@ class MockMarketingImageProvider(MarketingImageProvider):
                 agent = opened
             elif str(item.get("role") or "").startswith("property"):
                 photos.append(opened.convert("RGB"))
-        draw.text((left + 8, top + 8), "JRH One", fill=(255, 255, 255) if fill == NAVY else NAVY)
+        brand = "RE/MAX Data House"
+        prompt_text = prompt or ""
+        marker = "branded as "
+        if marker in prompt_text:
+            tail = prompt_text.split(marker, 1)[1]
+            brand = tail.split(" /", 1)[0].split(".", 1)[0].strip()[:28] or brand
+        draw.text((left + 8, top + 8), brand, fill=(255, 255, 255) if fill == NAVY else NAVY)
         if style == LUXURY_MINIMAL and photos:
             hero_h = int(inner_h * 0.78)
             canvas.paste(fit_cover(photos[0], inner_w, hero_h), (left, top + 36))
@@ -191,6 +197,10 @@ class MockMarketingImageProvider(MarketingImageProvider):
         ink = (255, 255, 255) if fill == NAVY else NAVY
         english = "written in English only" in (prompt or "")
         draw.text((left + 8, bottom - 64), "Inquire Now" if english else "Consultame ahora", fill=ink)
+        legal = "Mauro Marvisi CUCICBA 1762"
+        if "Legal footer:" in prompt_text:
+            legal = prompt_text.split("Legal footer:", 1)[1].split(".", 1)[0].strip()[:42] or legal
+        draw.text((left + 8, bottom - 36), legal, fill=ink)
         if agent is not None:
             agent_w = min(int(width * 0.18), int(inner_w * 0.28))
             agent_h = int(agent_w * 1.2)
@@ -489,6 +499,8 @@ def finished_ad_prompt(art, fmt, *, references=None, options=None, used_directio
         f"{safe_area_prompt(fmt)} "
         "REAL property photos must dominate. Do not invent another listing. "
         f"{agent_line} "
+        "Use the real-estate office brand, never JRH One. "
+        "Include the legal broker and license in a small footer. "
         "Short copy only. No decorative slogans, no vertical captions. "
         f"Avoid: {avoid}. "
         f"Reference map:\n{labels}"

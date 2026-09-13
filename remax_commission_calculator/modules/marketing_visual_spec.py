@@ -25,14 +25,17 @@ PALETTE = {
 }
 
 HIERARCHY = (
-    "logo",
-    "headline",
+    "agency_logo",
+    "office_name",
     "property_hero",
-    "secondary_photos",
+    "headline",
+    "location",
     "key_facts",
     "price",
     "cta",
     "agent",
+    "contact",
+    "legal_broker",
 )
 
 COPY_DENSITY = "very_low"
@@ -43,13 +46,15 @@ HERO_ATTENTION = (0.40, 0.60)
 AGENT_ATTENTION = (0.12, 0.22)
 
 STORY_ALLOWED_ELEMENTS = (
-    "logo",
+    "office_logo",
+    "office_name",
     "short_headline",
     "short_address_or_zone",
     "attributes_3_to_4",
     "price",
     "cta",
     "optional_agent",
+    "legal_footer",
 )
 
 SAFE_AREA = {
@@ -182,6 +187,9 @@ AVOID = (
     "text clipped outside the safe area",
     "logo flush to the edge",
     "agent name flush to the edge",
+    "JRH One",
+    "system product branding",
+    "confusing the agent with the legal broker",
 )
 
 
@@ -287,8 +295,8 @@ def key_is_commercial(direction):
 def safe_area_prompt(fmt):
     area = safe_area(fmt)
     return (
-        f"STRICT SAFE AREA for {fmt}: keep EVERY word, logo, price, CTA and agent "
-        f"name inside the inner rectangle. Minimum margins: left {area['left']}px, "
+        f"STRICT SAFE AREA for {fmt}: keep EVERY word, office logo, price, CTA, agent "
+        f"name and legal footer inside the inner rectangle. Minimum margins: left {area['left']}px, "
         f"right {area['right']}px, top {area['top']}px, bottom {area['bottom']}px. "
         "Nothing may touch or bleed past those margins. Leave real empty air there."
     )

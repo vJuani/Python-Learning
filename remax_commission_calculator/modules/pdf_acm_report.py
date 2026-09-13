@@ -661,14 +661,24 @@ def _draw_disclaimer(canvas, brand, website, disclaimer, y=8 * mm):
         canvas.drawString(12 * mm, y - 8, text[140:])
     canvas.setFillColor(NAVY)
     canvas.setFont("Helvetica-Bold", 7)
-    canvas.drawRightString(width - 12 * mm, y + 9, (brand or "JRH One")[:36])
+    canvas.drawRightString(width - 12 * mm, y + 9, (brand or "")[:36])
     if website:
         canvas.setFillColor(MUTED)
         canvas.setFont("Helvetica", 7)
         canvas.drawRightString(width - 12 * mm, y, website)
 
 
-def _draw_cover_footer(canvas, contact, include_agent, language, brand, org_logo, website, disclaimer):
+def _draw_cover_footer(
+    canvas,
+    contact,
+    include_agent,
+    language,
+    brand,
+    org_logo,
+    website,
+    disclaimer,
+    legal_footer="",
+):
     width, _height = A4
     band_h = 52 * mm
     canvas.saveState()
@@ -745,9 +755,13 @@ def _draw_cover_footer(canvas, contact, include_agent, language, brand, org_logo
                 )
         canvas.setFillColor(WHITE)
         canvas.setFont("Helvetica-Bold", 13)
-        canvas.drawString(x, 22 * mm, (brand or "JRH One")[:40])
+        canvas.drawString(x, 22 * mm, (brand or "")[:40])
         canvas.setFont("Helvetica", 8)
         canvas.drawString(x, 15 * mm, translate("acm_pdf_brand_role", language=language)[:48])
+    if legal_footer:
+        canvas.setFillColor(colors.HexColor("#C5D0DC"))
+        canvas.setFont("Helvetica", 6.5)
+        canvas.drawString(12 * mm, 9.5 * mm, str(legal_footer)[:110])
     canvas.setFillColor(colors.HexColor("#C5D0DC"))
     canvas.setFont("Helvetica", 6)
     wrapped = (disclaimer or "")[:180]
@@ -766,11 +780,12 @@ def build_acm_pdf(
     logo_path=None,
     compress=True,
     website=None,
+    legal_footer="",
 ):
     styles = _styles()
     buffer = io.BytesIO()
     language = language if language in ("es", "en") else "es"
-    brand = brand_name or "JRH One"
+    brand = brand_name or ""
     domain = website or f"www.{get_app_domain()}"
     disclaimer = translate("acm_disclaimer", language=language)
     page_w, page_h = A4
@@ -801,6 +816,7 @@ def build_acm_pdf(
             logo_path,
             domain,
             disclaimer,
+            legal_footer,
         )
 
     def on_later(canvas, doc):
@@ -874,14 +890,17 @@ def generate_acm_pdf_bytes(view, *, include_agent=True, language="es"):
 
     org_id = view["acm"]["organization_id"]
     settings = get_organization_settings(org_id) or {}
-    brand = settings.get("display_name") or "JRH One"
-    logo = _brand_logo_path(settings.get("logo_path"))
+    from modules.marketing_branding import resolve_marketing_branding
+
+    branding = resolve_marketing_branding(settings, language=language)
+    brand = branding.get("brand_name") or settings.get("display_name") or ""
+    logo = branding.get("logo_path")
     official = _official_logo_path()
     try:
         if logo and Path(logo).stat().st_size > 400_000:
-            logo = official
+            logo = None
     except OSError:
-        logo = official
+        logo = None
     return build_acm_pdf(
         view,
         include_agent=include_agent,
@@ -889,4 +908,5 @@ def generate_acm_pdf_bytes(view, *, include_agent=True, language="es"):
         brand_name=brand,
         logo_path=logo or official,
         website=f"www.{get_app_domain()}",
+        legal_footer=branding.get("legal_footer_line") or "",
     )

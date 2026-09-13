@@ -234,7 +234,7 @@ def _paste_logo(canvas, logo_path, *, box, xy):
 
 def _wordmark(draw, xy, brand, *, fill=NAVY, size=36):
     x, y = xy
-    draw.text((x, y), brand or "JRH One", font=font(size, bold=True), fill=fill)
+    draw.text((x, y), brand or "RE/MAX Data House", font=font(size, bold=True), fill=fill)
 
 
 def _header(canvas, facts, *, accent, invert=False):
@@ -456,11 +456,19 @@ def render_editorial(size, photos, facts, copy, agent, options, style):
         xy=(pad, footer_top + _u(width, 28)),
     )
     draw.text(
-        (pad + _u(width, 200), footer_top + _u(width, 40)),
-        facts.get("brand_name") or "JRH One",
+        (pad + _u(width, 200), footer_top + _u(width, 28)),
+        facts.get("brand_name") or facts.get("organization_name") or "RE/MAX Data House",
         font=font(_u(width, 22), bold=True),
         fill=WHITE,
     )
+    legal = facts.get("legal_footer_line") or ""
+    if legal:
+        draw.text(
+            (pad + _u(width, 200), footer_top + _u(width, 58)),
+            legal[:64],
+            font=font(_u(width, 14)),
+            fill=WHITE,
+        )
     return canvas.convert("RGB")
 
 

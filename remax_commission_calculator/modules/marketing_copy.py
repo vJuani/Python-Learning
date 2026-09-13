@@ -111,6 +111,19 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
     title = autofit_text(agent.get("title") or default_agent_role(language), max_chars=22, max_lines=1)
     phone = autofit_text(agent.get("phone") or "", max_chars=18, max_lines=1)
     cta_fit = autofit_text(cta or default_cta(language), max_chars=18, max_lines=1)
+    legal = autofit_text(
+        facts.get("legal_footer_line")
+        or " ".join(
+            part
+            for part in (
+                facts.get("legal_broker_name"),
+                facts.get("legal_broker_license"),
+            )
+            if part
+        ),
+        max_chars=52,
+        max_lines=2,
+    )
     return {
         "headline": hook["text"].replace("\n", " "),
         "headline_lines": hook["lines"],
@@ -122,8 +135,10 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
         "agent_name": name["text"].replace("\n", " "),
         "agent_title": title["text"],
         "agent_phone": phone["text"],
+        "legal_footer": legal["text"].replace("\n", " "),
+        "brand_name": facts.get("brand_name") or facts.get("organization_name") or "",
         "summarized": any(
-            item.get("summarized") for item in (street, zone, hook, name, title)
+            item.get("summarized") for item in (street, zone, hook, name, title, legal)
         ),
     }
 
@@ -145,7 +160,15 @@ def _hashtags_from_facts(facts, language="es"):
         tags.append("#Alquiler")
     elif purpose == "sale":
         tags.append("#Venta")
-    tags.append("#JRHOne")
+    brand = str(facts.get("brand_name") or facts.get("organization_name") or "").strip()
+    if brand:
+        token = re.sub(r"[^A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9]+", "", brand)
+        if token:
+            tags.append("#" + token)
+    elif language == "en":
+        tags.append("#RealEstate")
+    else:
+        tags.append("#Inmuebles")
     unique = []
     seen = set()
     for tag in tags:

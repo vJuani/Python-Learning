@@ -14,6 +14,11 @@ from modules.marketing_image_provider import (
     get_marketing_image_provider,
     get_marketing_image_provider_name,
 )
+from modules.marketing_branding import (
+    branding_from_facts,
+    branding_prompt_block,
+    validate_creative_branding,
+)
 from modules.marketing_copy import summarize_listing_copy
 from modules.marketing_language import (
     default_agent_role,
@@ -223,20 +228,22 @@ def build_marketing_image_prompt(
         f"Use {secondary}. Do not invent another property or rooms that are not in the references."
         if photo_count
         else (
-            "No listing photo is available. Create a premium branded JRH card with facts only. "
+            "No listing photo is available. Create a premium branded office card with facts only. "
             "Do not invent a specific interior or facade for this home."
         )
     )
-    logo_block = (
-        "Place the JRH One wordmark small, elegant and fully inside the safe area. "
-        "Never flush to the canvas edge. Brand: JRH One. "
-        "Palette: navy #0A1633, electric blue #0D47FF, white, deep charcoal."
+    branding = branding_from_facts(facts)
+    logo_block = branding_prompt_block(
+        branding,
+        include_agent=want_agent,
+        language=language,
     )
     copy_block = (
-        "ALLOWED COPY ONLY: small logo, one short headline, one short street OR zone, "
-        f"at most {MAX_STORY_ATTRIBUTES} attributes, price if requested, one CTA"
+        "ALLOWED COPY ONLY: office logo or wordmark, one short headline, one short street OR zone, "
+        f"at most {MAX_STORY_ATTRIBUTES} attributes, price if requested, one CTA, "
+        "mandatory legal broker footer"
         + (", agent name + short title" if want_agent else "")
-        + ". Forbidden: long paragraphs, decorative slogans, leftover phrases in corners, "
+        + ". Forbidden: JRH One, long paragraphs, decorative slogans, leftover phrases in corners, "
         "vertical captions, stacked competing headlines, icon rows, amateur flyer clutter."
     )
     hierarchy = " → ".join(HIERARCHY)
@@ -261,9 +268,10 @@ def build_marketing_image_prompt(
         f"Format: {FORMAT_BRIEFS.get(fmt, FORMAT_BRIEFS['story'])} "
         f"{safe_area_prompt(fmt)} "
         f"Style: {STYLE_BRIEFS[chosen_style]}. "
-        f"Hierarchy: {hierarchy}. One hero, then support, then facts, then price, then CTA. "
-        "Do not let four large texts compete. "
+        f"Hierarchy: {hierarchy}. Property first, then price, facts, contact, then legal broker. "
+        "Do not let four large texts compete. Never confuse the agent with the legal broker. "
         f"{copy_block} {photo_block} {price_block} {agent_block} {logo_block} "
+        f"Legal footer: {copy.get('legal_footer') or branding.get('legal_footer_line')}. "
         "Typography: every title and name must fit. Shrink the font, tighten tracking, "
         "or wrap to two lines. If it still overflows, summarize "
         f"('{copy['street']}' / '{copy['zone']}'). "
@@ -404,6 +412,24 @@ def generate_validated_marketing_image(
             last_verdict["reasons"] = reasons
             last_verdict["status"] = "failed_quality"
             options["language_retry"] = True
+        branding = branding_from_facts((context or {}).get("facts") or {})
+        brand_verdict = validate_creative_branding(
+            last_png,
+            planned_copy=planned,
+            extra_text=f"{planned.get('brand_name') or ''} {planned.get('legal_footer') or ''}",
+            branding=branding,
+        )
+        last_verdict["requires_legal_review"] = bool(
+            branding.get("requires_legal_review") or not branding.get("publishable")
+        )
+        if not brand_verdict.get("ok"):
+            last_verdict["ok"] = False
+            reasons = list(last_verdict.get("reasons") or [])
+            for reason in brand_verdict.get("reasons") or []:
+                if reason not in reasons:
+                    reasons.append(reason)
+            last_verdict["reasons"] = reasons
+            last_verdict["status"] = "failed_quality"
         if last_verdict.get("ok"):
             break
         repair_reasons = last_verdict.get("reasons") or []
@@ -421,6 +447,10 @@ def generate_validated_marketing_image(
         "size": size,
         "language": language,
         "language_retry": bool(options.get("language_retry")),
+        "requires_legal_review": bool(
+            (last_verdict or {}).get("requires_legal_review")
+        ),
+        "publishable": not bool((last_verdict or {}).get("requires_legal_review")),
     }
 
 

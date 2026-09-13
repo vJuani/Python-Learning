@@ -169,6 +169,80 @@
             <small class="field-help">{{ t('settings_logo_help') }}</small>
         </div>
 
+        <h3>{{ t('settings_marketing_brand_title') }}</h3>
+        <p class="field-help">{{ t('settings_marketing_brand_help') }}</p>
+        {% if not form_values.legal_broker_name or not form_values.legal_broker_license %}
+        <p class="flash-message flash-error" role="alert">{{ t('settings_marketing_legal_required') }}</p>
+        {% endif %}
+
+        <div class="form-group">
+            <label for="marketing_brand_name">{{ t('settings_marketing_brand_name') }}</label>
+            <input
+                type="text"
+                id="marketing_brand_name"
+                name="marketing_brand_name"
+                class="form-input"
+                value="{{ form_values.marketing_brand_name }}"
+                placeholder="RE/MAX Data House"
+            >
+            <small class="field-help">{{ t('settings_marketing_brand_name_help') }}</small>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="marketing_phone">{{ t('settings_marketing_phone') }}</label>
+                <input type="text" id="marketing_phone" name="marketing_phone" class="form-input" value="{{ form_values.marketing_phone }}">
+            </div>
+            <div class="form-group">
+                <label for="marketing_whatsapp">{{ t('settings_marketing_whatsapp') }}</label>
+                <input type="text" id="marketing_whatsapp" name="marketing_whatsapp" class="form-input" value="{{ form_values.marketing_whatsapp }}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="marketing_instagram">{{ t('settings_marketing_instagram') }}</label>
+                <input type="text" id="marketing_instagram" name="marketing_instagram" class="form-input" value="{{ form_values.marketing_instagram }}">
+            </div>
+            <div class="form-group">
+                <label for="marketing_email">{{ t('settings_marketing_email') }}</label>
+                <input type="email" id="marketing_email" name="marketing_email" class="form-input" value="{{ form_values.marketing_email }}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="marketing_logo_url">{{ t('settings_marketing_logo_url') }}</label>
+            <input type="text" id="marketing_logo_url" name="marketing_logo_url" class="form-input" value="{{ form_values.marketing_logo_url }}">
+            <small class="field-help">{{ t('settings_marketing_logo_url_help') }}</small>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="marketing_logo_light_url">{{ t('settings_marketing_logo_light_url') }}</label>
+                <input type="text" id="marketing_logo_light_url" name="marketing_logo_light_url" class="form-input" value="{{ form_values.marketing_logo_light_url }}">
+            </div>
+            <div class="form-group">
+                <label for="marketing_logo_dark_url">{{ t('settings_marketing_logo_dark_url') }}</label>
+                <input type="text" id="marketing_logo_dark_url" name="marketing_logo_dark_url" class="form-input" value="{{ form_values.marketing_logo_dark_url }}">
+            </div>
+        </div>
+
+        <h3>{{ t('settings_marketing_legal_title') }}</h3>
+        <p class="field-help">{{ t('settings_marketing_legal_help') }}</p>
+        <div class="form-group">
+            <label for="legal_broker_name">{{ t('settings_legal_broker_name') }}</label>
+            <input type="text" id="legal_broker_name" name="legal_broker_name" class="form-input" value="{{ form_values.legal_broker_name }}" placeholder="Mauro Marvisi">
+        </div>
+        <div class="form-group">
+            <label for="legal_broker_license">{{ t('settings_legal_broker_license') }}</label>
+            <input type="text" id="legal_broker_license" name="legal_broker_license" class="form-input" value="{{ form_values.legal_broker_license }}" placeholder="CUCICBA 1762 / CMCPSI 5574">
+        </div>
+        <div class="form-group">
+            <label for="legal_office_name">{{ t('settings_legal_office_name') }}</label>
+            <input type="text" id="legal_office_name" name="legal_office_name" class="form-input" value="{{ form_values.legal_office_name }}">
+        </div>
+        <div class="form-group">
+            <label for="legal_footer_line">{{ t('settings_legal_footer_line') }}</label>
+            <input type="text" id="legal_footer_line" name="legal_footer_line" class="form-input" value="{{ form_values.legal_footer_line }}" placeholder="Corredor Público Mauro Marvisi CUCICBA 1762 / CMCPSI 5574">
+            <small class="field-help">{{ t('settings_legal_footer_line_help') }}</small>
+        </div>
+
         <h3>{{ t('billing_org_billing_title') }}</h3>
 
         <div class="form-group">

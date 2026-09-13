@@ -93,6 +93,42 @@ def build_settings_dict(row):
         "default_issuer_profile_id": (
             row[24] if len(row) > 24 else None
         ),
+        "marketing_brand_name": (
+            row[25] if len(row) > 25 and row[25] else ""
+        ),
+        "marketing_logo_url": (
+            row[26] if len(row) > 26 and row[26] else ""
+        ),
+        "marketing_logo_dark_url": (
+            row[27] if len(row) > 27 and row[27] else ""
+        ),
+        "marketing_logo_light_url": (
+            row[28] if len(row) > 28 and row[28] else ""
+        ),
+        "legal_broker_name": (
+            row[29] if len(row) > 29 and row[29] else ""
+        ),
+        "legal_broker_license": (
+            row[30] if len(row) > 30 and row[30] else ""
+        ),
+        "legal_office_name": (
+            row[31] if len(row) > 31 and row[31] else ""
+        ),
+        "legal_footer_line": (
+            row[32] if len(row) > 32 and row[32] else ""
+        ),
+        "marketing_phone": (
+            row[33] if len(row) > 33 and row[33] else ""
+        ),
+        "marketing_instagram": (
+            row[34] if len(row) > 34 and row[34] else ""
+        ),
+        "marketing_whatsapp": (
+            row[35] if len(row) > 35 and row[35] else ""
+        ),
+        "marketing_email": (
+            row[36] if len(row) > 36 and row[36] else ""
+        ),
     }
 
 
@@ -122,7 +158,19 @@ SETTINGS_SELECT = """
             default_invoice_currency,
             agents_can_invoice,
             office_can_invoice,
-            default_issuer_profile_id
+            default_issuer_profile_id,
+            marketing_brand_name,
+            marketing_logo_url,
+            marketing_logo_dark_url,
+            marketing_logo_light_url,
+            legal_broker_name,
+            legal_broker_license,
+            legal_office_name,
+            legal_footer_line,
+            marketing_phone,
+            marketing_instagram,
+            marketing_whatsapp,
+            marketing_email
         FROM organization_settings
 """
 
@@ -369,6 +417,51 @@ def update_organization_billing_fields(
             "Organization settings not found"
         )
 
+    connection.commit()
+    connection.close()
+
+
+def update_organization_marketing_fields(organization_id, **fields):
+    """Update marketing / legal branding fields. Only provided keys are written."""
+    organization_id = require_organization_id(organization_id)
+    allowed = (
+        "marketing_brand_name",
+        "marketing_logo_url",
+        "marketing_logo_dark_url",
+        "marketing_logo_light_url",
+        "legal_broker_name",
+        "legal_broker_license",
+        "legal_office_name",
+        "legal_footer_line",
+        "marketing_phone",
+        "marketing_instagram",
+        "marketing_whatsapp",
+        "marketing_email",
+    )
+    clauses = []
+    params = []
+    for key in allowed:
+        if key not in fields:
+            continue
+        value = fields[key]
+        clauses.append(f"{key} = ?")
+        params.append(" ".join(str(value or "").split()))
+    if not clauses:
+        return
+    params.append(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        f"""
+        UPDATE organization_settings
+        SET {", ".join(clauses)}
+        WHERE organization_id = ?
+        """,
+        params,
+    )
+    if cursor.rowcount == 0:
+        connection.close()
+        raise ValueError("Organization settings not found")
     connection.commit()
     connection.close()
 

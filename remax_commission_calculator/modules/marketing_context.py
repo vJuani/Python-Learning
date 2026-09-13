@@ -5,11 +5,10 @@ from __future__ import annotations
 import re
 
 from modules.agent_branding import get_agent_presentation_asset
-from modules.branding import get_brand_name, resolve_brand_logo_path
 from modules.database.organization_settings_repository import get_organization_settings
 from modules.formatting import format_listing_money
 from modules.i18n import translate
-from modules.operation_summary import _brand_logo_path
+from modules.marketing_branding import resolve_marketing_branding
 from modules.property_detail_view import (
     compact_property_location,
     compact_property_title,
@@ -241,7 +240,7 @@ def build_property_marketing_context(
     meta = parse_external_metadata(display)
     purpose = normalize_listing_purpose(display.get("listing_purpose"))
     settings = get_organization_settings(display.get("organization_id")) or {}
-    org_logo = _brand_logo_path(settings.get("logo_path")) or resolve_brand_logo_path()
+    branding = resolve_marketing_branding(settings, language=language)
     photos = _media_items(display, selected_photo_ids)
     price_policy = _price_policy(meta, display)
     price_label = None
@@ -285,9 +284,20 @@ def build_property_marketing_context(
         "chips": _chips(display, language),
         "description": (display.get("description") or "").strip() or None,
         "price_policy": price_policy,
-        "brand_name": get_brand_name(),
-        "organization_name": (settings.get("display_name") or "").strip() or get_brand_name(),
-        "organization_logo": str(org_logo) if org_logo else None,
+        "brand_name": branding["brand_name"],
+        "organization_name": branding["office_name"],
+        "organization_logo": branding["logo_path"],
+        "legal_broker_name": branding["legal_broker_name"],
+        "legal_broker_license": branding["legal_broker_license"],
+        "legal_footer_line": branding["legal_footer_line"],
+        "marketing_phone": branding["marketing_phone"],
+        "marketing_instagram": branding["marketing_instagram"],
+        "marketing_whatsapp": branding["marketing_whatsapp"],
+        "marketing_email": branding["marketing_email"],
+        "legal_complete": branding["legal_complete"],
+        "requires_legal_review": branding["requires_legal_review"],
+        "used_demo_fallback": branding["used_demo_fallback"],
+        "publishable": branding["publishable"],
     }
     for key in list(facts):
         if key.lower() in FORBIDDEN_FACT_KEYS:
