@@ -3897,6 +3897,16 @@ def migrate_schema(create_backup=True):
 
     migrate_agent_instagram_sqlite()
 
+    from .agent_contact_channels_migration import migrate_agent_contact_channels_sqlite
+
+    migrate_agent_contact_channels_sqlite()
+
+    from .organization_marketing_logo_migration import (
+        migrate_organization_marketing_logo_sqlite,
+    )
+
+    migrate_organization_marketing_logo_sqlite()
+
     from .marketing_migration import migrate_marketing_sqlite
 
     migrate_marketing_sqlite()

@@ -272,8 +272,6 @@ def validate_organization_settings_form(
     legal_office_name = form_data.get("legal_office_name", "").strip()
     legal_footer_line = form_data.get("legal_footer_line", "").strip()
     marketing_phone = form_data.get("marketing_phone", "").strip()
-    marketing_instagram = form_data.get("marketing_instagram", "").strip()
-    marketing_whatsapp = form_data.get("marketing_whatsapp", "").strip()
     marketing_email = form_data.get("marketing_email", "").strip()
 
     if len(errors) > 0:
@@ -313,8 +311,6 @@ def validate_organization_settings_form(
         "legal_office_name": legal_office_name,
         "legal_footer_line": legal_footer_line,
         "marketing_phone": marketing_phone,
-        "marketing_instagram": marketing_instagram,
-        "marketing_whatsapp": marketing_whatsapp,
         "marketing_email": marketing_email,
     }
 

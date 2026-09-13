@@ -1283,12 +1283,19 @@ def register_agenda_routes(app, helpers):
         organization_id = require_user_organization()
         from modules.arca.connections import arca_chip_for
 
+        contact_channels = None
         if is_agent(user) and user.get("agent_id"):
             calendar = calendar_chip_for(
                 organization_id,
                 user,
                 agent_id=user.get("agent_id"),
                 can_manage=True,
+            )
+            from modules.agent_contact_channels import resolve_agent_contact_channels
+
+            contact_channels = resolve_agent_contact_channels(
+                user.get("agent_id"),
+                organization_id,
             )
         elif is_admin(user):
             calendar = {"state": "hidden"}
@@ -1299,6 +1306,7 @@ def register_agenda_routes(app, helpers):
             "settings/integrations.html",
             calendar=calendar,
             arca=arca_chip_for(organization_id, user),
+            contact_channels=contact_channels,
         )
 
     @app.route("/agenda/calendar/retry", methods=["POST"])

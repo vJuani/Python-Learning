@@ -31,22 +31,9 @@
         {% endif %}
     </div>
     {% if can_edit %}
-    <form method="post" class="acm-photo-form">
-        <input type="hidden" name="action" value="save_instagram">
-        <div class="form-group">
-            <label for="instagram_handle">{{ t('agent_instagram_label') }}</label>
-            <input
-                type="text"
-                id="instagram_handle"
-                name="instagram_handle"
-                class="form-input"
-                value="{{ agent.instagram_handle or '' }}"
-                placeholder="@usuario"
-            >
-            <small class="field-help">{{ t('agent_instagram_help') }}</small>
-        </div>
-        <button type="submit" class="btn btn-secondary">{{ t('agent_instagram_save') }}</button>
-    </form>
+    <p class="field-help">
+        <a href="{{ url_for('agent_contact_channels_edit', agent_id=agent.id) if photo_is_admin else url_for('agent_contact_channels_self') }}">{{ t('agent_contact_open') }}</a>
+    </p>
     <form method="post" enctype="multipart/form-data" class="acm-photo-form">
         <input type="hidden" name="action" value="upload">
         <label class="btn btn-secondary">

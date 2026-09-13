@@ -187,20 +187,11 @@
             >
             <small class="field-help">{{ t('settings_marketing_brand_name_help') }}</small>
         </div>
+        <p class="field-help">{{ t('settings_marketing_agent_channels_help') }}</p>
         <div class="form-row">
             <div class="form-group">
                 <label for="marketing_phone">{{ t('settings_marketing_phone') }}</label>
                 <input type="text" id="marketing_phone" name="marketing_phone" class="form-input" value="{{ form_values.marketing_phone }}">
-            </div>
-            <div class="form-group">
-                <label for="marketing_whatsapp">{{ t('settings_marketing_whatsapp') }}</label>
-                <input type="text" id="marketing_whatsapp" name="marketing_whatsapp" class="form-input" value="{{ form_values.marketing_whatsapp }}">
-            </div>
-        </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label for="marketing_instagram">{{ t('settings_marketing_instagram') }}</label>
-                <input type="text" id="marketing_instagram" name="marketing_instagram" class="form-input" value="{{ form_values.marketing_instagram }}">
             </div>
             <div class="form-group">
                 <label for="marketing_email">{{ t('settings_marketing_email') }}</label>
@@ -208,8 +199,50 @@
             </div>
         </div>
         <div class="form-group">
+            <label>{{ t('settings_marketing_logo_current') }}</label>
+            {% if marketing_logo_preview_url %}
+            <div class="settings-logo-preview">
+                <img src="{{ marketing_logo_preview_url }}" alt="{{ form_values.marketing_brand_name or form_values.display_name }}" class="settings-logo-image">
+                <p class="field-help">
+                    {{ t('settings_marketing_logo_source') }}:
+                    {% if marketing_logo_source == 'upload' %}{{ t('settings_marketing_logo_source_upload') }}
+                    {% elif marketing_logo_source == 'url' %}{{ t('settings_marketing_logo_source_url') }}
+                    {% elif marketing_logo_source == 'general' %}{{ t('settings_marketing_logo_source_general') }}
+                    {% else %}{{ t('settings_marketing_logo_source_none') }}{% endif %}
+                </p>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="remove_marketing_logo" value="yes">
+                    {{ t('settings_marketing_logo_remove') }}
+                </label>
+            </div>
+            {% else %}
+            <p class="field-help">{{ t('settings_marketing_logo_empty') }}</p>
+            {% endif %}
+        </div>
+        <div class="form-group">
+            <label for="marketing_logo_file">{{ t('settings_marketing_logo_change') }}</label>
+            <input
+                type="file"
+                id="marketing_logo_file"
+                name="marketing_logo_file"
+                class="form-input"
+                accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
+            >
+            <small class="field-help">{{ t('settings_marketing_logo_file_help') }}</small>
+        </div>
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="radio" name="marketing_logo_source" value="upload" {% if marketing_logo_source != 'url' %}checked{% endif %}>
+                {{ t('settings_marketing_logo_source_upload') }}
+            </label>
+            <label class="checkbox-label">
+                <input type="radio" name="marketing_logo_source" value="url" {% if marketing_logo_source == 'url' %}checked{% endif %}>
+                {{ t('settings_marketing_logo_use_url') }}
+            </label>
+        </div>
+        <div class="form-group">
             <label for="marketing_logo_url">{{ t('settings_marketing_logo_url') }}</label>
-            <input type="text" id="marketing_logo_url" name="marketing_logo_url" class="form-input" value="{{ form_values.marketing_logo_url }}">
+            <input type="url" id="marketing_logo_url" name="marketing_logo_url" class="form-input" value="{{ form_values.marketing_logo_url }}" placeholder="https://">
             <small class="field-help">{{ t('settings_marketing_logo_url_help') }}</small>
         </div>
         <div class="form-row">

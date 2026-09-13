@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page {% endblock %}
+
+{% block title %}{{ t('agent_contact_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="agenda-hero__kicker">{{ t('settings_integrations_title') }}</p>
+        <h2>{{ t('agent_contact_title') }}</h2>
+        <p>{{ t('agent_contact_help') }}</p>
+    </div>
+    <div class="page-actions">
+        {% if photo_is_admin %}
+        <a href="{{ url_for('agents_edit', agent_id=agent.id) }}" class="btn btn-secondary">{{ t('back') }}</a>
+        {% else %}
+        <a href="{{ url_for('settings_integrations') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        {% endif %}
+    </div>
+</section>
+
+<article class="integration-card">
+    <header class="integration-card__head">
+        <h3>WhatsApp</h3>
+        {% if channels.whatsapp_connected %}
+        <span class="integration-card__badge">{{ t('agent_contact_connected') }}</span>
+        {% else %}
+        <span class="integration-card__badge integration-card__badge--muted">{{ t('agent_contact_disconnected') }}</span>
+        {% endif %}
+    </header>
+    {% if channels.whatsapp_number and not edit_whatsapp %}
+    <p class="integration-card__email">{{ channels.whatsapp_number }}</p>
+    {% endif %}
+    {% if can_edit %}
+    {% if edit_whatsapp or not channels.whatsapp_connected %}
+    <form method="post" class="agent-contact-form">
+        <input type="hidden" name="action" value="link_whatsapp">
+        <label for="whatsapp_number">{{ t('agent_contact_whatsapp_number') }}</label>
+        <input
+            type="text"
+            id="whatsapp_number"
+            name="whatsapp_number"
+            class="form-input"
+            value="{{ channels.whatsapp_number or channels.suggested_whatsapp }}"
+            placeholder="+54 9 11 3170 4333"
+        >
+        {% if channels.suggested_whatsapp and not channels.whatsapp_connected %}
+        <small class="field-help">{{ t('agent_contact_whatsapp_suggest', number=channels.suggested_whatsapp) }}</small>
+        {% endif %}
+        <label class="agent-contact-toggle">
+            <input type="checkbox" name="use_in_marketing" value="1" {% if channels.whatsapp_enabled %}checked{% endif %}>
+            {{ t('agent_contact_use_whatsapp') }}
+        </label>
+        <div class="integration-card__actions">
+            <button type="submit" class="btn btn-primary">{{ t('agent_contact_link') if not channels.whatsapp_connected else t('agent_contact_save') }}</button>
+        </div>
+    </form>
+    {% else %}
+    <form method="post" class="agent-contact-toggle-form">
+        <input type="hidden" name="action" value="toggle_whatsapp">
+        <input type="hidden" name="enabled" value="{{ '0' if channels.whatsapp_enabled else '1' }}">
+        <label class="agent-contact-toggle">
+            <input type="checkbox" {% if channels.whatsapp_enabled %}checked{% endif %} onchange="this.form.submit()">
+            {{ t('agent_contact_use_whatsapp') }}
+        </label>
+    </form>
+    <div class="integration-card__actions">
+        <a class="btn btn-secondary" href="?edit=whatsapp">{{ t('agent_contact_edit') }}</a>
+        <form method="post">
+            <input type="hidden" name="action" value="unlink_whatsapp">
+            <button type="submit" class="btn btn-ghost">{{ t('agent_contact_unlink') }}</button>
+        </form>
+    </div>
+    {% endif %}
+    {% endif %}
+</article>
+
+<article class="integration-card" style="margin-top: 16px;">
+    <header class="integration-card__head">
+        <h3>Instagram</h3>
+        {% if channels.instagram_connected %}
+        <span class="integration-card__badge">{{ t('agent_contact_connected') }}</span>
+        {% else %}
+        <span class="integration-card__badge integration-card__badge--muted">{{ t('agent_contact_disconnected') }}</span>
+        {% endif %}
+    </header>
+    {% if channels.instagram_handle and not edit_instagram %}
+    <p class="integration-card__email">{{ channels.instagram_handle }}</p>
+    {% endif %}
+    {% if can_edit %}
+    {% if edit_instagram or not channels.instagram_connected %}
+    <form method="post" class="agent-contact-form">
+        <input type="hidden" name="action" value="link_instagram">
+        <label for="instagram_handle">{{ t('agent_instagram_label') }}</label>
+        <input
+            type="text"
+            id="instagram_handle"
+            name="instagram_handle"
+            class="form-input"
+            value="{{ channels.instagram_handle or '' }}"
+            placeholder="@usuario"
+        >
+        <small class="field-help">{{ t('agent_instagram_help') }}</small>
+        <label class="agent-contact-toggle">
+            <input type="checkbox" name="use_in_marketing" value="1" {% if channels.instagram_enabled %}checked{% endif %}>
+            {{ t('agent_contact_use_instagram') }}
+        </label>
+        <div class="integration-card__actions">
+            <button type="submit" class="btn btn-primary">{{ t('agent_contact_link') if not channels.instagram_connected else t('agent_contact_save') }}</button>
+        </div>
+    </form>
+    {% else %}
+    <form method="post" class="agent-contact-toggle-form">
+        <input type="hidden" name="action" value="toggle_instagram">
+        <input type="hidden" name="enabled" value="{{ '0' if channels.instagram_enabled else '1' }}">
+        <label class="agent-contact-toggle">
+            <input type="checkbox" {% if channels.instagram_enabled %}checked{% endif %} onchange="this.form.submit()">
+            {{ t('agent_contact_use_instagram') }}
+        </label>
+    </form>
+    <div class="integration-card__actions">
+        <a class="btn btn-secondary" href="?edit=instagram">{{ t('agent_contact_edit') }}</a>
+        <form method="post">
+            <input type="hidden" name="action" value="unlink_instagram">
+            <button type="submit" class="btn btn-ghost">{{ t('agent_contact_unlink') }}</button>
+        </form>
+    </div>
+    {% endif %}
+    {% endif %}
+</article>
+{% endblock %}

@@ -15,6 +15,7 @@ from modules.marketing_image_provider import (
     get_marketing_image_provider_name,
 )
 from modules.marketing_branding import (
+    agent_contact_prompt_lock,
     branding_from_facts,
     branding_prompt_block,
     validate_creative_branding,
@@ -217,6 +218,11 @@ def build_marketing_image_prompt(
         if contact_lines
         else "name and title only, no invented phone or handle"
     )
+    contact_lock = agent_contact_prompt_lock(
+        copy.get("agent_whatsapp"),
+        copy.get("agent_instagram"),
+        language=language,
+    )
     legal_name = copy.get("legal_broker_line") or branding_from_facts(facts).get(
         "legal_broker_name"
     )
@@ -228,8 +234,8 @@ def build_marketing_image_prompt(
         "the official ficha/ACM photo, clean crop, never duplicated, never a second hero. "
         f"Agent block, commercial contact only: name '{copy['agent_name']}', "
         f"short title '{copy['agent_title'] or default_agent_role(language)}', "
-        f"{contact_copy}. Use a small WhatsApp icon and a small Instagram icon next to "
-        "those lines. Do not show a regular phone number. Do not duplicate WhatsApp as "
+        f"{contact_copy}. {contact_lock['icons']}"
+        "Do not show a regular phone number. Do not duplicate WhatsApp as "
         "Teléfono. Never crop the head, shoulders or the name. If it does not fit, "
         "shrink the portrait automatically. Keep the exact same person. "
         "Do not invent another face, number, or Instagram handle."
@@ -255,13 +261,15 @@ def build_marketing_image_prompt(
         branding,
         include_agent=want_agent,
         language=language,
+        agent_whatsapp=copy.get("agent_whatsapp") or "",
+        agent_instagram=copy.get("agent_instagram") or "",
     )
     copy_block = (
         "ALLOWED COPY ONLY: office logo + office name top-left, tiny kicker top-right, "
         "one commercial operation headline, street on the next line, locality on a smaller third line, "
         f"one clean row of at most {MAX_STORY_ATTRIBUTES} facts, price if requested, one Spanish/locked-language CTA, "
         "mandatory legal broker footer"
-        + (", agent name + title + WhatsApp + Instagram, never phone + WhatsApp" if want_agent else "")
+        + (contact_lock["copy_suffix"] if want_agent else "")
         + ". Forbidden: JRH One, Inmobiliaria Principal, locality as the giant title, "
         "long paragraphs, English taglines on Spanish pieces, "
         "leftover phrases in corners, vertical captions, stacked competing headlines, "

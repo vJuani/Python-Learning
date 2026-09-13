@@ -200,6 +200,10 @@
                 <h2>{{ t('jrh_integrations_title') }}</h2>
             </div>
             {% set calendar = home.calendar or {"state": "unconfigured"} %}
+            <a class="jrh-integrations__row" href="{{ url_for('agent_contact_channels_self') }}">
+                <span>{{ t('agent_contact_title') }}</span>
+                <strong>{{ t('agent_contact_open') }}</strong>
+            </a>
             <a class="jrh-integrations__row" href="{{ url_for('settings_integrations') }}">
                 <span>
                     {{ t('agenda_calendar_google') }}

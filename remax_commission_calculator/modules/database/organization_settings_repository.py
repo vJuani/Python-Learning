@@ -129,6 +129,15 @@ def build_settings_dict(row):
         "marketing_email": (
             row[36] if len(row) > 36 and row[36] else ""
         ),
+        "marketing_logo_path": (
+            row[37] if len(row) > 37 and row[37] else ""
+        ),
+        "marketing_logo_source": (
+            row[38] if len(row) > 38 and row[38] else ""
+        ),
+        "marketing_logo_updated_at": (
+            row[39] if len(row) > 39 and row[39] else ""
+        ),
     }
 
 
@@ -170,7 +179,10 @@ SETTINGS_SELECT = """
             marketing_phone,
             marketing_instagram,
             marketing_whatsapp,
-            marketing_email
+            marketing_email,
+            marketing_logo_path,
+            marketing_logo_source,
+            marketing_logo_updated_at
         FROM organization_settings
 """
 
@@ -430,6 +442,9 @@ def update_organization_marketing_fields(organization_id, **fields):
     allowed = (
         "marketing_brand_name",
         "marketing_logo_url",
+        "marketing_logo_path",
+        "marketing_logo_source",
+        "marketing_logo_updated_at",
         "marketing_logo_dark_url",
         "marketing_logo_light_url",
         "legal_broker_name",

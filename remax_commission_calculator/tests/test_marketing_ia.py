@@ -25,9 +25,9 @@ from modules.agent_photo import resolve_agent_photo_path
 from modules.auth import ROLE_ADMIN, ROLE_AGENT, hash_password
 from modules.config import apply_config
 from modules.database import add_agent, add_organization, add_property, add_user, create_tables
+from modules.agent_contact_channels import link_agent_instagram, link_agent_whatsapp
 from modules.database.agents_repository import (
     get_agent_record,
-    update_agent_instagram_handle,
     update_agent_profile_photo,
 )
 from modules.database.connection import get_connection
@@ -173,7 +173,18 @@ class MarketingIaTests(unittest.TestCase):
             profile_photo_width=400,
             profile_photo_height=520,
         )
-        update_agent_instagram_handle(cls.agent_id, cls.org, "josebarreiro")
+        link_agent_whatsapp(
+            cls.agent_id,
+            cls.org,
+            "+54 9 11 3170 4333",
+            enable_marketing=True,
+        )
+        link_agent_instagram(
+            cls.agent_id,
+            cls.org,
+            "josebarreiro",
+            enable_marketing=True,
+        )
         cls.property_id = add_property(
             "Santamarina 1335",
             "Buenos Aires",
@@ -1120,7 +1131,7 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("RE/MAX Data House", prompt)
         self.assertIn("Mauro Marvisi", prompt)
         self.assertIn("CUCICBA", prompt)
-        self.assertIn("WhatsApp +54 9 11 4000 0000", prompt)
+        self.assertIn("WhatsApp +54 9 11 3170 4333", prompt)
         self.assertIn("Instagram @josebarreiro", prompt)
         self.assertIn("Corredor Público Mauro Marvisi", prompt)
         self.assertNotIn("phone '", prompt)
@@ -1401,11 +1412,11 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("CREATIVE BRAND LOCK", prompt)
         self.assertIn("marca visible de la inmobiliaria activa", prompt)
         self.assertIn("José Barreiro", prompt)
-        self.assertIn("WhatsApp +54 9 11 4000 0000", prompt)
+        self.assertIn("WhatsApp +54 9 11 3170 4333", prompt)
         self.assertIn("@josebarreiro", prompt)
         self.assertIn("Mauro Marvisi", prompt)
         copy = summarize_listing_copy(facts, context.get("agent"), language="es")
-        self.assertEqual(copy["agent_whatsapp"], "+54 9 11 4000 0000")
+        self.assertEqual(copy["agent_whatsapp"], "+54 9 11 3170 4333")
         self.assertEqual(copy["agent_instagram"], "@josebarreiro")
         self.assertEqual(copy["legal_broker_line"], "Corredor Público Mauro Marvisi")
         self.assertIn("CUCICBA 1762", copy["legal_license_line"])

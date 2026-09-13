@@ -86,22 +86,11 @@
             <small class="field-help">{{ t('team_leader_help') }}</small>
         </div>
 
-        <div class="form-group">
-            <label for="instagram_handle">{{ t('agent_instagram_label') }}</label>
-            <input
-                type="text"
-                id="instagram_handle"
-                name="instagram_handle"
-                class="form-input"
-                value="{{ agent.instagram_handle or '' }}"
-                placeholder="@usuario"
-            >
-            <small class="field-help">{{ t('agent_instagram_help') }}</small>
-        </div>
-
         {% if is_edit %}
         <p class="field-help">
             <a href="{{ url_for('agent_photo_edit', agent_id=agent.id) }}">{{ t('agent_photo_title') }}</a>
+            ·
+            <a href="{{ url_for('agent_contact_channels_edit', agent_id=agent.id) }}">{{ t('agent_contact_title') }}</a>
         </p>
         {% endif %}
 

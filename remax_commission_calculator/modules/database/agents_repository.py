@@ -46,6 +46,7 @@ def _build_agent_dict(row):
         "profile_photo_height": row[14] if len(row) > 14 else None,
         "profile_photo_updated_at": row[15] if len(row) > 15 else None,
         "instagram_handle": row[16] if len(row) > 16 else None,
+        "whatsapp_number": row[17] if len(row) > 17 else None,
     }
 
 
@@ -67,7 +68,8 @@ AGENTS_BASE_QUERY = """
         agents.profile_photo_width,
         agents.profile_photo_height,
         agents.profile_photo_updated_at,
-        agents.instagram_handle
+        agents.instagram_handle,
+        agents.whatsapp_number
     FROM agents
     LEFT JOIN agents AS team_leader
         ON agents.team_leader_agent_id = team_leader.id
@@ -504,6 +506,28 @@ def clear_agent_profile_photo(agent_id, organization_id):
         profile_photo_height=None,
         profile_photo_updated_at=None,
     )
+
+
+def update_agent_whatsapp_number(agent_id, organization_id, whatsapp_number):
+    organization_id = require_organization_id(organization_id)
+    value = " ".join(str(whatsapp_number or "").split()) or None
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE agents
+        SET whatsapp_number = ?
+        WHERE id = ?
+            AND organization_id = ?
+        """,
+        (value, agent_id, organization_id),
+    )
+    if cursor.rowcount == 0:
+        connection.close()
+        raise TenantError("Agent was not found in this organization.")
+    connection.commit()
+    connection.close()
+    return get_agent_record(agent_id, organization_id)
 
 
 def update_agent_instagram_handle(agent_id, organization_id, instagram_handle):

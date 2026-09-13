@@ -159,8 +159,8 @@ def _agent_snapshot(property_data, language):
     )
     if not branding:
         return None
-    whatsapp = branding.get("whatsapp")
-    instagram = branding.get("instagram") or branding.get("instagram_handle")
+    whatsapp = branding.get("whatsapp") if branding.get("whatsapp_enabled") else None
+    instagram = branding.get("instagram") if branding.get("instagram_enabled") else None
     if not whatsapp and not instagram:
         logger.warning(
             "marketing agent contact missing whatsapp and instagram agent=%s",
@@ -172,8 +172,10 @@ def _agent_snapshot(property_data, language):
         "name": branding.get("name"),
         "phone": branding.get("phone"),
         "whatsapp": whatsapp,
+        "whatsapp_enabled": bool(branding.get("whatsapp_enabled") and whatsapp),
         "email": branding.get("email"),
         "instagram": instagram,
+        "instagram_enabled": bool(branding.get("instagram_enabled") and instagram),
         "linkedin": branding.get("linkedin"),
         "title": branding.get("title"),
         "has_photo": bool(branding.get("has_photo")),
@@ -313,6 +315,8 @@ def build_property_marketing_context(
         "organization_name": branding["office_name"],
         "office_logo": branding["logo_path"],
         "organization_logo": branding["logo_path"],
+        "logo_source": branding.get("logo_source"),
+        "logo_url": branding.get("logo_url"),
         "has_logo": branding["has_logo"],
         "wordmark_text": branding.get("wordmark_text") or branding["brand_name"],
         "show_wordmark": bool(branding.get("wordmark_text") or not branding["has_logo"]),

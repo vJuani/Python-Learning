@@ -47,9 +47,8 @@ BRANDING_ALIASES = {
     "office_name": "marketing_brand_name",
     "organization_name": "organization_name",
     "marketing_logo": "marketing_logo_url",
-    "marketing_logo_path": "marketing_logo_url",
-    "office_logo": "marketing_logo_url",
-    "organization_logo": "marketing_logo_url",
+    "office_logo": "logo_path",
+    "organization_logo": "logo_path",
     "logo": "logo_path",
     "broker_name": "legal_broker_name",
     "broker_license": "legal_broker_license",
@@ -112,42 +111,17 @@ def marketing_legal_is_configured(settings):
 
 
 def resolve_local_logo_path(candidate):
-    value = _clean(candidate)
-    if not value or value.startswith(("http://", "https://")):
-        return None
-    raw = Path(value)
-    if raw.is_file():
-        return raw
-    static_root = (BASE_DIR / "static").resolve()
-    static_candidate = (static_root / value).resolve()
-    try:
-        static_candidate.relative_to(static_root)
-    except ValueError:
-        static_candidate = None
-    if static_candidate and static_candidate.is_file():
-        return static_candidate
-    rooted = (BASE_DIR / value).resolve()
-    if rooted.is_file():
-        return rooted
-    return None
+    from modules.organization_marketing_logo import resolve_stored_logo_file
+
+    return resolve_stored_logo_file(candidate)
 
 
-def _scan_organization_logo(organization_id):
-    if not organization_id:
-        return None
-    folder = BASE_DIR / "static" / "uploads" / "organizations" / str(organization_id)
-    for name in (
-        "logo.png",
-        "logo.webp",
-        "logo.svg",
-        "logo.jpg",
-        "logo.jpeg",
-        "logo.gif",
-    ):
-        candidate = folder / name
-        if candidate.is_file():
-            return candidate
-    return None
+def get_organization_marketing_branding(organization, **kwargs):
+    from modules.organization_marketing_logo import (
+        get_organization_marketing_branding as resolve_office_branding,
+    )
+
+    return resolve_office_branding(organization, **kwargs)
 
 
 def apply_branding_aliases(settings):
@@ -178,24 +152,14 @@ def office_wordmark(brand_name, *, has_logo=False, logo_path=None):
 
 
 def resolve_creative_logo_path(settings, *, organization_id=None, brand_name=None):
-    settings = apply_branding_aliases(settings)
-    for key in (
-        "marketing_logo_url",
-        "marketing_logo",
-        "marketing_logo_path",
-        "marketing_logo_light_url",
-        "logo_path",
-        "logo",
-        "office_logo",
-        "organization_logo",
-        "marketing_logo_dark_url",
-    ):
-        path = resolve_local_logo_path(settings.get(key))
-        if path:
-            return path
-    return _scan_organization_logo(
-        organization_id or settings.get("organization_id")
-    )
+    from modules.organization_marketing_logo import get_organization_marketing_branding
+
+    payload = dict(settings or {})
+    if organization_id and not payload.get("organization_id"):
+        payload["organization_id"] = organization_id
+    branding = get_organization_marketing_branding(payload, materialize_url=True)
+    path = branding.get("logo_path")
+    return Path(path) if path and Path(path).is_file() else None
 
 
 def build_legal_footer_line(settings, *, language="es"):
@@ -279,12 +243,17 @@ def resolve_marketing_branding(
         },
         language=language,
     )
-    logo_path = resolve_creative_logo_path(
+    office_logo = get_organization_marketing_branding(
         settings,
-        organization_id=settings.get("organization_id"),
-        brand_name=brand_name,
+        language=language,
+        materialize_url=True,
     )
-    if not logo_path:
+    logo_path = office_logo.get("logo_path")
+    if logo_path and Path(logo_path).is_file():
+        logo_path = Path(logo_path)
+    else:
+        logo_path = None
+    if not logo_path and office_logo.get("logo_source") != "url":
         logger.warning(
             "marketing branding missing office logo org=%s; using wordmark only",
             settings.get("organization_id"),
@@ -299,7 +268,9 @@ def resolve_marketing_branding(
         "office_logo": logo_value,
         "organization_logo": logo_value,
         "logo_path": logo_value,
-        "has_logo": bool(logo_path),
+        "logo_source": office_logo.get("logo_source"),
+        "logo_url": office_logo.get("logo_url"),
+        "has_logo": bool(logo_path) or bool(office_logo.get("has_logo")),
         "wordmark_text": office_wordmark(
             brand_name, has_logo=bool(logo_path), logo_path=logo_value
         ),
@@ -374,7 +345,91 @@ def branding_from_facts(facts):
     }
 
 
-def branding_prompt_block(branding, *, include_agent=False, language="es"):
+def agent_contact_prompt_lock(whatsapp="", instagram="", *, language="es"):
+    """Office branding stays separate. Only linked+enabled agent channels go here."""
+    wa = _clean(whatsapp)
+    ig = _clean(instagram)
+    if wa and ig:
+        lock_es = (
+            "Mostrá al agente como contacto comercial con WhatsApp e Instagram, "
+            "evitando repetir teléfono y WhatsApp."
+        )
+        lock_en = (
+            "Show the agent as the commercial contact using WhatsApp and Instagram, "
+            "without duplicating phone and WhatsApp."
+        )
+        agent = (
+            "The agent is the commercial contact only and is not the legal broker. "
+            "Show WhatsApp and Instagram only. Do not also show a regular phone. "
+        )
+        copy_suffix = ", agent name + title + WhatsApp + Instagram, never phone + WhatsApp"
+        icons = (
+            "Use a small WhatsApp icon next to the WhatsApp number and a small "
+            "Instagram icon next to the Instagram handle. "
+        )
+    elif wa:
+        lock_es = (
+            "Mostrá al agente como contacto comercial solo con WhatsApp. "
+            "No muestres Instagram ni un teléfono extra."
+        )
+        lock_en = (
+            "Show the agent as the commercial contact with WhatsApp only. "
+            "Do not show Instagram or an extra phone number."
+        )
+        agent = (
+            "The agent is the commercial contact only and is not the legal broker. "
+            "Show WhatsApp only. Do not invent Instagram. Do not also show a regular phone. "
+        )
+        copy_suffix = ", agent name + title + WhatsApp only, never phone + WhatsApp"
+        icons = "Use a small WhatsApp icon next to the WhatsApp number. Do not add Instagram. "
+    elif ig:
+        lock_es = (
+            "Mostrá al agente como contacto comercial solo con Instagram. "
+            "No muestres WhatsApp ni teléfono."
+        )
+        lock_en = (
+            "Show the agent as the commercial contact with Instagram only. "
+            "Do not show WhatsApp or a phone number."
+        )
+        agent = (
+            "The agent is the commercial contact only and is not the legal broker. "
+            "Show Instagram only. Do not invent WhatsApp or a regular phone. "
+        )
+        copy_suffix = ", agent name + title + Instagram only, no phone or WhatsApp"
+        icons = "Use a small Instagram icon next to the Instagram handle. Do not add WhatsApp. "
+    else:
+        lock_es = (
+            "Mostrá solo el nombre y el cargo del agente. "
+            "No inventes WhatsApp, Instagram ni teléfono."
+        )
+        lock_en = (
+            "Show only the agent name and title. "
+            "Do not invent WhatsApp, Instagram, or a phone number."
+        )
+        agent = (
+            "The agent is the commercial contact only and is not the legal broker. "
+            "Show name and title only. Do not invent WhatsApp, Instagram, or a phone. "
+        )
+        copy_suffix = ", agent name + title only, no invented WhatsApp, Instagram, or phone"
+        icons = "Do not add WhatsApp or Instagram icons or invented handles. "
+    return {
+        "lock": lock_es if language == "es" else lock_en,
+        "agent": agent,
+        "copy_suffix": copy_suffix,
+        "icons": icons,
+        "has_whatsapp": bool(wa),
+        "has_instagram": bool(ig),
+    }
+
+
+def branding_prompt_block(
+    branding,
+    *,
+    include_agent=False,
+    language="es",
+    agent_whatsapp="",
+    agent_instagram="",
+):
     branding = branding or {}
     brand = usable_brand_name(branding.get("brand_name"), branding.get("office_name"))
     brand = brand or DEMO_MARKETING_BRANDING["marketing_brand_name"]
@@ -408,19 +463,19 @@ def branding_prompt_block(branding, *, include_agent=False, language="es"):
             f"No real office logo file is available. Set the wordmark '{brand}' top-left "
             "in clean type. Do not invent a logo, balloon, or similar mark."
         )
-    agent = (
-        "The agent is the commercial contact only and is not the legal broker. "
-        "Show WhatsApp and Instagram only. Do not also show a regular phone. "
-        if include_agent
-        else "Do not show an agent. "
+    contact = agent_contact_prompt_lock(
+        agent_whatsapp,
+        agent_instagram,
+        language=language,
     )
+    agent = contact["agent"] if include_agent else "Do not show an agent. "
     if language == "es":
         lock = (
             f"Usar la marca visible de la inmobiliaria activa: {brand}. "
             "Usá el logo real de la inmobiliaria provisto como referencia. "
             "No inventes ni rediseñes el logo. No muestres JRH One dentro del creativo. "
-            "Mostrá al agente como contacto comercial con WhatsApp e Instagram, "
-            "evitando repetir teléfono y WhatsApp. Mantené separado y visible el texto "
+            f"{contact['lock'] if include_agent else 'No muestres un agente.'} "
+            "Mantené separado y visible el texto "
             f"legal del corredor responsable y su matrícula: {broker} {license_no}."
         )
     else:
@@ -429,8 +484,8 @@ def branding_prompt_block(branding, *, include_agent=False, language="es"):
             "Use the real estate office logo provided as an input asset. "
             "Do not recreate, redesign, or hallucinate the logo. "
             "Do not display JRH One in the final creative. "
-            "Show the agent as the commercial contact using WhatsApp and Instagram, "
-            "without duplicating phone and WhatsApp. Keep the legal broker name and "
+            f"{contact['lock'] if include_agent else 'Do not show an agent.'} "
+            "Keep the legal broker name and "
             f"license clearly visible and separate: {broker} {license_no}."
         )
     return (

@@ -17,6 +17,28 @@
     </div>
 </section>
 
+{% if contact_channels %}
+<article class="integration-card">
+    <header class="integration-card__head">
+        <h3>{{ t('agent_contact_title') }}</h3>
+    </header>
+    <p>{{ t('agent_contact_help') }}</p>
+    <p class="integration-card__meta">
+        WhatsApp:
+        <strong>{{ t('agent_contact_connected') if contact_channels.whatsapp_connected else t('agent_contact_disconnected') }}</strong>
+        {% if contact_channels.whatsapp_number %} · {{ contact_channels.whatsapp_number }}{% endif %}
+    </p>
+    <p class="integration-card__meta">
+        Instagram:
+        <strong>{{ t('agent_contact_connected') if contact_channels.instagram_connected else t('agent_contact_disconnected') }}</strong>
+        {% if contact_channels.instagram_handle %} · {{ contact_channels.instagram_handle }}{% endif %}
+    </p>
+    <div class="integration-card__actions">
+        <a class="btn btn-primary" href="{{ url_for('agent_contact_channels_self') }}">{{ t('agent_contact_open') }}</a>
+    </div>
+</article>
+{% endif %}
+
 {% set calendar = calendar or {"state": "unconfigured"} %}
 {% if calendar.state != 'hidden' %}
 <article class="integration-card">

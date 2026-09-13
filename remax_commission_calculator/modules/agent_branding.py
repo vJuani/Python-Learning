@@ -101,9 +101,6 @@ def get_agent_branding(agent_id, organization_id, *, language="es", agent_login_
         "has_photo": bool(agent.get("profile_photo_key")),
         "phone": (user or {}).get("phone") or None,
         "email": (user or {}).get("email") or None,
-        "whatsapp": format_whatsapp_display((user or {}).get("phone")),
-        "instagram": format_instagram_handle(agent.get("instagram_handle")),
-        "instagram_handle": format_instagram_handle(agent.get("instagram_handle")),
         "linkedin": None,
         "location": None,
         "organization": settings.get("display_name") or None,
@@ -112,6 +109,14 @@ def get_agent_branding(agent_id, organization_id, *, language="es", agent_login_
         "user_id": (user or {}).get("id"),
         "user_role": (user or {}).get("role"),
     }
+    from modules.agent_contact_channels import publishable_agent_contacts
+
+    contacts = publishable_agent_contacts(agent["id"], organization_id)
+    branding["whatsapp"] = contacts.get("whatsapp")
+    branding["whatsapp_enabled"] = bool(contacts.get("whatsapp_enabled"))
+    branding["instagram"] = contacts.get("instagram")
+    branding["instagram_handle"] = contacts.get("instagram")
+    branding["instagram_enabled"] = bool(contacts.get("instagram_enabled"))
     for key in (
         "phone",
         "email",

@@ -1914,6 +1914,18 @@ def create_postgres_schema():
 
         migrate_agent_instagram_postgres(cursor)
 
+        from .agent_contact_channels_migration import (
+            migrate_agent_contact_channels_postgres,
+        )
+
+        migrate_agent_contact_channels_postgres(cursor)
+
+        from .organization_marketing_logo_migration import (
+            migrate_organization_marketing_logo_postgres,
+        )
+
+        migrate_organization_marketing_logo_postgres(cursor)
+
         from .marketing_migration import migrate_marketing_postgres
 
         migrate_marketing_postgres(cursor)

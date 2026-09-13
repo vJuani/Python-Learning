@@ -14,6 +14,7 @@ from flask import (
 
 import os
 import io
+import mimetypes
 
 from datetime import date
 
@@ -86,7 +87,6 @@ from modules.database import (
     revoke_guest_access,
     set_registration_enabled,
     update_agent,
-    update_agent_instagram_handle,
     update_organization_settings,
     update_organization_billing_fields,
     update_organization_marketing_fields,
@@ -1000,6 +1000,8 @@ def settings_to_form_values(settings):
             else ""
         ),
         "marketing_logo_url": settings.get("marketing_logo_url") or "",
+        "marketing_logo_path": settings.get("marketing_logo_path") or "",
+        "marketing_logo_source": settings.get("marketing_logo_source") or "",
         "marketing_logo_dark_url": settings.get("marketing_logo_dark_url") or "",
         "marketing_logo_light_url": settings.get("marketing_logo_light_url") or "",
         "legal_broker_name": settings.get("legal_broker_name") or "",
@@ -1071,6 +1073,23 @@ def save_organization_logo(
         return None
 
     return relative_path.as_posix()
+
+
+def marketing_logo_preview_url(settings):
+    from modules.organization_marketing_logo import get_organization_marketing_branding
+
+    branding = get_organization_marketing_branding(settings, materialize_url=False)
+    version = branding.get("logo_updated_at") or "1"
+    source = branding.get("logo_source")
+    if source == "upload" and branding.get("logo_path"):
+        return url_for("organization_marketing_logo", v=version)
+    if source == "url" and branding.get("logo_url"):
+        url = branding["logo_url"]
+        separator = "&" if "?" in url else "?"
+        return f"{url}{separator}v={version}"
+    if source == "general" and settings and settings.get("logo_path"):
+        return url_for("static", filename=settings["logo_path"], v=version)
+    return None
 
 
 def delete_organization_logo_file(
@@ -3237,6 +3256,23 @@ def organization_settings():
                 remove_logo=remove_logo
             )
         )
+        from modules.organization_marketing_logo import (
+            MarketingLogoError,
+            apply_marketing_logo_form,
+        )
+
+        logo_fields = {}
+        if not errors:
+            try:
+                logo_fields = apply_marketing_logo_form(
+                    organization_id,
+                    request.form,
+                    request.files,
+                    current_settings,
+                )
+            except MarketingLogoError as error:
+                errors.append(error.message_key)
+                parsed = None
 
         if len(errors) > 0:
             form_values = {
@@ -3294,6 +3330,9 @@ def organization_settings():
                 "marketing_logo_url": request.form.get(
                     "marketing_logo_url", ""
                 ).strip(),
+                "marketing_logo_source": request.form.get(
+                    "marketing_logo_source", ""
+                ).strip(),
                 "marketing_logo_dark_url": request.form.get(
                     "marketing_logo_dark_url", ""
                 ).strip(),
@@ -3315,12 +3354,6 @@ def organization_settings():
                 "marketing_phone": request.form.get(
                     "marketing_phone", ""
                 ).strip(),
-                "marketing_instagram": request.form.get(
-                    "marketing_instagram", ""
-                ).strip(),
-                "marketing_whatsapp": request.form.get(
-                    "marketing_whatsapp", ""
-                ).strip(),
                 "marketing_email": request.form.get(
                     "marketing_email", ""
                 ).strip(),
@@ -3340,6 +3373,12 @@ def organization_settings():
                     if current_settings["logo_path"]
                     else None
                 ),
+                marketing_logo_preview_url=marketing_logo_preview_url(
+                    current_settings
+                ),
+                marketing_logo_source=request.form.get(
+                    "marketing_logo_source"
+                ) or current_settings.get("marketing_logo_source") or "",
                 timezones=COMMON_TIMEZONES,
                 tax_conditions=TAX_CONDITIONS,
                 payment_conditions=PAYMENT_CONDITIONS,
@@ -3418,7 +3457,10 @@ def organization_settings():
         update_organization_marketing_fields(
             organization_id,
             marketing_brand_name=parsed.get("marketing_brand_name"),
-            marketing_logo_url=parsed.get("marketing_logo_url"),
+            marketing_logo_url=logo_fields.get("marketing_logo_url"),
+            marketing_logo_path=logo_fields.get("marketing_logo_path"),
+            marketing_logo_source=logo_fields.get("marketing_logo_source"),
+            marketing_logo_updated_at=logo_fields.get("marketing_logo_updated_at"),
             marketing_logo_dark_url=parsed.get("marketing_logo_dark_url"),
             marketing_logo_light_url=parsed.get("marketing_logo_light_url"),
             legal_broker_name=parsed.get("legal_broker_name"),
@@ -3426,8 +3468,6 @@ def organization_settings():
             legal_office_name=parsed.get("legal_office_name"),
             legal_footer_line=parsed.get("legal_footer_line"),
             marketing_phone=parsed.get("marketing_phone"),
-            marketing_instagram=parsed.get("marketing_instagram"),
-            marketing_whatsapp=parsed.get("marketing_whatsapp"),
             marketing_email=parsed.get("marketing_email"),
         )
 
@@ -3457,6 +3497,12 @@ def organization_settings():
             if current_settings["logo_path"]
             else None
         ),
+        marketing_logo_preview_url=marketing_logo_preview_url(
+            current_settings
+        ),
+        marketing_logo_source=(
+            current_settings.get("marketing_logo_source") or ""
+        ),
         timezones=COMMON_TIMEZONES,
         tax_conditions=TAX_CONDITIONS,
         payment_conditions=PAYMENT_CONDITIONS,
@@ -3473,6 +3519,23 @@ def organization_settings():
         new_registration_code=None,
         new_guest_url=None
     )
+
+
+@app.route("/settings/organization/marketing-logo")
+@admin_required
+def organization_marketing_logo():
+    from modules.organization_marketing_logo import get_organization_marketing_branding
+
+    organization_id = require_user_organization()
+    settings = get_organization_settings(organization_id) or {}
+    branding = get_organization_marketing_branding(settings, materialize_url=False)
+    path = branding.get("logo_path")
+    if not path or not Path(path).is_file():
+        abort(404)
+    mime = mimetypes.guess_type(path)[0] or "image/png"
+    response = send_file(path, mimetype=mime)
+    response.headers["Cache-Control"] = "private, max-age=0, must-revalidate"
+    return response
 
 
 @app.route(
@@ -4433,16 +4496,11 @@ def agents_new():
             )
 
         try:
-            created_id = add_agent(
+            add_agent(
                 name,
                 agent_type,
                 organization_id,
                 team_leader_agent_id=team_leader_agent_id,
-            )
-            update_agent_instagram_handle(
-                created_id,
-                organization_id,
-                request.form.get("instagram_handle", ""),
             )
         except (ValueError, TenantError):
             flash_i18n("err_team_leader_invalid", "error")
@@ -4557,11 +4615,6 @@ def agents_edit(agent_id):
                 organization_id,
                 team_leader_agent_id=team_leader_agent_id,
                 update_team_leader=True,
-            )
-            update_agent_instagram_handle(
-                agent_id,
-                organization_id,
-                request.form.get("instagram_handle", ""),
             )
         except (ValueError, TenantError):
             flash_i18n("err_team_leader_invalid", "error")
@@ -8369,9 +8422,19 @@ register_property_media_routes(
 
 from modules.acm_routes import register_acm_routes
 from modules.agent_photo_routes import register_agent_photo_routes
+from modules.agent_contact_routes import register_agent_contact_routes
 from modules.marketing_routes import register_marketing_routes
 
 register_agent_photo_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+    },
+)
+
+register_agent_contact_routes(
     app,
     helpers={
         "require_user_organization": require_user_organization,
