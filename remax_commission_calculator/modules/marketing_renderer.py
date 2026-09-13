@@ -226,11 +226,11 @@ def _u(width, value):
 def _paste_logo(canvas, logo_path, *, box, xy):
     image = _logo_rgba(str(logo_path)) if logo_path else None
     if image is None:
-        return False
+        return None
     image = image.copy()
     image.thumbnail(box, Image.Resampling.LANCZOS)
     canvas.paste(image, xy, image)
-    return True
+    return image.size
 
 
 def _wordmark(draw, xy, brand, *, fill=NAVY, size=36):
@@ -238,7 +238,22 @@ def _wordmark(draw, xy, brand, *, fill=NAVY, size=36):
     draw.text((x, y), brand or "RE/MAX Data House", font=font(size, bold=True), fill=fill)
 
 
-def _header(canvas, facts, *, accent, invert=False):
+def _office_brand(facts):
+    return (
+        usable_brand_name(
+            facts.get("brand_name"),
+            facts.get("office_name"),
+            facts.get("organization_name"),
+        )
+        or "RE/MAX Data House"
+    )
+
+
+def _office_logo(facts):
+    return facts.get("organization_logo") or facts.get("office_logo") or facts.get("logo_path")
+
+
+def _header(canvas, facts, *, accent, invert=False, kicker=""):
     width, _height = canvas.size
     draw = ImageDraw.Draw(canvas)
     pad = _u(width, 48)
@@ -249,39 +264,30 @@ def _header(canvas, facts, *, accent, invert=False):
             fill=NAVY,
         )
         fill = WHITE
+        mute = SOFT
     else:
         fill = NAVY
+        mute = MUTED
     placed = _paste_logo(
         canvas,
-        facts.get("organization_logo"),
-        box=(_u(width, 220), _u(width, 64)),
-        xy=(pad, _u(width, 28)),
+        _office_logo(facts),
+        box=(_u(width, 72), _u(width, 72)),
+        xy=(pad, _u(width, 22)),
     )
-    if not placed and facts.get("show_wordmark", True):
+    text_x = pad + (placed[0] + _u(width, 14) if placed else 0)
+    if facts.get("show_wordmark", True) or not placed:
         _wordmark(
             draw,
-            (pad, _u(width, 34)),
-            usable_brand_name(facts.get("brand_name"), facts.get("organization_name"))
-            or "RE/MAX Data House",
+            (text_x, _u(width, 38)),
+            _office_brand(facts),
             fill=fill,
-            size=_u(width, 34),
+            size=_u(width, 28),
         )
-    purpose = (facts.get("purpose_label") or "").upper()
-    if purpose:
-        badge_w = _text_width(draw, purpose, font(_u(width, 20), bold=True)) + _u(width, 48)
-        bx = width - pad - badge_w
-        by = _u(width, 36)
-        draw.rounded_rectangle(
-            (bx, by, bx + badge_w, by + _u(width, 46)),
-            _u(width, 23),
-            fill=NAVY if not invert else ELECTRIC,
-        )
-        draw.text(
-            (bx + _u(width, 24), by + _u(width, 10)),
-            purpose,
-            font=font(_u(width, 20), bold=True),
-            fill=WHITE,
-        )
+    label = " ".join(str(kicker or facts.get("kicker") or "").split())
+    if label:
+        used = font(_u(width, 16))
+        tw = _text_width(draw, label, used)
+        draw.text((width - pad - tw, _u(width, 42)), label, font=used, fill=mute)
 
 
 def _feature_icons(draw, chips, xy, *, width, color=ELECTRIC, text_fill=INK):
@@ -348,20 +354,60 @@ def _address_block(draw, facts, copy, *, xy, width, max_width, light=False):
     x, y = xy
     title_fill = WHITE if light else NAVY
     mute = SOFT if light else MUTED
-    kicker = (copy.get("headline") or facts.get("type_label") or "").upper()
-    if kicker:
-        draw.text((x, y), kicker, font=font(_u(width, 20), bold=True), fill=ELECTRIC if not light else WHITE)
-        y += _u(width, 34)
-    title = facts.get("title") or copy.get("headline") or ""
-    title_font = font(_u(width, 64), bold=True)
-    for line in _wrap(draw, title, title_font, max_width)[:2]:
-        draw.text((x, y), line, font=title_font, fill=title_fill)
-        y += _u(width, 70)
-    loc = facts.get("location_line") or facts.get("locality") or ""
-    if loc:
-        draw.text((x, y + 4), f"●  {loc}", font=font(_u(width, 24)), fill=mute)
+    headline = (
+        copy.get("headline")
+        or facts.get("operation_title")
+        or facts.get("type_label")
+        or ""
+    ).upper()
+    if headline:
+        title_font = font(_u(width, 46), bold=True)
+        for line in _wrap(draw, headline, title_font, max_width)[:2]:
+            draw.text((x, y), line, font=title_font, fill=title_fill)
+            y += _u(width, 52)
+    street = copy.get("street") or facts.get("title") or ""
+    if street:
+        draw.text((x, y + 2), street, font=font(_u(width, 30), bold=True), fill=title_fill)
         y += _u(width, 40)
+    zone = copy.get("zone") or facts.get("zone_line") or facts.get("locality") or ""
+    if zone:
+        draw.text((x, y + 2), zone, font=font(_u(width, 20)), fill=mute)
+        y += _u(width, 34)
     return y
+
+
+def _legal_footer(canvas, facts):
+    width, height = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    pad = _u(width, 48)
+    bar_h = _u(width, 100)
+    top = height - bar_h
+    draw.rectangle((0, top, width, height), fill=NAVY)
+    placed = _paste_logo(
+        canvas,
+        _office_logo(facts),
+        box=(_u(width, 44), _u(width, 44)),
+        xy=(pad, top + _u(width, 18)),
+    )
+    text_x = pad + (placed[0] + _u(width, 12) if placed else 0)
+    draw.text(
+        (text_x, top + _u(width, 16)),
+        _office_brand(facts),
+        font=font(_u(width, 18), bold=True),
+        fill=WHITE,
+    )
+    legal = (
+        facts.get("legal_footer_line")
+        or facts.get("broker_footer_text")
+        or ""
+    )
+    if legal:
+        draw.text(
+            (text_x, top + _u(width, 48)),
+            legal,
+            font=font(_u(width, 14)),
+            fill=WHITE,
+        )
 
 
 def _price(draw, facts, options, *, xy, width, fill=NAVY, size=72):
@@ -371,15 +417,15 @@ def _price(draw, facts, options, *, xy, width, fill=NAVY, size=72):
 
 
 def render_editorial(size, photos, facts, copy, agent, options, style):
-    """Hero + overlay title, two thumbs, agent card. Reference flyer 1."""
+    """Large hero, two thumbs, commercial title below the photo."""
     width, height = size
     canvas = Image.new("RGBA", size, WHITE)
     draw = ImageDraw.Draw(canvas)
     accent = STYLE_ACCENT.get(style, ELECTRIC)
     pad = _u(width, 48)
-    _header(canvas, facts, accent=accent)
-    hero_top = _u(width, 130)
-    hero_h = int(height * 0.42)
+    _header(canvas, facts, accent=accent, kicker=copy.get("kicker"))
+    hero_top = _u(width, 118)
+    hero_h = int(height * 0.40)
     if photos:
         paste_rounded(
             canvas,
@@ -388,97 +434,52 @@ def render_editorial(size, photos, facts, copy, agent, options, style):
             (width - pad * 2, hero_h),
             radius=_u(width, 36),
         )
-        tint = Image.new("RGBA", (width - pad * 2, hero_h), (0, 0, 0, 0))
-        tdraw = ImageDraw.Draw(tint)
-        fade_h = int(hero_h * 0.48)
-        for index in range(fade_h):
-            ratio = index / max(1, fade_h - 1)
-            tdraw.line(
-                [(0, hero_h - fade_h + index), (width - pad * 2, hero_h - fade_h + index)],
-                fill=(10, 22, 51, int(20 + 200 * ratio)),
-            )
-        alpha = _rounded_mask(width - pad * 2, hero_h, _u(width, 36))
-        tint_alpha = tint.split()[-1]
-        merged = Image.new("L", tint.size, 0)
-        merged.paste(tint_alpha, (0, 0), alpha)
-        tint.putalpha(merged)
-        canvas.paste(tint, (pad, hero_top), tint)
-        overlay_draw = ImageDraw.Draw(canvas)
-        _address_block(
-            overlay_draw,
-            facts,
-            copy,
-            xy=(pad + _u(width, 36), hero_top + hero_h - _u(width, 280)),
-            width=width,
-            max_width=width - pad * 2 - _u(width, 80),
-            light=True,
-        )
-        if options.get("show_features", True):
-            _feature_icons(
-                overlay_draw,
-                facts.get("chips") or [],
-                (pad + _u(width, 36), hero_top + hero_h - _u(width, 70)),
-                width=width,
-                color=WHITE,
-                text_fill=WHITE,
-            )
-    y = hero_top + hero_h + _u(width, 36)
-    _price(draw, facts, options, xy=(pad, y), width=width, size=78)
-    y += _u(width, 100)
-    thumbs_h = _u(width, 220)
+    y = hero_top + hero_h + _u(width, 28)
+    thumbs_h = _u(width, 168)
     remaining = photos[1:3]
     if remaining:
-        thumb_w = (width - pad * 2 - _u(width, 240) - _u(width, 24)) // max(1, len(remaining))
+        thumb_w = (width - pad * 2 - _u(width, 220) - _u(width, 20)) // max(1, len(remaining))
         for index, photo in enumerate(remaining):
             paste_rounded(
                 canvas,
                 photo,
                 (pad + index * (thumb_w + 12), y),
                 (thumb_w, thumbs_h),
-                radius=_u(width, 24),
+                radius=_u(width, 22),
             )
     if options.get("include_agent") and agent:
         _agent_block(
             canvas,
             agent,
-            xy=(width - pad - _u(width, 200), y - _u(width, 10)),
+            xy=(width - pad - _u(width, 176), y - _u(width, 4)),
             width=width,
             show_photo=options.get("show_agent_photo", True),
-            size=_u(width, 200),
+            size=_u(width, 168),
         )
-    y += thumbs_h + _u(width, 36)
+    if remaining or (options.get("include_agent") and agent):
+        y += thumbs_h + _u(width, 28)
+    y = _address_block(
+        draw,
+        facts,
+        copy,
+        xy=(pad, y),
+        width=width,
+        max_width=width - pad * 2,
+    )
+    if options.get("show_features", True):
+        _feature_icons(draw, facts.get("chips") or [], (pad, y + 6), width=width)
+        y += _u(width, 52)
+    _price(draw, facts, options, xy=(pad, y + 4), width=width, size=70)
+    y += _u(width, 92)
     _cta_pill(
         draw,
-        (pad, y),
-        copy.get("cta") or "Consultá por esta propiedad",
+        (pad, min(y, height - _u(width, 220))),
+        copy.get("cta") or "Contáctanos",
         width=width,
         accent=accent,
-        min_w=width - pad * 2 - _u(width, 280),
+        min_w=_u(width, 280),
     )
-    footer_top = height - _u(width, 110)
-    draw.rectangle((0, footer_top, width, height), fill=NAVY)
-    footer_logo = _paste_logo(
-        canvas,
-        facts.get("organization_logo"),
-        box=(_u(width, 180), _u(width, 50)),
-        xy=(pad, footer_top + _u(width, 28)),
-    )
-    if not footer_logo:
-        draw.text(
-            (pad, footer_top + _u(width, 28)),
-            usable_brand_name(facts.get("brand_name"), facts.get("organization_name"))
-            or "RE/MAX Data House",
-            font=font(_u(width, 22), bold=True),
-            fill=WHITE,
-        )
-    legal = facts.get("legal_footer_line") or ""
-    if legal:
-        draw.text(
-            (pad + _u(width, 200), footer_top + _u(width, 58)),
-            legal[:64],
-            font=font(_u(width, 14)),
-            fill=WHITE,
-        )
+    _legal_footer(canvas, facts)
     return canvas.convert("RGB")
 
 
@@ -489,7 +490,7 @@ def render_visual(size, photos, facts, copy, agent, options, style):
     draw = ImageDraw.Draw(canvas)
     accent = STYLE_ACCENT.get(style, ELECTRIC)
     pad = _u(width, 48)
-    _header(canvas, facts, accent=accent)
+    _header(canvas, facts, accent=accent, kicker=copy.get("kicker"))
     top = _u(width, 136)
     gallery_h = int(height * 0.38)
     gallery = photos[:3]
@@ -538,10 +539,11 @@ def render_visual(size, photos, facts, copy, agent, options, style):
     _cta_pill(
         draw,
         (pad, min(y, height - _u(width, 160))),
-        copy.get("cta") or "Escribinos",
+        copy.get("cta") or "Contáctanos",
         width=width,
         accent=accent,
     )
+    _legal_footer(canvas, facts)
     return canvas.convert("RGB")
 
 
@@ -552,37 +554,21 @@ def render_minimal(size, photos, facts, copy, agent, options, style):
     draw = ImageDraw.Draw(canvas)
     accent = STYLE_ACCENT.get(style, ELECTRIC)
     pad = _u(width, 52)
-    _header(canvas, facts, accent=accent)
+    _header(canvas, facts, accent=accent, kicker=copy.get("kicker"))
     top = _u(width, 136)
     hero_h = int(height * 0.36)
     if photos:
         paste_rounded(
             canvas, photos[0], (pad, top), (width - pad * 2, hero_h), radius=_u(width, 36)
         )
-    y = top + hero_h + _u(width, 28)
-    purpose = " · ".join(
-        part
-        for part in (
-            (facts.get("type_label") or "").upper(),
-            (facts.get("purpose_label") or "").upper(),
-        )
-        if part
+    y = _address_block(
+        draw,
+        facts,
+        copy,
+        xy=(pad, top + hero_h + _u(width, 28)),
+        width=width,
+        max_width=width - pad * 2,
     )
-    if purpose:
-        draw.text((pad, y), purpose, font=font(_u(width, 20), bold=True), fill=MUTED)
-        y += _u(width, 32)
-    title_font = font(_u(width, 58), bold=True)
-    for line in _wrap(draw, facts.get("title") or "", title_font, width - pad * 2)[:2]:
-        draw.text((pad, y), line, font=title_font, fill=NAVY)
-        y += _u(width, 64)
-    loc = facts.get("location_line") or ""
-    if loc:
-        draw.text((pad, y), f"●  {loc}", font=font(_u(width, 24)), fill=MUTED)
-        y += _u(width, 40)
-    script = copy.get("headline") or ""
-    if script:
-        draw.text((pad, y), script, font=font(_u(width, 28), italic=True), fill=ELECTRIC)
-        y += _u(width, 46)
     if options.get("show_features", True):
         _feature_icons(draw, facts.get("chips") or [], (pad, y), width=width)
         y += _u(width, 58)
@@ -591,7 +577,7 @@ def render_minimal(size, photos, facts, copy, agent, options, style):
     _cta_pill(
         draw,
         (pad + price_w + _u(width, 28), y + _u(width, 12)),
-        copy.get("cta") or "Consultá",
+        copy.get("cta") or "Contáctanos",
         width=width,
         accent=accent,
     )
@@ -618,6 +604,7 @@ def render_minimal(size, photos, facts, copy, agent, options, style):
             circular=True,
             size=_u(width, 168),
         )
+    _legal_footer(canvas, facts)
     return canvas.convert("RGB")
 
 

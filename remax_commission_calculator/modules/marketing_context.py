@@ -10,6 +10,7 @@ from modules.database.organizations_repository import get_organization_by_id
 from modules.formatting import format_listing_money
 from modules.i18n import translate
 from modules.marketing_branding import resolve_marketing_branding
+from modules.marketing_language import default_kicker, marketing_zone_line, operation_headline
 from modules.property_detail_view import (
     compact_property_location,
     compact_property_title,
@@ -118,7 +119,13 @@ def _chips(display, language):
     if area in (None, ""):
         area = display.get("total_m2")
     if area not in (None, ""):
-        number = int(area) if float(area) == int(float(area)) else area
+        value = float(area)
+        if value == int(value):
+            number = str(int(value))
+        elif language == "es":
+            number = f"{value:.2f}".replace(".", ",")
+        else:
+            number = f"{value:.2f}"
         chips.append(f"{number} m²")
     return chips[:4]
 
@@ -291,12 +298,27 @@ def build_property_marketing_context(
         "description": (display.get("description") or "").strip() or None,
         "price_policy": price_policy,
         "brand_name": branding["brand_name"],
+        "office_name": branding["office_name"],
         "organization_name": branding["office_name"],
+        "office_logo": branding["logo_path"],
         "organization_logo": branding["logo_path"],
         "has_logo": branding["has_logo"],
-        "show_wordmark": branding["show_wordmark"],
+        "show_wordmark": True,
+        "kicker": default_kicker(language),
+        "operation_title": operation_headline(language, {
+            "type_label": type_label,
+            "purpose": purpose,
+        }),
+        "zone_line": marketing_zone_line({
+            "locality": locality,
+            "jurisdiction": display.get("jurisdiction"),
+            "location_line": compact_property_location(display),
+        }),
         "legal_broker_name": branding["legal_broker_name"],
         "legal_broker_license": branding["legal_broker_license"],
+        "broker_name": branding.get("broker_name") or branding["legal_broker_name"],
+        "broker_license": branding.get("broker_license") or branding["legal_broker_license"],
+        "broker_footer_text": branding["legal_footer_line"],
         "legal_footer_line": branding["legal_footer_line"],
         "marketing_phone": branding["marketing_phone"],
         "marketing_instagram": branding["marketing_instagram"],

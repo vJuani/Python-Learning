@@ -25,6 +25,7 @@ from modules.marketing_language import (
     default_cta,
     default_headline,
     forbidden_language_hits,
+    is_location_headline,
     language_prompt_block,
     resolve_creative_language,
     validate_creative_language,
@@ -178,10 +179,8 @@ def build_marketing_image_prompt(
     fmt = normalize_format(fmt)
     cta_text = (cta or options.get("cta") or (art or {}).get("cta") or "").strip()
     note = (request_text or options.get("request_text") or options.get("prompt") or "").strip()
-    headline = ((art or {}).get("headline") or "").strip() or default_headline(
-        language, facts, chosen_style
-    )
-    if forbidden_language_hits(headline, language):
+    headline = default_headline(language, facts, chosen_style)
+    if forbidden_language_hits(headline, language) or is_location_headline(headline, facts):
         headline = default_headline(language, facts, chosen_style)
     if forbidden_language_hits(cta_text, language):
         cta_text = default_cta(language)
@@ -239,12 +238,15 @@ def build_marketing_image_prompt(
         language=language,
     )
     copy_block = (
-        "ALLOWED COPY ONLY: office logo or wordmark, one short headline, one short street OR zone, "
-        f"at most {MAX_STORY_ATTRIBUTES} attributes, price if requested, one CTA, "
+        "ALLOWED COPY ONLY: office logo + office name top-left, tiny kicker top-right, "
+        "one commercial operation headline, street on the next line, locality on a smaller third line, "
+        f"one clean row of at most {MAX_STORY_ATTRIBUTES} facts, price if requested, one Spanish/locked-language CTA, "
         "mandatory legal broker footer"
         + (", agent name + short title" if want_agent else "")
-        + ". Forbidden: JRH One, Inmobiliaria Principal, long paragraphs, decorative slogans, leftover phrases in corners, "
-        "vertical captions, stacked competing headlines, icon rows, amateur flyer clutter."
+        + ". Forbidden: JRH One, Inmobiliaria Principal, locality as the giant title, "
+        "long paragraphs, English taglines on Spanish pieces, "
+        "leftover phrases in corners, vertical captions, stacked competing headlines, "
+        "cluttered icon walls, amateur flyer or PowerPoint look."
     )
     hierarchy = " → ".join(HIERARCHY)
     avoid = ", ".join(AVOID)
@@ -276,9 +278,14 @@ def build_marketing_image_prompt(
         "or wrap to two lines. If it still overflows, summarize "
         f"('{copy['street']}' / '{copy['zone']}'). "
         f"Listing: {_fact_line(facts, include_price=show_price)}. "
-        f"Headline: {copy['headline']}. "
-        f"Street: {copy['street']}. Zone: {copy['zone']}. "
-        f"CTA: {copy['cta']}. "
+        f"Exact visible copy, do not rewrite: "
+        f"Kicker top-right (small): {copy.get('kicker') or facts.get('kicker')}. "
+        f"Main title (large, commercial, never the city): {copy['headline']}. "
+        f"Address line: {copy['street']}. "
+        f"Locality line (smaller): {copy['zone']}. "
+        f"Facts row: {' · '.join(copy.get('attributes') or [])}. "
+        f"CTA button: {copy['cta']}. "
+        "Keep the property photo dominant. Do not cover it with oversized type. "
         f"Visible language: {language}. "
         f"User note: {note or 'none'}. "
         f"Variant {variation_index}: change crop and type placement, "

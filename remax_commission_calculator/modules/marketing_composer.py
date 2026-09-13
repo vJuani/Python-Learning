@@ -7,6 +7,7 @@ import re
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
+from modules.marketing_branding import usable_brand_name
 from modules.marketing_references import agent_overlay_image
 from modules.marketing_renderer import (
     ELECTRIC,
@@ -62,17 +63,11 @@ def _brand_backdrop(size, *, theme):
     return Image.alpha_composite(canvas, glow)
 
 
-def _draw_wordmark(draw, xy, *, width, fill=WHITE):
+def _draw_wordmark(draw, xy, *, width, fill=WHITE, brand=""):
     x, y = xy
-    brand = font(_u(width, 40), bold=True)
-    small = font(_u(width, 15), bold=True)
-    draw.text((x, y), "JRH", font=brand, fill=fill)
-    jrh_w = draw.textbbox((0, 0), "JRH", font=brand)[2]
-    bar_x = x + jrh_w + _u(width, 12)
-    draw.rectangle((bar_x, y + _u(width, 8), bar_x + 3, y + _u(width, 34)), fill=fill)
-    draw.text((bar_x + _u(width, 14), y), "ONE", font=brand, fill=fill)
-    subtitle = (180, 196, 220) if fill == WHITE else (91, 107, 124)
-    draw.text((x, y + _u(width, 44)), "BIENES RAÍCES", font=small, fill=subtitle)
+    label = usable_brand_name(brand) or "RE/MAX Data House"
+    used = font(_u(width, 28), bold=True)
+    draw.text((x, y), label, font=used, fill=fill)
 
 
 def _icon_pin(draw, box, fill):
@@ -216,7 +211,10 @@ def compose_marketing_image(context, art, *, fmt, options):
     draw = ImageDraw.Draw(canvas)
     ink = WHITE if theme == "dark" else INK
     mute = MUTED_ON_DARK if theme == "dark" else MUTED_ON_LIGHT
-    _draw_wordmark(draw, (pad, top), width=width, fill=ink)
+    office = usable_brand_name(
+        facts.get("brand_name"), facts.get("office_name"), facts.get("organization_name")
+    )
+    _draw_wordmark(draw, (pad, top), width=width, fill=ink, brand=office)
 
     show_agent = bool(options.get("include_agent"))
     show_photo = bool(show_agent and options.get("show_agent_photo"))
@@ -232,7 +230,7 @@ def compose_marketing_image(context, art, *, fmt, options):
     if spec["hero"] == "full_bleed" and hero is not None:
         bleed_h = int(height * (0.58 if extras and spec["thumbs"] != "none_or_one" else 0.62))
         paste_rounded(canvas, hero, (0, 0), (width, bleed_h), radius=0)
-        _draw_wordmark(draw, (pad, top), width=width, fill=WHITE)
+        _draw_wordmark(draw, (pad, top), width=width, fill=WHITE, brand=office)
         hook = ((art or {}).get("headline") or "").strip()
         if hook:
             draw.text((pad, hero_top + _u(width, 40)), hook, font=_serif(_u(width, 48), bold=True), fill=WHITE)

@@ -196,7 +196,7 @@ class MockMarketingImageProvider(MarketingImageProvider):
                 canvas.paste(fit_cover(photos[1], thumb_w, thumb_h), (left, top + 72 + hero_h))
         ink = (255, 255, 255) if fill == NAVY else NAVY
         english = "written in English only" in (prompt or "")
-        draw.text((left + 8, bottom - 64), "Inquire Now" if english else "Consultame ahora", fill=ink)
+        draw.text((left + 8, bottom - 64), "Inquire Now" if english else "Contáctanos", fill=ink)
         legal = "Mauro Marvisi CUCICBA 1762"
         if "Legal footer:" in prompt_text:
             legal = prompt_text.split("Legal footer:", 1)[1].split(".", 1)[0].strip()[:42] or legal

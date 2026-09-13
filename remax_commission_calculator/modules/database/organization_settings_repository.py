@@ -423,7 +423,10 @@ def update_organization_billing_fields(
 
 def update_organization_marketing_fields(organization_id, **fields):
     """Update marketing / legal branding fields. Only provided keys are written."""
+    from modules.marketing_branding import apply_branding_aliases
+
     organization_id = require_organization_id(organization_id)
+    fields = apply_branding_aliases(fields)
     allowed = (
         "marketing_brand_name",
         "marketing_logo_url",

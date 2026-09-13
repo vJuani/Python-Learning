@@ -80,11 +80,9 @@ def autofit_text(text, *, max_chars=28, max_lines=2, min_chars=10):
 
 
 def _zone_line(facts):
-    locality = " ".join(str(facts.get("locality") or "").split())
-    jurisdiction = " ".join(str(facts.get("jurisdiction") or "").split())
-    if locality and jurisdiction and locality.casefold() != jurisdiction.casefold():
-        return f"{locality}, {jurisdiction}"
-    return locality or jurisdiction or " ".join(str(facts.get("location_line") or "").split())
+    from modules.marketing_language import marketing_zone_line
+
+    return marketing_zone_line(facts)
 
 
 def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="es"):
@@ -92,6 +90,7 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
         default_agent_role,
         default_cta,
         default_headline,
+        default_kicker,
         marketing_label,
     )
 
@@ -101,9 +100,14 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
     zone = autofit_text(_zone_line(facts), max_chars=32, max_lines=1)
     fallback_headline = default_headline(language, facts)
     hook = autofit_text(
-        headline or fallback_headline or marketing_label("available", language),
-        max_chars=26,
+        fallback_headline or marketing_label("available", language),
+        max_chars=32,
         max_lines=2,
+    )
+    kicker = autofit_text(
+        facts.get("kicker") or default_kicker(language),
+        max_chars=28,
+        max_lines=1,
     )
     chips = [str(item).strip() for item in (facts.get("chips") or []) if str(item).strip()][:4]
     agent = agent or {}
@@ -121,12 +125,13 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
             )
             if part
         ),
-        max_chars=52,
+        max_chars=72,
         max_lines=2,
     )
     return {
         "headline": hook["text"].replace("\n", " "),
         "headline_lines": hook["lines"],
+        "kicker": kicker["text"],
         "street": street["text"],
         "zone": zone["text"],
         "attributes": chips,

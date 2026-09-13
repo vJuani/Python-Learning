@@ -10,9 +10,11 @@ from modules.jrh_ai_provider import get_jrh_ai_provider_name
 from modules.marketing_context import ai_prompt_facts
 from modules.marketing_language import (
     default_cta,
+    default_headline,
+    default_kicker,
     forbidden_language_hits,
+    is_location_headline,
     resolve_creative_language,
-    style_headline,
 )
 from modules.marketing_visual_spec import (
     AVOID,
@@ -70,17 +72,14 @@ def pick_direction(fmt, index, used, preferred=None):
     return choice
 
 
-def _safe_hook(text, facts, language="es"):
+def _safe_kicker(text, facts, language="es"):
     raw = " ".join(str(text or "").split())
     if not raw:
         return None
     if forbidden_language_hits(raw, language):
         return None
-    if INVENTED_CLAIM_RE.search(raw):
-        locality = facts.get("locality") or facts.get("title") or ""
-        if language == "en":
-            return f"In {locality}" if locality else None
-        return f"En {locality}" if locality else None
+    if INVENTED_CLAIM_RE.search(raw) or is_location_headline(raw, facts):
+        return None
     words = raw.split()
     if len(words) > MAX_CREATIVE_WORDS:
         raw = " ".join(words[:MAX_CREATIVE_WORDS])
@@ -100,15 +99,17 @@ def _fallback_direction(fmt, index, used, facts, request):
     )
     show_photo = request.get("with_agent_photo") is not False and request.get("with_agent") is not False
     brief = build_visual_brief(fmt, direction, show_agent_photo=show_photo)
-    hook = style_headline(language, direction) or HOOKS.get(direction)
+    headline = default_headline(language, facts)
+    kicker = default_kicker(language)
     return {
         "visual_direction": direction,
         "creative_brief": brief["composition"],
         "background_style": brief["composition"],
         "layout": brief,
         "visual_brief": brief,
-        "headline": hook,
-        "short_hook": "",
+        "headline": headline,
+        "kicker": kicker,
+        "short_hook": kicker,
         "cta": default_cta(language),
         "language": language,
         "copy_density": request.get("copy_density") or COPY_DENSITY,
@@ -139,10 +140,11 @@ def plan_item(context, request, *, fmt, index, used_directions):
         )
         parsed = request_structured_json(
             instructions=(
-                "Art-direct one finished commercial real-estate advertisement at the "
-                "approved JRH quality target. Very little copy: optional headline "
-                f"<=8 words, CTA <=2 words. {lang_line} Do not invent amenities or claims. "
-                "Return JSON with visual_direction, creative_brief, headline, cta, "
+                "Art-direct one finished commercial real-estate advertisement. "
+                "The large title MUST be the operation line (property type + sale/rent), "
+                "never the locality and never a poetic slogan. "
+                f"CTA <=3 words. {lang_line} Do not invent amenities or claims. "
+                "Return JSON with visual_direction, creative_brief, kicker, cta, "
                 "text_theme (light|dark)."
             ),
             user_content=[
@@ -158,11 +160,17 @@ def plan_item(context, request, *, fmt, index, used_directions):
         )
         if not isinstance(parsed, dict):
             return fallback
-        fallback["headline"] = _safe_hook(
-            parsed.get("headline"),
+        fallback["headline"] = default_headline(
+            language, (context or {}).get("facts") or {}
+        )
+        kicker = _safe_kicker(
+            parsed.get("kicker") or parsed.get("headline"),
             (context or {}).get("facts") or {},
             language,
-        ) or fallback["headline"]
+        )
+        if kicker:
+            fallback["kicker"] = kicker
+            fallback["short_hook"] = kicker
         if parsed.get("cta") and not forbidden_language_hits(parsed.get("cta"), language):
             fallback["cta"] = str(parsed.get("cta"))[:20]
         if parsed.get("creative_brief"):

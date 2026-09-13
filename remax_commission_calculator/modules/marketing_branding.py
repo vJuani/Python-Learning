@@ -31,6 +31,7 @@ PLACEHOLDER_BRANDS = frozenset(
     }
 )
 NEUTRAL_BRAND_FALLBACK = "RE/MAX Data House"
+DEFAULT_OFFICE_LOGO = BASE_DIR / "static" / "brand" / "office" / "remax-pin.png"
 
 DEMO_MARKETING_BRANDING = {
     "marketing_brand_name": "RE/MAX Data House",
@@ -40,6 +41,16 @@ DEMO_MARKETING_BRANDING = {
     "legal_footer_line": (
         "Corredor Público Mauro Marvisi CUCICBA 1762 / CMCPSI 5574"
     ),
+}
+
+BRANDING_ALIASES = {
+    "office_name": "marketing_brand_name",
+    "organization_name": "organization_name",
+    "office_logo": "marketing_logo_url",
+    "organization_logo": "marketing_logo_url",
+    "broker_name": "legal_broker_name",
+    "broker_license": "legal_broker_license",
+    "broker_footer_text": "legal_footer_line",
 }
 
 MARKETING_BRANDING_KEYS = (
@@ -129,20 +140,45 @@ def _scan_organization_logo(organization_id):
     return None
 
 
-def resolve_creative_logo_path(settings, *, organization_id=None):
-    settings = settings or {}
+def apply_branding_aliases(settings):
+    """Accept office_* / organization_* / broker_* aliases from any inmobiliaria."""
+    normalized = dict(settings or {})
+    for alias, canonical in BRANDING_ALIASES.items():
+        if _clean(normalized.get(canonical)):
+            continue
+        if _clean(normalized.get(alias)):
+            normalized[canonical] = normalized.get(alias)
+    return normalized
+
+
+def default_office_logo_path(brand_name=None):
+    brand = _clean(brand_name).casefold()
+    if brand and "re/max" not in brand and "remax" not in brand:
+        return None
+    if DEFAULT_OFFICE_LOGO.is_file():
+        return DEFAULT_OFFICE_LOGO
+    return None
+
+
+def resolve_creative_logo_path(settings, *, organization_id=None, brand_name=None):
+    settings = apply_branding_aliases(settings)
     for key in (
         "marketing_logo_light_url",
         "marketing_logo_url",
+        "office_logo",
+        "organization_logo",
         "logo_path",
         "marketing_logo_dark_url",
     ):
         path = resolve_local_logo_path(settings.get(key))
         if path:
             return path
-    return _scan_organization_logo(
+    scanned = _scan_organization_logo(
         organization_id or settings.get("organization_id")
     )
+    if scanned:
+        return scanned
+    return default_office_logo_path(brand_name)
 
 
 def build_legal_footer_line(settings, *, language="es"):
@@ -168,15 +204,28 @@ def resolve_marketing_branding(
     apply_demo_fallback=True,
 ):
     """Resolve the brand that may appear inside a generated creative."""
-    settings = dict(settings or {})
-    stored_brand = usable_brand_name(settings.get("marketing_brand_name"))
-    stored_office = usable_brand_name(settings.get("legal_office_name"))
-    stored_broker = _clean(settings.get("legal_broker_name"))
-    stored_license = _clean(settings.get("legal_broker_license"))
-    stored_footer = _clean(settings.get("legal_footer_line"))
+    settings = apply_branding_aliases(settings)
+    stored_brand = usable_brand_name(
+        settings.get("marketing_brand_name"),
+        settings.get("office_name"),
+    )
+    stored_office = usable_brand_name(
+        settings.get("legal_office_name"),
+        settings.get("office_name"),
+    )
+    stored_broker = _clean(
+        settings.get("legal_broker_name") or settings.get("broker_name")
+    )
+    stored_license = _clean(
+        settings.get("legal_broker_license") or settings.get("broker_license")
+    )
+    stored_footer = _clean(
+        settings.get("legal_footer_line") or settings.get("broker_footer_text")
+    )
     org_name = usable_brand_name(
         organization_name,
         settings.get("organization_name"),
+        settings.get("office_name"),
         settings.get("display_name"),
         settings.get("trade_name"),
     )
@@ -216,6 +265,7 @@ def resolve_marketing_branding(
     logo_path = resolve_creative_logo_path(
         settings,
         organization_id=settings.get("organization_id"),
+        brand_name=brand_name,
     )
     if not logo_path:
         logger.warning(
@@ -224,14 +274,21 @@ def resolve_marketing_branding(
         )
     configured = marketing_legal_is_configured(settings)
     legal_complete = bool(stored_broker and stored_license)
+    logo_value = str(logo_path) if logo_path else None
     return {
         "brand_name": brand_name,
         "office_name": office_name,
-        "logo_path": str(logo_path) if logo_path else None,
+        "organization_name": office_name,
+        "office_logo": logo_value,
+        "organization_logo": logo_value,
+        "logo_path": logo_value,
         "has_logo": bool(logo_path),
-        "show_wordmark": not bool(logo_path),
+        "show_wordmark": True,
         "legal_broker_name": stored_broker,
         "legal_broker_license": stored_license,
+        "broker_name": stored_broker,
+        "broker_license": stored_license,
+        "broker_footer_text": footer,
         "legal_footer_line": footer,
         "marketing_phone": _clean(settings.get("marketing_phone")),
         "marketing_instagram": _clean(settings.get("marketing_instagram")),
@@ -250,18 +307,38 @@ def branding_from_facts(facts):
     facts = facts or {}
     brand = usable_brand_name(
         facts.get("brand_name"),
+        facts.get("office_name"),
         facts.get("organization_name"),
     ) or DEMO_MARKETING_BRANDING["marketing_brand_name"]
-    has_logo = bool(facts.get("organization_logo") or facts.get("has_logo"))
+    logo = (
+        facts.get("organization_logo")
+        or facts.get("office_logo")
+        or facts.get("logo_path")
+    )
+    has_logo = bool(logo or facts.get("has_logo"))
+    footer = (
+        facts.get("legal_footer_line")
+        or facts.get("broker_footer_text")
+        or ""
+    )
+    broker = facts.get("legal_broker_name") or facts.get("broker_name") or ""
+    license_no = facts.get("legal_broker_license") or facts.get("broker_license") or ""
     return {
         "brand_name": brand,
-        "office_name": usable_brand_name(facts.get("organization_name")) or brand,
-        "logo_path": facts.get("organization_logo"),
+        "office_name": usable_brand_name(
+            facts.get("office_name"), facts.get("organization_name")
+        ) or brand,
+        "logo_path": logo,
+        "office_logo": logo,
+        "organization_logo": logo,
         "has_logo": has_logo,
-        "show_wordmark": bool(facts.get("show_wordmark", not has_logo)),
-        "legal_broker_name": facts.get("legal_broker_name") or "",
-        "legal_broker_license": facts.get("legal_broker_license") or "",
-        "legal_footer_line": facts.get("legal_footer_line") or "",
+        "show_wordmark": bool(facts.get("show_wordmark", True)),
+        "legal_broker_name": broker,
+        "legal_broker_license": license_no,
+        "broker_name": broker,
+        "broker_license": license_no,
+        "broker_footer_text": footer,
+        "legal_footer_line": footer,
         "marketing_phone": facts.get("marketing_phone") or "",
         "marketing_instagram": facts.get("marketing_instagram") or "",
         "marketing_whatsapp": facts.get("marketing_whatsapp") or "",
@@ -301,9 +378,10 @@ def branding_prompt_block(branding, *, include_agent=False, language="es"):
     if branding.get("has_logo"):
         logo = (
             "Place the REAL office logo from the logo reference in the top-left, "
-            "inside the safe area. Small, sharp, clean, no extra plate or colored box, "
-            "never pixelated, never invented, never replaced by JRH One. "
-            "If the mark already includes the office name, do not repeat the name beside it."
+            "inside the safe area, immediately followed by the office name "
+            f"'{brand}'. Keep logo + name as one compact header lockup. "
+            "Small, sharp, clean, no extra plate or colored box, never pixelated, "
+            "never invented, never replaced by JRH One."
         )
     else:
         logo = (
@@ -320,14 +398,14 @@ def branding_prompt_block(branding, *, include_agent=False, language="es"):
             f"Usar la marca visible de la inmobiliaria activa: {brand}. "
             "No mostrar JRH One dentro del creativo. "
             "Colocar el logo real de la inmobiliaria si está disponible. "
-            f"Mostrar el nombre comercial correcto de la oficina ({office}) solo si el logo no lo incluye. "
+            f"Mostrar siempre el nombre comercial de la oficina ({office}) junto al logo. "
             f"Mantener el responsable legal y matrícula visibles: {broker} {license_no}."
         )
     else:
         lock = (
             f"Use the active real estate office branding ({brand}), not the app brand. "
-            "Show the real estate office logo if provided, and use the office commercial name "
-            "only when the logo does not already include it. "
+            "Show the real estate office logo if provided, and always keep the office "
+            "commercial name next to it. "
             "Do not display JRH One in the final creative. "
             f"Keep the legal broker and license visible: {broker} {license_no}."
         )
@@ -337,8 +415,9 @@ def branding_prompt_block(branding, *, include_agent=False, language="es"):
         f"{logo} "
         f"Mandatory legal footer, small, clean, fully inside the safe area, never cropped: '{footer}'. "
         f"{agent}{contact}"
-        "Visual hierarchy: header office logo top-left; body property, title, "
-        "location, facts and price; footer agent/contact then legal broker and license."
+        "Visual hierarchy: header office logo + office name top-left and a tiny kicker "
+        "top-right; then a large property photo; then operation title, street, locality; "
+        "facts, price, CTA; footer agent/contact then legal broker and license."
     )
 
 

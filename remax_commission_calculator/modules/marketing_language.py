@@ -12,31 +12,45 @@ logger = logging.getLogger(__name__)
 
 MARKETING_COPY = {
     "es": {
-        "default_headline_sale": "Tu próximo hogar te espera",
-        "default_headline_investment": "Descubrí tu próxima inversión",
-        "cta": "Consultame ahora",
+        "default_headline_sale": "En venta",
+        "default_headline_investment": "Inversión disponible",
+        "cta": "Contáctanos",
         "cta_short": "Consultame",
-        "for_sale": "En venta",
-        "for_rent": "En alquiler",
+        "for_sale": "en venta",
+        "for_rent": "en alquiler",
         "agent_role": "Agente inmobiliario",
         "available": "Disponible",
-        "headline_editorial": "Viví distinto",
+        "kicker": "Tu próximo hogar está acá",
+        "headline_editorial": "Tu próximo hogar está acá",
         "headline_commercial": "Disponible ahora",
         "headline_luxury": "Exclusiva",
     },
     "en": {
-        "default_headline_sale": "Your Next Home Awaits",
-        "default_headline_investment": "Discover Your Next Investment",
+        "default_headline_sale": "For Sale",
+        "default_headline_investment": "Investment Opportunity",
         "cta": "Inquire Now",
-        "cta_short": "Inquire Now",
-        "for_sale": "For Sale",
-        "for_rent": "For Rent",
+        "cta_short": "Inquire",
+        "for_sale": "for sale",
+        "for_rent": "for rent",
         "agent_role": "Real Estate Agent",
         "available": "Available",
-        "headline_editorial": "Live differently",
+        "kicker": "Your next home is here",
+        "headline_editorial": "Your next home is here",
         "headline_commercial": "Available now",
         "headline_luxury": "Exclusive",
     },
+}
+
+JURISDICTION_SHORT = {
+    "buenos aires": "PBA",
+    "provincia de buenos aires": "PBA",
+    "bs as": "PBA",
+    "bs. as.": "PBA",
+    "bs.as.": "PBA",
+    "caba": "CABA",
+    "capital federal": "CABA",
+    "ciudad autonoma de buenos aires": "CABA",
+    "ciudad autónoma de buenos aires": "CABA",
 }
 
 ENGLISH_CREATIVE_WORDS = (
@@ -119,23 +133,52 @@ def resolve_creative_language(*, locale=None, request_text="", organization_lang
     return normalize_language(organization_language or DEFAULT_LANGUAGE)
 
 
-def default_headline(language="es", facts=None, style=None):
+def operation_headline(language="es", facts=None, style=None):
+    """Commercial title: DEPARTAMENTO EN VENTA. Never the locality."""
     pack = copy_pack(language)
     facts = facts or {}
+    type_label = " ".join(str(facts.get("type_label") or "").split())
     purpose = str(facts.get("purpose") or "").lower()
-    kind = " ".join(
-        str(part or "").lower()
-        for part in (facts.get("type_label"), facts.get("property_type"), facts.get("title"))
+    rental = purpose in {"rental", "temporary_rental"}
+    suffix = pack["for_rent"] if rental else pack["for_sale"]
+    if type_label:
+        return f"{type_label} {suffix}".upper()
+    return suffix.upper()
+
+
+def default_headline(language="es", facts=None, style=None):
+    return operation_headline(language, facts, style)
+
+
+def default_kicker(language="es"):
+    return copy_pack(language)["kicker"]
+
+
+def marketing_zone_line(facts):
+    facts = facts or {}
+    locality = " ".join(str(facts.get("locality") or "").split())
+    jurisdiction = " ".join(str(facts.get("jurisdiction") or "").split())
+    short = JURISDICTION_SHORT.get(jurisdiction.casefold()) if jurisdiction else None
+    if locality and short:
+        return f"{locality}, {short}"
+    if locality and jurisdiction and locality.casefold() != jurisdiction.casefold():
+        return f"{locality}, {jurisdiction}"
+    return locality or (short or jurisdiction) or " ".join(
+        str(facts.get("location_line") or "").split()
     )
-    if purpose == "rental":
-        return pack["for_rent"]
-    if any(token in kind for token in ("oficina", "office", "terreno", "lote", "land", "local")):
-        return pack["default_headline_investment"]
-    if style in {"luxury_minimal", "minimal", "editorial_premium", "premium"}:
-        return pack["headline_editorial"] if style in {"editorial_premium", "premium"} else pack["headline_luxury"]
-    if style in {"modern_commercial", "modern"}:
-        return pack["headline_commercial"]
-    return pack["default_headline_sale"]
+
+
+def is_location_headline(text, facts=None):
+    folded = " ".join(str(text or "").lower().split())
+    if not folded:
+        return False
+    if folded.startswith("en ") or folded.startswith("in "):
+        rest = folded.split(" ", 1)[1]
+        if rest in {"venta", "alquiler", "sale", "rent"}:
+            return False
+        return True
+    locality = " ".join(str((facts or {}).get("locality") or "").lower().split())
+    return bool(locality and locality in folded and len(folded.split()) <= 3)
 
 
 def default_cta(language="es"):

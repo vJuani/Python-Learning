@@ -1106,7 +1106,11 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("ALLOWED COPY ONLY", prompt)
         self.assertIn(STYLE_BRIEFS[EDITORIAL_PREMIUM][:24], prompt)
         self.assertIn("Spanish only", prompt)
-        self.assertIn("Consultame ahora", prompt)
+        self.assertIn("Contáctanos", prompt)
+        self.assertIn("DEPARTAMENTO EN VENTA", prompt)
+        self.assertIn("Victoria, PBA", prompt)
+        self.assertIn("Tu próximo hogar está acá", prompt)
+        self.assertNotIn("En Victoria", prompt)
         self.assertNotIn("Discover Your Next Investment", prompt)
         self.assertIn("RE/MAX Data House", prompt)
         self.assertIn("Mauro Marvisi", prompt)
@@ -1123,7 +1127,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         self.assertIn("English only", english)
         self.assertIn(MARKETING_COPY["en"]["cta"], english)
-        self.assertNotIn("Consultame ahora", english)
+        self.assertNotIn("Contáctanos", english)
 
     def test_44_structured_one_story_and_pack_counts(self):
         one = start_marketing_batch(
@@ -1296,7 +1300,7 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(detect_request_language("haceme una historia con mi foto y mis datos"), "es")
         self.assertIn("discover", forbidden_language_hits("Discover Your Next Investment", "es"))
         self.assertIn("inquire", forbidden_language_hits("Inquire Now", "es"))
-        self.assertFalse(forbidden_language_hits("Tu próxima inversión. Consultame ahora.", "es"))
+        self.assertFalse(forbidden_language_hits("Tu próxima inversión. Contáctanos.", "es"))
         verdict = validate_creative_language(
             language="es",
             planned_copy={"headline": "Luxury Office Space Available", "cta": "Inquire Now"},
@@ -1314,7 +1318,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         options = spanish["assets"][0].get("options") or {}
         self.assertEqual(options.get("language"), "es")
-        self.assertEqual((spanish["assets"][0].get("copy_snapshot") or {}).get("cta"), "Consultame ahora")
+        self.assertEqual((spanish["assets"][0].get("copy_snapshot") or {}).get("cta"), "Contáctanos")
         english = start_marketing_batch(
             self.org,
             self._user(self.agent_user_id),
@@ -1340,13 +1344,35 @@ class MarketingIaTests(unittest.TestCase):
         )
         self.assertEqual(empty["brand_name"], "RE/MAX Data House")
         self.assertEqual(empty["legal_broker_name"], "Mauro Marvisi")
+        aliased = resolve_marketing_branding(
+            {
+                "office_name": "RE/MAX Data House",
+                "office_logo": str(self.office_logo),
+                "broker_name": "Mauro Marvisi",
+                "broker_license": "CUCICBA 1762 / CMCPSI 5574",
+                "broker_footer_text": (
+                    "Corredor Público Mauro Marvisi CUCICBA 1762 / CMCPSI 5574"
+                ),
+            },
+            apply_demo_fallback=False,
+        )
+        self.assertEqual(aliased["office_name"], "RE/MAX Data House")
+        self.assertTrue(aliased["has_logo"])
+        self.assertTrue(aliased["show_wordmark"])
+        self.assertEqual(aliased["broker_name"], "Mauro Marvisi")
+        self.assertIn("CMCPSI 5574", aliased["broker_footer_text"])
         self.assertNotEqual(empty["brand_name"], "JRH One")
         self.assertNotEqual(empty["brand_name"], "Inmobiliaria Principal")
         context = build_property_marketing_context(self._property())
         facts = context["facts"]
         self.assertEqual(facts["brand_name"], "RE/MAX Data House")
+        self.assertEqual(facts["office_name"], "RE/MAX Data House")
+        self.assertTrue(facts["show_wordmark"])
+        self.assertEqual(facts["operation_title"], "DEPARTAMENTO EN VENTA")
+        self.assertEqual(facts["zone_line"], "Victoria, PBA")
         self.assertEqual(facts["legal_broker_name"], "Mauro Marvisi")
         self.assertIn("CUCICBA", facts["legal_footer_line"])
+        self.assertIn("Corredor Público Mauro Marvisi", facts["broker_footer_text"])
         self.assertFalse(facts["requires_legal_review"])
         self.assertTrue(facts["publishable"])
         self.assertTrue(str(facts["organization_logo"]).endswith("office-logo.png"))

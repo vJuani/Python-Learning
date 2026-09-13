@@ -81,7 +81,7 @@ def run_raw_story_qa(
         "show_price": True,
         "style": "premium",
         "language": language,
-        "cta": "Consultame ahora" if language != "en" else "Inquire Now",
+        "cta": "Contáctanos" if language != "en" else "Inquire Now",
         "request_text": "Una historia 9:16, pocas palabras, foto real del agente.",
     }
     packed = collect_reference_images(context, options)
