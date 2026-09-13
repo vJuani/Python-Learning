@@ -107,6 +107,33 @@ def fit_cover(image, width, height):
     return resized.crop((left, top, left + width, top + height))
 
 
+def fit_contain(image, width, height, *, fill=NAVY):
+    src_w, src_h = image.size
+    canvas = Image.new("RGB", (width, height), fill)
+    if src_w <= 0 or src_h <= 0:
+        return canvas
+    scale = min(width / src_w, height / src_h)
+    new_w = max(1, int(src_w * scale))
+    new_h = max(1, int(src_h * scale))
+    resized = image.convert("RGB").resize((new_w, new_h), Image.Resampling.LANCZOS)
+    canvas.paste(resized, ((width - new_w) // 2, (height - new_h) // 2))
+    return canvas
+
+
+def fit_contain_safe(image, size, fmt=None, *, fill=NAVY):
+    from modules.marketing_visual_spec import format_from_size, safe_rect
+
+    width, height = size
+    fmt = fmt or format_from_size(size)
+    left, top, right, bottom = safe_rect(fmt, size)
+    box_w = max(1, right - left)
+    box_h = max(1, bottom - top)
+    inner = fit_contain(image, box_w, box_h, fill=fill)
+    canvas = Image.new("RGB", (width, height), fill)
+    canvas.paste(inner, (left, top))
+    return canvas
+
+
 def load_property_photos(photo_rows, *, cache=None):
     images = []
     cache = cache if cache is not None else {}

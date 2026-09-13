@@ -41,7 +41,7 @@ from modules.marketing_context import (
 )
 from jinja2 import Environment
 from modules.marketing_art_director import STORY_DIRECTIONS, plan_item
-from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy
+from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy, summarize_listing_copy
 from modules.marketing_composer import compose_marketing_image
 from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider, get_marketing_image_model
 from modules.openai_image_service import (
@@ -54,12 +54,18 @@ from modules.marketing_qa import resolve_qa_file, run_raw_story_qa
 from modules.marketing_image_provider import sha256_bytes
 from modules.marketing_quality import validate_creative
 from modules.marketing_visual_spec import (
+    EDITORIAL_PREMIUM,
+    LUXURY_MINIMAL,
+    MODERN_COMMERCIAL,
+    SAFE_AREA,
+    STYLE_BRIEFS,
     STYLE_REFERENCE_LABEL,
     approved_style_path,
     build_visual_brief,
+    normalize_style,
 )
 from modules.marketing_references import collect_reference_images
-from modules.marketing_renderer import FORMAT_SIZES, render_marketing_image
+from modules.marketing_renderer import FORMAT_SIZES, fit_contain_safe, render_marketing_image
 from modules.marketing_photo_selector import select_photos_for_item
 from modules.marketing_request import DEFAULT_PROMPT, agent_presentation_config, expand_items, parse_marketing_request
 from modules.marketing_service import (
@@ -1037,6 +1043,8 @@ class MarketingIaTests(unittest.TestCase):
         brief = build_visual_brief("story", "editorial_navy")
         self.assertEqual(brief["text_density"], "very_low")
         self.assertEqual(brief["quality_target"], "approved_jrh_story")
+        self.assertEqual(brief["safe_area"]["left"], 80)
+        self.assertEqual(brief["safe_area"]["bottom"], 180)
 
     def test_43_openai_service_prompt_and_plan(self):
         self.assertEqual(DEFAULT_OPENAI_IMAGE_MODEL, "gpt-image-1")
@@ -1062,6 +1070,12 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("finished premium real-estate", prompt)
         self.assertIn("Santamarina", prompt)
         self.assertIn("REAL agent portrait", prompt)
+        self.assertIn("STRICT SAFE AREA", prompt)
+        self.assertIn("left 80px", prompt)
+        self.assertIn("bottom 180px", prompt)
+        self.assertIn("vertical captions", prompt)
+        self.assertIn("ALLOWED COPY ONLY", prompt)
+        self.assertIn(STYLE_BRIEFS[EDITORIAL_PREMIUM][:24], prompt)
 
     def test_44_structured_one_story_and_pack_counts(self):
         one = start_marketing_batch(
@@ -1163,6 +1177,70 @@ class MarketingIaTests(unittest.TestCase):
         page = client.get("/marketing/qa/raw-story")
         self.assertEqual(page.status_code, 200)
         self.assertIn(b"Raw OpenAI Story", page.data)
+
+    def test_47_safe_area_copy_and_layout_validation(self):
+        self.assertEqual(SAFE_AREA["story"], {"left": 80, "right": 80, "top": 120, "bottom": 180})
+        self.assertEqual(SAFE_AREA["post"], {"left": 70, "right": 70, "top": 70, "bottom": 70})
+        self.assertEqual(SAFE_AREA["flyer"], {"left": 80, "right": 80, "top": 80, "bottom": 80})
+        self.assertEqual(normalize_style("premium"), EDITORIAL_PREMIUM)
+        self.assertEqual(normalize_style("modern"), MODERN_COMMERCIAL)
+        self.assertEqual(normalize_style("minimal"), LUXURY_MINIMAL)
+        self.assertNotEqual(STYLE_BRIEFS[EDITORIAL_PREMIUM], STYLE_BRIEFS[MODERN_COMMERCIAL])
+        self.assertNotEqual(STYLE_BRIEFS[MODERN_COMMERCIAL], STYLE_BRIEFS[LUXURY_MINIMAL])
+        context = build_property_marketing_context(self._property())
+        copy = summarize_listing_copy(context["facts"], context.get("agent"))
+        self.assertEqual(copy["street"], "Santamarina 1335")
+        self.assertIn("Victoria", copy["zone"])
+        long_copy = summarize_listing_copy(
+            {
+                "title": "Avenida del Libertador General San Martín 4450 piso 12",
+                "locality": "Vicente López",
+                "jurisdiction": "Buenos Aires",
+            }
+        )
+        self.assertLessEqual(len(long_copy["street"]), 32)
+        clipped = Image.new("RGB", FORMAT_SIZES["story"], (18, 28, 48))
+        draw = ImageDraw.Draw(clipped)
+        draw.rectangle((120, 200, 960, 1400), fill=(90, 100, 120))
+        for y in range(0, 1920, 4):
+            draw.rectangle((0, y, 48, y + 2), fill=(255, 255, 255))
+        for x in range(0, 1080, 4):
+            draw.rectangle((x, 1860, x + 2, 1919), fill=(255, 255, 255))
+        buffer = io.BytesIO()
+        clipped.save(buffer, format="PNG")
+        verdict = validate_creative(
+            buffer.getvalue(),
+            size=FORMAT_SIZES["story"],
+            options={"layout_engine": "openai_images", "format": "story"},
+            references=[{"role": "property_hero"}],
+            fmt="story",
+        )
+        self.assertFalse(verdict["ok"])
+        self.assertTrue(
+            {"unsafe_edges", "text_clipped", "agent_clipped"} & set(verdict["reasons"]),
+            verdict["reasons"],
+        )
+        marker = Image.new("RGB", (1024, 1536), (30, 40, 60))
+        ImageDraw.Draw(marker).rectangle((0, 0, 40, 1536), fill=(255, 0, 0))
+        fitted = fit_contain_safe(marker, FORMAT_SIZES["story"], "story")
+        self.assertEqual(fitted.size, FORMAT_SIZES["story"])
+        left_edge = fitted.crop((0, 0, 80, 1920))
+        reds = sum(1 for pixel in left_edge.getdata() if pixel[0] > 200 and pixel[1] < 40)
+        self.assertEqual(reds, 0)
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            formats=["story"],
+            count=1,
+            include_agent=True,
+            style="premium",
+        )
+        options = result["assets"][0].get("options") or {}
+        self.assertGreaterEqual(options.get("quality_score") or 0, 70)
+        self.assertFalse(
+            {"unsafe_edges", "text_clipped", "agent_clipped"} & set(options.get("quality_reasons") or [])
+        )
 
 
 def _quality_png():

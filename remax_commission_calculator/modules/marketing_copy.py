@@ -36,6 +36,85 @@ def _clip(text, limit):
     return clipped or value[:limit]
 
 
+def _wrap_words(text, max_chars, max_lines):
+    words = [part for part in str(text or "").split() if part]
+    if not words:
+        return []
+    lines = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = f"{current} {word}"
+        if len(candidate) <= max_chars:
+            current = candidate
+            continue
+        lines.append(current)
+        current = word
+        if len(lines) >= max_lines:
+            break
+    if len(lines) < max_lines and current:
+        lines.append(current)
+    return lines[:max_lines]
+
+
+def autofit_text(text, *, max_chars=28, max_lines=2, min_chars=10):
+    """Shrink, wrap, then summarize so type never overflows a creative."""
+    value = " ".join(str(text or "").split())
+    if not value:
+        return {"text": "", "lines": [], "font_scale": 1.0, "summarized": False}
+    for scale, width in ((1.0, max_chars), (0.92, int(max_chars * 1.08)), (0.84, int(max_chars * 1.16))):
+        lines = _wrap_words(value, max(min_chars, width), max_lines)
+        if lines and " ".join(lines) == value:
+            return {
+                "text": "\n".join(lines),
+                "lines": lines,
+                "font_scale": scale,
+                "summarized": False,
+            }
+    lines = _wrap_words(value, max_chars, max_lines) or [_clip(value, max_chars)]
+    return {
+        "text": "\n".join(lines),
+        "lines": lines,
+        "font_scale": 0.8,
+        "summarized": " ".join(lines) != value,
+    }
+
+
+def _zone_line(facts):
+    locality = " ".join(str(facts.get("locality") or "").split())
+    jurisdiction = " ".join(str(facts.get("jurisdiction") or "").split())
+    if locality and jurisdiction and locality.casefold() != jurisdiction.casefold():
+        return f"{locality}, {jurisdiction}"
+    return locality or jurisdiction or " ".join(str(facts.get("location_line") or "").split())
+
+
+def summarize_listing_copy(facts, agent=None, *, headline="", cta="Consultame"):
+    facts = facts or {}
+    street = autofit_text(facts.get("title") or "", max_chars=28, max_lines=1)
+    zone = autofit_text(_zone_line(facts), max_chars=32, max_lines=1)
+    hook = autofit_text(headline or facts.get("title") or "Disponible", max_chars=26, max_lines=2)
+    chips = [str(item).strip() for item in (facts.get("chips") or []) if str(item).strip()][:4]
+    agent = agent or {}
+    name = autofit_text(agent.get("name") or "", max_chars=24, max_lines=2)
+    title = autofit_text(agent.get("title") or "", max_chars=22, max_lines=1)
+    phone = autofit_text(agent.get("phone") or "", max_chars=18, max_lines=1)
+    cta_fit = autofit_text(cta or "Consultame", max_chars=16, max_lines=1)
+    return {
+        "headline": hook["text"].replace("\n", " "),
+        "headline_lines": hook["lines"],
+        "street": street["text"],
+        "zone": zone["text"],
+        "attributes": chips,
+        "price": facts.get("price_label") or "",
+        "cta": cta_fit["text"] or "Consultame",
+        "agent_name": name["text"].replace("\n", " "),
+        "agent_title": title["text"],
+        "agent_phone": phone["text"],
+        "summarized": any(
+            item.get("summarized") for item in (street, zone, hook, name, title)
+        ),
+    }
+
+
 def _hashtags_from_facts(facts, language="es"):
     tags = []
     locality = str(facts.get("locality") or "").strip()

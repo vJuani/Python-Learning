@@ -56,8 +56,7 @@ from modules.marketing_request import (
 )
 from modules.openai_image_service import (
     assert_openai_configured,
-    build_marketing_image_prompt,
-    generate_one_marketing_image,
+    generate_validated_marketing_image,
     get_openai_image_model,
     map_image_error,
     normalize_style,
@@ -534,7 +533,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
         art = _art_from_asset(asset)
         fmt = asset["format"]
         size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
-        prompt = build_marketing_image_prompt(
+        generated = generate_validated_marketing_image(
             context,
             fmt,
             options=options,
@@ -545,16 +544,15 @@ def _process_item(organization_id, asset_id, *, retry=False):
             include_price=options.get("show_price", True),
             include_agent=bool(options.get("include_agent") and options.get("show_agent_photo")),
             variation_index=max(1, int(options.get("format_index") or 1)),
-        )
-        png_bytes = generate_one_marketing_image(
-            prompt=prompt,
             size=size,
             references=references,
-            visual_direction=art.get("visual_direction") or options.get("style"),
         )
+        png_bytes = generated["png_bytes"]
         agent_composited = agent_sent
         options["layout_engine"] = "openai_images"
         options["agent_photo_composited"] = agent_composited
+        options["layout_attempts"] = (generated.get("quality") or {}).get("attempt") or 1
+        options["quality_reasons"] = (generated.get("quality") or {}).get("reasons") or []
         from modules.marketing_image_provider import OpenAIMarketingImageProvider, MockMarketingImageProvider
 
         pipeline_audit = (
@@ -579,13 +577,14 @@ def _process_item(organization_id, asset_id, *, retry=False):
             options["pipeline_endpoint"],
             options["pipeline_post_process"],
         )
-        final_quality = validate_creative(
+        final_quality = generated.get("quality") or validate_creative(
             png_bytes,
             size=size,
             options=options,
             references=references,
             agent_photo_sent=agent_sent,
             agent_photo_composited=agent_composited,
+            fmt=fmt,
         )
         options["quality_score"] = final_quality.get("score")
         stage = "persistence"

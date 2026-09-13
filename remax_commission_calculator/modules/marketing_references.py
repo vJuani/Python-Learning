@@ -69,33 +69,21 @@ def collect_reference_images(context, options):
     photos = list((context or {}).get("photos") or [])
     loaded = load_property_photos(photos)
     references = []
-    style_path = approved_style_path()
-    style_bytes = _open_path_bytes(style_path)
-    if style_bytes:
-        references.append(
-            {
-                "role": "style",
-                "label": f"Reference A: APPROVED JRH STYLE. {STYLE_REFERENCE_LABEL}",
-                "bytes": style_bytes,
-                "mime": "image/jpeg",
-                "name": "jrh-approved-style.jpg",
-            }
-        )
     for index, image in enumerate(loaded[:3]):
         payload = _png_bytes(image)
         if not payload:
             continue
-        letter = "BCD"[index]
+        letter = "ABC"[index]
         if index == 0:
             label = (
                 f"Reference {letter}: REAL PROPERTY HERO. "
-                "This is the actual property being advertised. Use it prominently."
+                "This is the actual property being advertised. Use it as the dominant photo."
             )
             role = "property_hero"
         else:
             label = (
                 f"Reference {letter}: REAL PROPERTY SECONDARY of the SAME listing. "
-                "Do not invent another property."
+                "Small support only. Do not invent another property."
             )
             role = "property_extra"
         references.append(
@@ -118,8 +106,9 @@ def collect_reference_images(context, options):
             {
                 "role": "agent",
                 "label": (
-                    "Reference D: REAL AGENT PORTRAIT. This is the exact person. "
-                    "Integrate a clean professional cutout, small or medium, never huge. "
+                    "Reference D: REAL AGENT PORTRAIT from ficha/ACM/card. "
+                    "This is the exact person. Clean professional cutout, small or medium. "
+                    "Never crop the head or shoulders. Never hug the canvas edge. "
                     "Do not invent another face and do not duplicate the portrait."
                 ),
                 "bytes": agent_bytes,
@@ -132,10 +121,25 @@ def collect_reference_images(context, options):
         references.append(
             {
                 "role": "logo",
-                "label": "Reference E: REAL JRH ONE LOGO. Use small, elegant, never stretched.",
+                "label": (
+                    "Reference E: REAL JRH ONE LOGO. Small, elegant, never stretched, "
+                    "never flush to the edge, always inside the safe area."
+                ),
                 "bytes": logo_bytes,
                 "mime": "image/png",
                 "name": "jrh-one-logo.png",
+            }
+        )
+    style_path = approved_style_path()
+    style_bytes = _open_path_bytes(style_path)
+    if style_bytes:
+        references.append(
+            {
+                "role": "style",
+                "label": f"Reference F: APPROVED JRH STYLE. {STYLE_REFERENCE_LABEL}",
+                "bytes": style_bytes,
+                "mime": "image/jpeg",
+                "name": "jrh-approved-style.jpg",
             }
         )
     logger.info(

@@ -13,7 +13,15 @@ import urllib.request
 
 from PIL import Image, ImageDraw
 
-from modules.marketing_renderer import NAVY, WHITE, fit_cover, paste_rounded
+from modules.marketing_renderer import NAVY, WHITE, fit_contain_safe, fit_cover, paste_rounded
+from modules.marketing_visual_spec import (
+    EDITORIAL_PREMIUM,
+    LUXURY_MINIMAL,
+    MODERN_COMMERCIAL,
+    format_from_size,
+    normalize_style,
+    safe_rect,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +98,10 @@ def _api_size(width, height):
     return "1024x1024"
 
 
-def _fit_output(raw, size):
+def _fit_output(raw, size, fmt=None):
     image = Image.open(io.BytesIO(raw)).convert("RGB")
-    fitted = fit_cover(image, size[0], size[1])
+    fmt = fmt or format_from_size(size)
+    fitted = fit_contain_safe(image, size, fmt, fill=NAVY)
     out = io.BytesIO()
     fitted.save(out, format="PNG")
     return out.getvalue()
@@ -138,11 +147,14 @@ class MockMarketingImageProvider(MarketingImageProvider):
             "model": "mock",
         }
         width, height = size
-        canvas = Image.new("RGBA", size, (*WHITE, 255))
+        style = normalize_style(visual_direction)
+        fmt = format_from_size(size)
+        left, top, right, bottom = safe_rect(fmt, size)
+        inner_w = max(1, right - left)
+        inner_h = max(1, bottom - top)
+        fill = WHITE if style == MODERN_COMMERCIAL else NAVY
+        canvas = Image.new("RGBA", size, (*fill, 255))
         draw = ImageDraw.Draw(canvas)
-        direction = visual_direction or ""
-        if direction in {"property_hero", "luxury_minimal", "luxury_editorial", "editorial_dark", "photo_lifestyle"}:
-            draw.rectangle((0, 0, width, height), fill=(*NAVY, 255))
         photos = []
         agent = None
         for item in refs:
@@ -155,27 +167,43 @@ class MockMarketingImageProvider(MarketingImageProvider):
                 agent = opened
             elif str(item.get("role") or "").startswith("property"):
                 photos.append(opened.convert("RGB"))
-        if direction in {"property_hero", "luxury_minimal", "luxury_editorial", "editorial_dark"} and photos:
-            canvas.paste(fit_cover(photos[0], width, int(height * 0.82)), (0, 0))
-            draw.rectangle((0, int(height * 0.78), width, height), fill=(*NAVY, 255))
-        elif direction in {"clean_collage", "bright_architectural", "bright_geometric", "bold_grid"} and photos:
-            canvas.paste(fit_cover(photos[0], int(width * 0.62), int(height * 0.58)), (int(width * 0.04), int(height * 0.08)))
+        draw.text((left + 8, top + 8), "JRH One", fill=(255, 255, 255) if fill == NAVY else NAVY)
+        if style == LUXURY_MINIMAL and photos:
+            hero_h = int(inner_h * 0.78)
+            canvas.paste(fit_cover(photos[0], inner_w, hero_h), (left, top + 36))
+        elif style == MODERN_COMMERCIAL and photos:
+            hero_w = int(inner_w * 0.72)
+            hero_h = int(inner_h * 0.52)
+            canvas.paste(fit_cover(photos[0], hero_w, hero_h), (left, top + 48))
             if len(photos) > 1:
-                canvas.paste(fit_cover(photos[1], int(width * 0.30), int(height * 0.27)), (int(width * 0.68), int(height * 0.08)))
-            if len(photos) > 2:
-                canvas.paste(fit_cover(photos[2], int(width * 0.30), int(height * 0.27)), (int(width * 0.68), int(height * 0.38)))
+                extra = int(inner_w * 0.24)
+                canvas.paste(
+                    fit_cover(photos[1], extra, int(hero_h * 0.46)),
+                    (left + hero_w + 16, top + 48),
+                )
         elif photos:
-            canvas.paste(fit_cover(photos[0], width, int(height * 0.62)), (0, 0))
+            hero_h = int(inner_h * 0.50)
+            canvas.paste(fit_cover(photos[0], inner_w, hero_h), (left, top + 56))
             if len(photos) > 1:
-                canvas.paste(fit_cover(photos[1], int(width * 0.46), int(height * 0.18)), (int(width * 0.04), int(height * 0.66)))
+                thumb_w = int(inner_w * 0.30)
+                thumb_h = int(inner_h * 0.16)
+                canvas.paste(fit_cover(photos[1], thumb_w, thumb_h), (left, top + 72 + hero_h))
+        ink = (255, 255, 255) if fill == NAVY else NAVY
+        draw.text((left + 8, bottom - 64), "Consultame", fill=ink)
         if agent is not None:
+            agent_w = min(int(width * 0.18), int(inner_w * 0.28))
+            agent_h = int(agent_w * 1.2)
+            if top + agent_h + 54 > bottom:
+                agent_w = max(72, int(agent_w * 0.75))
+                agent_h = int(agent_w * 1.2)
             paste_rounded(
                 canvas,
                 agent,
-                (int(width * 0.68), int(height * 0.66)),
-                (int(width * 0.24), int(width * 0.30)),
-                radius=26,
+                (right - agent_w, bottom - agent_h - 36),
+                (agent_w, agent_h),
+                radius=22,
             )
+            draw.text((right - agent_w, bottom - 28), "Agente", fill=ink)
         image = canvas.convert("RGB")
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
@@ -270,7 +298,7 @@ class OpenAIMarketingImageProvider(MarketingImageProvider):
             raw = self._edits(api_key, model, prompt, api_size, refs)
         else:
             raw = self._generate(api_key, model, prompt, api_size)
-        final = _fit_output(raw, size) if apply_fit else raw
+        final = _fit_output(raw, size, format_from_size(size)) if apply_fit else raw
         audit = {
             "provider": "openai",
             "model": model,
@@ -283,7 +311,7 @@ class OpenAIMarketingImageProvider(MarketingImageProvider):
             "final_size": _image_size(final),
             "legacy_compositor": False,
             "legacy_compositor_fn": None,
-            "post_process": "fit_cover" if apply_fit else "none",
+            "post_process": "fit_contain_safe" if apply_fit else "none",
             "post_process_fn": (
                 "modules.marketing_image_provider._fit_output"
                 if apply_fit
@@ -434,28 +462,29 @@ def generate_with_audit(*, prompt, size, visual_direction=None, references=None,
 
 
 def finished_ad_prompt(art, fmt, *, references=None, options=None, used_directions=None):
-    from modules.marketing_visual_spec import STYLE_REFERENCE_LABEL, AVOID
+    from modules.marketing_visual_spec import AVOID, STYLE_REFERENCE_LABEL, safe_area_prompt
 
-    direction = (art or {}).get("visual_direction") or "editorial_navy"
+    direction = (art or {}).get("visual_direction") or "editorial_premium"
     brief = (art or {}).get("visual_brief") or (art or {}).get("layout") or {}
     labels = "\n".join(item.get("label") or "" for item in (references or []) if item.get("label"))
     avoid = ", ".join(sorted(set(list(used_directions or []) + list(AVOID))))
     agent_line = (
-        "The REAL AGENT portrait must stay that exact person. Reserve space for the final cutout."
+        "The REAL AGENT portrait must stay that exact person. "
+        "Keep head, shoulders and the name fully inside the safe area."
         if any(item.get("role") == "agent" for item in (references or []))
         else "Do not include any agent portrait or invented person."
     )
     return (
         "You are an award-winning art director for premium real-estate advertising. "
-        "Match the APPROVED JRH STYLE reference in polish, hierarchy, photographic "
-        "prominence and agent integration. Do not copy its property, person, text or exact layout. "
+        "This is the finished ad. Editorial, clean, modern, elegant. "
+        "Do not copy the style reference layout, collage, curve or edge type. "
         f"{STYLE_REFERENCE_LABEL} "
-        f"Format: {fmt} 9:16-aware vertical ad. Direction: {direction}. "
+        f"Format: {fmt} vertical ad. Direction: {direction}. "
         f"Brief: {brief}. "
+        f"{safe_area_prompt(fmt)} "
         "REAL property photos must dominate. Do not invent another listing. "
         f"{agent_line} "
-        "Do not render addresses, prices, names or the JRH logo — the compositor adds those. "
-        "Very low copy. One short decorative headline is allowed. "
+        "Short copy only. No decorative slogans, no vertical captions. "
         f"Avoid: {avoid}. "
         f"Reference map:\n{labels}"
     )

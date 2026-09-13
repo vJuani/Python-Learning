@@ -10,18 +10,21 @@ from modules.jrh_ai_provider import get_jrh_ai_provider_name
 from modules.marketing_context import ai_prompt_facts
 from modules.marketing_visual_spec import (
     AVOID,
-    COMPOSITIONS,
     COPY_DENSITY,
+    EDITORIAL_PREMIUM,
+    LUXURY_MINIMAL,
     MAX_CREATIVE_WORDS,
+    MODERN_COMMERCIAL,
     QUALITY_TARGET,
     build_visual_brief,
+    normalize_style,
 )
 
 logger = logging.getLogger(__name__)
 
-STORY_DIRECTIONS = tuple(COMPOSITIONS)
-POST_DIRECTIONS = ("white_architectural", "editorial_navy", "photo_led_luxury")
-FLYER_DIRECTIONS = ("editorial_navy", "white_architectural", "photo_led_luxury")
+STORY_DIRECTIONS = (EDITORIAL_PREMIUM, MODERN_COMMERCIAL, LUXURY_MINIMAL)
+POST_DIRECTIONS = (MODERN_COMMERCIAL, EDITORIAL_PREMIUM, LUXURY_MINIMAL)
+FLYER_DIRECTIONS = (EDITORIAL_PREMIUM, MODERN_COMMERCIAL, LUXURY_MINIMAL)
 STATUS_DIRECTIONS = STORY_DIRECTIONS
 
 DIRECTION_POOL = {
@@ -32,9 +35,12 @@ DIRECTION_POOL = {
 }
 
 HOOKS = {
-    "editorial_navy": "Tu próximo hogar te espera",
-    "white_architectural": "Espacios que inspiran",
-    "photo_led_luxury": "Disponible ahora",
+    EDITORIAL_PREMIUM: "Viví distinto",
+    MODERN_COMMERCIAL: "Disponible ahora",
+    LUXURY_MINIMAL: "Exclusiva",
+    "editorial_navy": "Viví distinto",
+    "white_architectural": "Disponible ahora",
+    "photo_led_luxury": "Exclusiva",
 }
 
 INVENTED_CLAIM_RE = re.compile(
@@ -44,8 +50,14 @@ INVENTED_CLAIM_RE = re.compile(
 )
 
 
-def pick_direction(fmt, index, used):
+def pick_direction(fmt, index, used, preferred=None):
     pool = list(DIRECTION_POOL.get(fmt) or STORY_DIRECTIONS)
+    preferred = normalize_style(preferred) if preferred else None
+    if preferred and preferred not in pool:
+        preferred = None
+    if preferred and preferred not in used:
+        used.add(preferred)
+        return preferred
     unused = [item for item in pool if item not in used]
     choice = unused[0] if unused else pool[index % len(pool)]
     used.add(choice)
@@ -66,7 +78,12 @@ def _safe_hook(text, facts):
 
 
 def _fallback_direction(fmt, index, used, facts, request):
-    direction = pick_direction(fmt, index, used)
+    direction = pick_direction(
+        fmt,
+        index,
+        used,
+        preferred=request.get("style") or request.get("visual_direction"),
+    )
     show_photo = request.get("with_agent_photo") is not False and request.get("with_agent") is not False
     brief = build_visual_brief(fmt, direction, show_agent_photo=show_photo)
     hook = HOOKS.get(direction) or "Tu próximo hogar te espera"
