@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import logging
@@ -16,12 +17,52 @@ from modules.marketing_renderer import NAVY, WHITE, fit_cover, paste_rounded
 
 logger = logging.getLogger(__name__)
 
+OPENAI_GENERATIONS_URL = "https://api.openai.com/v1/images/generations"
+OPENAI_EDITS_URL = "https://api.openai.com/v1/images/edits"
+
+
+def sha256_bytes(payload):
+    return hashlib.sha256(payload or b"").hexdigest()
+
+
+def _image_size(payload):
+    try:
+        image = Image.open(io.BytesIO(payload))
+        image.load()
+        return image.size
+    except Exception:
+        return None
+
+
+def log_marketing_pipeline(audit):
+    payload = dict(audit or {})
+    payload.pop("raw_bytes", None)
+    payload.pop("final_bytes", None)
+    logger.info(
+        "marketing_pipeline provider=%s model=%s endpoint=%s input_images=%s "
+        "input_roles=%s api_size=%s raw_size=%s final_size=%s "
+        "legacy_compositor=%s post_process=%s fallback=%s hashes_match=%s",
+        payload.get("provider"),
+        payload.get("model"),
+        payload.get("endpoint"),
+        payload.get("input_image_count"),
+        payload.get("input_roles"),
+        payload.get("api_size"),
+        payload.get("raw_size"),
+        payload.get("final_size"),
+        payload.get("legacy_compositor"),
+        payload.get("post_process"),
+        payload.get("fallback"),
+        payload.get("hashes_match"),
+    )
+    return payload
+
 
 def get_marketing_image_model():
     return (
-        os.environ.get("MARKETING_IMAGE_MODEL")
-        or os.environ.get("OPENAI_IMAGE_MODEL")
-        or "gpt-image-2.5-sunburst"
+        os.environ.get("OPENAI_IMAGE_MODEL")
+        or os.environ.get("MARKETING_IMAGE_MODEL")
+        or "gpt-image-1"
     ).strip()
 
 
@@ -75,6 +116,7 @@ class MarketingImageProvider:
 
 class MockMarketingImageProvider(MarketingImageProvider):
     last_call = None
+    last_audit = None
 
     def generate_background(self, *, prompt, size, visual_direction):
         return self.generate_creative(
@@ -137,10 +179,52 @@ class MockMarketingImageProvider(MarketingImageProvider):
         image = canvas.convert("RGB")
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
-        return buffer.getvalue()
+        raw = buffer.getvalue()
+        MockMarketingImageProvider.last_audit = {
+            "provider": "mock",
+            "model": "mock",
+            "endpoint": "mock",
+            "input_image_count": len(refs),
+            "input_roles": [item.get("role") for item in refs],
+            "api_size": f"{width}x{height}",
+            "raw_size": (width, height),
+            "final_size": (width, height),
+            "legacy_compositor": True,
+            "legacy_compositor_fn": "MockMarketingImageProvider.generate_creative",
+            "post_process": "none",
+            "fallback": True,
+            "hashes_match": True,
+            "raw_sha256": sha256_bytes(raw),
+            "final_sha256": sha256_bytes(raw),
+        }
+        log_marketing_pipeline(MockMarketingImageProvider.last_audit)
+        return raw
+
+    def generate_with_audit(
+        self,
+        *,
+        prompt,
+        size,
+        visual_direction=None,
+        references=None,
+        apply_fit=True,
+    ):
+        raw = self.generate_creative(
+            prompt=prompt,
+            size=size,
+            visual_direction=visual_direction,
+            references=references,
+        )
+        audit = dict(MockMarketingImageProvider.last_audit or {})
+        audit["raw_bytes"] = raw
+        audit["final_bytes"] = raw
+        audit["post_process"] = "none"
+        return audit
 
 
 class OpenAIMarketingImageProvider(MarketingImageProvider):
+    last_audit = None
+
     def generate_background(self, *, prompt, size, visual_direction):
         return self.generate_creative(
             prompt=prompt,
@@ -150,6 +234,24 @@ class OpenAIMarketingImageProvider(MarketingImageProvider):
         )
 
     def generate_creative(self, *, prompt, size, visual_direction=None, references=None):
+        result = self.generate_with_audit(
+            prompt=prompt,
+            size=size,
+            visual_direction=visual_direction,
+            references=references,
+            apply_fit=True,
+        )
+        return result["final_bytes"]
+
+    def generate_with_audit(
+        self,
+        *,
+        prompt,
+        size,
+        visual_direction=None,
+        references=None,
+        apply_fit=True,
+    ):
         api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         if not api_key:
             raise MarketingImageError("missing_openai_api_key")
@@ -157,6 +259,7 @@ class OpenAIMarketingImageProvider(MarketingImageProvider):
         model = get_marketing_image_model()
         width, height = size
         api_size = _api_size(width, height)
+        endpoint = OPENAI_EDITS_URL if refs else OPENAI_GENERATIONS_URL
         logger.info(
             "marketing_image provider=openai model=%s refs=%s agent_photo_sent_to_provider=%s",
             model,
@@ -167,7 +270,37 @@ class OpenAIMarketingImageProvider(MarketingImageProvider):
             raw = self._edits(api_key, model, prompt, api_size, refs)
         else:
             raw = self._generate(api_key, model, prompt, api_size)
-        return _fit_output(raw, size)
+        final = _fit_output(raw, size) if apply_fit else raw
+        audit = {
+            "provider": "openai",
+            "model": model,
+            "endpoint": endpoint,
+            "input_image_count": min(len(refs), 5),
+            "input_roles": [item.get("role") for item in refs[:5]],
+            "api_size": api_size,
+            "requested_size": size,
+            "raw_size": _image_size(raw),
+            "final_size": _image_size(final),
+            "legacy_compositor": False,
+            "legacy_compositor_fn": None,
+            "post_process": "fit_cover" if apply_fit else "none",
+            "post_process_fn": (
+                "modules.marketing_image_provider._fit_output"
+                if apply_fit
+                else None
+            ),
+            "fallback": False,
+            "raw_sha256": sha256_bytes(raw),
+            "final_sha256": sha256_bytes(final),
+            "hashes_match": sha256_bytes(raw) == sha256_bytes(final),
+            "raw_bytes": raw,
+            "final_bytes": final,
+        }
+        OpenAIMarketingImageProvider.last_audit = {
+            key: value for key, value in audit.items() if key not in {"raw_bytes", "final_bytes"}
+        }
+        log_marketing_pipeline(audit)
+        return audit
 
     def _generate(self, api_key, model, prompt, api_size):
         payload = {
@@ -178,7 +311,7 @@ class OpenAIMarketingImageProvider(MarketingImageProvider):
             "quality": os.environ.get("MARKETING_IMAGE_QUALITY", "high"),
         }
         request = urllib.request.Request(
-            "https://api.openai.com/v1/images/generations",
+            OPENAI_GENERATIONS_URL,
             data=json.dumps(payload).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -208,7 +341,7 @@ class OpenAIMarketingImageProvider(MarketingImageProvider):
         for attempt in range(2):
             try:
                 response = requests.post(
-                    "https://api.openai.com/v1/images/edits",
+                    OPENAI_EDITS_URL,
                     headers={"Authorization": f"Bearer {api_key}"},
                     data=data,
                     files=files,
@@ -267,6 +400,37 @@ def get_marketing_image_provider():
     if name == "mock":
         return MockMarketingImageProvider()
     raise MarketingImageError("image_provider_unavailable")
+
+
+def generate_with_audit(*, prompt, size, visual_direction=None, references=None, apply_fit=True):
+    provider = get_marketing_image_provider()
+    if hasattr(provider, "generate_with_audit"):
+        return provider.generate_with_audit(
+            prompt=prompt,
+            size=size,
+            visual_direction=visual_direction,
+            references=references,
+            apply_fit=apply_fit,
+        )
+    raw = provider.generate_creative(
+        prompt=prompt,
+        size=size,
+        visual_direction=visual_direction,
+        references=references,
+    )
+    return {
+        "raw_bytes": raw,
+        "final_bytes": raw,
+        "provider": get_marketing_image_provider_name(),
+        "model": get_marketing_image_model(),
+        "endpoint": "unknown",
+        "legacy_compositor": False,
+        "post_process": "none",
+        "fallback": get_marketing_image_provider_name() != "openai",
+        "hashes_match": True,
+        "raw_sha256": sha256_bytes(raw),
+        "final_sha256": sha256_bytes(raw),
+    }
 
 
 def finished_ad_prompt(art, fmt, *, references=None, options=None, used_directions=None):

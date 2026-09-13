@@ -21,6 +21,10 @@
     padding: 14px 14px 16px;
     text-decoration: none;
     color: #0a1633;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    width: 100%;
     min-height: 5.4rem;
 }
 .home-shortcuts__card strong { font-size: 0.95rem; }

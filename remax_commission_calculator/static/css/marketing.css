@@ -107,6 +107,76 @@ body.is-creative-page .app-main-inner {
     resize: vertical;
 }
 .mkt-prompt textarea { min-height: 8.5rem; }
+.mkt-create-dialog {
+    width: min(28rem, calc(100vw - 1.25rem));
+    padding: 0;
+    border: 0;
+    border-radius: 1rem;
+}
+.mkt-create-dialog .mkt-create-form,
+.mkt-prompt .mkt-create-form {
+    display: grid;
+    gap: 0.85rem;
+    padding: 0 1rem 1rem;
+}
+.mkt-prompt .mkt-create-form { padding: 0; }
+.mkt-create-field,
+.mkt-create-choices {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: #0a1633;
+    font-weight: 700;
+}
+.mkt-create-choices {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+}
+.mkt-create-choices legend {
+    padding: 0 0 0.35rem;
+    font-size: 0.82rem;
+}
+.mkt-create-choices label,
+.mkt-create-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: 0.82rem;
+    background: #eef3ff;
+    border: 1px solid #d7e2ee;
+    border-radius: 12px;
+    padding: 0.55rem 0.65rem;
+}
+.mkt-create-toggle { font-weight: 600; }
+.mkt-create-field input,
+.mkt-create-field select {
+    width: 100%;
+    border: 1px solid #c9d6e5;
+    border-radius: 12px;
+    padding: 0.7rem 0.85rem;
+    font: inherit;
+    font-weight: 500;
+    color: #0a1633;
+}
+.mkt-create-form .btn-primary {
+    width: 100%;
+    min-height: 3.1rem;
+}
+.mkt-qa-audit {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0 0 1.2rem;
+    padding: 1rem;
+    background: #fff;
+    border: 1px solid #d7e2ee;
+    border-radius: 16px;
+}
+.mkt-qa-audit div { display: grid; grid-template-columns: 10rem 1fr; gap: 0.6rem; }
+.mkt-qa-audit dt { margin: 0; color: #5b6b7c; font-size: 0.78rem; }
+.mkt-qa-audit dd { margin: 0; color: #0a1633; font-weight: 600; word-break: break-all; }
 .mkt-prompt .btn-primary {
     width: 100%;
     min-height: 3.1rem;

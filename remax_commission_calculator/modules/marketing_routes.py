@@ -14,12 +14,15 @@ from flask import (
 
 from modules.auth import get_current_user, is_admin, is_agent, is_guest_session
 from modules.marketing_context import MarketingError
+from modules.marketing_qa import resolve_qa_file, run_raw_story_qa
 from modules.marketing_service import (
     asset_download_name,
     cleanup_expired_marketing_assets,
+    discard_marketing_asset,
     get_asset_view,
     get_batch_status,
     prepare_create_view,
+    regenerate_marketing_asset,
     require_asset_access,
     resolve_asset_file,
     retry_marketing_item,
@@ -100,17 +103,23 @@ def register_marketing_routes(app, helpers):
             return _forbidden()
         organization_id = require_user_organization()
         property_id = request.form.get("property_id", type=int)
-        prompt = (request.form.get("prompt") or "").strip()
+        prompt = (request.form.get("prompt") or request.form.get("request_text") or "").strip()
+        piece_type = (request.form.get("piece_type") or "").strip().lower()
+        quantity = (request.form.get("quantity") or "").strip().lower()
         if not property_id:
             flash_i18n("marketing_err_property_missing", "error")
             return redirect(url_for("marketing_new"))
-        if not prompt:
+        if not piece_type and not quantity and not prompt:
             flash_i18n("marketing_err_prompt_missing", "error")
             return redirect(url_for("marketing_new", property_id=property_id))
         include_values = request.form.getlist("include_agent")
         include_agent = None
         if include_values:
             include_agent = include_values[-1] not in {"0", "off", "false", ""}
+        price_values = request.form.getlist("include_price")
+        include_price = None
+        if price_values:
+            include_price = price_values[-1] not in {"0", "off", "false", ""}
         try:
             result = start_marketing_batch(
                 organization_id,
@@ -120,6 +129,12 @@ def register_marketing_routes(app, helpers):
                 language=get_current_language(),
                 idempotency_key=(request.form.get("idempotency_key") or "").strip() or None,
                 include_agent=include_agent if include_values else None,
+                include_price=include_price if price_values else None,
+                formats=[piece_type] if piece_type else None,
+                quantity=quantity or None,
+                style=(request.form.get("style") or "").strip() or None,
+                cta=(request.form.get("cta") or "").strip() or None,
+                request_text=prompt,
             )
         except MarketingError as error:
             return _handle(error, "marketing_new")
@@ -212,6 +227,44 @@ def register_marketing_routes(app, helpers):
             )
         )
 
+    @app.route("/marketing/assets/<int:asset_id>/regenerate", methods=["POST"])
+    def marketing_regenerate(asset_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            result = regenerate_marketing_asset(
+                organization_id,
+                user,
+                asset_id,
+                language=get_current_language(),
+            )
+        except MarketingError as error:
+            return _handle(error)
+        return redirect(_composer_url(result))
+
+    @app.route("/marketing/assets/<int:asset_id>/discard", methods=["POST"])
+    def marketing_discard(asset_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            discarded = discard_marketing_asset(organization_id, user, asset_id)
+        except MarketingError as error:
+            return _handle(error)
+        if discarded.get("generation_id"):
+            return redirect(
+                _composer_url(
+                    generation_id=discarded.get("generation_id"),
+                    property_id=discarded.get("property_id"),
+                )
+            )
+        if discarded.get("property_id"):
+            return redirect(url_for("properties_detail", property_id=discarded["property_id"]))
+        return redirect(url_for("dashboard"))
+
     @app.route("/marketing/assets/<int:asset_id>/vary", methods=["POST"])
     def marketing_vary(asset_id):
         user = _marketing_user()
@@ -264,3 +317,34 @@ def register_marketing_routes(app, helpers):
     @app.route("/marketing/assets/<int:asset_id>/download.pdf")
     def marketing_download_pdf(asset_id):
         return _send_asset(asset_id, kind="pdf", as_attachment=True)
+
+    @app.route("/marketing/qa/raw-story", methods=["GET", "POST"])
+    def marketing_qa_raw_story():
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        report = None
+        if request.method == "POST":
+            try:
+                report = run_raw_story_qa(
+                    organization_id,
+                    user,
+                    property_id=request.form.get("property_id", type=int),
+                    address=(request.form.get("address") or "Don Bosco 477").strip(),
+                    language=get_current_language(),
+                )
+            except MarketingError as error:
+                return _handle(error)
+        return render_template("marketing/qa_raw_story.html", report=report)
+
+    @app.route("/marketing/qa/<run_id>/<filename>")
+    def marketing_qa_file(run_id, filename):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        path = resolve_qa_file(organization_id, run_id, filename)
+        if path is None:
+            abort(404)
+        return send_file(path, mimetype="image/png")

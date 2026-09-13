@@ -31,6 +31,12 @@
             data-share-title="{{ asset.headline }}"
             hidden
         >{{ t('marketing_share') }}</button>
+        <form method="post" action="{{ url_for('marketing_regenerate', asset_id=asset.id) }}">
+            <button type="submit" class="btn btn-secondary">{{ t('marketing_regenerate') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('marketing_discard', asset_id=asset.id) }}">
+            <button type="submit" class="btn btn-secondary">{{ t('marketing_discard') }}</button>
+        </form>
         {% endif %}
         <a class="btn btn-secondary" href="{{ url_for('marketing_new', property_id=asset.property_id) }}">{{ t('marketing_another') }}</a>
     </div>

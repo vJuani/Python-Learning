@@ -101,9 +101,9 @@
                     </a>
                     {% elif asset.failed %}
                     <div class="mkt-fail">
-                        <p>{{ t('marketing_err_quality') if asset.pipeline_status == 'failed_quality' else t('marketing_item_failed') }}</p>
+                        <p>{{ t(asset.options.error) if asset.options.error and asset.options.error != 'marketing_err_item_failed' else t('marketing_item_failed') }}</p>
                         <form method="post" action="{{ url_for('marketing_retry', asset_id=asset.id) }}">
-                            <button type="submit" class="btn btn-secondary">{{ t('marketing_retry_other') if asset.pipeline_status == 'failed_quality' else t('marketing_retry') }}</button>
+                            <button type="submit" class="btn btn-secondary">{{ t('marketing_retry') }}</button>
                         </form>
                     </div>
                     {% else %}
@@ -112,9 +112,15 @@
                 </div>
                 {% if asset.ready %}
                 <div class="mkt-proposal__actions">
+                    <a class="btn btn-secondary" href="{{ url_for('marketing_preview', asset_id=asset.id) }}" target="_blank" rel="noopener">{{ t('marketing_preview') }}</a>
                     <a class="btn btn-primary" href="{{ url_for('marketing_download_png', asset_id=asset.id) }}">{{ t('marketing_download') }}</a>
                     <button type="button" class="btn btn-secondary" data-mkt-share data-share-url="{{ url_for('marketing_download_png', asset_id=asset.id, _external=True) }}" data-share-title="{{ view.property_address }}" data-share-name="{{ asset.download_name if asset.download_name is defined else 'jrh-content.png' }}" hidden>{{ t('marketing_share') }}</button>
-                    <a class="btn btn-secondary" href="{{ url_for('marketing_asset', asset_id=asset.id) }}">{{ t('marketing_vary') }}</a>
+                    <form method="post" action="{{ url_for('marketing_regenerate', asset_id=asset.id) }}">
+                        <button type="submit" class="btn btn-secondary">{{ t('marketing_regenerate') }}</button>
+                    </form>
+                    <form method="post" action="{{ url_for('marketing_discard', asset_id=asset.id) }}">
+                        <button type="submit" class="btn btn-secondary">{{ t('marketing_discard') }}</button>
+                    </form>
                 </div>
                 {% endif %}
             </article>
@@ -125,50 +131,19 @@
     <p class="mkt-temp-note">{{ t('marketing_temp_note') }}</p>
     {% else %}
 
-    <form class="mkt-prompt" method="post" action="{{ url_for('marketing_generate') }}" data-mkt-prompt>
-        {% if view.property %}
-        <input type="hidden" name="property_id" value="{{ view.property.id }}">
-        {% else %}
-        <label class="mkt-prompt__property">
-            <span>{{ t('marketing_choose_property') }}</span>
-            <select name="property_id" required>
-                <option value="">{{ t('marketing_choose_property') }}</option>
-                {% for item in view.properties %}
-                <option value="{{ item.id }}">{{ item.address }}</option>
-                {% endfor %}
-            </select>
-        </label>
-        {% endif %}
-        <label class="mkt-prompt__ask">
-            <span>{{ t('marketing_step_format') }}</span>
-            <textarea name="prompt" rows="5" maxlength="500" required placeholder="{{ t('marketing_prompt_placeholder') }}">{{ view.prompt }}</textarea>
-        </label>
-        <input type="hidden" name="idempotency_key" value="{{ view.idempotency_key }}">
-        <div class="mkt-chips" data-mkt-chips>
-            <button type="button" class="mkt-chip" data-chip="Haceme 3 historias, 3 posts y 3 flyers, todos diferentes, premium, sin descripción larga y usando mi foto." data-chip-replace="1">{{ t('marketing_format_pack') }}</button>
-            <button type="button" class="mkt-chip" data-chip="Haceme una historia" data-chip-replace="1">{{ t('marketing_chip_one_story') }}</button>
-            <button type="button" class="mkt-chip" data-chip="Haceme 3 historias">{{ t('marketing_chip_stories') }}</button>
-            <button type="button" class="mkt-chip" data-chip="Haceme 3 posts">{{ t('marketing_chip_posts') }}</button>
-            <button type="button" class="mkt-chip" data-chip="Haceme 3 flyers">{{ t('marketing_chip_flyers') }}</button>
-            <button type="button" class="mkt-chip" data-chip="usando mi foto">{{ t('marketing_chip_agent') }}</button>
-            <button type="button" class="mkt-chip" data-chip="más minimalista">{{ t('marketing_chip_minimal') }}</button>
-            <button type="button" class="mkt-chip" data-chip="sin precio">{{ t('marketing_chip_no_price') }}</button>
-        </div>
-        {% if view.context and view.context.agent %}
-        <label class="mkt-agent-toggle">
-            {% if view.context.agent.has_photo %}
-            <span class="mkt-agent-toggle__photo" aria-hidden="true"></span>
-            {% endif %}
-            <input type="hidden" name="include_agent" value="0">
-            <input type="checkbox" name="include_agent" value="1" checked>
-            <span>
-                <strong>{{ t('marketing_include_agent') }}</strong>
-                <small>{{ t('marketing_include_agent_help') }}</small>
-            </span>
-        </label>
-        {% endif %}
-        <button type="submit" class="btn btn-primary" {% if view.missing_photos %}disabled{% endif %}>{{ t('marketing_generate_ai') }}</button>
-    </form>
+    {% with
+        mkt_property_id=view.property.id if view.property else None,
+        mkt_properties=view.properties,
+        mkt_include_agent_default=view.include_agent_default,
+        mkt_include_price_default=view.include_price_default,
+        mkt_request_text=view.request_text,
+        mkt_missing_photos=view.missing_photos,
+        mkt_idempotency=view.idempotency_key
+    %}
+    <div class="mkt-prompt">
+        {% include "marketing/_create_form.html" %}
+    </div>
+    {% endwith %}
     {% endif %}
 </section>
 {% endblock %}

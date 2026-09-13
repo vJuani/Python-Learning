@@ -91,7 +91,7 @@ def validate_creative(
         reasons.append("excessive_whitespace")
     if _edge_variance(image) < 220:
         reasons.append("flat_composition")
-    if options.get("layout_engine") != "jrh_listing" and _upper_variance(image) < 160:
+    if options.get("layout_engine") not in {"jrh_listing", "openai_images"} and _upper_variance(image) < 160:
         reasons.append("property_not_prominent")
     if _edge_clip_risk(image):
         reasons.append("unsafe_edges")

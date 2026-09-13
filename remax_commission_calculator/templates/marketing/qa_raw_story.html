@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}QA raw Story | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="mkt-composer">
+    <header class="mkt-composer__head">
+        <div>
+            <p class="mkt-kicker">QA temporal</p>
+            <h1>Raw OpenAI Story</h1>
+            <p class="field-help">1 historia 9:16. Sin compositor Pillow. La imagen mostrada es el PNG crudo de OpenAI.</p>
+        </div>
+        <a class="mkt-close" href="{{ url_for('dashboard') }}">{{ t('marketing_close') }}</a>
+    </header>
+
+    <form class="mkt-prompt" method="post" action="{{ url_for('marketing_qa_raw_story') }}">
+        <label class="mkt-create-field">
+            <span>Dirección</span>
+            <input type="text" name="address" value="Don Bosco 477">
+        </label>
+        <button type="submit" class="btn btn-primary">Generar 1 Story cruda</button>
+    </form>
+
+    {% if report %}
+    <article class="mkt-property">
+        <div>
+            <h2>{{ report.property_address }}</h2>
+            <p>run {{ report.run_id }}</p>
+        </div>
+    </article>
+    <dl class="mkt-qa-audit">
+        <div><dt>Modelo</dt><dd>{{ report.model }}</dd></div>
+        <div><dt>Provider</dt><dd>{{ report.provider }}</dd></div>
+        <div><dt>Endpoint</dt><dd>{{ report.endpoint }}</dd></div>
+        <div><dt>Imágenes input</dt><dd>{{ report.input_image_count }} ({{ report.input_roles|join(', ') }})</dd></div>
+        <div><dt>API size</dt><dd>{{ report.api_size }}</dd></div>
+        <div><dt>Raw size</dt><dd>{{ report.raw_size }}</dd></div>
+        <div><dt>Compositor legacy</dt><dd>{{ report.legacy_compositor }}</dd></div>
+        <div><dt>Post-process</dt><dd>{{ report.post_process }}</dd></div>
+        <div><dt>Fallback</dt><dd>{{ report.fallback }}</dd></div>
+        <div><dt>PNG producer</dt><dd>{{ report.png_producer_fn }}</dd></div>
+        <div><dt>raw sha256</dt><dd>{{ report.raw_sha256 }}</dd></div>
+        <div><dt>final sha256</dt><dd>{{ report.final_sha256 }}</dd></div>
+        <div><dt>Hashes iguales</dt><dd>{{ report.hashes_match }}</dd></div>
+        {% if report.difference_reason %}
+        <div><dt>Diferencia</dt><dd>{{ report.difference_reason }}</dd></div>
+        {% endif %}
+    </dl>
+    <div class="mkt-proposals">
+        <article class="mkt-proposal">
+            <p class="mkt-proposal__label">raw_openai_output.png = final_output.png</p>
+            <div class="mkt-proposal__frame mkt-proposal__frame--story">
+                <img src="{{ url_for('marketing_qa_file', run_id=report.run_id, filename='raw_openai_output.png') }}" alt="Raw OpenAI story">
+            </div>
+        </article>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

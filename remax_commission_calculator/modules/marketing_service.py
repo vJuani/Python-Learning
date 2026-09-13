@@ -32,7 +32,6 @@ from modules.database.properties_repository import get_properties, get_property_
 from modules.database.tenant import require_organization_id
 from modules.i18n import translate
 from modules.marketing_art_director import plan_item
-from modules.marketing_composer import compose_marketing_image
 from modules.marketing_context import (
     MarketingError,
     assert_marketing_access,
@@ -42,8 +41,6 @@ from modules.marketing_context import (
 )
 from modules.marketing_image_provider import (
     MarketingImageError,
-    finished_ad_prompt,
-    get_marketing_image_provider,
     get_marketing_image_provider_name,
 )
 from modules.marketing_quality import validate_creative
@@ -56,6 +53,15 @@ from modules.marketing_request import (
     counts_match_request,
     expand_items,
     parse_marketing_request,
+)
+from modules.openai_image_service import (
+    assert_openai_configured,
+    build_marketing_image_prompt,
+    generate_one_marketing_image,
+    get_openai_image_model,
+    map_image_error,
+    normalize_style,
+    resolve_generation_plan,
 )
 
 logger = logging.getLogger(__name__)
@@ -283,6 +289,14 @@ def prepare_create_view(
             "default_prompt": DEFAULT_PROMPT,
             "idempotency_key": uuid.uuid4().hex,
             "can_create": bool(property_data or properties),
+            "piece_type": "story",
+            "quantity": "1",
+            "style": "premium",
+            "include_agent_default": bool((context or {}).get("agent")),
+            "include_price_default": bool(
+                ((context or {}).get("facts") or {}).get("price_policy", {}).get("default_show", True)
+            ),
+            "request_text": (prompt or "").strip(),
         }
     )
     return view
@@ -318,6 +332,9 @@ def _options_from_request(parsed, context):
         "variation_strength": parsed.get("variation_strength") or "high",
         "temporary": True,
         "agent_presentation": presentation,
+        "style": normalize_style(parsed.get("style") or parsed.get("visual_direction")),
+        "cta": (parsed.get("cta") or "").strip(),
+        "request_text": (parsed.get("request_text") or parsed.get("prompt") or "").strip(),
     }
 
 
@@ -514,41 +531,53 @@ def _process_item(organization_id, asset_id, *, retry=False):
         options["agent_photo_loaded"] = packed.get("agent_photo_loaded")
         options["agent_photo_sent_to_provider"] = agent_sent
         stage = "image_generation"
-        provider = get_marketing_image_provider()
         art = _art_from_asset(asset)
         fmt = asset["format"]
         size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
-        options["layout_engine"] = "jrh_listing"
-        if get_marketing_image_provider_name() != "openai":
-            prompt = finished_ad_prompt(
-                art,
-                fmt,
-                references=references,
-                options=options,
-                used_directions=[options.get("visual_direction")],
-            )
-            provider.generate_creative(
-                prompt=prompt,
-                size=size,
-                visual_direction=art.get("visual_direction"),
-                references=references,
-            )
-        stage = "composition"
-        asset = _update_options(
-            asset,
-            pipeline_status=PIPELINE_COMPOSITING,
-            source=get_marketing_image_provider_name(),
-            agent_photo_sent_to_provider=agent_sent,
-            layout_engine="jrh_listing",
+        prompt = build_marketing_image_prompt(
+            context,
+            fmt,
+            options=options,
+            art=art,
+            request_text=options.get("request_text") or options.get("prompt") or "",
+            style=options.get("style"),
+            cta=options.get("cta") or art.get("cta") or "",
+            include_price=options.get("show_price", True),
+            include_agent=bool(options.get("include_agent") and options.get("show_agent_photo")),
+            variation_index=max(1, int(options.get("format_index") or 1)),
         )
-        options = dict(asset.get("options") or {}) | options
-        png_bytes, _size, compose_meta = compose_marketing_image(context, art, fmt=fmt, options=options)
-        agent_composited = bool(compose_meta.get("agent_photo_composited"))
+        png_bytes = generate_one_marketing_image(
+            prompt=prompt,
+            size=size,
+            references=references,
+            visual_direction=art.get("visual_direction") or options.get("style"),
+        )
+        agent_composited = agent_sent
+        options["layout_engine"] = "openai_images"
         options["agent_photo_composited"] = agent_composited
+        from modules.marketing_image_provider import OpenAIMarketingImageProvider, MockMarketingImageProvider
+
+        pipeline_audit = (
+            OpenAIMarketingImageProvider.last_audit
+            or MockMarketingImageProvider.last_audit
+            or {}
+        )
+        options["legacy_compositor"] = bool(pipeline_audit.get("legacy_compositor"))
+        options["pipeline_provider"] = pipeline_audit.get("provider") or get_marketing_image_provider_name()
+        options["pipeline_model"] = pipeline_audit.get("model") or get_openai_image_model()
+        options["pipeline_endpoint"] = pipeline_audit.get("endpoint")
+        options["pipeline_post_process"] = pipeline_audit.get("post_process")
         logger.info(
-            "marketing item=%s agent_photo_composited=%s",
+            "marketing item=%s agent_photo_composited=%s source=%s "
+            "legacy_compositor=%s provider=%s model=%s endpoint=%s post_process=%s",
             asset_id,
             agent_composited,
+            options["pipeline_provider"],
+            options["legacy_compositor"],
+            options["pipeline_provider"],
+            options["pipeline_model"],
+            options["pipeline_endpoint"],
+            options["pipeline_post_process"],
         )
         final_quality = validate_creative(
             png_bytes,
@@ -559,21 +588,6 @@ def _process_item(organization_id, asset_id, *, retry=False):
             agent_photo_composited=agent_composited,
         )
         options["quality_score"] = final_quality.get("score")
-        if not final_quality.get("ok"):
-            if not retry:
-                logger.info("marketing quality retry after compose item=%s", asset_id)
-                return _process_item(organization_id, asset_id, retry=True)
-            options["pipeline_status"] = PIPELINE_FAILED_QUALITY
-            options["error"] = "marketing_err_quality"
-            with _DB_LOCK:
-                update_marketing_asset(
-                    asset_id,
-                    organization_id,
-                    storage_key=None,
-                    pdf_storage_key=None,
-                    options_json=ensure_json_serializable(options, path="options"),
-                )
-            return get_marketing_asset(asset_id, organization_id)
         stage = "persistence"
         storage_key = _write_bytes(
             organization_id,
@@ -594,7 +608,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
         options["pipeline_status"] = PIPELINE_COMPLETED
         options["error"] = None
         options["source"] = get_marketing_image_provider_name()
-        options["model"] = os.environ.get("MARKETING_IMAGE_MODEL") or "gpt-image-2.5-sunburst"
+        options["model"] = get_openai_image_model()
         with _DB_LOCK:
             update_marketing_asset(
                 asset_id,
@@ -603,7 +617,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
                 pdf_storage_key=pdf_key,
                 options_json=ensure_json_serializable(options, path="options"),
             )
-    except Exception:
+    except Exception as error:
         logger.exception(
             "Marketing generation item failed batch_id=%s item_id=%s stage=%s",
             batch_id,
@@ -611,7 +625,14 @@ def _process_item(organization_id, asset_id, *, retry=False):
             stage,
         )
         asset = get_marketing_asset(asset_id, organization_id) or asset
-        _update_options(asset, pipeline_status=PIPELINE_FAILED, error="marketing_err_item_failed")
+        error_key = (
+            map_image_error(error)
+            if isinstance(error, (MarketingImageError, MarketingError))
+            else "marketing_err_item_failed"
+        )
+        if isinstance(error, MarketingError):
+            error_key = error.message_key
+        _update_options(asset, pipeline_status=PIPELINE_FAILED, error=error_key)
     return get_marketing_asset(asset_id, organization_id)
 
 
@@ -690,15 +711,23 @@ def start_marketing_batch(
     user,
     *,
     property_id,
-    prompt,
+    prompt="",
     language="es",
     idempotency_key=None,
     reference_asset_id=None,
     variation=False,
     include_agent=None,
+    include_price=None,
+    formats=None,
+    count=None,
+    quantity=None,
+    style=None,
+    cta=None,
+    request_text=None,
 ):
     organization_id = require_organization_id(organization_id)
     cleanup_expired_marketing_assets(organization_id)
+    assert_openai_configured()
     token = (idempotency_key or "").strip() or None
     if token:
         existing = find_batch_by_idempotency(organization_id, token)
@@ -714,30 +743,51 @@ def start_marketing_batch(
             user, get_marketing_asset(reference_asset_id, organization_id)
         )
         variation = True
-    parsed = parse_marketing_request(prompt, language=language, variation=variation)
+    note = (request_text or prompt or "").strip()
+    structured = formats not in (None, "", []) or quantity not in (None, "") or count not in (None, "")
+    parsed = parse_marketing_request(note, language=language, variation=variation)
+    parsed["request_text"] = note
+    parsed["cta"] = (cta or parsed.get("cta") or "").strip()
+    if style:
+        parsed["style"] = normalize_style(style)
     if include_agent is False:
         parsed["with_agent"] = False
         parsed["with_agent_photo"] = False
-    if reference:
-        folded = (parsed.get("prompt") or "").lower()
-        if variation and not re.search(r"\d+", parsed.get("prompt") or ""):
-            parsed["story_count"] = 0
-            parsed["post_count"] = 0
-            parsed["flyer_count"] = 0
-            parsed["status_count"] = 0
-        if not expand_items(parsed):
-            fmt = reference.get("format") or "story"
-            if re.search(r"historia|story", folded):
-                fmt = "story"
-            elif re.search(r"\bposts?\b|publicaci", folded):
-                fmt = "post"
-            elif re.search(r"flyer|folleto", folded):
-                fmt = "flyer"
-            parsed["story_count"] = 1 if fmt == "story" else 0
-            parsed["post_count"] = 1 if fmt == "post" else 0
-            parsed["flyer_count"] = 1 if fmt == "flyer" else 0
-            parsed["status_count"] = 1 if fmt == "status" else 0
-    items = _items_from_request(parsed, reference=reference)
+    elif include_agent is True:
+        parsed["with_agent"] = True
+        parsed["with_agent_photo"] = True
+    if include_price is False:
+        parsed["show_price"] = False
+    elif include_price is True:
+        parsed["show_price"] = True
+    if structured:
+        items = resolve_generation_plan(formats, count=count if count is not None else 1, quantity=quantity)
+        parsed["explicit_formats"] = True
+        parsed["story_count"] = sum(1 for item in items if item["format"] == "story")
+        parsed["post_count"] = sum(1 for item in items if item["format"] == "post")
+        parsed["flyer_count"] = sum(1 for item in items if item["format"] == "flyer")
+        parsed["status_count"] = sum(1 for item in items if item["format"] == "status")
+    else:
+        if reference:
+            folded = (parsed.get("prompt") or "").lower()
+            if variation and not re.search(r"\d+", parsed.get("prompt") or ""):
+                parsed["story_count"] = 0
+                parsed["post_count"] = 0
+                parsed["flyer_count"] = 0
+                parsed["status_count"] = 0
+            if not expand_items(parsed):
+                fmt = reference.get("format") or "story"
+                if re.search(r"historia|story", folded):
+                    fmt = "story"
+                elif re.search(r"\bposts?\b|publicaci", folded):
+                    fmt = "post"
+                elif re.search(r"flyer|folleto", folded):
+                    fmt = "flyer"
+                parsed["story_count"] = 1 if fmt == "story" else 0
+                parsed["post_count"] = 1 if fmt == "post" else 0
+                parsed["flyer_count"] = 1 if fmt == "flyer" else 0
+                parsed["status_count"] = 1 if fmt == "status" else 0
+        items = _items_from_request(parsed, reference=reference)
     if len(items) > MAX_BATCH_ITEMS:
         items = items[:MAX_BATCH_ITEMS]
         parsed["capped"] = True
@@ -746,8 +796,6 @@ def start_marketing_batch(
         language=language,
         include_agent=parsed.get("with_agent") is not False,
     )
-    if context["photo_count"] == 0:
-        raise MarketingError("marketing_err_no_photos", 400)
     options = _options_from_request(parsed, context)
     if reference:
         ref_opts = dict(reference.get("options") or {})
@@ -903,6 +951,14 @@ def start_marketing_batch(
     return get_batch_view(organization_id, user, batch_id, language=language)
 
 
+def _form_flag(form, key, *, default=None):
+    if form.get(key) in {"0", "off", "false"}:
+        return False
+    if form.get(key) in {"1", "on", "true"}:
+        return True
+    return default
+
+
 def generate_marketing_proposals(
     organization_id,
     user,
@@ -912,28 +968,20 @@ def generate_marketing_proposals(
     language="es",
 ):
     form = form or {}
-    prompt = (form.get("prompt") or "").strip()
-    if not prompt:
-        fmt = str(form.get("format") or "pack").strip().lower()
-        if fmt == "story":
-            prompt = "Haceme 3 historias, todas diferentes, premium, sin descripción larga y usando mi foto."
-        elif fmt == "post":
-            prompt = "Haceme 3 posts de Instagram, todos diferentes, premium, sin descripción larga y usando mi foto."
-        elif fmt == "status":
-            prompt = "Haceme 3 estados de WhatsApp, todos diferentes, premium, sin descripción larga y usando mi foto."
-        elif fmt == "flyer":
-            prompt = "Haceme 3 flyers, todos diferentes, premium, sin descripción larga y usando mi foto."
-        else:
-            prompt = DEFAULT_PROMPT
-    if form.get("include_agent") in {"0", "off", "false"}:
-        prompt += " sin agente."
-    if form.get("show_price") in {"0", "off", "false"}:
-        prompt += " Sin precio."
-    include_agent = None
-    if form.get("include_agent") in {"0", "off", "false"}:
-        include_agent = False
-    elif form.get("include_agent") in {"1", "on", "true"}:
-        include_agent = True
+    prompt = (form.get("prompt") or form.get("request_text") or "").strip()
+    piece_type = (form.get("piece_type") or "").strip().lower()
+    quantity = (form.get("quantity") or "").strip().lower()
+    formats = None
+    count = None
+    if piece_type or quantity:
+        formats = [piece_type or "story"]
+        count = quantity or form.get("count") or 1
+    elif not prompt:
+        prompt = DEFAULT_PROMPT
+    include_agent = _form_flag(form, "include_agent")
+    include_price = _form_flag(form, "include_price")
+    if include_price is None:
+        include_price = _form_flag(form, "show_price")
     previous = os.environ.get("MARKETING_SYNC")
     os.environ["MARKETING_SYNC"] = "1"
     try:
@@ -945,6 +993,13 @@ def generate_marketing_proposals(
             language=language,
             idempotency_key=(form.get("idempotency_key") or "").strip() or None,
             include_agent=include_agent,
+            include_price=include_price,
+            formats=formats,
+            count=count,
+            quantity=quantity or None,
+            style=form.get("style"),
+            cta=form.get("cta"),
+            request_text=form.get("request_text") or prompt,
         )
     finally:
         if previous is None:
@@ -1046,8 +1101,9 @@ def retry_marketing_item(organization_id, user, asset_id, *, language="es"):
 def vary_marketing_asset(organization_id, user, asset_id, prompt, *, language="es"):
     asset = require_asset_access(user, get_marketing_asset(asset_id, organization_id))
     text = (prompt or "").strip()
+    options = asset.get("options") or {}
     if not text:
-        raise MarketingError("marketing_err_prompt_missing", 400)
+        return regenerate_marketing_asset(organization_id, user, asset_id, language=language)
     return start_marketing_batch(
         organization_id,
         user,
@@ -1057,7 +1113,54 @@ def vary_marketing_asset(organization_id, user, asset_id, prompt, *, language="e
         reference_asset_id=asset_id,
         variation=True,
         idempotency_key=uuid.uuid4().hex,
+        include_agent=options.get("include_agent"),
+        include_price=options.get("show_price"),
+        style=options.get("style"),
+        cta=options.get("cta"),
+        request_text=text,
     )
+
+
+def regenerate_marketing_asset(organization_id, user, asset_id, *, language="es"):
+    asset = require_asset_access(user, get_marketing_asset(asset_id, organization_id))
+    options = asset.get("options") or {}
+    copy = asset.get("copy_snapshot") or {}
+    return start_marketing_batch(
+        organization_id,
+        user,
+        property_id=asset["property_id"],
+        prompt=options.get("request_text") or options.get("prompt") or "",
+        language=language,
+        reference_asset_id=asset_id,
+        variation=True,
+        formats=[asset.get("format") or "story"],
+        count=1,
+        include_agent=options.get("include_agent"),
+        include_price=options.get("show_price"),
+        style=options.get("style") or asset.get("style"),
+        cta=options.get("cta") or copy.get("cta"),
+        request_text=options.get("request_text") or options.get("prompt") or "",
+        idempotency_key=uuid.uuid4().hex,
+    )
+
+
+def discard_marketing_asset(organization_id, user, asset_id):
+    asset = require_asset_access(user, get_marketing_asset(asset_id, organization_id))
+    root = Path(get_private_upload_root())
+    for key in (asset.get("storage_key"), asset.get("pdf_storage_key")):
+        if not key:
+            continue
+        path = root / key
+        try:
+            if path.is_file():
+                path.unlink()
+        except OSError:
+            logger.info("marketing discard file skipped")
+    delete_marketing_asset(asset["id"], organization_id)
+    return {
+        "generation_id": asset.get("generation_id"),
+        "property_id": asset.get("property_id"),
+    }
 
 
 def select_marketing_asset(organization_id, user, asset_id):

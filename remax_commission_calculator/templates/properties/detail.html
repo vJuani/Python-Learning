@@ -8,11 +8,17 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/properties-page.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/property-sync.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/property-detail.css') }}">
+{% if can_use_property_media %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/property-maps.js') }}"></script>
 <script src="{{ url_for('static', filename='js/property-detail.js') }}" defer></script>
+{% if can_use_property_media %}
+<script src="{{ url_for('static', filename='js/marketing.js') }}" defer></script>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -121,6 +127,15 @@
 </article>
 
 {% if can_use_property_media %}
+{% with
+    mkt_property_id=property_data.id,
+    mkt_include_agent_default=detail.branding.has_photo if detail.branding else false,
+    mkt_include_price_default=property_data.listing_price is not none,
+    mkt_request_text='',
+    mkt_missing_photos=not property_gallery
+%}
+{% include "marketing/_create_dialog.html" %}
+{% endwith %}
 <dialog class="aa-dialog property-brochure-dialog" data-brochure-dialog>
     <form
         method="post"

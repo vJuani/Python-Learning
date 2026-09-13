@@ -9,6 +9,7 @@ from pathlib import Path
 from PIL import Image
 
 from modules.agent_branding import get_agent_presentation_asset
+from modules.branding import resolve_brand_logo_path
 from modules.marketing_renderer import load_property_photos
 
 logger = logging.getLogger(__name__)
@@ -118,12 +119,23 @@ def collect_reference_images(context, options):
                 "role": "agent",
                 "label": (
                     "Reference D: REAL AGENT PORTRAIT. This is the exact person. "
-                    "The final compositor will overlay this same cutout. "
-                    "Do not invent another face."
+                    "Integrate a clean professional cutout, small or medium, never huge. "
+                    "Do not invent another face and do not duplicate the portrait."
                 ),
                 "bytes": agent_bytes,
                 "mime": "image/png",
                 "name": "agent-portrait.png",
+            }
+        )
+    logo_bytes = _open_path_bytes(resolve_brand_logo_path())
+    if logo_bytes:
+        references.append(
+            {
+                "role": "logo",
+                "label": "Reference E: REAL JRH ONE LOGO. Use small, elegant, never stretched.",
+                "bytes": logo_bytes,
+                "mime": "image/png",
+                "name": "jrh-one-logo.png",
             }
         )
     logger.info(

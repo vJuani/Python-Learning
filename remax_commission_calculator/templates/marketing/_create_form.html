@@ -1,0 +1,61 @@
+<form class="mkt-create-form" method="post" action="{{ url_for('marketing_generate') }}" data-mkt-prompt>
+    {% if mkt_property_id %}
+    <input type="hidden" name="property_id" value="{{ mkt_property_id }}">
+    {% else %}
+    <label class="mkt-create-field">
+        <span>{{ t('marketing_choose_property') }}</span>
+        <select name="property_id" required>
+            <option value="">{{ t('marketing_choose_property') }}</option>
+            {% for item in mkt_properties or [] %}
+            <option value="{{ item.id }}">{{ item.address }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% endif %}
+
+    <fieldset class="mkt-create-choices">
+        <legend>{{ t('marketing_piece_type') }}</legend>
+        <label><input type="radio" name="piece_type" value="story" checked> {{ t('marketing_format_story_short') }}</label>
+        <label><input type="radio" name="piece_type" value="post"> {{ t('marketing_format_post_short') }}</label>
+        <label><input type="radio" name="piece_type" value="flyer"> {{ t('marketing_format_flyer_short') }}</label>
+    </fieldset>
+
+    <fieldset class="mkt-create-choices">
+        <legend>{{ t('marketing_quantity') }}</legend>
+        <label><input type="radio" name="quantity" value="1" checked> {{ t('marketing_quantity_1') }}</label>
+        <label><input type="radio" name="quantity" value="3"> {{ t('marketing_quantity_3') }}</label>
+        <label><input type="radio" name="quantity" value="pack"> {{ t('marketing_quantity_pack') }}</label>
+    </fieldset>
+
+    <fieldset class="mkt-create-choices">
+        <legend>{{ t('marketing_step_style') }}</legend>
+        <label><input type="radio" name="style" value="premium" checked> {{ t('marketing_style_premium') }}</label>
+        <label><input type="radio" name="style" value="minimal"> {{ t('marketing_style_minimal') }}</label>
+        <label><input type="radio" name="style" value="modern"> {{ t('marketing_style_modern') }}</label>
+    </fieldset>
+
+    <label class="mkt-create-toggle">
+        <input type="hidden" name="include_agent" value="0">
+        <input type="checkbox" name="include_agent" value="1" {% if mkt_include_agent_default %}checked{% endif %}>
+        <span>{{ t('marketing_include_agent_photo') }}</span>
+    </label>
+    <label class="mkt-create-toggle">
+        <input type="hidden" name="include_price" value="0">
+        <input type="checkbox" name="include_price" value="1" {% if mkt_include_price_default %}checked{% endif %}>
+        <span>{{ t('marketing_include_price') }}</span>
+    </label>
+
+    <label class="mkt-create-field">
+        <span>{{ t('marketing_cta_optional') }}</span>
+        <input type="text" name="cta" maxlength="80" placeholder="{{ t('marketing_cta_placeholder') }}">
+    </label>
+    <label class="mkt-create-field">
+        <span>{{ t('marketing_note_optional') }}</span>
+        <input type="text" name="request_text" maxlength="180" value="{{ mkt_request_text or '' }}" placeholder="{{ t('marketing_note_placeholder') }}">
+    </label>
+    <input type="hidden" name="idempotency_key" value="{{ mkt_idempotency or '' }}">
+    {% if mkt_missing_photos %}
+    <p class="mkt-warn" role="status">{{ t('marketing_no_photos_fallback') }}</p>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">{{ t('marketing_generate_ai') }}</button>
+</form>

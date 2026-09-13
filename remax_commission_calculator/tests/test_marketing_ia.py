@@ -44,6 +44,14 @@ from modules.marketing_art_director import STORY_DIRECTIONS, plan_item
 from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy
 from modules.marketing_composer import compose_marketing_image
 from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider, get_marketing_image_model
+from modules.openai_image_service import (
+    DEFAULT_OPENAI_IMAGE_MODEL,
+    build_marketing_image_prompt,
+    generate_marketing_images,
+    resolve_generation_plan,
+)
+from modules.marketing_qa import resolve_qa_file, run_raw_story_qa
+from modules.marketing_image_provider import sha256_bytes
 from modules.marketing_quality import validate_creative
 from modules.marketing_visual_spec import (
     STYLE_REFERENCE_LABEL,
@@ -58,6 +66,7 @@ from modules.marketing_service import (
     asset_download_name,
     can_view_asset,
     cleanup_expired_marketing_assets,
+    discard_marketing_asset,
     ensure_json_serializable,
     generate_marketing_proposals,
     resolve_asset_file,
@@ -484,22 +493,24 @@ class MarketingIaTests(unittest.TestCase):
         ok = client.get("/marketing", follow_redirects=True)
         self.assertEqual(ok.status_code, 200)
         self.assertIn("JRH IA".encode("utf-8"), ok.data)
-        self.assertIn("¿Qué querés que JRH haga?".encode("utf-8"), ok.data)
-        self.assertNotIn("Elegí el estilo".encode("utf-8"), ok.data)
+        self.assertIn("Tipo de pieza".encode("utf-8"), ok.data)
         self.assertNotIn("Historial".encode("utf-8"), ok.data)
         create = client.get(f"/marketing/new?property_id={self.property_id}")
         self.assertEqual(create.status_code, 200)
         self.assertIn("Santamarina 1335".encode("utf-8"), create.data)
         self.assertIn("Generar con IA".encode("utf-8"), create.data)
-        self.assertNotIn(b'name="format"', create.data)
-        self.assertNotIn(b'name="style"', create.data)
+        self.assertIn(b'name="piece_type"', create.data)
+        self.assertIn(b'name="style"', create.data)
+        self.assertNotIn(b"<textarea", create.data)
         home = client.get("/")
         self.assertEqual(home.status_code, 200)
-        self.assertIn("Crear contenido con IA".encode("utf-8"), home.data)
+        self.assertIn("Crear pieza de marketing".encode("utf-8"), home.data)
         self.assertNotIn(b">Marketing</span>", home.data)
         detail = client.get(f"/properties/{self.property_id}")
         self.assertEqual(detail.status_code, 200)
         self.assertIn("Crear con JRH IA".encode("utf-8"), detail.data)
+        self.assertIn(b"data-mkt-open", detail.data)
+        self.assertIn(b"data-mkt-dialog", detail.data)
 
     def test_19_jrh_property_context(self):
         self.assertEqual(detect_marketing_content("creame una historia de Santamarina"), "story")
@@ -809,7 +820,12 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("max-width: 72rem", css)
         self.assertIn(".mkt-prompt .btn-primary", css)
         self.assertIn("display: block !important", css)
-        self.assertEqual(get_marketing_image_model(), os.environ.get("MARKETING_IMAGE_MODEL") or "gpt-image-2.5-sunburst")
+        self.assertEqual(
+            get_marketing_image_model(),
+            os.environ.get("OPENAI_IMAGE_MODEL")
+            or os.environ.get("MARKETING_IMAGE_MODEL")
+            or "gpt-image-1",
+        )
         context = build_property_marketing_context(self._property())
         packed = collect_reference_images(
             context,
@@ -1021,6 +1037,132 @@ class MarketingIaTests(unittest.TestCase):
         brief = build_visual_brief("story", "editorial_navy")
         self.assertEqual(brief["text_density"], "very_low")
         self.assertEqual(brief["quality_target"], "approved_jrh_story")
+
+    def test_43_openai_service_prompt_and_plan(self):
+        self.assertEqual(DEFAULT_OPENAI_IMAGE_MODEL, "gpt-image-1")
+        self.assertEqual(get_marketing_image_model(), "gpt-image-1")
+        self.assertEqual(
+            [item["format"] for item in resolve_generation_plan(["story"], count=1)],
+            ["story"],
+        )
+        pack = resolve_generation_plan(["story"], quantity="pack")
+        self.assertEqual(len(pack), 9)
+        self.assertEqual([item["format"] for item in pack].count("story"), 3)
+        self.assertEqual([item["format"] for item in pack].count("post"), 3)
+        self.assertEqual([item["format"] for item in pack].count("flyer"), 3)
+        context = build_property_marketing_context(self._property())
+        prompt = build_marketing_image_prompt(
+            context,
+            "story",
+            include_agent=True,
+            include_price=True,
+            style="premium",
+            cta="Consultame",
+        )
+        self.assertIn("finished premium real-estate", prompt)
+        self.assertIn("Santamarina", prompt)
+        self.assertIn("REAL agent portrait", prompt)
+
+    def test_44_structured_one_story_and_pack_counts(self):
+        one = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            formats=["story"],
+            count=1,
+            include_agent=True,
+            include_price=True,
+            style="premium",
+            request_text="con mi foto",
+        )
+        self.assertEqual(len(one["assets"]), 1)
+        self.assertEqual(one["assets"][0]["format"], "story")
+        self.assertTrue((one["assets"][0].get("options") or {}).get("agent_photo_sent_to_provider"))
+        generated = generate_marketing_images(
+            self._property(),
+            formats=["story"],
+            count=1,
+            include_agent=True,
+            include_price=True,
+        )
+        self.assertEqual(len(generated), 1)
+        self.assertEqual(generated[0]["format"], "story")
+        self.assertTrue(generated[0]["png_bytes"])
+        pack = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            formats=["pack"],
+            quantity="pack",
+            include_agent=True,
+        )
+        self.assertEqual(len(pack["assets"]), 9)
+
+    def test_45_discard_removes_session_asset(self):
+        result = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            formats=["story"],
+            count=1,
+        )
+        asset = result["assets"][0]
+        path = resolve_asset_file(asset)
+        self.assertTrue(path and path.is_file())
+        discarded = discard_marketing_asset(
+            self.org, self._user(self.agent_user_id), asset["id"]
+        )
+        self.assertEqual(discarded["property_id"], self.property_id)
+        self.assertFalse(path.is_file())
+        self.assertIsNone(get_marketing_asset(asset["id"], self.org))
+
+    def test_46_raw_story_qa_skips_legacy_compositor(self):
+        don_bosco = add_property(
+            "Don Bosco 477",
+            "Buenos Aires",
+            self.org,
+            agent_id=self.agent_id,
+            property_type="apartment",
+            listing_price=120000,
+            listing_purpose="sale",
+            listing_currency="USD",
+            created_by_user_id=self.admin_id,
+        )
+        rel = f"organizations/{self.org}/properties/{don_bosco}/media/cover.jpg"
+        _write_photo(_PRIVATE_ROOT / rel, (70, 82, 96), rooms=True)
+        upsert_property_media(
+            self.org,
+            don_bosco,
+            source="manual",
+            external_media_id="don-bosco-cover",
+            original_url=None,
+            storage_key=rel,
+            storage_strategy=STRATEGY_COPY,
+            position=0,
+            is_cover=True,
+            content_type="image/jpeg",
+        )
+        report = run_raw_story_qa(
+            self.org,
+            self._user(self.agent_user_id),
+            address="Don Bosco 477",
+        )
+        self.assertEqual(report["property_address"], "Don Bosco 477")
+        self.assertTrue(report["hashes_match"])
+        self.assertEqual(report["raw_sha256"], report["final_sha256"])
+        self.assertEqual(report["post_process"], "none")
+        self.assertIsNone(report["post_process_fn"])
+        raw_path = resolve_qa_file(self.org, report["run_id"], "raw_openai_output.png")
+        final_path = resolve_qa_file(self.org, report["run_id"], "final_output.png")
+        self.assertTrue(raw_path and raw_path.is_file())
+        self.assertTrue(final_path and final_path.is_file())
+        self.assertEqual(sha256_bytes(raw_path.read_bytes()), sha256_bytes(final_path.read_bytes()))
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["user_id"] = self.agent_user_id
+        page = client.get("/marketing/qa/raw-story")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b"Raw OpenAI Story", page.data)
 
 
 def _quality_png():

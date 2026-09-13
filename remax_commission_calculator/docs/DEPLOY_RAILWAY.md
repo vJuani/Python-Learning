@@ -107,6 +107,7 @@ upload a `.env` file.
 | `JRH_AI_PROVIDER` | `mock` | `openai` |
 | `JRH_AI_MODEL` | unused with mock | `gpt-4o-mini` |
 | `OPENAI_API_KEY` | unset | the same Railway secret already used by Cash AI |
+| `OPENAI_IMAGE_MODEL` | unused with mock | `gpt-image-1` |
 
 If `JRH_AI_PROVIDER` is omitted:
 - tests set `mock` themselves

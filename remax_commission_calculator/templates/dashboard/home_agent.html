@@ -8,12 +8,14 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard-page.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/home-v2.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-ask-page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/jrh-voice.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/jrh-ask-page.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/marketing.js') }}" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -120,10 +122,10 @@
                 <strong>{{ t('home_shortcut_search') }}</strong>
                 <span>{{ t('home_shortcut_search_help') }}</span>
             </a>
-            <a class="home-shortcuts__card home-shortcuts__card--featured" href="{{ url_for('marketing_new') }}">
+            <button type="button" class="home-shortcuts__card home-shortcuts__card--featured" data-mkt-open>
                 <strong>{{ t('home_shortcut_create') }}</strong>
                 <span>{{ t('home_shortcut_create_help') }}</span>
-            </a>
+            </button>
             <a class="home-shortcuts__card" href="{{ url_for('agenda_index') }}">
                 <strong>{{ t('agenda_title') }}</strong>
                 <span>{{ t('home_shortcut_agenda_help') }}</span>
@@ -225,4 +227,14 @@
         </section>
     </aside>
 </div>
+{% with
+    mkt_property_id=None,
+    mkt_properties=marketing_properties,
+    mkt_include_agent_default=true,
+    mkt_include_price_default=true,
+    mkt_request_text='',
+    mkt_missing_photos=false
+%}
+{% include "marketing/_create_dialog.html" %}
+{% endwith %}
 {% endblock %}

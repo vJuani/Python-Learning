@@ -143,6 +143,30 @@
     tick();
   }
 
+  function setupCreateDialog() {
+    var dialog = document.querySelector("[data-mkt-dialog]");
+    if (!dialog) return;
+    document.querySelectorAll("[data-mkt-open]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        if (typeof dialog.showModal === "function") {
+          dialog.showModal();
+        } else {
+          dialog.setAttribute("open", "open");
+        }
+      });
+    });
+    dialog.querySelectorAll("[data-mkt-close]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        dialog.close();
+      });
+    });
+    dialog.addEventListener("click", function (event) {
+      if (event.target === dialog) {
+        dialog.close();
+      }
+    });
+  }
+
   document.querySelectorAll("[data-mkt-copy]").forEach(function (button) {
     button.addEventListener("click", function () {
       copyText(button);
@@ -152,4 +176,5 @@
   document.querySelectorAll("[data-mkt-chips]").forEach(setupChips);
   document.querySelectorAll("[data-mkt-prompt]").forEach(setupPromptGuard);
   document.querySelectorAll("[data-mkt-batch]").forEach(pollBatch);
+  setupCreateDialog();
 })();

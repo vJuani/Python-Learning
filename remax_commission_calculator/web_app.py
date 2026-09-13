@@ -1557,6 +1557,11 @@ def get_agent_home_context(organization_id, agent_id, *, jrh_result=None, jrh_as
             agent_id=agent_id,
             language=language,
         ),
+        "marketing_properties": get_properties(
+            organization_id,
+            agent_id=agent_id,
+            include_all_statuses=False,
+        ),
         "pending_summary": summarize_pending_actions(
             _pending_actions_for_current_user(),
             language=language,
