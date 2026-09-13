@@ -25,6 +25,7 @@ HARD_FAIL = {
     "logo_clipped",
     "agent_missing",
     "agent_not_composited",
+    "wrong_language",
 }
 
 
@@ -169,6 +170,7 @@ def validate_creative(
         "agent_not_composited": 28,
         "property_missing": 30,
         "wrong_size": 10,
+        "wrong_language": 30,
     }
     for reason in reasons:
         score -= penalties.get(reason, 8)

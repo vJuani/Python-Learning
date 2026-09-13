@@ -80,7 +80,8 @@ def run_raw_story_qa(
         "show_agent_photo": True,
         "show_price": True,
         "style": "premium",
-        "cta": "Consultame",
+        "language": language,
+        "cta": "Consultame ahora" if language != "en" else "Inquire Now",
         "request_text": "Una historia 9:16, pocas palabras, foto real del agente.",
     }
     packed = collect_reference_images(context, options)
@@ -90,10 +91,11 @@ def run_raw_story_qa(
         options=options,
         request_text=options["request_text"],
         style="premium",
-        cta="Consultame",
+        cta=options["cta"],
         include_price=True,
         include_agent=True,
         variation_index=1,
+        language=language,
     )
     size = FORMAT_SIZES[QA_FORMAT]
     audit = generate_with_audit(

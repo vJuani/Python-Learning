@@ -15,6 +15,15 @@ from modules.marketing_image_provider import (
     get_marketing_image_provider_name,
 )
 from modules.marketing_copy import summarize_listing_copy
+from modules.marketing_language import (
+    default_agent_role,
+    default_cta,
+    default_headline,
+    forbidden_language_hits,
+    language_prompt_block,
+    resolve_creative_language,
+    validate_creative_language,
+)
 from modules.marketing_quality import validate_creative
 from modules.marketing_references import collect_reference_images
 from modules.marketing_renderer import FORMAT_SIZES
@@ -146,6 +155,7 @@ def build_marketing_image_prompt(
     include_agent=False,
     variation_index=1,
     repair_reasons=None,
+    language=None,
 ):
     """Internal art-direction prompt. Never shown to the end user."""
     options = options or {}
@@ -153,13 +163,23 @@ def build_marketing_image_prompt(
     facts = (context or {}).get("facts") or {}
     agent = (context or {}).get("agent") or {}
     photos = list((context or {}).get("photos") or [])
+    language = resolve_creative_language(
+        locale=language or options.get("language") or (context or {}).get("language"),
+        request_text=request_text or options.get("request_text") or options.get("prompt") or "",
+    )
     chosen_style = normalize_style(
         art.get("visual_direction") or style or options.get("style") or "premium"
     )
     fmt = normalize_format(fmt)
     cta_text = (cta or options.get("cta") or (art or {}).get("cta") or "").strip()
     note = (request_text or options.get("request_text") or options.get("prompt") or "").strip()
-    headline = ((art or {}).get("headline") or facts.get("title") or "").strip()
+    headline = ((art or {}).get("headline") or "").strip() or default_headline(
+        language, facts, chosen_style
+    )
+    if forbidden_language_hits(headline, language):
+        headline = default_headline(language, facts, chosen_style)
+    if forbidden_language_hits(cta_text, language):
+        cta_text = default_cta(language)
     show_price = include_price if include_price is not None else options.get("show_price", True)
     if (facts.get("price_policy") or {}).get("private"):
         show_price = False
@@ -168,7 +188,8 @@ def build_marketing_image_prompt(
         facts,
         agent if want_agent or include_agent else None,
         headline=headline,
-        cta=cta_text or "Consultame",
+        cta=cta_text or default_cta(language),
+        language=language,
     )
     photo_count = len(photos)
     secondary = (
@@ -185,7 +206,7 @@ def build_marketing_image_prompt(
     agent_block = (
         "Integrate the REAL agent portrait as a small-to-medium professional cutout, "
         "the official ficha/ACM photo, clean crop, never duplicated, never a second hero. "
-        f"Agent block: name '{copy['agent_name']}', short title '{copy['agent_title'] or 'Asesor'}'"
+        f"Agent block: name '{copy['agent_name']}', short title '{copy['agent_title'] or default_agent_role(language)}'"
         + (f", phone '{copy['agent_phone']}'" if copy.get("agent_phone") else "")
         + ". Never crop the head, shoulders or the name. If it does not fit, shrink the "
         "portrait automatically. Keep the exact same person. Do not invent another face."
@@ -227,10 +248,16 @@ def build_marketing_image_prompt(
             f"({', '.join(repair_reasons)}). Pull every word, logo, price, CTA and agent "
             "name inward. Shrink type and the agent automatically. Leave empty air in the margins."
         )
+    if repair_reasons and "wrong_language" in repair_reasons:
+        repair += (
+            " The previous creative used the wrong language. "
+            "Rewrite every visible word in the locked language. Do not mix languages."
+        )
     return (
         "Create one finished premium real-estate marketing piece. "
         "This is the final ad, ready to publish: editorial, clean, modern, elegant, minimal. "
         "Not a background, not a PowerPoint collage, not an amateur flyer. "
+        f"{language_prompt_block(language)} "
         f"Format: {FORMAT_BRIEFS.get(fmt, FORMAT_BRIEFS['story'])} "
         f"{safe_area_prompt(fmt)} "
         f"Style: {STYLE_BRIEFS[chosen_style]}. "
@@ -241,9 +268,10 @@ def build_marketing_image_prompt(
         "or wrap to two lines. If it still overflows, summarize "
         f"('{copy['street']}' / '{copy['zone']}'). "
         f"Listing: {_fact_line(facts, include_price=show_price)}. "
-        f"Headline: {copy['headline'] or 'Disponible'}. "
+        f"Headline: {copy['headline']}. "
         f"Street: {copy['street']}. Zone: {copy['zone']}. "
         f"CTA: {copy['cta']}. "
+        f"Visible language: {language}. "
         f"User note: {note or 'none'}. "
         f"Variant {variation_index}: change crop and type placement, "
         "but keep the same listing, the same real photos and this style family. "
@@ -296,6 +324,7 @@ def generate_validated_marketing_image(
     variation_index=1,
     size=None,
     references=None,
+    language=None,
 ):
     """Generate, validate safe areas, and regenerate layout once if needed."""
     options = dict(options or {})
@@ -304,6 +333,11 @@ def generate_validated_marketing_image(
     size = size or FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
     options["format"] = fmt
     options["layout_engine"] = "openai_images"
+    language = resolve_creative_language(
+        locale=language or options.get("language") or (context or {}).get("language"),
+        request_text=request_text or options.get("request_text") or options.get("prompt") or "",
+    )
+    options["language"] = language
     chosen_style = normalize_style(
         art.get("visual_direction") or style or options.get("style") or "premium"
     )
@@ -312,6 +346,10 @@ def generate_validated_marketing_image(
     last_prompt = None
     repair_reasons = None
     for attempt in range(1, MAX_LAYOUT_ATTEMPTS + 1):
+        if repair_reasons and "wrong_language" in repair_reasons:
+            art = dict(art)
+            art["headline"] = default_headline(language, (context or {}).get("facts") or {}, chosen_style)
+            cta = default_cta(language)
         last_prompt = build_marketing_image_prompt(
             context,
             fmt,
@@ -324,6 +362,7 @@ def generate_validated_marketing_image(
             include_agent=include_agent,
             variation_index=variation_index,
             repair_reasons=repair_reasons,
+            language=language,
         )
         last_png = generate_one_marketing_image(
             prompt=last_prompt,
@@ -342,6 +381,29 @@ def generate_validated_marketing_image(
         )
         last_verdict = dict(last_verdict)
         last_verdict["attempt"] = attempt
+        planned = summarize_listing_copy(
+            (context or {}).get("facts") or {},
+            (context or {}).get("agent") if include_agent else None,
+            headline=(art or {}).get("headline") or "",
+            cta=cta or options.get("cta") or "",
+            language=language,
+        )
+        language_verdict = validate_creative_language(
+            last_png,
+            language=language,
+            planned_copy=planned,
+            extra_text=f"{art.get('headline') or ''} {cta or options.get('cta') or ''}",
+        )
+        last_verdict["language"] = language
+        last_verdict["language_hits"] = language_verdict.get("hits") or []
+        if not language_verdict.get("ok"):
+            last_verdict["ok"] = False
+            reasons = list(last_verdict.get("reasons") or [])
+            if "wrong_language" not in reasons:
+                reasons.append("wrong_language")
+            last_verdict["reasons"] = reasons
+            last_verdict["status"] = "failed_quality"
+            options["language_retry"] = True
         if last_verdict.get("ok"):
             break
         repair_reasons = last_verdict.get("reasons") or []
@@ -357,6 +419,8 @@ def generate_validated_marketing_image(
         "prompt": last_prompt,
         "style": chosen_style,
         "size": size,
+        "language": language,
+        "language_retry": bool(options.get("language_retry")),
     }
 
 
@@ -445,6 +509,10 @@ def generate_marketing_images(
         "cta": (cta or "").strip(),
         "request_text": (request_text or "").strip(),
         "prompt": (request_text or "").strip(),
+        "language": resolve_creative_language(
+            locale=language,
+            request_text=request_text,
+        ),
     }
     if options:
         item_options.update(options)
@@ -463,6 +531,7 @@ def generate_marketing_images(
             include_agent=item_options["include_agent"],
             variation_index=item["index"],
             references=packed["references"],
+            language=item_options.get("language") or language,
         )
         results.append(
             {

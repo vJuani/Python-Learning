@@ -75,6 +75,7 @@
             {{ t('marketing_step_creating') }}
         </p>
         <p class="mkt-progress__step" data-step="finish">{% if view.creating %}○{% else %}✓{% endif %} {{ t('marketing_step_finish') }}</p>
+        <p class="mkt-warn" data-mkt-language-retry {% if not view.language_retry %}hidden{% endif %}>{{ t('marketing_language_retry') }}</p>
     </div>
 
     {% if not view.single and view.groups|length > 1 %}

@@ -124,6 +124,10 @@
           (payload.items || []).forEach(function (item) {
             renderItem(document.querySelector('[data-mkt-item="' + item.id + '"]'), item);
           });
+          var languageWarn = document.querySelector("[data-mkt-language-retry]");
+          if (languageWarn && payload.language_retry) {
+            languageWarn.hidden = false;
+          }
           if (!payload.creating) {
             root.setAttribute("data-mkt-done", "1");
             if (mark) mark.textContent = "✓";

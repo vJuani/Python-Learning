@@ -189,7 +189,8 @@ class MockMarketingImageProvider(MarketingImageProvider):
                 thumb_h = int(inner_h * 0.16)
                 canvas.paste(fit_cover(photos[1], thumb_w, thumb_h), (left, top + 72 + hero_h))
         ink = (255, 255, 255) if fill == NAVY else NAVY
-        draw.text((left + 8, bottom - 64), "Consultame", fill=ink)
+        english = "written in English only" in (prompt or "")
+        draw.text((left + 8, bottom - 64), "Inquire Now" if english else "Consultame ahora", fill=ink)
         if agent is not None:
             agent_w = min(int(width * 0.18), int(inner_w * 0.28))
             agent_h = int(agent_w * 1.2)
@@ -203,7 +204,11 @@ class MockMarketingImageProvider(MarketingImageProvider):
                 (agent_w, agent_h),
                 radius=22,
             )
-            draw.text((right - agent_w, bottom - 28), "Agente", fill=ink)
+            draw.text(
+                (right - agent_w, bottom - 28),
+                "Agent" if english else "Agente",
+                fill=ink,
+            )
         image = canvas.convert("RGB")
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")

@@ -53,6 +53,7 @@
         <span>{{ t('marketing_note_optional') }}</span>
         <input type="text" name="request_text" maxlength="180" value="{{ mkt_request_text or '' }}" placeholder="{{ t('marketing_note_placeholder') }}">
     </label>
+    <input type="hidden" name="language" value="{{ current_language }}">
     <input type="hidden" name="idempotency_key" value="{{ mkt_idempotency or '' }}">
     {% if mkt_missing_photos %}
     <p class="mkt-warn" role="status">{{ t('marketing_no_photos_fallback') }}</p>

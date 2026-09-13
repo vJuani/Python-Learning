@@ -28,10 +28,12 @@ from modules.database.marketing_repository import (
     update_marketing_asset,
     update_marketing_batch,
 )
+from modules.database.organization_settings_repository import get_organization_settings
 from modules.database.properties_repository import get_properties, get_property_record
 from modules.database.tenant import require_organization_id
 from modules.i18n import translate
 from modules.marketing_art_director import plan_item
+from modules.marketing_language import resolve_creative_language
 from modules.marketing_context import (
     MarketingError,
     assert_marketing_access,
@@ -334,6 +336,7 @@ def _options_from_request(parsed, context):
         "style": normalize_style(parsed.get("style") or parsed.get("visual_direction")),
         "cta": (parsed.get("cta") or "").strip(),
         "request_text": (parsed.get("request_text") or parsed.get("prompt") or "").strip(),
+        "language": parsed.get("language") or (context or {}).get("language") or "es",
     }
 
 
@@ -458,7 +461,7 @@ def _context_from_asset(asset):
         "cover_id": snapshot.get("cover_id"),
         "agent": asset.get("agent_branding_snapshot") or {},
         "include_agent": options.get("include_agent"),
-        "language": snapshot.get("language") or "es",
+        "language": options.get("language") or snapshot.get("language") or "es",
     }
 
 
@@ -546,6 +549,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
             variation_index=max(1, int(options.get("format_index") or 1)),
             size=size,
             references=references,
+            language=options.get("language") or context.get("language") or "es",
         )
         png_bytes = generated["png_bytes"]
         agent_composited = agent_sent
@@ -553,6 +557,9 @@ def _process_item(organization_id, asset_id, *, retry=False):
         options["agent_photo_composited"] = agent_composited
         options["layout_attempts"] = (generated.get("quality") or {}).get("attempt") or 1
         options["quality_reasons"] = (generated.get("quality") or {}).get("reasons") or []
+        options["language"] = generated.get("language") or options.get("language") or "es"
+        if generated.get("language_retry"):
+            options["language_retry"] = True
         from modules.marketing_image_provider import OpenAIMarketingImageProvider, MockMarketingImageProvider
 
         pipeline_audit = (
@@ -743,9 +750,16 @@ def start_marketing_batch(
         )
         variation = True
     note = (request_text or prompt or "").strip()
+    settings = get_organization_settings(organization_id) or {}
+    language = resolve_creative_language(
+        locale=language,
+        request_text=note,
+        organization_language=settings.get("default_language"),
+    )
     structured = formats not in (None, "", []) or quantity not in (None, "") or count not in (None, "")
     parsed = parse_marketing_request(note, language=language, variation=variation)
     parsed["request_text"] = note
+    parsed["language"] = language
     parsed["cta"] = (cta or parsed.get("cta") or "").strip()
     if style:
         parsed["style"] = normalize_style(style)
@@ -977,6 +991,10 @@ def generate_marketing_proposals(
         count = quantity or form.get("count") or 1
     elif not prompt:
         prompt = DEFAULT_PROMPT
+    language = resolve_creative_language(
+        locale=form.get("language") or language,
+        request_text=prompt,
+    )
     include_agent = _form_flag(form, "include_agent")
     include_price = _form_flag(form, "include_price")
     if include_price is None:
@@ -1040,6 +1058,10 @@ def get_batch_view(organization_id, user, batch_id, *, language="es"):
         "creating": status in {"queued", "generating"},
         "single": total == 1,
         "single_format": first.get("format") if total == 1 else None,
+        "language_retry": any(
+            (item.get("options") or {}).get("language_retry") for item in decorated
+        ),
+        "creative_language": ((first.get("options") or {}).get("language") or language),
     }
 
 
@@ -1072,6 +1094,9 @@ def get_batch_status(organization_id, user, batch_id, *, language="es"):
         "completed": view["completed"],
         "failed": view["failed"],
         "creating": view["creating"],
+        "language_retry": any(
+            (asset.get("options") or {}).get("language_retry") for asset in view["assets"]
+        ),
         "steps": {
             "analyze": True,
             "photos": True,

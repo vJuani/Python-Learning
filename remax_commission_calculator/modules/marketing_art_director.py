@@ -8,6 +8,12 @@ import re
 
 from modules.jrh_ai_provider import get_jrh_ai_provider_name
 from modules.marketing_context import ai_prompt_facts
+from modules.marketing_language import (
+    default_cta,
+    forbidden_language_hits,
+    resolve_creative_language,
+    style_headline,
+)
 from modules.marketing_visual_spec import (
     AVOID,
     COPY_DENSITY,
@@ -64,12 +70,16 @@ def pick_direction(fmt, index, used, preferred=None):
     return choice
 
 
-def _safe_hook(text, facts):
+def _safe_hook(text, facts, language="es"):
     raw = " ".join(str(text or "").split())
     if not raw:
         return None
+    if forbidden_language_hits(raw, language):
+        return None
     if INVENTED_CLAIM_RE.search(raw):
         locality = facts.get("locality") or facts.get("title") or ""
+        if language == "en":
+            return f"In {locality}" if locality else None
         return f"En {locality}" if locality else None
     words = raw.split()
     if len(words) > MAX_CREATIVE_WORDS:
@@ -78,6 +88,10 @@ def _safe_hook(text, facts):
 
 
 def _fallback_direction(fmt, index, used, facts, request):
+    language = resolve_creative_language(
+        locale=request.get("language"),
+        request_text=request.get("request_text") or request.get("prompt") or "",
+    )
     direction = pick_direction(
         fmt,
         index,
@@ -86,7 +100,7 @@ def _fallback_direction(fmt, index, used, facts, request):
     )
     show_photo = request.get("with_agent_photo") is not False and request.get("with_agent") is not False
     brief = build_visual_brief(fmt, direction, show_agent_photo=show_photo)
-    hook = HOOKS.get(direction) or "Tu próximo hogar te espera"
+    hook = style_headline(language, direction) or HOOKS.get(direction)
     return {
         "visual_direction": direction,
         "creative_brief": brief["composition"],
@@ -95,7 +109,8 @@ def _fallback_direction(fmt, index, used, facts, request):
         "visual_brief": brief,
         "headline": hook,
         "short_hook": "",
-        "cta": "Consultame",
+        "cta": default_cta(language),
+        "language": language,
         "copy_density": request.get("copy_density") or COPY_DENSITY,
         "text_theme": "light" if brief["theme"] == "dark" else "dark",
         "quality_target": QUALITY_TARGET,
@@ -106,6 +121,10 @@ def _fallback_direction(fmt, index, used, facts, request):
 def plan_item(context, request, *, fmt, index, used_directions):
     facts = ai_prompt_facts(context)
     fallback = _fallback_direction(fmt, index, used_directions, (context or {}).get("facts") or {}, request)
+    language = fallback.get("language") or resolve_creative_language(
+        locale=request.get("language") or (context or {}).get("language"),
+        request_text=request.get("request_text") or request.get("prompt") or "",
+    )
     if get_jrh_ai_provider_name() in {"mock", "test", "rules"}:
         return fallback
     if not os.environ.get("OPENAI_API_KEY", "").strip():
@@ -113,11 +132,16 @@ def plan_item(context, request, *, fmt, index, used_directions):
     try:
         from modules.cash_ai_provider import request_structured_json
 
+        lang_line = (
+            "Write headline and CTA in Spanish only. No English taglines."
+            if language == "es"
+            else "Write headline and CTA in English only. No Spanish taglines."
+        )
         parsed = request_structured_json(
             instructions=(
                 "Art-direct one finished commercial real-estate advertisement at the "
                 "approved JRH quality target. Very little copy: optional headline "
-                "<=8 words, CTA <=2 words. Do not invent amenities or claims. "
+                f"<=8 words, CTA <=2 words. {lang_line} Do not invent amenities or claims. "
                 "Return JSON with visual_direction, creative_brief, headline, cta, "
                 "text_theme (light|dark)."
             ),
@@ -134,8 +158,12 @@ def plan_item(context, request, *, fmt, index, used_directions):
         )
         if not isinstance(parsed, dict):
             return fallback
-        fallback["headline"] = _safe_hook(parsed.get("headline"), (context or {}).get("facts") or {}) or fallback["headline"]
-        if parsed.get("cta"):
+        fallback["headline"] = _safe_hook(
+            parsed.get("headline"),
+            (context or {}).get("facts") or {},
+            language,
+        ) or fallback["headline"]
+        if parsed.get("cta") and not forbidden_language_hits(parsed.get("cta"), language):
             fallback["cta"] = str(parsed.get("cta"))[:20]
         if parsed.get("creative_brief"):
             fallback["creative_brief"] = str(parsed["creative_brief"])[:280]

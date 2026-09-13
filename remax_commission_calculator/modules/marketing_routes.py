@@ -31,6 +31,7 @@ from modules.marketing_service import (
     vary_marketing_asset,
 )
 from modules.database.marketing_repository import get_marketing_asset
+from modules.i18n import normalize_language
 
 
 def register_marketing_routes(app, helpers):
@@ -126,7 +127,9 @@ def register_marketing_routes(app, helpers):
                 user,
                 property_id=property_id,
                 prompt=prompt,
-                language=get_current_language(),
+                language=normalize_language(
+                    request.form.get("language") or get_current_language()
+                ),
                 idempotency_key=(request.form.get("idempotency_key") or "").strip() or None,
                 include_agent=include_agent if include_values else None,
                 include_price=include_price if price_values else None,

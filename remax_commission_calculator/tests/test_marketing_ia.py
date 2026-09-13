@@ -44,6 +44,13 @@ from modules.marketing_art_director import STORY_DIRECTIONS, plan_item
 from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy, summarize_listing_copy
 from modules.marketing_composer import compose_marketing_image
 from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider, get_marketing_image_model
+from modules.marketing_language import (
+    MARKETING_COPY,
+    detect_request_language,
+    forbidden_language_hits,
+    resolve_creative_language,
+    validate_creative_language,
+)
 from modules.openai_image_service import (
     DEFAULT_OPENAI_IMAGE_MODEL,
     build_marketing_image_prompt,
@@ -507,6 +514,8 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("Generar con IA".encode("utf-8"), create.data)
         self.assertIn(b'name="piece_type"', create.data)
         self.assertIn(b'name="style"', create.data)
+        self.assertIn(b'name="language"', create.data)
+        self.assertIn(b'name="language" value="es"', create.data)
         self.assertNotIn(b"<textarea", create.data)
         home = client.get("/")
         self.assertEqual(home.status_code, 200)
@@ -1065,7 +1074,7 @@ class MarketingIaTests(unittest.TestCase):
             include_agent=True,
             include_price=True,
             style="premium",
-            cta="Consultame",
+            language="es",
         )
         self.assertIn("finished premium real-estate", prompt)
         self.assertIn("Santamarina", prompt)
@@ -1076,6 +1085,20 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("vertical captions", prompt)
         self.assertIn("ALLOWED COPY ONLY", prompt)
         self.assertIn(STYLE_BRIEFS[EDITORIAL_PREMIUM][:24], prompt)
+        self.assertIn("Spanish only", prompt)
+        self.assertIn("Consultame ahora", prompt)
+        self.assertNotIn("Discover Your Next Investment", prompt)
+        english = build_marketing_image_prompt(
+            context,
+            "story",
+            include_agent=True,
+            include_price=True,
+            style="premium",
+            language="en",
+        )
+        self.assertIn("English only", english)
+        self.assertIn(MARKETING_COPY["en"]["cta"], english)
+        self.assertNotIn("Consultame ahora", english)
 
     def test_44_structured_one_story_and_pack_counts(self):
         one = start_marketing_batch(
@@ -1241,6 +1264,44 @@ class MarketingIaTests(unittest.TestCase):
         self.assertFalse(
             {"unsafe_edges", "text_clipped", "agent_clipped"} & set(options.get("quality_reasons") or [])
         )
+
+    def test_48_creative_language_follows_session_locale(self):
+        self.assertEqual(resolve_creative_language(locale="es", request_text="make me a story"), "es")
+        self.assertEqual(resolve_creative_language(locale="en", request_text="haceme una historia"), "en")
+        self.assertEqual(detect_request_language("haceme una historia con mi foto y mis datos"), "es")
+        self.assertIn("discover", forbidden_language_hits("Discover Your Next Investment", "es"))
+        self.assertIn("inquire", forbidden_language_hits("Inquire Now", "es"))
+        self.assertFalse(forbidden_language_hits("Tu próxima inversión. Consultame ahora.", "es"))
+        verdict = validate_creative_language(
+            language="es",
+            planned_copy={"headline": "Luxury Office Space Available", "cta": "Inquire Now"},
+        )
+        self.assertFalse(verdict["ok"])
+        self.assertIn("luxury", verdict["hits"])
+        spanish = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            formats=["story"],
+            count=1,
+            language="es",
+            request_text="haceme una historia con mi foto y mis datos",
+        )
+        options = spanish["assets"][0].get("options") or {}
+        self.assertEqual(options.get("language"), "es")
+        self.assertEqual((spanish["assets"][0].get("copy_snapshot") or {}).get("cta"), "Consultame ahora")
+        english = start_marketing_batch(
+            self.org,
+            self._user(self.agent_user_id),
+            property_id=self.property_id,
+            formats=["post"],
+            count=1,
+            language="en",
+            request_text="make me a post",
+        )
+        en_options = english["assets"][0].get("options") or {}
+        self.assertEqual(en_options.get("language"), "en")
+        self.assertEqual((english["assets"][0].get("copy_snapshot") or {}).get("cta"), "Inquire Now")
 
 
 def _quality_png():
