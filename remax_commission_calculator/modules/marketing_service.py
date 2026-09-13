@@ -292,7 +292,7 @@ def prepare_create_view(
             "can_create": bool(property_data or properties),
             "piece_type": "story",
             "quantity": "1",
-            "style": "premium",
+            "style": "light",
             "include_agent_default": bool((context or {}).get("agent")),
             "include_price_default": bool(
                 ((context or {}).get("facts") or {}).get("price_policy", {}).get("default_show", True)
@@ -910,7 +910,7 @@ def start_marketing_batch(
                 property_id=property_data["id"],
                 generation_id=batch_id,
                 format=item["format"],
-                style=art.get("visual_direction") or "premium",
+                style=art.get("visual_direction") or "light",
                 tone=parsed.get("visual_direction") or "premium varied",
                 template=art.get("visual_direction") or "direction",
                 copy_snapshot=ensure_json_serializable(copy, path="copy_snapshot"),

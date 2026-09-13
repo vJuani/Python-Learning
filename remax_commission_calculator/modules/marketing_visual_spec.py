@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 SPEC_ID = "JRH_MARKETING_VISUAL_SPEC"
-SPEC_VERSION = "2.0"
+SPEC_VERSION = "3.0"
 QUALITY_TARGET = "approved_jrh_story"
 
 STYLE_DIR = Path(__file__).resolve().parent.parent / "marketing_style_references"
@@ -75,94 +75,91 @@ SAFE_INSET = {
     "flyer": {"x": 48, "y": 52},
 }
 
-EDITORIAL_PREMIUM = "editorial_premium"
-MODERN_COMMERCIAL = "modern_commercial"
-LUXURY_MINIMAL = "luxury_minimal"
+LIGHT_PREMIUM = "light_premium"
+BLUE_PREMIUM = "blue_premium"
+EDITORIAL_PREMIUM = LIGHT_PREMIUM
+MODERN_COMMERCIAL = BLUE_PREMIUM
+LUXURY_MINIMAL = LIGHT_PREMIUM
+
+SHARED_LAYOUT = {
+    "hero": "upper_editorial",
+    "thumbs": "pair_support",
+    "agent": "lower_right_small",
+}
 
 STYLE_ALIASES = {
-    "premium": EDITORIAL_PREMIUM,
-    "elegant": EDITORIAL_PREMIUM,
-    "elegante": EDITORIAL_PREMIUM,
-    "editorial": EDITORIAL_PREMIUM,
-    "editorial_premium": EDITORIAL_PREMIUM,
-    "editorial_navy": EDITORIAL_PREMIUM,
-    "luxury_editorial": EDITORIAL_PREMIUM,
-    "modern": MODERN_COMMERCIAL,
-    "moderno": MODERN_COMMERCIAL,
-    "commercial": MODERN_COMMERCIAL,
-    "moderno_comercial": MODERN_COMMERCIAL,
-    "modern_commercial": MODERN_COMMERCIAL,
-    "white_architectural": MODERN_COMMERCIAL,
-    "clean_collage": MODERN_COMMERCIAL,
-    "bright_architectural": MODERN_COMMERCIAL,
-    "bright_geometric": MODERN_COMMERCIAL,
-    "price_led": MODERN_COMMERCIAL,
-    "minimal": LUXURY_MINIMAL,
-    "minimalista": LUXURY_MINIMAL,
-    "luxury": LUXURY_MINIMAL,
-    "luxury_minimal": LUXURY_MINIMAL,
-    "photo_led_luxury": LUXURY_MINIMAL,
-    "property_hero": LUXURY_MINIMAL,
-    "luxury_minimal_photo": LUXURY_MINIMAL,
+    "light": LIGHT_PREMIUM,
+    "light_premium": LIGHT_PREMIUM,
+    "template_light": LIGHT_PREMIUM,
+    "premium": LIGHT_PREMIUM,
+    "elegant": LIGHT_PREMIUM,
+    "elegante": LIGHT_PREMIUM,
+    "editorial": LIGHT_PREMIUM,
+    "editorial_premium": LIGHT_PREMIUM,
+    "editorial_navy": LIGHT_PREMIUM,
+    "luxury_editorial": LIGHT_PREMIUM,
+    "minimal": LIGHT_PREMIUM,
+    "minimalista": LIGHT_PREMIUM,
+    "luxury": LIGHT_PREMIUM,
+    "luxury_minimal": LIGHT_PREMIUM,
+    "photo_led_luxury": LIGHT_PREMIUM,
+    "property_hero": LIGHT_PREMIUM,
+    "luxury_minimal_photo": LIGHT_PREMIUM,
+    "blue": BLUE_PREMIUM,
+    "blue_premium": BLUE_PREMIUM,
+    "template_blue": BLUE_PREMIUM,
+    "navy": BLUE_PREMIUM,
+    "modern": BLUE_PREMIUM,
+    "moderno": BLUE_PREMIUM,
+    "commercial": BLUE_PREMIUM,
+    "moderno_comercial": BLUE_PREMIUM,
+    "modern_commercial": BLUE_PREMIUM,
+    "white_architectural": BLUE_PREMIUM,
+    "clean_collage": BLUE_PREMIUM,
+    "bright_architectural": BLUE_PREMIUM,
+    "bright_geometric": BLUE_PREMIUM,
+    "price_led": BLUE_PREMIUM,
 }
 
 COMPOSITIONS = {
-    EDITORIAL_PREMIUM: {
+    LIGHT_PREMIUM: {
+        **SHARED_LAYOUT,
         "theme": "light",
-        "hero": "upper_editorial",
-        "thumbs": "pair_support",
-        "agent": "lower_right_small",
         "mood": "editorial, quiet luxury, magazine cover, ivory paper",
         "brief": (
-            "Editorial Premium: one dominant hero photograph, slim outer margins, "
-            "very little type. At most one or two small supporting photos. "
-            "Ivory or off-white field. Navy and electric blue only as accents. "
-            "No navy outer frame. No collage, no icon rows, no competing headlines."
+            "Light Premium: one locked listing layout on an ivory field. "
+            "Office logo + full office name top-left, short kicker top-right, "
+            "one large hero, two equal secondary photos, commercial title, "
+            "street + locality, four attribute icons, price, slim CTA, "
+            "agent block, legal hairline. Navy ink, electric blue only on the CTA. "
+            "No navy outer frame. No PowerPoint. Do not invent another composition."
         ),
     },
-    MODERN_COMMERCIAL: {
-        "theme": "light",
-        "hero": "hero_plus_offer",
-        "thumbs": "one_or_two",
-        "agent": "footer_compact",
-        "mood": "modern, commercial, high-clarity selling, light editorial",
+    BLUE_PREMIUM: {
+        **SHARED_LAYOUT,
+        "theme": "blue",
+        "mood": "modern premium, deep navy field, cream type, electric accent",
         "brief": (
-            "Modern Commercial: sales-first layout. Hero photo, clearly readable price, "
-            "one clear CTA, one or two supporting photos. Clean geometry on an ivory field. "
-            "Blue only on the CTA and thin rules. Never a coupon flyer or PowerPoint."
-        ),
-    },
-    LUXURY_MINIMAL: {
-        "theme": "light",
-        "hero": "full_bleed_inset",
-        "thumbs": "none_or_one",
-        "agent": "tiny_footer",
-        "mood": "sober, minimal, image-led luxury, light gallery",
-        "brief": (
-            "Luxury Minimal: almost all image, almost no type. Fine branding, "
-            "a short address or zone, optional price. One hero, optional one secondary. "
-            "Light ivory canvas, no dark slab, no frames, no icons, no decorative slogans."
+            "Blue Premium: the SAME locked listing layout as Light Premium. "
+            "Only the palette changes: deep navy canvas, cream or white type, "
+            "electric blue as a slim CTA accent. Keep it elegant and light, "
+            "not a heavy PowerPoint slab. Do not invent another composition."
         ),
     },
 }
 
 STYLE_BRIEFS = {
-    EDITORIAL_PREMIUM: (
-        "EDITORIAL PREMIUM, not commercial poster. Magazine-cover real-estate. "
-        "Ivory or off-white canvas, never a navy or electric-blue outer plate. "
-        "Huge hero, slim outer margins, short serif-like headline, tiny logo. "
-        "Supporting photos stay small and secondary. Mood: quiet, elegant, expensive."
+    LIGHT_PREMIUM: (
+        "LIGHT PREMIUM. Ivory or soft off-white canvas, never a navy plate. "
+        "Same locked layout every time: logo+name, kicker, hero, two thumbs, "
+        "operation title, address, facts, price, slim CTA, agent, legal. "
+        "Navy ink, electric blue only on the CTA. Quiet, elegant, expensive."
     ),
-    MODERN_COMMERCIAL: (
-        "MODERN COMMERCIAL, not editorial quiet. Selling layout on a light field. "
-        "Price is a primary fact. CTA is clear but not oversized. "
-        "One or two extras help the sale. Blue is accent only. "
-        "Mood: crisp, architectural, high-clarity, still refined."
-    ),
-    LUXURY_MINIMAL: (
-        "LUXURY MINIMAL, not a busy listing card. Image is 80% of the frame. "
-        "Copy is tiny and sparse. Branding is a fine wordmark only. "
-        "Mood: sober, light, gallery-like, almost no decoration."
+    BLUE_PREMIUM: (
+        "BLUE PREMIUM. Same locked layout as Light Premium. Deep navy canvas, "
+        "cream or white type, electric blue only as a slim accent. "
+        "Modern and a little bolder, still editorial and clean. "
+        "Not PowerPoint, not a giant blue block wrapping a smaller card."
     ),
 }
 
@@ -176,9 +173,9 @@ STYLE_REFERENCE_LABEL = (
 AVOID = (
     "SaaS UI",
     "generic template",
-    "navy outer frame",
+    "navy frame around a smaller card",
     "electric-blue enclosing slab",
-    "dark plate wrapping the whole ad",
+    "PowerPoint navy slab",
     "PowerPoint collage",
     "amateur flyer",
     "tiny text",
@@ -212,8 +209,34 @@ def approved_style_path():
 
 
 def normalize_style(style):
-    key = str(style or EDITORIAL_PREMIUM).strip().lower()
-    return STYLE_ALIASES.get(key, EDITORIAL_PREMIUM)
+    key = str(style or LIGHT_PREMIUM).strip().lower()
+    return STYLE_ALIASES.get(key, LIGHT_PREMIUM)
+
+
+def is_blue_template(direction):
+    return composition_key(direction) == BLUE_PREMIUM
+
+
+def theme_palette(direction):
+    if is_blue_template(direction):
+        return {
+            "theme": "blue",
+            "field": PALETTE["navy"],
+            "ink": PALETTE["ivory"],
+            "mute": (168, 180, 198),
+            "accent": PALETTE["electric"],
+            "line": (48, 68, 110),
+            "title": PALETTE["white"],
+        }
+    return {
+        "theme": "light",
+        "field": PALETTE["ivory"],
+        "ink": PALETTE["ink"],
+        "mute": PALETTE["muted"],
+        "accent": PALETTE["electric"],
+        "line": (226, 228, 222),
+        "title": PALETTE["navy"],
+    }
 
 
 def composition_key(direction):
@@ -288,8 +311,12 @@ def build_visual_brief(fmt, direction, *, show_agent_photo=True):
         "composition": spec["brief"],
         "agent": agent,
         "text_density": COPY_DENSITY,
-        "price": "prominent" if key_is_commercial(direction) else "quiet_or_prominent",
-        "branding": "ivory field + navy ink + electric blue accents",
+        "price": "prominent",
+        "branding": (
+            "navy field + cream type + electric blue accents"
+            if spec["theme"] == "blue"
+            else "ivory field + navy ink + electric blue accents"
+        ),
         "mood": spec["mood"],
         "avoid": list(AVOID),
         "theme": spec["theme"],
@@ -302,7 +329,7 @@ def build_visual_brief(fmt, direction, *, show_agent_photo=True):
 
 
 def key_is_commercial(direction):
-    return composition_key(direction) == MODERN_COMMERCIAL
+    return True
 
 
 def safe_area_prompt(fmt):

@@ -18,11 +18,10 @@ from modules.marketing_language import (
 )
 from modules.marketing_visual_spec import (
     AVOID,
+    BLUE_PREMIUM,
     COPY_DENSITY,
-    EDITORIAL_PREMIUM,
-    LUXURY_MINIMAL,
+    LIGHT_PREMIUM,
     MAX_CREATIVE_WORDS,
-    MODERN_COMMERCIAL,
     QUALITY_TARGET,
     build_visual_brief,
     normalize_style,
@@ -30,9 +29,9 @@ from modules.marketing_visual_spec import (
 
 logger = logging.getLogger(__name__)
 
-STORY_DIRECTIONS = (EDITORIAL_PREMIUM, MODERN_COMMERCIAL, LUXURY_MINIMAL)
-POST_DIRECTIONS = (MODERN_COMMERCIAL, EDITORIAL_PREMIUM, LUXURY_MINIMAL)
-FLYER_DIRECTIONS = (EDITORIAL_PREMIUM, MODERN_COMMERCIAL, LUXURY_MINIMAL)
+STORY_DIRECTIONS = (LIGHT_PREMIUM, BLUE_PREMIUM)
+POST_DIRECTIONS = (LIGHT_PREMIUM, BLUE_PREMIUM)
+FLYER_DIRECTIONS = (LIGHT_PREMIUM, BLUE_PREMIUM)
 STATUS_DIRECTIONS = STORY_DIRECTIONS
 
 DIRECTION_POOL = {
@@ -43,12 +42,11 @@ DIRECTION_POOL = {
 }
 
 HOOKS = {
-    EDITORIAL_PREMIUM: "Viví distinto",
-    MODERN_COMMERCIAL: "Disponible ahora",
-    LUXURY_MINIMAL: "Exclusiva",
-    "editorial_navy": "Viví distinto",
-    "white_architectural": "Disponible ahora",
-    "photo_led_luxury": "Exclusiva",
+    LIGHT_PREMIUM: "Tu próximo hogar está acá",
+    BLUE_PREMIUM: "Tu próximo hogar está acá",
+    "editorial_premium": "Tu próximo hogar está acá",
+    "modern_commercial": "Tu próximo hogar está acá",
+    "luxury_minimal": "Tu próximo hogar está acá",
 }
 
 INVENTED_CLAIM_RE = re.compile(
@@ -59,15 +57,8 @@ INVENTED_CLAIM_RE = re.compile(
 
 
 def pick_direction(fmt, index, used, preferred=None):
-    pool = list(DIRECTION_POOL.get(fmt) or STORY_DIRECTIONS)
-    preferred = normalize_style(preferred) if preferred else None
-    if preferred and preferred not in pool:
-        preferred = None
-    if preferred and preferred not in used:
-        used.add(preferred)
-        return preferred
-    unused = [item for item in pool if item not in used]
-    choice = unused[0] if unused else pool[index % len(pool)]
+    del fmt, index
+    choice = normalize_style(preferred) if preferred else LIGHT_PREMIUM
     used.add(choice)
     return choice
 

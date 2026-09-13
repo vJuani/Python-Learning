@@ -13,12 +13,10 @@ import urllib.request
 
 from PIL import Image, ImageDraw
 
-from modules.marketing_renderer import INK, IVORY, WHITE, fit_contain_safe, fit_cover, paste_rounded
+from modules.marketing_renderer import INK, IVORY, NAVY, WHITE, fit_contain_safe, fit_cover, paste_rounded
 from modules.marketing_visual_spec import (
-    EDITORIAL_PREMIUM,
-    LUXURY_MINIMAL,
-    MODERN_COMMERCIAL,
     format_from_size,
+    is_blue_template,
     normalize_style,
     safe_rect,
 )
@@ -152,7 +150,8 @@ class MockMarketingImageProvider(MarketingImageProvider):
         left, top, right, bottom = safe_rect(fmt, size)
         inner_w = max(1, right - left)
         inner_h = max(1, bottom - top)
-        fill = IVORY
+        fill = NAVY if is_blue_template(style) else IVORY
+        ink = WHITE if is_blue_template(style) else INK
         canvas = Image.new("RGBA", size, (*fill, 255))
         draw = ImageDraw.Draw(canvas)
         photos = []
@@ -173,28 +172,20 @@ class MockMarketingImageProvider(MarketingImageProvider):
         if marker in prompt_text:
             tail = prompt_text.split(marker, 1)[1]
             brand = tail.split(" /", 1)[0].split(".", 1)[0].strip()[:28] or brand
-        draw.text((left + 8, top + 8), brand, fill=INK)
-        if style == LUXURY_MINIMAL and photos:
-            hero_h = int(inner_h * 0.78)
-            canvas.paste(fit_cover(photos[0], inner_w, hero_h), (left, top + 36))
-        elif style == MODERN_COMMERCIAL and photos:
-            hero_w = int(inner_w * 0.72)
-            hero_h = int(inner_h * 0.52)
-            canvas.paste(fit_cover(photos[0], hero_w, hero_h), (left, top + 48))
-            if len(photos) > 1:
-                extra = int(inner_w * 0.24)
-                canvas.paste(
-                    fit_cover(photos[1], extra, int(hero_h * 0.46)),
-                    (left + hero_w + 16, top + 48),
-                )
-        elif photos:
+        draw.text((left + 8, top + 8), brand, fill=ink)
+        if photos:
             hero_h = int(inner_h * 0.50)
             canvas.paste(fit_cover(photos[0], inner_w, hero_h), (left, top + 56))
-            if len(photos) > 1:
-                thumb_w = int(inner_w * 0.30)
+            extras = photos[1:3]
+            if extras:
                 thumb_h = int(inner_h * 0.16)
-                canvas.paste(fit_cover(photos[1], thumb_w, thumb_h), (left, top + 72 + hero_h))
-        ink = INK
+                gap = 12
+                thumb_w = (inner_w - gap * (len(extras) - 1)) // len(extras)
+                for index, photo in enumerate(extras):
+                    canvas.paste(
+                        fit_cover(photo, thumb_w, thumb_h),
+                        (left + index * (thumb_w + gap), top + 72 + hero_h),
+                    )
         english = "written in English only" in (prompt or "")
         draw.text((left + 8, bottom - 64), "Inquire Now" if english else "Contáctanos", fill=ink)
         legal = "Mauro Marvisi CUCICBA 1762"

@@ -27,11 +27,10 @@
         <label><input type="radio" name="quantity" value="pack"> {{ t('marketing_quantity_pack') }}</label>
     </fieldset>
 
-    <fieldset class="mkt-create-choices">
+    <fieldset class="mkt-create-choices mkt-create-choices--two">
         <legend>{{ t('marketing_step_style') }}</legend>
-        <label><input type="radio" name="style" value="premium" checked> {{ t('marketing_style_premium') }}</label>
-        <label><input type="radio" name="style" value="minimal"> {{ t('marketing_style_minimal') }}</label>
-        <label><input type="radio" name="style" value="modern"> {{ t('marketing_style_modern') }}</label>
+        <label><input type="radio" name="style" value="light" {% if (mkt_style or 'light') != 'blue' %}checked{% endif %}> {{ t('marketing_style_light') }}</label>
+        <label><input type="radio" name="style" value="blue" {% if mkt_style == 'blue' %}checked{% endif %}> {{ t('marketing_style_blue') }}</label>
     </fieldset>
 
     <label class="mkt-create-toggle">

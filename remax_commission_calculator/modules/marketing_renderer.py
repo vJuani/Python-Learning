@@ -12,6 +12,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as pdf_canvas
 
 from modules.marketing_branding import usable_brand_name
+from modules.marketing_visual_spec import theme_palette
 from modules.property_sync.media import resolve_media_filesystem_path
 from modules.property_sync.remote_media import fetch_allowed_image_bytes
 
@@ -254,7 +255,7 @@ def _office_logo(facts):
     return facts.get("organization_logo") or facts.get("office_logo") or facts.get("logo_path")
 
 
-def _header(canvas, facts, *, accent, invert=False, kicker=""):
+def _header(canvas, facts, *, accent, invert=False, kicker="", fill=None, mute=None):
     width, _height = canvas.size
     draw = ImageDraw.Draw(canvas)
     pad = _u(width, 40)
@@ -264,11 +265,11 @@ def _header(canvas, facts, *, accent, invert=False, kicker=""):
             0,
             fill=NAVY,
         )
-        fill = WHITE
-        mute = SOFT
+        fill = fill or WHITE
+        mute = mute or SOFT
     else:
-        fill = NAVY
-        mute = MUTED
+        fill = fill or NAVY
+        mute = mute or MUTED
     placed = _paste_logo(
         canvas,
         _office_logo(facts),
@@ -327,7 +328,7 @@ def _cta_pill(draw, xy, text, *, width, accent=ELECTRIC, min_w=None):
     draw.text((x + (pill_w - tw) // 2, y + _u(width, 13)), label, font=used, fill=accent)
 
 
-def _agent_block(canvas, agent, *, xy, width, show_photo=True, circular=False, size=180, text_beside=False):
+def _agent_block(canvas, agent, *, xy, width, show_photo=True, circular=False, size=180, text_beside=False, ink=NAVY, mute=MUTED):
     if not agent:
         return
     x, y = xy
@@ -363,13 +364,13 @@ def _agent_block(canvas, agent, *, xy, width, show_photo=True, circular=False, s
         text_x = x
         text_y = y
     if name:
-        draw.text((text_x, text_y), name, font=name_font, fill=NAVY)
+        draw.text((text_x, text_y), name, font=name_font, fill=ink)
         text_y += _u(width, 28)
     if title:
-        draw.text((text_x, text_y), title, font=title_font, fill=MUTED)
+        draw.text((text_x, text_y), title, font=title_font, fill=mute)
         text_y += _u(width, 22)
     for contact in contacts:
-        draw.text((text_x, text_y), contact, font=contact_font, fill=MUTED)
+        draw.text((text_x, text_y), contact, font=contact_font, fill=mute)
         text_y += _u(width, 20)
 
 
@@ -399,13 +400,13 @@ def _address_block(draw, facts, copy, *, xy, width, max_width, light=False):
     return y
 
 
-def _legal_footer(canvas, facts):
+def _legal_footer(canvas, facts, *, line=LINE, mute=MUTED):
     width, height = canvas.size
     draw = ImageDraw.Draw(canvas)
     pad = _u(width, 40)
     bar_h = _u(width, 52)
     top = height - bar_h
-    draw.line((pad, top, width - pad, top), fill=LINE, width=1)
+    draw.line((pad, top, width - pad, top), fill=line, width=1)
     legal = (
         facts.get("legal_footer_line")
         or facts.get("broker_footer_text")
@@ -429,11 +430,19 @@ def _price(draw, facts, options, *, xy, width, fill=NAVY, size=72):
 def render_editorial(size, photos, facts, copy, agent, options, style):
     """Large hero, two thumbs, commercial title below the photo."""
     width, height = size
-    canvas = Image.new("RGBA", size, (*IVORY, 255))
+    colors = theme_palette(style)
+    canvas = Image.new("RGBA", size, (*colors["field"], 255))
     draw = ImageDraw.Draw(canvas)
-    accent = STYLE_ACCENT.get(style, ELECTRIC)
+    accent = colors["accent"]
     pad = _u(width, 40)
-    _header(canvas, facts, accent=accent, kicker=copy.get("kicker"))
+    _header(
+        canvas,
+        facts,
+        accent=accent,
+        kicker=copy.get("kicker"),
+        fill=colors["ink"],
+        mute=colors["mute"],
+    )
     hero_top = _u(width, 104)
     hero_h = int(height * 0.44)
     if photos:
@@ -466,11 +475,19 @@ def render_editorial(size, photos, facts, copy, agent, options, style):
         xy=(pad, y),
         width=width,
         max_width=width - pad * 2,
+        light=colors["theme"] == "blue",
     )
     if options.get("show_features", True):
-        _feature_icons(draw, facts.get("chips") or [], (pad, y + 6), width=width)
+        _feature_icons(
+            draw,
+            facts.get("chips") or [],
+            (pad, y + 6),
+            width=width,
+            color=accent,
+            text_fill=colors["ink"],
+        )
         y += _u(width, 52)
-    _price(draw, facts, options, xy=(pad, y + 4), width=width, size=70)
+    _price(draw, facts, options, xy=(pad, y + 4), width=width, size=70, fill=colors["ink"])
     y += _u(width, 92)
     _cta_pill(
         draw,
@@ -489,136 +506,21 @@ def render_editorial(size, photos, facts, copy, agent, options, style):
             show_photo=options.get("show_agent_photo", True),
             size=_u(width, 128),
             text_beside=True,
+            ink=colors["ink"],
+            mute=colors["mute"],
         )
-    _legal_footer(canvas, facts)
+    _legal_footer(canvas, facts, line=colors["line"], mute=colors["mute"])
     return canvas.convert("RGB")
 
 
 def render_visual(size, photos, facts, copy, agent, options, style):
-    """Asymmetric collage + price + agent. Reference flyer 3."""
-    width, height = size
-    canvas = Image.new("RGBA", size, (*IVORY, 255))
-    draw = ImageDraw.Draw(canvas)
-    accent = STYLE_ACCENT.get(style, ELECTRIC)
-    pad = _u(width, 40)
-    _header(canvas, facts, accent=accent, kicker=copy.get("kicker"))
-    top = _u(width, 112)
-    gallery_h = int(height * 0.38)
-    gallery = photos[:3]
-    if len(gallery) == 1:
-        paste_rounded(
-            canvas, gallery[0], (pad, top), (width - pad * 2, gallery_h), radius=_u(width, 32)
-        )
-    elif gallery:
-        left_w = int((width - pad * 2 - 16) * 0.62)
-        right_w = width - pad * 2 - 16 - left_w
-        paste_rounded(
-            canvas, gallery[0], (pad, top), (left_w, gallery_h), radius=_u(width, 28)
-        )
-        extra = gallery[1:3]
-        stack_h = (gallery_h - 16) // max(1, len(extra))
-        for index, image in enumerate(extra):
-            paste_rounded(
-                canvas,
-                image,
-                (pad + left_w + 16, top + index * (stack_h + 16)),
-                (right_w, stack_h),
-                radius=_u(width, 24),
-            )
-    y = _address_block(
-        draw,
-        facts,
-        copy,
-        xy=(pad, top + gallery_h + _u(width, 28)),
-        width=width,
-        max_width=width - pad * 2,
-    )
-    if options.get("show_features", True):
-        _feature_icons(draw, facts.get("chips") or [], (pad, y + 8), width=width)
-        y += _u(width, 56)
-    _price(draw, facts, options, xy=(pad, y + 8), width=width, size=76)
-    y += _u(width, 118)
-    _cta_pill(
-        draw,
-        (pad, min(y, height - _u(width, 240))),
-        copy.get("cta") or "Contáctanos",
-        width=width,
-        accent=accent,
-    )
-    if options.get("include_agent") and agent:
-        _agent_block(
-            canvas,
-            agent,
-            xy=(width - pad - _u(width, 128), height - _u(width, 248)),
-            width=width,
-            show_photo=options.get("show_agent_photo", True),
-            size=_u(width, 128),
-            text_beside=True,
-        )
-    _legal_footer(canvas, facts)
-    return canvas.convert("RGB")
+    """Same locked layout as Light/Blue Premium."""
+    return render_editorial(size, photos, facts, copy, agent, options, style)
 
 
 def render_minimal(size, photos, facts, copy, agent, options, style):
-    """One hero, lots of air, chips, price + CTA, circular agent. Reference flyer 8."""
-    width, height = size
-    canvas = Image.new("RGBA", size, (*IVORY, 255))
-    draw = ImageDraw.Draw(canvas)
-    accent = STYLE_ACCENT.get(style, ELECTRIC)
-    pad = _u(width, 40)
-    _header(canvas, facts, accent=accent, kicker=copy.get("kicker"))
-    top = _u(width, 112)
-    hero_h = int(height * 0.36)
-    if photos:
-        paste_rounded(
-            canvas, photos[0], (pad, top), (width - pad * 2, hero_h), radius=_u(width, 36)
-        )
-    y = _address_block(
-        draw,
-        facts,
-        copy,
-        xy=(pad, top + hero_h + _u(width, 28)),
-        width=width,
-        max_width=width - pad * 2,
-    )
-    if options.get("show_features", True):
-        _feature_icons(draw, facts.get("chips") or [], (pad, y), width=width)
-        y += _u(width, 58)
-    _price(draw, facts, options, xy=(pad, y), width=width, size=70)
-    price_w = _text_width(draw, facts.get("price_label") or "", font(_u(width, 70), bold=True))
-    _cta_pill(
-        draw,
-        (pad + price_w + _u(width, 28), y + _u(width, 12)),
-        copy.get("cta") or "Contáctanos",
-        width=width,
-        accent=accent,
-    )
-    y += _u(width, 110)
-    thumbs = photos[1:3]
-    thumb_h = _u(width, 200)
-    if thumbs:
-        thumb_w = _u(width, 250)
-        for index, photo in enumerate(thumbs):
-            paste_rounded(
-                canvas,
-                photo,
-                (pad + index * (thumb_w + 16), y),
-                (thumb_w, thumb_h),
-                radius=_u(width, 24),
-            )
-    if options.get("include_agent") and agent:
-        _agent_block(
-            canvas,
-            agent,
-            xy=(width - pad - _u(width, 128), height - _u(width, 248)),
-            width=width,
-            show_photo=options.get("show_agent_photo", True),
-            circular=True,
-            size=_u(width, 128),
-            text_beside=True,
-        )
-    _legal_footer(canvas, facts)
-    return canvas.convert("RGB")
+    """Same locked layout as Light/Blue Premium."""
+    return render_editorial(size, photos, facts, copy, agent, options, style)
 
 
 RENDERERS = {
@@ -633,8 +535,8 @@ def render_marketing_image(context, copy, *, fmt, template, style, options):
     photos = load_property_photos((context or {}).get("photos") or [])
     facts = (context or {}).get("facts") or {}
     agent = (context or {}).get("agent") if options.get("include_agent") else None
-    renderer = RENDERERS.get(template) or render_editorial
-    image = renderer(size, photos, facts, copy or {}, agent, options or {}, style)
+    del template
+    image = render_editorial(size, photos, facts, copy or {}, agent, options or {}, style)
     if image.size != size:
         image = image.resize(size, Image.Resampling.LANCZOS)
     buffer = io.BytesIO()

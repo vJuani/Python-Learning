@@ -116,7 +116,11 @@ def collect_reference_images(context, options):
             }
         )
     facts = (context or {}).get("facts") or {}
-    logo_bytes = _open_path_bytes(facts.get("organization_logo"), keep_alpha=True)
+    logo_bytes = None
+    for key in ("organization_logo", "office_logo", "logo_path"):
+        logo_bytes = _open_path_bytes(facts.get(key), keep_alpha=True)
+        if logo_bytes:
+            break
     if logo_bytes:
         brand = facts.get("brand_name") or facts.get("organization_name") or "office"
         references.append(

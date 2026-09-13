@@ -113,8 +113,8 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
     agent = agent or {}
     name = autofit_text(agent.get("name") or "", max_chars=24, max_lines=2)
     title = autofit_text(agent.get("title") or default_agent_role(language), max_chars=22, max_lines=1)
-    whatsapp = autofit_text(agent.get("whatsapp") or "", max_chars=22, max_lines=1)
-    instagram = autofit_text(agent.get("instagram") or "", max_chars=22, max_lines=1)
+    whatsapp = {"text": " ".join(str(agent.get("whatsapp") or "").split())}
+    instagram = {"text": " ".join(str(agent.get("instagram") or "").split())}
     cta_fit = autofit_text(cta or default_cta(language), max_chars=18, max_lines=1)
     broker = " ".join(
         part

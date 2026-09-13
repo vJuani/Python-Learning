@@ -40,6 +40,8 @@ from modules.marketing_visual_spec import (
     HIERARCHY,
     MAX_STORY_ATTRIBUTES,
     STYLE_BRIEFS,
+    composition_spec,
+    is_blue_template,
     normalize_style,
     safe_area_prompt,
 )
@@ -175,7 +177,7 @@ def build_marketing_image_prompt(
         request_text=request_text or options.get("request_text") or options.get("prompt") or "",
     )
     chosen_style = normalize_style(
-        art.get("visual_direction") or style or options.get("style") or "premium"
+        art.get("visual_direction") or style or options.get("style") or "light"
     )
     fmt = normalize_format(fmt)
     cta_text = (cta or options.get("cta") or (art or {}).get("cta") or "").strip()
@@ -277,7 +279,36 @@ def build_marketing_image_prompt(
         "cluttered icon walls, amateur flyer or PowerPoint look."
     )
     hierarchy = " → ".join(HIERARCHY)
-    avoid = ", ".join(AVOID)
+    avoid_items = list(AVOID)
+    if is_blue_template(chosen_style):
+        avoid_items = [
+            item
+            for item in avoid_items
+            if "navy frame" not in item and "PowerPoint navy" not in item
+        ]
+    else:
+        avoid_items = list(AVOID) + ["navy outer frame"]
+    avoid = ", ".join(avoid_items)
+    spec = composition_spec(chosen_style)
+    if spec["theme"] == "blue":
+        canvas_line = (
+            "Canvas: deep navy field with cream or white type. "
+            "Electric blue only as a slim CTA accent. The navy IS the page, "
+            "not a frame around a smaller card. Not PowerPoint, not heavy blocks. "
+        )
+    else:
+        canvas_line = (
+            "Canvas: ivory or soft off-white paper. No navy or electric-blue slab wrapping "
+            "the whole piece. Blue is accent only — CTA, thin rules, small icons. "
+        )
+    layout_lock = (
+        "LOCKED LAYOUT for every piece: office logo + full office name top-left, "
+        "short kicker top-right, one large hero photo, two equal secondary photos, "
+        "commercial operation title, street, locality, one row of up to 4 attribute "
+        "icons, price, slim CTA, agent block (photo + name + title + WhatsApp and/or "
+        "Instagram only if provided), legal hairline at the bottom. "
+        "Do not invent a different composition. Only the color treatment may change. "
+    )
     repair = ""
     if repair_reasons:
         repair = (
@@ -294,8 +325,8 @@ def build_marketing_image_prompt(
     return (
         "Create one finished premium real-estate marketing piece. "
         "This is the final ad, ready to publish: editorial, clean, modern, elegant, minimal. "
-        "Canvas: ivory or soft off-white paper. No navy or electric-blue slab wrapping "
-        "the whole piece. Blue is accent only — CTA, thin rules, small icons. "
+        f"{canvas_line}"
+        f"{layout_lock}"
         "Soft shadows if contrast is needed. Not a background, not a PowerPoint collage, "
         "not an amateur flyer. "
         f"{language_prompt_block(language)} "
@@ -390,7 +421,7 @@ def generate_validated_marketing_image(
     )
     options["language"] = language
     chosen_style = normalize_style(
-        art.get("visual_direction") or style or options.get("style") or "premium"
+        art.get("visual_direction") or style or options.get("style") or "light"
     )
     last_png = None
     last_verdict = None

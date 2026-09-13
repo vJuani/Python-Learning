@@ -74,7 +74,9 @@ from modules.marketing_qa import resolve_qa_file, run_raw_story_qa
 from modules.marketing_image_provider import sha256_bytes
 from modules.marketing_quality import validate_creative
 from modules.marketing_visual_spec import (
+    BLUE_PREMIUM,
     EDITORIAL_PREMIUM,
+    LIGHT_PREMIUM,
     LUXURY_MINIMAL,
     MODERN_COMMERCIAL,
     SAFE_AREA,
@@ -416,7 +418,9 @@ class MarketingIaTests(unittest.TestCase):
             directions = [
                 (item.get("options") or {}).get("visual_direction") for item in group["assets"]
             ]
-            self.assertEqual(len(directions), len(set(directions)), directions)
+            self.assertTrue(directions)
+            self.assertTrue(set(directions) <= {LIGHT_PREMIUM, BLUE_PREMIUM}, directions)
+            self.assertEqual(len(set(directions)), 1, directions)
         self.assertEqual([group["format"] for group in result["groups"]], ["story", "post", "flyer"])
 
     def test_13_snapshot_immutable(self):
@@ -550,6 +554,10 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("Generar con IA".encode("utf-8"), create.data)
         self.assertIn(b'name="piece_type"', create.data)
         self.assertIn(b'name="style"', create.data)
+        self.assertIn(b'value="light"', create.data)
+        self.assertIn(b'value="blue"', create.data)
+        self.assertIn("Template Light".encode("utf-8"), create.data)
+        self.assertIn("Template Blue".encode("utf-8"), create.data)
         self.assertIn(b'name="language"', create.data)
         self.assertIn(b'name="language" value="es"', create.data)
         self.assertNotIn(b"<textarea", create.data)
@@ -670,7 +678,7 @@ class MarketingIaTests(unittest.TestCase):
             for index in range(1, 4)
         ]
         directions = [item["visual_direction"] for item in planned]
-        self.assertEqual(len(set(directions)), 3)
+        self.assertEqual(set(directions), {LIGHT_PREMIUM})
 
     def test_25_dict_items_method_is_not_iterable(self):
         group = {
@@ -1031,8 +1039,8 @@ class MarketingIaTests(unittest.TestCase):
     def test_42_visual_spec_and_three_compositions(self):
         self.assertTrue(approved_style_path() and approved_style_path().is_file())
         self.assertIn("VISUAL STYLE REFERENCE ONLY", STYLE_REFERENCE_LABEL)
-        self.assertEqual(len(STORY_DIRECTIONS), 3)
-        self.assertEqual(len(set(STORY_DIRECTIONS)), 3)
+        self.assertEqual(len(STORY_DIRECTIONS), 2)
+        self.assertEqual(set(STORY_DIRECTIONS), {LIGHT_PREMIUM, BLUE_PREMIUM})
         context = build_property_marketing_context(self._property())
         packed = collect_reference_images(
             context,
@@ -1050,8 +1058,14 @@ class MarketingIaTests(unittest.TestCase):
             for index in range(1, 4)
         ]
         directions = [item["visual_direction"] for item in planned]
-        self.assertEqual(len(set(directions)), 3)
+        self.assertEqual(set(directions), {LIGHT_PREMIUM})
         self.assertTrue(all(item.get("visual_brief") for item in planned))
+        self.assertEqual(planned[0]["visual_brief"]["hero"], planned[1]["visual_brief"]["hero"])
+        self.assertEqual(
+            build_visual_brief("story", LIGHT_PREMIUM)["hero"],
+            build_visual_brief("story", BLUE_PREMIUM)["hero"],
+        )
+        self.assertEqual(build_visual_brief("story", BLUE_PREMIUM)["theme"], "blue")
         QA_DIR.mkdir(parents=True, exist_ok=True)
         result = start_marketing_batch(
             self.org,
@@ -1151,6 +1165,18 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("English only", english)
         self.assertIn(MARKETING_COPY["en"]["cta"], english)
         self.assertNotIn("Contáctanos", english)
+        blue = build_marketing_image_prompt(
+            context,
+            "story",
+            include_agent=True,
+            include_price=True,
+            style="blue",
+            language="es",
+        )
+        self.assertIn("LOCKED LAYOUT", blue)
+        self.assertIn("deep navy", blue)
+        self.assertIn(STYLE_BRIEFS[BLUE_PREMIUM][:20], blue)
+        self.assertIn("WhatsApp +54 9 11 3170 4333", blue)
 
     def test_43b_outer_field_is_ivory_not_navy(self):
         inner = Image.new("RGB", (400, 700), (180, 180, 180))
@@ -1163,6 +1189,11 @@ class MarketingIaTests(unittest.TestCase):
         brief = build_visual_brief("story", "editorial_navy")
         self.assertEqual(brief["theme"], "light")
         self.assertIn("ivory", brief["branding"])
+        blue_brief = build_visual_brief("story", "blue")
+        self.assertEqual(blue_brief["theme"], "blue")
+        self.assertEqual(blue_brief["hero"], brief["hero"])
+        self.assertEqual(blue_brief["thumbs"], brief["thumbs"])
+        self.assertIn("navy", blue_brief["branding"])
 
     def test_44_structured_one_story_and_pack_counts(self):
         one = start_marketing_batch(
@@ -1269,11 +1300,13 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(SAFE_AREA["story"], {"left": 48, "right": 48, "top": 64, "bottom": 80})
         self.assertEqual(SAFE_AREA["post"], {"left": 40, "right": 40, "top": 44, "bottom": 48})
         self.assertEqual(SAFE_AREA["flyer"], {"left": 48, "right": 48, "top": 52, "bottom": 56})
-        self.assertEqual(normalize_style("premium"), EDITORIAL_PREMIUM)
-        self.assertEqual(normalize_style("modern"), MODERN_COMMERCIAL)
-        self.assertEqual(normalize_style("minimal"), LUXURY_MINIMAL)
-        self.assertNotEqual(STYLE_BRIEFS[EDITORIAL_PREMIUM], STYLE_BRIEFS[MODERN_COMMERCIAL])
-        self.assertNotEqual(STYLE_BRIEFS[MODERN_COMMERCIAL], STYLE_BRIEFS[LUXURY_MINIMAL])
+        self.assertEqual(normalize_style("premium"), LIGHT_PREMIUM)
+        self.assertEqual(normalize_style("light"), LIGHT_PREMIUM)
+        self.assertEqual(normalize_style("modern"), BLUE_PREMIUM)
+        self.assertEqual(normalize_style("blue"), BLUE_PREMIUM)
+        self.assertEqual(normalize_style("minimal"), LIGHT_PREMIUM)
+        self.assertEqual(normalize_style(""), LIGHT_PREMIUM)
+        self.assertNotEqual(STYLE_BRIEFS[LIGHT_PREMIUM], STYLE_BRIEFS[BLUE_PREMIUM])
         context = build_property_marketing_context(self._property())
         copy = summarize_listing_copy(context["facts"], context.get("agent"))
         self.assertEqual(copy["street"], "Santamarina 1335")

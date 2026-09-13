@@ -192,6 +192,8 @@ def default_agent_role(language="es"):
 def style_headline(language, direction):
     pack = copy_pack(language)
     mapping = {
+        "light_premium": pack["headline_editorial"],
+        "blue_premium": pack["headline_commercial"],
         "editorial_premium": pack["headline_editorial"],
         "editorial_navy": pack["headline_editorial"],
         "modern_commercial": pack["headline_commercial"],

@@ -432,11 +432,11 @@ def branding_prompt_block(
     wordmark = _clean(branding.get("wordmark_text")) or brand
     if branding.get("has_logo"):
         logo = (
-            "Place the REAL office logo from the logo reference in the top-left — "
-            "the current RE/MAX balloon/pin if that is the file. Use that exact asset. "
-            "Do not recreate, redesign, stretch, or hallucinate the mark. Immediately "
-            f"after the pin set the full office name '{wordmark}'. Keep RE/MAX in the "
-            "name. Small, sharp, no extra plate, never replaced by JRH One."
+            "Place the REAL office logo from the logo reference in the top-left. "
+            "Reproduce that exact current file. Do not redraw a generic RE/MAX balloon, "
+            "do not use an old mark, and do not invent a logo. Immediately after the "
+            f"logo set the full office name '{wordmark}'. Keep RE/MAX in the name if "
+            "it is part of the office name. Small, sharp, no extra plate, never JRH One."
         )
     else:
         logo = (

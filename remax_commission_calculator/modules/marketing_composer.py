@@ -12,9 +12,8 @@ from modules.marketing_references import agent_overlay_image
 from modules.marketing_renderer import (
     ELECTRIC,
     FORMAT_SIZES,
-    INK,
     IVORY,
-    LINE,
+    NAVY,
     WHITE,
     font,
     load_property_photos,
@@ -24,7 +23,7 @@ from modules.marketing_renderer import (
     _paste_logo,
     _u,
 )
-from modules.marketing_visual_spec import composition_spec, safe_inset
+from modules.marketing_visual_spec import composition_spec, safe_inset, theme_palette
 
 
 MUTED_ON_LIGHT = (91, 107, 124)
@@ -45,8 +44,8 @@ def _serif(size, *, bold=False):
 
 
 def _brand_backdrop(size, *, theme):
-    del theme
-    return Image.new("RGBA", size, (*IVORY, 255))
+    fill = NAVY if theme == "blue" else IVORY
+    return Image.new("RGBA", size, (*fill, 255))
 
 
 def _draw_wordmark(draw, xy, *, width, fill=WHITE, brand=""):
@@ -194,7 +193,7 @@ def _facts_block(draw, facts, options, *, x, y, width, max_right, ink, mute, sho
             draw.text((fx + icon_size + 6, y + _u(width, 26)), label, font=font(_u(width, 15)), fill=mute)
         y += _u(width, 70)
     if show_cta:
-        label = "CONSULTAME"
+        label = options.get("cta") or "Contáctanos"
         used = font(_u(width, 22), bold=True)
         tw = draw.textbbox((0, 0), label, font=used)[2]
         pill_h = _u(width, 52)
@@ -212,20 +211,27 @@ def compose_marketing_image(context, art, *, fmt, options):
     options = options or {}
     facts = (context or {}).get("facts") or {}
     photos = load_property_photos((context or {}).get("photos") or [])
-    direction = (art or {}).get("visual_direction") or "editorial_navy"
+    direction = (art or {}).get("visual_direction") or "light"
     spec = composition_spec(direction)
-    theme = spec["theme"]
+    colors = theme_palette(direction)
+    theme = colors["theme"]
     inset = safe_inset(fmt)
     pad = max(_u(width, inset["x"]), inset["x"])
     top = max(_u(width, 28), inset["y"] // 2)
     canvas = _brand_backdrop(size, theme=theme)
     draw = ImageDraw.Draw(canvas)
-    ink = INK
-    mute = MUTED_ON_LIGHT
+    ink = colors["ink"]
+    mute = colors["mute"]
+    line = colors["line"]
     office = usable_brand_name(
         facts.get("brand_name"), facts.get("office_name"), facts.get("organization_name")
     )
     _draw_office_lockup(canvas, draw, facts, pad=pad, top=top, width=width, fill=ink, office=office)
+    kicker = ((art or {}).get("kicker") or facts.get("kicker") or "").strip()
+    if kicker:
+        used = font(_u(width, 16))
+        tw = draw.textbbox((0, 0), kicker, font=used)[2]
+        draw.text((width - pad - tw, top + _u(width, 20)), kicker, font=used, fill=mute)
 
     show_agent = bool(options.get("include_agent"))
     show_photo = bool(show_agent and options.get("show_agent_photo"))
@@ -244,58 +250,24 @@ def compose_marketing_image(context, art, *, fmt, options):
     extras = photos[1:3]
     radius = _u(width, 20)
     hero_top = top + _u(width, 88)
-
-    if spec["hero"] == "full_bleed" and hero is not None:
-        bleed_h = int(height * (0.62 if extras and spec["thumbs"] != "none_or_one" else 0.66))
-        paste_rounded(canvas, hero, (0, 0), (width, bleed_h), radius=0)
-        _draw_office_lockup(canvas, draw, facts, pad=pad, top=top, width=width, fill=WHITE, office=office)
-        hook = ((art or {}).get("headline") or "").strip()
-        if hook:
-            draw.text((pad, hero_top + _u(width, 40)), hook, font=_serif(_u(width, 48), bold=True), fill=WHITE)
-        thumbs_top = bleed_h + _u(width, 18)
-        thumb_h = int(height * 0.12) if extras and spec["thumbs"] != "none_or_one" else 0
-        if thumb_h and extras:
-            paste_rounded(canvas, extras[0], (pad, thumbs_top), (int(width * 0.42), thumb_h), radius=radius)
-        facts_y = (thumbs_top + thumb_h + _u(width, 28)) if thumb_h else bleed_h + _u(width, 28)
-    elif spec["hero"] == "collage_lead":
-        hero_h = int(height * 0.36)
-        if hero is not None:
-            paste_rounded(canvas, hero, (pad, hero_top), (int(width * 0.62) - pad, hero_h), radius=radius)
-        if extras:
-            cell_h = (hero_h - _u(width, 12)) // 2
-            rx = int(width * 0.64)
-            rw = width - rx - pad
-            paste_rounded(canvas, extras[0], (rx, hero_top), (rw, cell_h), radius=_u(width, 14))
-            if len(extras) > 1:
-                paste_rounded(
-                    canvas,
-                    extras[1],
-                    (rx, hero_top + cell_h + _u(width, 12)),
-                    (rw, cell_h),
-                    radius=_u(width, 14),
-                )
-        facts_y = hero_top + hero_h + _u(width, 32)
-        thumbs_top = facts_y
-        thumb_h = 0
-    else:
-        hero_h = int(height * (0.50 if extras else 0.58))
-        if hero is not None:
-            paste_rounded(canvas, hero, (pad, hero_top), (width - pad * 2, hero_h), radius=radius)
-        hook = ((art or {}).get("headline") or "").strip()
-        if hook:
-            draw.text((pad + _u(width, 16), hero_top + _u(width, 24)), hook, font=_serif(_u(width, 36), bold=True), fill=WHITE)
-        thumbs_top = hero_top + hero_h + _u(width, 22)
-        thumb_h = int(height * 0.18) if extras else 0
-        if thumb_h and extras:
-            gap = _u(width, 14)
-            thumbs_w = int(width * 0.92) - pad
-            if len(extras) == 1:
-                paste_rounded(canvas, extras[0], (pad, thumbs_top), (thumbs_w, thumb_h), radius=_u(width, 16))
-            else:
-                cell = (thumbs_w - gap) // 2
-                paste_rounded(canvas, extras[0], (pad, thumbs_top), (cell, thumb_h), radius=_u(width, 16))
-                paste_rounded(canvas, extras[1], (pad + cell + gap, thumbs_top), (cell, thumb_h), radius=_u(width, 16))
-        facts_y = thumbs_top + (thumb_h or 0) + _u(width, 36)
+    hero_h = int(height * (0.50 if extras else 0.58))
+    if hero is not None:
+        paste_rounded(canvas, hero, (pad, hero_top), (width - pad * 2, hero_h), radius=radius)
+    thumbs_top = hero_top + hero_h + _u(width, 22)
+    thumb_h = int(height * 0.18) if extras else 0
+    if thumb_h and extras:
+        gap = _u(width, 14)
+        thumbs_w = int(width * 0.92) - pad
+        if len(extras) == 1:
+            paste_rounded(canvas, extras[0], (pad, thumbs_top), (thumbs_w, thumb_h), radius=_u(width, 16))
+        else:
+            cell = (thumbs_w - gap) // 2
+            paste_rounded(canvas, extras[0], (pad, thumbs_top), (cell, thumb_h), radius=_u(width, 16))
+            paste_rounded(canvas, extras[1], (pad + cell + gap, thumbs_top), (cell, thumb_h), radius=_u(width, 16))
+    facts_y = thumbs_top + (thumb_h or 0) + _u(width, 36)
+    if (art or {}).get("cta"):
+        options = dict(options)
+        options["cta"] = art.get("cta")
 
     composited = False
     if has_portrait:
@@ -322,7 +294,7 @@ def compose_marketing_image(context, art, *, fmt, options):
     instagram = (agent or {}).get("instagram") or ""
     legal = facts.get("legal_footer_line") or facts.get("broker_footer_text") or ""
     footer_y = height - pad - _u(width, 22)
-    draw.line((pad, footer_y - _u(width, 16), width - pad, footer_y - _u(width, 16)), fill=LINE, width=1)
+    draw.line((pad, footer_y - _u(width, 16), width - pad, footer_y - _u(width, 16)), fill=line, width=1)
     if legal:
         draw.text((pad, footer_y), legal, font=font(_u(width, 12)), fill=mute)
     if name:
