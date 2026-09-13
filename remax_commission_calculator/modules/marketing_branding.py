@@ -7,7 +7,6 @@ publishable creative. The visible brand is the active real-estate office.
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
 
 from modules.branding import get_brand_name
@@ -136,19 +135,9 @@ def apply_branding_aliases(settings):
 
 
 def office_wordmark(brand_name, *, has_logo=False, logo_path=None):
-    """Avoid repeating RE/MAX when the real office mark already includes it."""
-    brand = _clean(brand_name)
-    if not brand:
-        return ""
-    if not has_logo:
-        return brand
-    logo_hint = _clean(logo_path).casefold()
-    looks_remax = "re/max" in logo_hint or "remax" in logo_hint
-    folded = brand.casefold()
-    if folded.startswith("re/max ") or folded.startswith("remax ") or looks_remax:
-        rest = re.sub(r"^(re/?max)\s+", "", brand, flags=re.I).strip()
-        return rest
-    return brand
+    """Full commercial office name. Keep RE/MAX in the wordmark next to the pin."""
+    del has_logo, logo_path
+    return _clean(brand_name)
 
 
 def resolve_creative_logo_path(settings, *, organization_id=None, brand_name=None):
@@ -442,22 +431,13 @@ def branding_prompt_block(
     )
     wordmark = _clean(branding.get("wordmark_text")) or brand
     if branding.get("has_logo"):
-        if wordmark and wordmark.casefold() != brand.casefold():
-            logo = (
-                "Place the REAL office logo from the logo reference in the top-left, "
-                "inside the safe area. Use that exact file. Do not recreate, redesign, "
-                "stretch, or hallucinate the mark. Immediately after the logo set the "
-                f"office name '{wordmark}' — do not repeat RE/MAX if the mark already "
-                "includes it. Small, sharp, no extra plate, never replaced by JRH One."
-            )
-        else:
-            logo = (
-                "Place the REAL office logo from the logo reference in the top-left, "
-                "inside the safe area, immediately followed by the office name "
-                f"'{wordmark}'. Use that exact file. Do not recreate, redesign, "
-                "stretch, or hallucinate the mark. Small, sharp, no extra plate, "
-                "never replaced by JRH One."
-            )
+        logo = (
+            "Place the REAL office logo from the logo reference in the top-left — "
+            "the current RE/MAX balloon/pin if that is the file. Use that exact asset. "
+            "Do not recreate, redesign, stretch, or hallucinate the mark. Immediately "
+            f"after the pin set the full office name '{wordmark}'. Keep RE/MAX in the "
+            "name. Small, sharp, no extra plate, never replaced by JRH One."
+        )
     else:
         logo = (
             f"No real office logo file is available. Set the wordmark '{brand}' top-left "

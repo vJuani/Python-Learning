@@ -62,17 +62,17 @@ STORY_ALLOWED_ELEMENTS = (
 )
 
 SAFE_AREA = {
-    "story": {"left": 80, "right": 80, "top": 120, "bottom": 180},
-    "status": {"left": 80, "right": 80, "top": 120, "bottom": 180},
-    "post": {"left": 70, "right": 70, "top": 70, "bottom": 70},
-    "flyer": {"left": 80, "right": 80, "top": 80, "bottom": 80},
+    "story": {"left": 48, "right": 48, "top": 64, "bottom": 80},
+    "status": {"left": 48, "right": 48, "top": 64, "bottom": 80},
+    "post": {"left": 40, "right": 40, "top": 44, "bottom": 48},
+    "flyer": {"left": 48, "right": 48, "top": 52, "bottom": 56},
 }
 
 SAFE_INSET = {
-    "story": {"x": 80, "y": 120},
-    "status": {"x": 80, "y": 120},
-    "post": {"x": 70, "y": 70},
-    "flyer": {"x": 80, "y": 80},
+    "story": {"x": 48, "y": 64},
+    "status": {"x": 48, "y": 64},
+    "post": {"x": 40, "y": 44},
+    "flyer": {"x": 48, "y": 52},
 }
 
 EDITORIAL_PREMIUM = "editorial_premium"
@@ -114,7 +114,7 @@ COMPOSITIONS = {
         "agent": "lower_right_small",
         "mood": "editorial, quiet luxury, magazine cover, ivory paper",
         "brief": (
-            "Editorial Premium: one dominant hero photograph, generous negative space, "
+            "Editorial Premium: one dominant hero photograph, slim outer margins, "
             "very little type. At most one or two small supporting photos. "
             "Ivory or off-white field. Navy and electric blue only as accents. "
             "No navy outer frame. No collage, no icon rows, no competing headlines."
@@ -150,7 +150,7 @@ STYLE_BRIEFS = {
     EDITORIAL_PREMIUM: (
         "EDITORIAL PREMIUM, not commercial poster. Magazine-cover real-estate. "
         "Ivory or off-white canvas, never a navy or electric-blue outer plate. "
-        "Huge hero, lots of air, short serif-like headline, tiny logo. "
+        "Huge hero, slim outer margins, short serif-like headline, tiny logo. "
         "Supporting photos stay small and secondary. Mood: quiet, elegant, expensive."
     ),
     MODERN_COMMERCIAL: (
@@ -311,5 +311,6 @@ def safe_area_prompt(fmt):
         f"STRICT SAFE AREA for {fmt}: keep EVERY word, office logo, price, CTA, agent "
         f"name and legal footer inside the inner rectangle. Minimum margins: left {area['left']}px, "
         f"right {area['right']}px, top {area['top']}px, bottom {area['bottom']}px. "
-        "Nothing may touch or bleed past those margins. Leave real empty air there."
+        "Nothing may touch or bleed past those margins. Keep those margins slim so the "
+        "listing fills the canvas. Do not leave a wide empty frame around the ad."
     )

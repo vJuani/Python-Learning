@@ -230,9 +230,10 @@ def build_marketing_image_prompt(
         "legal_broker_license"
     )
     agent_block = (
-        "Integrate the REAL agent portrait as a small-to-medium professional cutout, "
-        "the official ficha/ACM photo, clean crop, never duplicated, never a second hero. "
-        f"Agent block, commercial contact only: name '{copy['agent_name']}', "
+        "Integrate the REAL agent portrait as a compact professional cutout in the "
+        "lower footer, with air around it. Official ficha/ACM photo, clean crop, "
+        "never duplicated, never a second hero, never covering the price or CTA. "
+        f"Agent block, aligned and quiet: name '{copy['agent_name']}', "
         f"short title '{copy['agent_title'] or default_agent_role(language)}', "
         f"{contact_copy}. {contact_lock['icons']}"
         "Do not show a regular phone number. Do not duplicate WhatsApp as "
@@ -282,7 +283,8 @@ def build_marketing_image_prompt(
         repair = (
             " REPAIR PASS: the previous layout failed safe-area validation "
             f"({', '.join(repair_reasons)}). Pull every word, logo, price, CTA and agent "
-            "name inward. Shrink type and the agent automatically. Leave empty air in the margins."
+            "name inward. Shrink type and the agent automatically. Keep slim inner "
+            "margins; do not recreate a wide empty frame."
         )
     if repair_reasons and "wrong_language" in repair_reasons:
         repair += (
@@ -303,8 +305,8 @@ def build_marketing_image_prompt(
         f"Hierarchy: {hierarchy}. Property first, then price, facts, contact, then legal broker. "
         "Do not let four large texts compete. Never confuse the agent with the legal broker. "
         f"{copy_block} {photo_block} {price_block} {agent_block} {logo_block} "
-        f"Legal footer, visually separated from the agent: "
-        f"{legal_name}. {legal_license}. "
+        f"Legal footer, tiny and muted, left-aligned under a hairline, visually "
+        f"separated from the agent: {legal_name}. {legal_license}. "
         f"Full legal line: {copy.get('legal_footer') or branding.get('legal_footer_line')}. "
         "Typography: every title and name must fit. Shrink the font, tighten tracking, "
         "or wrap to two lines. If it still overflows, summarize "
@@ -316,8 +318,10 @@ def build_marketing_image_prompt(
         f"Address line: {copy['street']}. "
         f"Locality line (smaller): {copy['zone']}. "
         f"Facts row: {' · '.join(copy.get('attributes') or [])}. "
-        f"CTA button: {copy['cta']}. "
+        f"CTA button: {copy['cta']}. Draw it as a slim elegant pill — thin outline or "
+        "light fill, not a heavy saturated block. "
         "Keep the property photo dominant. Do not cover it with oversized type. "
+        "Fill the canvas: slim outer margins, no wide empty ivory frame. "
         f"Visible language: {language}. "
         f"User note: {note or 'none'}. "
         f"Variant {variation_index}: change crop and type placement, "

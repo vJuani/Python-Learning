@@ -1088,8 +1088,8 @@ class MarketingIaTests(unittest.TestCase):
         brief = build_visual_brief("story", "editorial_navy")
         self.assertEqual(brief["text_density"], "very_low")
         self.assertEqual(brief["quality_target"], "approved_jrh_story")
-        self.assertEqual(brief["safe_area"]["left"], 80)
-        self.assertEqual(brief["safe_area"]["bottom"], 180)
+        self.assertEqual(brief["safe_area"]["left"], 48)
+        self.assertEqual(brief["safe_area"]["bottom"], 80)
 
     def test_43_openai_service_prompt_and_plan(self):
         self.assertEqual(DEFAULT_OPENAI_IMAGE_MODEL, "gpt-image-1")
@@ -1116,8 +1116,8 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("Santamarina", prompt)
         self.assertIn("REAL agent portrait", prompt)
         self.assertIn("STRICT SAFE AREA", prompt)
-        self.assertIn("left 80px", prompt)
-        self.assertIn("bottom 180px", prompt)
+        self.assertIn("left 48px", prompt)
+        self.assertIn("bottom 80px", prompt)
         self.assertIn("vertical captions", prompt)
         self.assertIn("ALLOWED COPY ONLY", prompt)
         self.assertIn("ivory or soft off-white", prompt)
@@ -1266,9 +1266,9 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn(b"Raw OpenAI Story", page.data)
 
     def test_47_safe_area_copy_and_layout_validation(self):
-        self.assertEqual(SAFE_AREA["story"], {"left": 80, "right": 80, "top": 120, "bottom": 180})
-        self.assertEqual(SAFE_AREA["post"], {"left": 70, "right": 70, "top": 70, "bottom": 70})
-        self.assertEqual(SAFE_AREA["flyer"], {"left": 80, "right": 80, "top": 80, "bottom": 80})
+        self.assertEqual(SAFE_AREA["story"], {"left": 48, "right": 48, "top": 64, "bottom": 80})
+        self.assertEqual(SAFE_AREA["post"], {"left": 40, "right": 40, "top": 44, "bottom": 48})
+        self.assertEqual(SAFE_AREA["flyer"], {"left": 48, "right": 48, "top": 52, "bottom": 56})
         self.assertEqual(normalize_style("premium"), EDITORIAL_PREMIUM)
         self.assertEqual(normalize_style("modern"), MODERN_COMMERCIAL)
         self.assertEqual(normalize_style("minimal"), LUXURY_MINIMAL)
@@ -1311,7 +1311,7 @@ class MarketingIaTests(unittest.TestCase):
         ImageDraw.Draw(marker).rectangle((0, 0, 40, 1536), fill=(255, 0, 0))
         fitted = fit_contain_safe(marker, FORMAT_SIZES["story"], "story")
         self.assertEqual(fitted.size, FORMAT_SIZES["story"])
-        left_edge = fitted.crop((0, 0, 80, 1920))
+        left_edge = fitted.crop((0, 0, 48, 1920))
         reds = sum(1 for pixel in left_edge.getdata() if pixel[0] > 200 and pixel[1] < 40)
         self.assertEqual(reds, 0)
         result = start_marketing_batch(
@@ -1413,7 +1413,7 @@ class MarketingIaTests(unittest.TestCase):
         self.assertFalse(facts["requires_legal_review"])
         self.assertTrue(facts["publishable"])
         self.assertTrue(str(facts["organization_logo"]).endswith("office-logo.png"))
-        self.assertEqual(facts["wordmark_text"], "Data House")
+        self.assertEqual(facts["wordmark_text"], "RE/MAX Data House")
         self.assertNotIn("remax-pin.png", str(facts["organization_logo"]))
         packed = collect_reference_images(
             context,
