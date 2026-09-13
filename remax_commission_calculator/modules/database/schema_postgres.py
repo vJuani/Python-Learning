@@ -2456,11 +2456,21 @@ def create_postgres_schema():
             """
             UPDATE organization_settings
             SET
-                marketing_brand_name = COALESCE(
-                    NULLIF(BTRIM(marketing_brand_name), ''),
-                    NULLIF(BTRIM(display_name), ''),
-                    'RE/MAX Data House'
-                ),
+                marketing_brand_name = CASE
+                    WHEN LOWER(BTRIM(COALESCE(marketing_brand_name, '')))
+                        NOT IN ('', 'inmobiliaria principal', 'jrh one')
+                    THEN BTRIM(marketing_brand_name)
+                    WHEN LOWER(BTRIM(COALESCE(display_name, '')))
+                        NOT IN ('', 'inmobiliaria principal', 'jrh one')
+                    THEN BTRIM(display_name)
+                    ELSE 'RE/MAX Data House'
+                END,
+                legal_office_name = CASE
+                    WHEN LOWER(BTRIM(COALESCE(legal_office_name, '')))
+                        NOT IN ('', 'inmobiliaria principal', 'jrh one')
+                    THEN BTRIM(legal_office_name)
+                    ELSE 'RE/MAX Data House'
+                END,
                 legal_broker_name = COALESCE(
                     NULLIF(BTRIM(legal_broker_name), ''),
                     'Mauro Marvisi'
@@ -2469,18 +2479,16 @@ def create_postgres_schema():
                     NULLIF(BTRIM(legal_broker_license), ''),
                     'CUCICBA 1762 / CMCPSI 5574'
                 ),
-                legal_office_name = COALESCE(
-                    NULLIF(BTRIM(legal_office_name), ''),
-                    NULLIF(BTRIM(marketing_brand_name), ''),
-                    NULLIF(BTRIM(display_name), ''),
-                    'RE/MAX Data House'
-                ),
                 legal_footer_line = COALESCE(
                     NULLIF(BTRIM(legal_footer_line), ''),
                     'Corredor Público Mauro Marvisi CUCICBA 1762 / CMCPSI 5574'
                 )
             WHERE COALESCE(BTRIM(legal_broker_name), '') = ''
                OR COALESCE(BTRIM(legal_broker_license), '') = ''
+               OR LOWER(BTRIM(COALESCE(marketing_brand_name, '')))
+                    IN ('', 'inmobiliaria principal', 'jrh one')
+               OR LOWER(BTRIM(COALESCE(legal_office_name, '')))
+                    IN ('', 'inmobiliaria principal', 'jrh one')
             """
         )
 

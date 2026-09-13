@@ -11,6 +11,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as pdf_canvas
 
+from modules.marketing_branding import usable_brand_name
 from modules.property_sync.media import resolve_media_filesystem_path
 from modules.property_sync.remote_media import fetch_allowed_image_bytes
 
@@ -256,8 +257,15 @@ def _header(canvas, facts, *, accent, invert=False):
         box=(_u(width, 220), _u(width, 64)),
         xy=(pad, _u(width, 28)),
     )
-    if not placed:
-        _wordmark(draw, (pad, _u(width, 34)), facts.get("brand_name"), fill=fill, size=_u(width, 34))
+    if not placed and facts.get("show_wordmark", True):
+        _wordmark(
+            draw,
+            (pad, _u(width, 34)),
+            usable_brand_name(facts.get("brand_name"), facts.get("organization_name"))
+            or "RE/MAX Data House",
+            fill=fill,
+            size=_u(width, 34),
+        )
     purpose = (facts.get("purpose_label") or "").upper()
     if purpose:
         badge_w = _text_width(draw, purpose, font(_u(width, 20), bold=True)) + _u(width, 48)
@@ -449,18 +457,20 @@ def render_editorial(size, photos, facts, copy, agent, options, style):
     )
     footer_top = height - _u(width, 110)
     draw.rectangle((0, footer_top, width, height), fill=NAVY)
-    _paste_logo(
+    footer_logo = _paste_logo(
         canvas,
         facts.get("organization_logo"),
         box=(_u(width, 180), _u(width, 50)),
         xy=(pad, footer_top + _u(width, 28)),
     )
-    draw.text(
-        (pad + _u(width, 200), footer_top + _u(width, 28)),
-        facts.get("brand_name") or facts.get("organization_name") or "RE/MAX Data House",
-        font=font(_u(width, 22), bold=True),
-        fill=WHITE,
-    )
+    if not footer_logo:
+        draw.text(
+            (pad, footer_top + _u(width, 28)),
+            usable_brand_name(facts.get("brand_name"), facts.get("organization_name"))
+            or "RE/MAX Data House",
+            font=font(_u(width, 22), bold=True),
+            fill=WHITE,
+        )
     legal = facts.get("legal_footer_line") or ""
     if legal:
         draw.text(

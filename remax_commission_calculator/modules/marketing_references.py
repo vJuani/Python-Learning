@@ -124,9 +124,9 @@ def collect_reference_images(context, options):
                 "role": "logo",
                 "label": (
                     f"Reference E: REAL OFFICE LOGO for {brand}. "
-                    "Reproduce this exact mark. Small, elegant, never stretched, "
-                    "never flush to the edge, always inside the safe area. "
-                    "Do not invent a different logo and do not use any JRH One mark."
+                    "Reproduce this exact file in the top-left header. "
+                    "Small, sharp, clean, no extra background plate. "
+                    "Never stretch, invent, or replace it. Never use JRH One or Inmobiliaria Principal."
                 ),
                 "bytes": logo_bytes,
                 "mime": "image/png",

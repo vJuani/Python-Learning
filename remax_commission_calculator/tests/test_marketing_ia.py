@@ -34,8 +34,10 @@ from modules.database.organization_settings_repository import update_organizatio
 from modules.database.users_repository import get_user_by_id
 from modules.marketing_branding import (
     DEMO_MARKETING_BRANDING,
+    is_placeholder_brand,
     is_system_brand_text,
     resolve_marketing_branding,
+    usable_brand_name,
     validate_creative_branding,
 )
 from modules.jrh_ai_classify import classify_intent, detect_marketing_content
@@ -1328,11 +1330,18 @@ class MarketingIaTests(unittest.TestCase):
 
     def test_49_creative_uses_organization_brand_not_jrh(self):
         self.assertTrue(is_system_brand_text("JRH One"))
+        self.assertTrue(is_placeholder_brand("Inmobiliaria Principal"))
         self.assertFalse(is_system_brand_text("RE/MAX Data House"))
-        empty = resolve_marketing_branding({}, apply_demo_fallback=True)
+        self.assertEqual(usable_brand_name("Inmobiliaria Principal", "RE/MAX Data House"), "RE/MAX Data House")
+        empty = resolve_marketing_branding(
+            {"display_name": "Inmobiliaria Principal"},
+            organization_name="Inmobiliaria Principal",
+            apply_demo_fallback=True,
+        )
         self.assertEqual(empty["brand_name"], "RE/MAX Data House")
         self.assertEqual(empty["legal_broker_name"], "Mauro Marvisi")
         self.assertNotEqual(empty["brand_name"], "JRH One")
+        self.assertNotEqual(empty["brand_name"], "Inmobiliaria Principal")
         context = build_property_marketing_context(self._property())
         facts = context["facts"]
         self.assertEqual(facts["brand_name"], "RE/MAX Data House")
@@ -1350,9 +1359,12 @@ class MarketingIaTests(unittest.TestCase):
         self.assertNotIn("jrh-one-logo.png", names)
         prompt = build_marketing_image_prompt(context, "story", include_agent=True, language="es")
         self.assertIn("CREATIVE BRAND LOCK", prompt)
+        self.assertIn("marca visible de la inmobiliaria activa", prompt)
         self.assertIn("José Barreiro", prompt)
         self.assertIn("Mauro Marvisi", prompt)
         self.assertNotIn("JRH One wordmark", prompt)
+        self.assertNotIn("branded as Inmobiliaria Principal", prompt)
+        self.assertIn("Never write Inmobiliaria Principal", prompt)
         copy = summarize_listing_copy(facts, context.get("agent"), language="es")
         self.assertIn("Mauro", copy["legal_footer"])
         flagged = validate_creative_branding(

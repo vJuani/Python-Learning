@@ -6,6 +6,7 @@ import re
 
 from modules.agent_branding import get_agent_presentation_asset
 from modules.database.organization_settings_repository import get_organization_settings
+from modules.database.organizations_repository import get_organization_by_id
 from modules.formatting import format_listing_money
 from modules.i18n import translate
 from modules.marketing_branding import resolve_marketing_branding
@@ -240,7 +241,12 @@ def build_property_marketing_context(
     meta = parse_external_metadata(display)
     purpose = normalize_listing_purpose(display.get("listing_purpose"))
     settings = get_organization_settings(display.get("organization_id")) or {}
-    branding = resolve_marketing_branding(settings, language=language)
+    organization = get_organization_by_id(display.get("organization_id")) or {}
+    branding = resolve_marketing_branding(
+        settings,
+        language=language,
+        organization_name=organization.get("name"),
+    )
     photos = _media_items(display, selected_photo_ids)
     price_policy = _price_policy(meta, display)
     price_label = None
@@ -287,6 +293,8 @@ def build_property_marketing_context(
         "brand_name": branding["brand_name"],
         "organization_name": branding["office_name"],
         "organization_logo": branding["logo_path"],
+        "has_logo": branding["has_logo"],
+        "show_wordmark": branding["show_wordmark"],
         "legal_broker_name": branding["legal_broker_name"],
         "legal_broker_license": branding["legal_broker_license"],
         "legal_footer_line": branding["legal_footer_line"],

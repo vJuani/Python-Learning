@@ -27,6 +27,7 @@ HARD_FAIL = {
     "agent_not_composited",
     "wrong_language",
     "system_brand_visible",
+    "placeholder_brand",
     "missing_legal",
 }
 
@@ -174,6 +175,7 @@ def validate_creative(
         "wrong_size": 10,
         "wrong_language": 30,
         "system_brand_visible": 40,
+        "placeholder_brand": 40,
         "missing_legal": 28,
     }
     for reason in reasons:

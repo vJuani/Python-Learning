@@ -243,7 +243,7 @@ def build_marketing_image_prompt(
         f"at most {MAX_STORY_ATTRIBUTES} attributes, price if requested, one CTA, "
         "mandatory legal broker footer"
         + (", agent name + short title" if want_agent else "")
-        + ". Forbidden: JRH One, long paragraphs, decorative slogans, leftover phrases in corners, "
+        + ". Forbidden: JRH One, Inmobiliaria Principal, long paragraphs, decorative slogans, leftover phrases in corners, "
         "vertical captions, stacked competing headlines, icon rows, amateur flyer clutter."
     )
     hierarchy = " → ".join(HIERARCHY)

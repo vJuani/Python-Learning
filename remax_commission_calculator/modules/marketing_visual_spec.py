@@ -188,8 +188,11 @@ AVOID = (
     "logo flush to the edge",
     "agent name flush to the edge",
     "JRH One",
+    "Inmobiliaria Principal",
+    "generic office placeholders",
     "system product branding",
     "confusing the agent with the legal broker",
+    "invented office logos",
 )
 
 

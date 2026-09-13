@@ -992,7 +992,12 @@ def settings_to_form_values(settings):
             ) is not None
             else 3
         ),
-        "marketing_brand_name": settings.get("marketing_brand_name") or "",
+        "marketing_brand_name": (
+            settings.get("marketing_brand_name")
+            if (settings.get("marketing_brand_name") or "").strip().casefold()
+            not in {"", "inmobiliaria principal", "jrh one"}
+            else ""
+        ),
         "marketing_logo_url": settings.get("marketing_logo_url") or "",
         "marketing_logo_dark_url": settings.get("marketing_logo_dark_url") or "",
         "marketing_logo_light_url": settings.get("marketing_logo_light_url") or "",
