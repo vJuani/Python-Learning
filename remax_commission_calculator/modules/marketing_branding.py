@@ -7,6 +7,7 @@ publishable creative. The visible brand is the active real-estate office.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 from modules.branding import get_brand_name
@@ -31,7 +32,6 @@ PLACEHOLDER_BRANDS = frozenset(
     }
 )
 NEUTRAL_BRAND_FALLBACK = "RE/MAX Data House"
-DEFAULT_OFFICE_LOGO = BASE_DIR / "static" / "brand" / "office" / "remax-pin.png"
 
 DEMO_MARKETING_BRANDING = {
     "marketing_brand_name": "RE/MAX Data House",
@@ -46,8 +46,11 @@ DEMO_MARKETING_BRANDING = {
 BRANDING_ALIASES = {
     "office_name": "marketing_brand_name",
     "organization_name": "organization_name",
+    "marketing_logo": "marketing_logo_url",
+    "marketing_logo_path": "marketing_logo_url",
     "office_logo": "marketing_logo_url",
     "organization_logo": "marketing_logo_url",
+    "logo": "logo_path",
     "broker_name": "legal_broker_name",
     "broker_license": "legal_broker_license",
     "broker_footer_text": "legal_footer_line",
@@ -133,7 +136,14 @@ def _scan_organization_logo(organization_id):
     if not organization_id:
         return None
     folder = BASE_DIR / "static" / "uploads" / "organizations" / str(organization_id)
-    for name in ("logo.png", "logo.jpg", "logo.jpeg", "logo.webp", "logo.gif"):
+    for name in (
+        "logo.png",
+        "logo.webp",
+        "logo.svg",
+        "logo.jpg",
+        "logo.jpeg",
+        "logo.gif",
+    ):
         candidate = folder / name
         if candidate.is_file():
             return candidate
@@ -151,34 +161,41 @@ def apply_branding_aliases(settings):
     return normalized
 
 
-def default_office_logo_path(brand_name=None):
-    brand = _clean(brand_name).casefold()
-    if brand and "re/max" not in brand and "remax" not in brand:
-        return None
-    if DEFAULT_OFFICE_LOGO.is_file():
-        return DEFAULT_OFFICE_LOGO
-    return None
+def office_wordmark(brand_name, *, has_logo=False, logo_path=None):
+    """Avoid repeating RE/MAX when the real office mark already includes it."""
+    brand = _clean(brand_name)
+    if not brand:
+        return ""
+    if not has_logo:
+        return brand
+    logo_hint = _clean(logo_path).casefold()
+    looks_remax = "re/max" in logo_hint or "remax" in logo_hint
+    folded = brand.casefold()
+    if folded.startswith("re/max ") or folded.startswith("remax ") or looks_remax:
+        rest = re.sub(r"^(re/?max)\s+", "", brand, flags=re.I).strip()
+        return rest
+    return brand
 
 
 def resolve_creative_logo_path(settings, *, organization_id=None, brand_name=None):
     settings = apply_branding_aliases(settings)
     for key in (
-        "marketing_logo_light_url",
         "marketing_logo_url",
+        "marketing_logo",
+        "marketing_logo_path",
+        "marketing_logo_light_url",
+        "logo_path",
+        "logo",
         "office_logo",
         "organization_logo",
-        "logo_path",
         "marketing_logo_dark_url",
     ):
         path = resolve_local_logo_path(settings.get(key))
         if path:
             return path
-    scanned = _scan_organization_logo(
+    return _scan_organization_logo(
         organization_id or settings.get("organization_id")
     )
-    if scanned:
-        return scanned
-    return default_office_logo_path(brand_name)
 
 
 def build_legal_footer_line(settings, *, language="es"):
@@ -283,6 +300,9 @@ def resolve_marketing_branding(
         "organization_logo": logo_value,
         "logo_path": logo_value,
         "has_logo": bool(logo_path),
+        "wordmark_text": office_wordmark(
+            brand_name, has_logo=bool(logo_path), logo_path=logo_value
+        ),
         "show_wordmark": True,
         "legal_broker_name": stored_broker,
         "legal_broker_license": stored_license,
@@ -332,6 +352,8 @@ def branding_from_facts(facts):
         "office_logo": logo,
         "organization_logo": logo,
         "has_logo": has_logo,
+        "wordmark_text": facts.get("wordmark_text")
+        or office_wordmark(brand, has_logo=has_logo, logo_path=logo),
         "show_wordmark": bool(facts.get("show_wordmark", True)),
         "legal_broker_name": broker,
         "legal_broker_license": license_no,
@@ -363,58 +385,60 @@ def branding_prompt_block(branding, *, include_agent=False, language="es"):
         branding.get("legal_broker_license")
         or DEMO_MARKETING_BRANDING["legal_broker_license"]
     )
-    contact_bits = []
-    labels = {
-        "marketing_instagram": "Instagram",
-        "marketing_whatsapp": "WhatsApp",
-        "marketing_phone": "Tel" if language == "es" else "Phone",
-        "marketing_email": "Email",
-    }
-    for key, label in labels.items():
-        value = branding.get(key)
-        if value:
-            contact_bits.append(f"{label} {value}")
-    contact = (", ".join(contact_bits) + ". ") if contact_bits else ""
+    wordmark = _clean(branding.get("wordmark_text")) or brand
     if branding.get("has_logo"):
-        logo = (
-            "Place the REAL office logo from the logo reference in the top-left, "
-            "inside the safe area, immediately followed by the office name "
-            f"'{brand}'. Keep logo + name as one compact header lockup. "
-            "Small, sharp, clean, no extra plate or colored box, never pixelated, "
-            "never invented, never replaced by JRH One."
-        )
+        if wordmark and wordmark.casefold() != brand.casefold():
+            logo = (
+                "Place the REAL office logo from the logo reference in the top-left, "
+                "inside the safe area. Use that exact file. Do not recreate, redesign, "
+                "stretch, or hallucinate the mark. Immediately after the logo set the "
+                f"office name '{wordmark}' — do not repeat RE/MAX if the mark already "
+                "includes it. Small, sharp, no extra plate, never replaced by JRH One."
+            )
+        else:
+            logo = (
+                "Place the REAL office logo from the logo reference in the top-left, "
+                "inside the safe area, immediately followed by the office name "
+                f"'{wordmark}'. Use that exact file. Do not recreate, redesign, "
+                "stretch, or hallucinate the mark. Small, sharp, no extra plate, "
+                "never replaced by JRH One."
+            )
     else:
         logo = (
-            f"No logo file is available. Set the wordmark '{brand}' top-left in clean type. "
-            "Do not invent a logo, balloon, or similar mark."
+            f"No real office logo file is available. Set the wordmark '{brand}' top-left "
+            "in clean type. Do not invent a logo, balloon, or similar mark."
         )
     agent = (
         "The agent is the commercial contact only and is not the legal broker. "
+        "Show WhatsApp and Instagram only. Do not also show a regular phone. "
         if include_agent
         else "Do not show an agent. "
     )
     if language == "es":
         lock = (
             f"Usar la marca visible de la inmobiliaria activa: {brand}. "
-            "No mostrar JRH One dentro del creativo. "
-            "Colocar el logo real de la inmobiliaria si está disponible. "
-            f"Mostrar siempre el nombre comercial de la oficina ({office}) junto al logo. "
-            f"Mantener el responsable legal y matrícula visibles: {broker} {license_no}."
+            "Usá el logo real de la inmobiliaria provisto como referencia. "
+            "No inventes ni rediseñes el logo. No muestres JRH One dentro del creativo. "
+            "Mostrá al agente como contacto comercial con WhatsApp e Instagram, "
+            "evitando repetir teléfono y WhatsApp. Mantené separado y visible el texto "
+            f"legal del corredor responsable y su matrícula: {broker} {license_no}."
         )
     else:
         lock = (
             f"Use the active real estate office branding ({brand}), not the app brand. "
-            "Show the real estate office logo if provided, and always keep the office "
-            "commercial name next to it. "
+            "Use the real estate office logo provided as an input asset. "
+            "Do not recreate, redesign, or hallucinate the logo. "
             "Do not display JRH One in the final creative. "
-            f"Keep the legal broker and license visible: {broker} {license_no}."
+            "Show the agent as the commercial contact using WhatsApp and Instagram, "
+            "without duplicating phone and WhatsApp. Keep the legal broker name and "
+            f"license clearly visible and separate: {broker} {license_no}."
         )
     return (
         f"CREATIVE BRAND LOCK: {lock} "
         f"Never write Inmobiliaria Principal or any generic office placeholder. "
         f"{logo} "
         f"Mandatory legal footer, small, clean, fully inside the safe area, never cropped: '{footer}'. "
-        f"{agent}{contact}"
+        f"{agent}"
         "Visual hierarchy: header office logo + office name top-left and a tiny kicker "
         "top-right; then a large property photo; then operation title, street, locality; "
         "facts, price, CTA; footer agent/contact then legal broker and license."

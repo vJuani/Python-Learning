@@ -12,7 +12,7 @@ from modules.agent_photo import (
     save_agent_profile_photo,
 )
 from modules.auth import ROLE_ADMIN, ROLE_AGENT, get_current_user
-from modules.database.agents_repository import get_agent_record
+from modules.database.agents_repository import get_agent_record, update_agent_instagram_handle
 
 
 def register_agent_photo_routes(app, helpers):
@@ -87,7 +87,14 @@ def register_agent_photo_routes(app, helpers):
         if request.method == "POST":
             action = request.form.get("action") or "upload"
             try:
-                if action == "delete":
+                if action == "save_instagram":
+                    update_agent_instagram_handle(
+                        agent["id"],
+                        organization_id,
+                        request.form.get("instagram_handle", ""),
+                    )
+                    flash_i18n("agent_instagram_saved", "success")
+                elif action == "delete":
                     delete_agent_profile_photo(organization_id, agent["id"])
                     flash_i18n("agent_photo_deleted", "success")
                 else:

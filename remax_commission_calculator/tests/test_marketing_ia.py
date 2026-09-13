@@ -25,7 +25,11 @@ from modules.agent_photo import resolve_agent_photo_path
 from modules.auth import ROLE_ADMIN, ROLE_AGENT, hash_password
 from modules.config import apply_config
 from modules.database import add_agent, add_organization, add_property, add_user, create_tables
-from modules.database.agents_repository import get_agent_record, update_agent_profile_photo
+from modules.database.agents_repository import (
+    get_agent_record,
+    update_agent_instagram_handle,
+    update_agent_profile_photo,
+)
 from modules.database.connection import get_connection
 from modules.database.marketing_repository import get_marketing_asset, update_marketing_asset
 from modules.database.properties_repository import get_property_record, update_property
@@ -169,6 +173,7 @@ class MarketingIaTests(unittest.TestCase):
             profile_photo_width=400,
             profile_photo_height=520,
         )
+        update_agent_instagram_handle(cls.agent_id, cls.org, "josebarreiro")
         cls.property_id = add_property(
             "Santamarina 1335",
             "Buenos Aires",
@@ -1115,6 +1120,11 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("RE/MAX Data House", prompt)
         self.assertIn("Mauro Marvisi", prompt)
         self.assertIn("CUCICBA", prompt)
+        self.assertIn("WhatsApp +54 9 11 4000 0000", prompt)
+        self.assertIn("Instagram @josebarreiro", prompt)
+        self.assertIn("Corredor Público Mauro Marvisi", prompt)
+        self.assertNotIn("phone '", prompt)
+        self.assertNotIn("remax-pin.png", prompt)
         self.assertNotIn("Place the JRH One", prompt)
         self.assertNotIn("Brand: JRH One", prompt)
         english = build_marketing_image_prompt(
@@ -1343,6 +1353,8 @@ class MarketingIaTests(unittest.TestCase):
             apply_demo_fallback=True,
         )
         self.assertEqual(empty["brand_name"], "RE/MAX Data House")
+        self.assertFalse(empty["has_logo"])
+        self.assertEqual(empty["wordmark_text"], "RE/MAX Data House")
         self.assertEqual(empty["legal_broker_name"], "Mauro Marvisi")
         aliased = resolve_marketing_branding(
             {
@@ -1376,6 +1388,8 @@ class MarketingIaTests(unittest.TestCase):
         self.assertFalse(facts["requires_legal_review"])
         self.assertTrue(facts["publishable"])
         self.assertTrue(str(facts["organization_logo"]).endswith("office-logo.png"))
+        self.assertEqual(facts["wordmark_text"], "Data House")
+        self.assertNotIn("remax-pin.png", str(facts["organization_logo"]))
         packed = collect_reference_images(
             context,
             {"include_agent": True, "show_agent_photo": True},
@@ -1387,11 +1401,18 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("CREATIVE BRAND LOCK", prompt)
         self.assertIn("marca visible de la inmobiliaria activa", prompt)
         self.assertIn("José Barreiro", prompt)
+        self.assertIn("WhatsApp +54 9 11 4000 0000", prompt)
+        self.assertIn("@josebarreiro", prompt)
         self.assertIn("Mauro Marvisi", prompt)
+        copy = summarize_listing_copy(facts, context.get("agent"), language="es")
+        self.assertEqual(copy["agent_whatsapp"], "+54 9 11 4000 0000")
+        self.assertEqual(copy["agent_instagram"], "@josebarreiro")
+        self.assertEqual(copy["legal_broker_line"], "Corredor Público Mauro Marvisi")
+        self.assertIn("CUCICBA 1762", copy["legal_license_line"])
+        self.assertNotIn("agent_phone", copy)
         self.assertNotIn("JRH One wordmark", prompt)
         self.assertNotIn("branded as Inmobiliaria Principal", prompt)
         self.assertIn("Never write Inmobiliaria Principal", prompt)
-        copy = summarize_listing_copy(facts, context.get("agent"), language="es")
         self.assertIn("Mauro", copy["legal_footer"])
         flagged = validate_creative_branding(
             planned_copy={"headline": "JRH One Luxury", "cta": "Now"},

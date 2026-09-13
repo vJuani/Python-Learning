@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 from modules.agent_branding import get_agent_presentation_asset
 from modules.database.organization_settings_repository import get_organization_settings
@@ -156,13 +159,21 @@ def _agent_snapshot(property_data, language):
     )
     if not branding:
         return None
+    whatsapp = branding.get("whatsapp")
+    instagram = branding.get("instagram") or branding.get("instagram_handle")
+    if not whatsapp and not instagram:
+        logger.warning(
+            "marketing agent contact missing whatsapp and instagram agent=%s",
+            branding.get("agent_id"),
+        )
     return {
         "agent_id": branding.get("agent_id"),
         "organization_id": branding.get("organization_id"),
         "name": branding.get("name"),
         "phone": branding.get("phone"),
+        "whatsapp": whatsapp,
         "email": branding.get("email"),
-        "instagram": branding.get("instagram"),
+        "instagram": instagram,
         "linkedin": branding.get("linkedin"),
         "title": branding.get("title"),
         "has_photo": bool(branding.get("has_photo")),
@@ -303,7 +314,8 @@ def build_property_marketing_context(
         "office_logo": branding["logo_path"],
         "organization_logo": branding["logo_path"],
         "has_logo": branding["has_logo"],
-        "show_wordmark": True,
+        "wordmark_text": branding.get("wordmark_text") or branding["brand_name"],
+        "show_wordmark": bool(branding.get("wordmark_text") or not branding["has_logo"]),
         "kicker": default_kicker(language),
         "operation_title": operation_headline(language, {
             "type_label": type_label,

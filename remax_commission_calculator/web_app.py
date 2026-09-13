@@ -86,6 +86,7 @@ from modules.database import (
     revoke_guest_access,
     set_registration_enabled,
     update_agent,
+    update_agent_instagram_handle,
     update_organization_settings,
     update_organization_billing_fields,
     update_organization_marketing_fields,
@@ -4432,11 +4433,16 @@ def agents_new():
             )
 
         try:
-            add_agent(
+            created_id = add_agent(
                 name,
                 agent_type,
                 organization_id,
                 team_leader_agent_id=team_leader_agent_id,
+            )
+            update_agent_instagram_handle(
+                created_id,
+                organization_id,
+                request.form.get("instagram_handle", ""),
             )
         except (ValueError, TenantError):
             flash_i18n("err_team_leader_invalid", "error")
@@ -4551,6 +4557,11 @@ def agents_edit(agent_id):
                 organization_id,
                 team_leader_agent_id=team_leader_agent_id,
                 update_team_leader=True,
+            )
+            update_agent_instagram_handle(
+                agent_id,
+                organization_id,
+                request.form.get("instagram_handle", ""),
             )
         except (ValueError, TenantError):
             flash_i18n("err_team_leader_invalid", "error")

@@ -275,11 +275,14 @@ def _header(canvas, facts, *, accent, invert=False, kicker=""):
         xy=(pad, _u(width, 22)),
     )
     text_x = pad + (placed[0] + _u(width, 14) if placed else 0)
-    if facts.get("show_wordmark", True) or not placed:
+    wordmark = facts.get("wordmark_text")
+    if wordmark is None:
+        wordmark = _office_brand(facts)
+    if wordmark and (facts.get("show_wordmark", True) or not placed):
         _wordmark(
             draw,
             (text_x, _u(width, 38)),
-            _office_brand(facts),
+            wordmark,
             fill=fill,
             size=_u(width, 28),
         )

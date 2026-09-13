@@ -113,21 +113,26 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
     agent = agent or {}
     name = autofit_text(agent.get("name") or "", max_chars=24, max_lines=2)
     title = autofit_text(agent.get("title") or default_agent_role(language), max_chars=22, max_lines=1)
-    phone = autofit_text(agent.get("phone") or "", max_chars=18, max_lines=1)
+    whatsapp = autofit_text(agent.get("whatsapp") or "", max_chars=22, max_lines=1)
+    instagram = autofit_text(agent.get("instagram") or "", max_chars=22, max_lines=1)
     cta_fit = autofit_text(cta or default_cta(language), max_chars=18, max_lines=1)
+    broker = " ".join(
+        part
+        for part in (
+            "Corredor Público" if language == "es" else "Licensed Broker",
+            facts.get("legal_broker_name") or "",
+        )
+        if part
+    ).strip()
+    license_no = " ".join(str(facts.get("legal_broker_license") or "").split())
     legal = autofit_text(
         facts.get("legal_footer_line")
-        or " ".join(
-            part
-            for part in (
-                facts.get("legal_broker_name"),
-                facts.get("legal_broker_license"),
-            )
-            if part
-        ),
+        or " ".join(part for part in (broker, license_no) if part),
         max_chars=72,
         max_lines=2,
     )
+    legal_name = autofit_text(broker, max_chars=40, max_lines=1)
+    legal_license = autofit_text(license_no, max_chars=40, max_lines=1)
     return {
         "headline": hook["text"].replace("\n", " "),
         "headline_lines": hook["lines"],
@@ -139,7 +144,10 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
         "cta": cta_fit["text"] or default_cta(language),
         "agent_name": name["text"].replace("\n", " "),
         "agent_title": title["text"],
-        "agent_phone": phone["text"],
+        "agent_whatsapp": whatsapp["text"],
+        "agent_instagram": instagram["text"],
+        "legal_broker_line": legal_name["text"],
+        "legal_license_line": legal_license["text"],
         "legal_footer": legal["text"].replace("\n", " "),
         "brand_name": facts.get("brand_name") or facts.get("organization_name") or "",
         "summarized": any(

@@ -207,13 +207,32 @@ def build_marketing_image_prompt(
             if photo_count > 1
             else "no invented secondary photo"
         )
+    contact_lines = []
+    if copy.get("agent_whatsapp"):
+        contact_lines.append(f"WhatsApp {copy['agent_whatsapp']}")
+    if copy.get("agent_instagram"):
+        contact_lines.append(f"Instagram {copy['agent_instagram']}")
+    contact_copy = (
+        "; ".join(contact_lines)
+        if contact_lines
+        else "name and title only, no invented phone or handle"
+    )
+    legal_name = copy.get("legal_broker_line") or branding_from_facts(facts).get(
+        "legal_broker_name"
+    )
+    legal_license = copy.get("legal_license_line") or branding_from_facts(facts).get(
+        "legal_broker_license"
+    )
     agent_block = (
         "Integrate the REAL agent portrait as a small-to-medium professional cutout, "
         "the official ficha/ACM photo, clean crop, never duplicated, never a second hero. "
-        f"Agent block: name '{copy['agent_name']}', short title '{copy['agent_title'] or default_agent_role(language)}'"
-        + (f", phone '{copy['agent_phone']}'" if copy.get("agent_phone") else "")
-        + ". Never crop the head, shoulders or the name. If it does not fit, shrink the "
-        "portrait automatically. Keep the exact same person. Do not invent another face."
+        f"Agent block, commercial contact only: name '{copy['agent_name']}', "
+        f"short title '{copy['agent_title'] or default_agent_role(language)}', "
+        f"{contact_copy}. Use a small WhatsApp icon and a small Instagram icon next to "
+        "those lines. Do not show a regular phone number. Do not duplicate WhatsApp as "
+        "Teléfono. Never crop the head, shoulders or the name. If it does not fit, "
+        "shrink the portrait automatically. Keep the exact same person. "
+        "Do not invent another face, number, or Instagram handle."
         if want_agent
         else "Do not include any agent portrait, invented person, or stock headshot."
     )
@@ -242,7 +261,7 @@ def build_marketing_image_prompt(
         "one commercial operation headline, street on the next line, locality on a smaller third line, "
         f"one clean row of at most {MAX_STORY_ATTRIBUTES} facts, price if requested, one Spanish/locked-language CTA, "
         "mandatory legal broker footer"
-        + (", agent name + short title" if want_agent else "")
+        + (", agent name + title + WhatsApp + Instagram, never phone + WhatsApp" if want_agent else "")
         + ". Forbidden: JRH One, Inmobiliaria Principal, locality as the giant title, "
         "long paragraphs, English taglines on Spanish pieces, "
         "leftover phrases in corners, vertical captions, stacked competing headlines, "
@@ -273,7 +292,9 @@ def build_marketing_image_prompt(
         f"Hierarchy: {hierarchy}. Property first, then price, facts, contact, then legal broker. "
         "Do not let four large texts compete. Never confuse the agent with the legal broker. "
         f"{copy_block} {photo_block} {price_block} {agent_block} {logo_block} "
-        f"Legal footer: {copy.get('legal_footer') or branding.get('legal_footer_line')}. "
+        f"Legal footer, visually separated from the agent: "
+        f"{legal_name}. {legal_license}. "
+        f"Full legal line: {copy.get('legal_footer') or branding.get('legal_footer_line')}. "
         "Typography: every title and name must fit. Shrink the font, tighten tracking, "
         "or wrap to two lines. If it still overflows, summarize "
         f"('{copy['street']}' / '{copy['zone']}'). "

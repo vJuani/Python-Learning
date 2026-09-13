@@ -33,6 +33,7 @@ from .agents_repository import (
     list_team_juniors,
     update_agent,
     update_agent_from_sync,
+    update_agent_instagram_handle,
 )
 
 from .agent_wallet_repository import (

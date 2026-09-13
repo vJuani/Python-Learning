@@ -1910,6 +1910,10 @@ def create_postgres_schema():
 
         migrate_agent_profile_photo_postgres(cursor)
 
+        from .agent_instagram_migration import migrate_agent_instagram_postgres
+
+        migrate_agent_instagram_postgres(cursor)
+
         from .marketing_migration import migrate_marketing_postgres
 
         migrate_marketing_postgres(cursor)

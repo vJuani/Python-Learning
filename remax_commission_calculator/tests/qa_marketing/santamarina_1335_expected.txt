@@ -1,0 +1,15 @@
+Santamarina 1335 — Marketing IA QA
+Property: Santamarina 1335, Victoria, PBA
+Headline: DEPARTAMENTO EN VENTA
+Brand: RE/MAX Data House (never JRH One)
+Logo: organization marketing_logo / logo_path / org upload. Never generic remx-pin.
+Agent: José Barreiro
+Title: Agente inmobiliario
+WhatsApp: from agent user phone, formatted (+54 9 11 …)
+Instagram: from agents.instagram_handle as @usuario
+No regular phone next to WhatsApp
+Legal:
+  Corredor Público Mauro Marvisi
+  CUCICBA 1762 / CMCPSI 5574
+Agent photo: same ficha/ACM file via get_agent_presentation_asset
+Fallback if Instagram missing: hide Instagram, keep WhatsApp or name+title
