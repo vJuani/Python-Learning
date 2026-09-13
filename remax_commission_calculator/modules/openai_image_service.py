@@ -292,7 +292,10 @@ def build_marketing_image_prompt(
     return (
         "Create one finished premium real-estate marketing piece. "
         "This is the final ad, ready to publish: editorial, clean, modern, elegant, minimal. "
-        "Not a background, not a PowerPoint collage, not an amateur flyer. "
+        "Canvas: ivory or soft off-white paper. No navy or electric-blue slab wrapping "
+        "the whole piece. Blue is accent only — CTA, thin rules, small icons. "
+        "Soft shadows if contrast is needed. Not a background, not a PowerPoint collage, "
+        "not an amateur flyer. "
         f"{language_prompt_block(language)} "
         f"Format: {FORMAT_BRIEFS.get(fmt, FORMAT_BRIEFS['story'])} "
         f"{safe_area_prompt(fmt)} "

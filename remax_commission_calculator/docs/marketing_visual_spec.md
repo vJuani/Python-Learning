@@ -14,7 +14,7 @@ Property photos, the Agent portrait and all facts come from live listing data.
 
 - Real-estate photography is the hero (about 40–60% of attention).
 - Premium editorial composition, not a SaaS card.
-- Deep JRH navy, electric blue accent, clean white.
+- Ivory or off-white field. Navy and electric blue only as accents, never as an outer plate.
 - Large, sophisticated type with a clear hierarchy.
 - Very few words. Commercial facts are obvious.
 - One or two secondary photos, chosen with intent.

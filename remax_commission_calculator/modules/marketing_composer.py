@@ -12,6 +12,8 @@ from modules.marketing_references import agent_overlay_image
 from modules.marketing_renderer import (
     ELECTRIC,
     FORMAT_SIZES,
+    INK,
+    IVORY,
     WHITE,
     font,
     load_property_photos,
@@ -22,9 +24,6 @@ from modules.marketing_renderer import (
 from modules.marketing_visual_spec import composition_spec, safe_inset
 
 
-NAVY_DEEP = (6, 14, 32)
-INK = (17, 28, 51)
-MUTED_ON_DARK = (176, 190, 214)
 MUTED_ON_LIGHT = (91, 107, 124)
 
 
@@ -43,24 +42,8 @@ def _serif(size, *, bold=False):
 
 
 def _brand_backdrop(size, *, theme):
-    width, height = size
-    if theme == "light":
-        canvas = Image.new("RGBA", size, (247, 249, 252, 255))
-        glow = Image.new("RGBA", size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(glow)
-        draw.ellipse(
-            (-int(width * 0.2), int(height * 0.7), int(width * 1.2), int(height * 1.3)),
-            fill=(13, 71, 255, 28),
-        )
-        return Image.alpha_composite(canvas, glow)
-    canvas = Image.new("RGBA", size, (*NAVY_DEEP, 255))
-    glow = Image.new("RGBA", size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(glow)
-    draw.ellipse(
-        (-int(width * 0.25), int(height * 0.52), int(width * 1.25), int(height * 1.22)),
-        fill=(13, 71, 255, 110),
-    )
-    return Image.alpha_composite(canvas, glow)
+    del theme
+    return Image.new("RGBA", size, (*IVORY, 255))
 
 
 def _draw_wordmark(draw, xy, *, width, fill=WHITE, brand=""):
@@ -187,10 +170,14 @@ def _facts_block(draw, facts, options, *, x, y, width, max_right, ink, mute, sho
             draw.text((fx + icon_size + 6, y + _u(width, 26)), label, font=font(_u(width, 15)), fill=mute)
         y += _u(width, 70)
     if show_cta:
-        draw.text((x, y), "CONSULTAME", font=font(_u(width, 26), bold=True), fill=ink)
-        cta_w = draw.textbbox((0, 0), "CONSULTAME", font=font(_u(width, 26), bold=True))[2]
-        draw.text((x + cta_w + _u(width, 10), y), "→", font=font(_u(width, 26), bold=True), fill=ELECTRIC)
-        y += _u(width, 40)
+        label = "CONSULTAME"
+        used = font(_u(width, 22), bold=True)
+        tw = draw.textbbox((0, 0), label, font=used)[2]
+        pill_h = _u(width, 52)
+        pill_w = tw + _u(width, 48)
+        draw.rounded_rectangle((x, y, x + pill_w, y + pill_h), pill_h // 2, fill=ELECTRIC)
+        draw.text((x + (pill_w - tw) // 2, y + _u(width, 12)), label, font=used, fill=WHITE)
+        y += pill_h + _u(width, 28)
     return y
 
 
@@ -209,8 +196,8 @@ def compose_marketing_image(context, art, *, fmt, options):
     top = max(_u(width, 28), inset["y"] // 2)
     canvas = _brand_backdrop(size, theme=theme)
     draw = ImageDraw.Draw(canvas)
-    ink = WHITE if theme == "dark" else INK
-    mute = MUTED_ON_DARK if theme == "dark" else MUTED_ON_LIGHT
+    ink = INK
+    mute = MUTED_ON_LIGHT
     office = usable_brand_name(
         facts.get("brand_name"), facts.get("office_name"), facts.get("organization_name")
     )
@@ -266,7 +253,7 @@ def compose_marketing_image(context, art, *, fmt, options):
         hook = ((art or {}).get("headline") or "").strip()
         if hook:
             draw.text((pad + _u(width, 16), hero_top + _u(width, 24)), hook, font=_serif(_u(width, 36), bold=True), fill=WHITE)
-        thumbs_top = hero_top + hero_h + _u(width, 16)
+        thumbs_top = hero_top + hero_h + _u(width, 22)
         thumb_h = int(height * 0.18) if extras else 0
         if thumb_h and extras:
             gap = _u(width, 14)
@@ -277,7 +264,7 @@ def compose_marketing_image(context, art, *, fmt, options):
                 cell = (thumbs_w - gap) // 2
                 paste_rounded(canvas, extras[0], (pad, thumbs_top), (cell, thumb_h), radius=_u(width, 16))
                 paste_rounded(canvas, extras[1], (pad + cell + gap, thumbs_top), (cell, thumb_h), radius=_u(width, 16))
-        facts_y = thumbs_top + (thumb_h or 0) + _u(width, 28)
+        facts_y = thumbs_top + (thumb_h or 0) + _u(width, 36)
 
     composited = False
     if has_portrait:
@@ -300,11 +287,16 @@ def compose_marketing_image(context, art, *, fmt, options):
     agent = (context or {}).get("agent") if show_agent else None
     name = (agent or {}).get("name") or "" if options.get("show_name", True) else ""
     role = (agent or {}).get("title") or ""
+    legal = facts.get("legal_footer_line") or facts.get("broker_footer_text") or ""
+    footer_y = height - pad - _u(width, 36)
+    draw.line((pad, footer_y - _u(width, 22), width - pad, footer_y - _u(width, 22)), fill=ELECTRIC, width=2)
+    if legal:
+        draw.text((pad, footer_y), legal, font=font(_u(width, 14)), fill=mute)
     if name:
         name_font = font(_u(width, 26), bold=True)
         name_w = draw.textbbox((0, 0), name, font=name_font)[2]
         nx = width - pad - name_w if has_portrait else pad
-        ny = height - pad - _u(width, 52)
+        ny = footer_y - _u(width, 64)
         draw.text((nx, ny), name, font=name_font, fill=ink)
         if role:
             role_font = font(_u(width, 15))

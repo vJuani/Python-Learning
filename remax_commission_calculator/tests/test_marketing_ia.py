@@ -85,7 +85,7 @@ from modules.marketing_visual_spec import (
     normalize_style,
 )
 from modules.marketing_references import collect_reference_images
-from modules.marketing_renderer import FORMAT_SIZES, fit_contain_safe, render_marketing_image
+from modules.marketing_renderer import FORMAT_SIZES, IVORY, fit_contain_safe, render_marketing_image
 from modules.marketing_photo_selector import select_photos_for_item
 from modules.marketing_request import DEFAULT_PROMPT, agent_presentation_config, expand_items, parse_marketing_request
 from modules.marketing_service import (
@@ -1120,6 +1120,8 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("bottom 180px", prompt)
         self.assertIn("vertical captions", prompt)
         self.assertIn("ALLOWED COPY ONLY", prompt)
+        self.assertIn("ivory or soft off-white", prompt)
+        self.assertIn("navy outer frame", prompt)
         self.assertIn(STYLE_BRIEFS[EDITORIAL_PREMIUM][:24], prompt)
         self.assertIn("Spanish only", prompt)
         self.assertIn("Contáctanos", prompt)
@@ -1149,6 +1151,18 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("English only", english)
         self.assertIn(MARKETING_COPY["en"]["cta"], english)
         self.assertNotIn("Contáctanos", english)
+
+    def test_43b_outer_field_is_ivory_not_navy(self):
+        inner = Image.new("RGB", (400, 700), (180, 180, 180))
+        fitted = fit_contain_safe(inner, FORMAT_SIZES["story"], "story")
+        corner = fitted.getpixel((6, 6))
+        ivory_dist = sum(abs(corner[i] - IVORY[i]) for i in range(3))
+        navy_dist = sum(abs(corner[i] - (10, 22, 51)[i]) for i in range(3))
+        self.assertLess(ivory_dist, 12)
+        self.assertGreater(navy_dist, 80)
+        brief = build_visual_brief("story", "editorial_navy")
+        self.assertEqual(brief["theme"], "light")
+        self.assertIn("ivory", brief["branding"])
 
     def test_44_structured_one_story_and_pack_counts(self):
         one = start_marketing_batch(

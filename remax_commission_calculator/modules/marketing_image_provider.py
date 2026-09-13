@@ -13,7 +13,7 @@ import urllib.request
 
 from PIL import Image, ImageDraw
 
-from modules.marketing_renderer import NAVY, WHITE, fit_contain_safe, fit_cover, paste_rounded
+from modules.marketing_renderer import INK, IVORY, WHITE, fit_contain_safe, fit_cover, paste_rounded
 from modules.marketing_visual_spec import (
     EDITORIAL_PREMIUM,
     LUXURY_MINIMAL,
@@ -101,7 +101,7 @@ def _api_size(width, height):
 def _fit_output(raw, size, fmt=None):
     image = Image.open(io.BytesIO(raw)).convert("RGB")
     fmt = fmt or format_from_size(size)
-    fitted = fit_contain_safe(image, size, fmt, fill=NAVY)
+    fitted = fit_contain_safe(image, size, fmt, fill=IVORY)
     out = io.BytesIO()
     fitted.save(out, format="PNG")
     return out.getvalue()
@@ -152,7 +152,7 @@ class MockMarketingImageProvider(MarketingImageProvider):
         left, top, right, bottom = safe_rect(fmt, size)
         inner_w = max(1, right - left)
         inner_h = max(1, bottom - top)
-        fill = WHITE if style == MODERN_COMMERCIAL else NAVY
+        fill = IVORY
         canvas = Image.new("RGBA", size, (*fill, 255))
         draw = ImageDraw.Draw(canvas)
         photos = []
@@ -173,7 +173,7 @@ class MockMarketingImageProvider(MarketingImageProvider):
         if marker in prompt_text:
             tail = prompt_text.split(marker, 1)[1]
             brand = tail.split(" /", 1)[0].split(".", 1)[0].strip()[:28] or brand
-        draw.text((left + 8, top + 8), brand, fill=(255, 255, 255) if fill == NAVY else NAVY)
+        draw.text((left + 8, top + 8), brand, fill=INK)
         if style == LUXURY_MINIMAL and photos:
             hero_h = int(inner_h * 0.78)
             canvas.paste(fit_cover(photos[0], inner_w, hero_h), (left, top + 36))
@@ -194,7 +194,7 @@ class MockMarketingImageProvider(MarketingImageProvider):
                 thumb_w = int(inner_w * 0.30)
                 thumb_h = int(inner_h * 0.16)
                 canvas.paste(fit_cover(photos[1], thumb_w, thumb_h), (left, top + 72 + hero_h))
-        ink = (255, 255, 255) if fill == NAVY else NAVY
+        ink = INK
         english = "written in English only" in (prompt or "")
         draw.text((left + 8, bottom - 64), "Inquire Now" if english else "Contáctanos", fill=ink)
         legal = "Mauro Marvisi CUCICBA 1762"

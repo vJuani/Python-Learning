@@ -19,11 +19,12 @@ from modules.property_sync.remote_media import fetch_allowed_image_bytes
 NAVY = (10, 22, 51)
 ELECTRIC = (13, 71, 255)
 WHITE = (255, 255, 255)
-SOFT = (244, 247, 252)
+IVORY = (250, 247, 241)
+SOFT = (247, 244, 238)
 INK = (17, 28, 51)
 MUTED = (91, 107, 124)
 GOLD = (196, 164, 92)
-LINE = (226, 232, 240)
+LINE = (226, 228, 222)
 
 FORMAT_SIZES = {
     "story": (1080, 1920),
@@ -108,7 +109,7 @@ def fit_cover(image, width, height):
     return resized.crop((left, top, left + width, top + height))
 
 
-def fit_contain(image, width, height, *, fill=NAVY):
+def fit_contain(image, width, height, *, fill=IVORY):
     src_w, src_h = image.size
     canvas = Image.new("RGB", (width, height), fill)
     if src_w <= 0 or src_h <= 0:
@@ -121,7 +122,7 @@ def fit_contain(image, width, height, *, fill=NAVY):
     return canvas
 
 
-def fit_contain_safe(image, size, fmt=None, *, fill=NAVY):
+def fit_contain_safe(image, size, fmt=None, *, fill=IVORY):
     from modules.marketing_visual_spec import format_from_size, safe_rect
 
     width, height = size
@@ -382,22 +383,22 @@ def _address_block(draw, facts, copy, *, xy, width, max_width, light=False):
 def _legal_footer(canvas, facts):
     width, height = canvas.size
     draw = ImageDraw.Draw(canvas)
-    pad = _u(width, 48)
-    bar_h = _u(width, 100)
+    pad = _u(width, 56)
+    bar_h = _u(width, 108)
     top = height - bar_h
-    draw.rectangle((0, top, width, height), fill=NAVY)
+    draw.line((pad, top, width - pad, top), fill=ELECTRIC, width=2)
     placed = _paste_logo(
         canvas,
         _office_logo(facts),
-        box=(_u(width, 44), _u(width, 44)),
-        xy=(pad, top + _u(width, 18)),
+        box=(_u(width, 40), _u(width, 40)),
+        xy=(pad, top + _u(width, 22)),
     )
     text_x = pad + (placed[0] + _u(width, 12) if placed else 0)
     draw.text(
-        (text_x, top + _u(width, 16)),
+        (text_x, top + _u(width, 20)),
         _office_brand(facts),
-        font=font(_u(width, 18), bold=True),
-        fill=WHITE,
+        font=font(_u(width, 17), bold=True),
+        fill=INK,
     )
     legal = (
         facts.get("legal_footer_line")
@@ -406,10 +407,10 @@ def _legal_footer(canvas, facts):
     )
     if legal:
         draw.text(
-            (text_x, top + _u(width, 48)),
+            (text_x, top + _u(width, 50)),
             legal,
             font=font(_u(width, 14)),
-            fill=WHITE,
+            fill=MUTED,
         )
 
 
@@ -422,12 +423,12 @@ def _price(draw, facts, options, *, xy, width, fill=NAVY, size=72):
 def render_editorial(size, photos, facts, copy, agent, options, style):
     """Large hero, two thumbs, commercial title below the photo."""
     width, height = size
-    canvas = Image.new("RGBA", size, WHITE)
+    canvas = Image.new("RGBA", size, (*IVORY, 255))
     draw = ImageDraw.Draw(canvas)
     accent = STYLE_ACCENT.get(style, ELECTRIC)
-    pad = _u(width, 48)
+    pad = _u(width, 56)
     _header(canvas, facts, accent=accent, kicker=copy.get("kicker"))
-    hero_top = _u(width, 118)
+    hero_top = _u(width, 126)
     hero_h = int(height * 0.40)
     if photos:
         paste_rounded(
@@ -489,7 +490,7 @@ def render_editorial(size, photos, facts, copy, agent, options, style):
 def render_visual(size, photos, facts, copy, agent, options, style):
     """Asymmetric collage + price + agent. Reference flyer 3."""
     width, height = size
-    canvas = Image.new("RGBA", size, WHITE)
+    canvas = Image.new("RGBA", size, (*IVORY, 255))
     draw = ImageDraw.Draw(canvas)
     accent = STYLE_ACCENT.get(style, ELECTRIC)
     pad = _u(width, 48)
@@ -553,7 +554,7 @@ def render_visual(size, photos, facts, copy, agent, options, style):
 def render_minimal(size, photos, facts, copy, agent, options, style):
     """One hero, lots of air, chips, price + CTA, circular agent. Reference flyer 8."""
     width, height = size
-    canvas = Image.new("RGBA", size, WHITE)
+    canvas = Image.new("RGBA", size, (*IVORY, 255))
     draw = ImageDraw.Draw(canvas)
     accent = STYLE_ACCENT.get(style, ELECTRIC)
     pad = _u(width, 52)

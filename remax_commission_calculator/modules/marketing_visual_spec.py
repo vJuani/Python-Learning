@@ -17,10 +17,10 @@ APPROVED_STYLE_NAME = "jrh-approved-story.jpg"
 
 PALETTE = {
     "navy": (10, 22, 51),
-    "navy_deep": (6, 14, 32),
+    "ivory": (250, 247, 241),
     "electric": (13, 71, 255),
     "white": (255, 255, 255),
-    "muted": (176, 190, 214),
+    "muted": (91, 107, 124),
     "ink": (17, 28, 51),
 }
 
@@ -108,15 +108,16 @@ STYLE_ALIASES = {
 
 COMPOSITIONS = {
     EDITORIAL_PREMIUM: {
-        "theme": "dark",
+        "theme": "light",
         "hero": "upper_editorial",
         "thumbs": "pair_support",
         "agent": "lower_right_small",
-        "mood": "editorial, quiet luxury, magazine cover",
+        "mood": "editorial, quiet luxury, magazine cover, ivory paper",
         "brief": (
             "Editorial Premium: one dominant hero photograph, generous negative space, "
             "very little type. At most one or two small supporting photos. "
-            "Elegant navy/white. No collage, no icon rows, no competing headlines."
+            "Ivory or off-white field. Navy and electric blue only as accents. "
+            "No navy outer frame. No collage, no icon rows, no competing headlines."
         ),
     },
     MODERN_COMMERCIAL: {
@@ -124,23 +125,23 @@ COMPOSITIONS = {
         "hero": "hero_plus_offer",
         "thumbs": "one_or_two",
         "agent": "footer_compact",
-        "mood": "modern, commercial, high-clarity selling",
+        "mood": "modern, commercial, high-clarity selling, light editorial",
         "brief": (
             "Modern Commercial: sales-first layout. Hero photo, clearly readable price, "
-            "one strong CTA, one or two supporting photos. Clean geometry, high contrast, "
-            "still premium — never a coupon flyer or PowerPoint."
+            "one clear CTA, one or two supporting photos. Clean geometry on an ivory field. "
+            "Blue only on the CTA and thin rules. Never a coupon flyer or PowerPoint."
         ),
     },
     LUXURY_MINIMAL: {
-        "theme": "dark",
+        "theme": "light",
         "hero": "full_bleed_inset",
         "thumbs": "none_or_one",
         "agent": "tiny_footer",
-        "mood": "sober, minimal, image-led luxury",
+        "mood": "sober, minimal, image-led luxury, light gallery",
         "brief": (
             "Luxury Minimal: almost all image, almost no type. Fine branding, "
             "a short address or zone, optional price. One hero, optional one secondary. "
-            "No frames, no icons, no decorative slogans."
+            "Light ivory canvas, no dark slab, no frames, no icons, no decorative slogans."
         ),
     },
 }
@@ -148,18 +149,20 @@ COMPOSITIONS = {
 STYLE_BRIEFS = {
     EDITORIAL_PREMIUM: (
         "EDITORIAL PREMIUM, not commercial poster. Magazine-cover real-estate. "
+        "Ivory or off-white canvas, never a navy or electric-blue outer plate. "
         "Huge hero, lots of air, short serif-like headline, tiny logo. "
         "Supporting photos stay small and secondary. Mood: quiet, elegant, expensive."
     ),
     MODERN_COMMERCIAL: (
-        "MODERN COMMERCIAL, not editorial quiet. Selling layout. "
-        "Price is a primary fact. CTA is unmistakable. One or two extras help the sale. "
+        "MODERN COMMERCIAL, not editorial quiet. Selling layout on a light field. "
+        "Price is a primary fact. CTA is clear but not oversized. "
+        "One or two extras help the sale. Blue is accent only. "
         "Mood: crisp, architectural, high-clarity, still refined."
     ),
     LUXURY_MINIMAL: (
         "LUXURY MINIMAL, not a busy listing card. Image is 80% of the frame. "
         "Copy is tiny and sparse. Branding is a fine wordmark only. "
-        "Mood: sober, dark, gallery-like, almost no decoration."
+        "Mood: sober, light, gallery-like, almost no decoration."
     ),
 }
 
@@ -173,6 +176,9 @@ STYLE_REFERENCE_LABEL = (
 AVOID = (
     "SaaS UI",
     "generic template",
+    "navy outer frame",
+    "electric-blue enclosing slab",
+    "dark plate wrapping the whole ad",
     "PowerPoint collage",
     "amateur flyer",
     "tiny text",
@@ -283,7 +289,7 @@ def build_visual_brief(fmt, direction, *, show_agent_photo=True):
         "agent": agent,
         "text_density": COPY_DENSITY,
         "price": "prominent" if key_is_commercial(direction) else "quiet_or_prominent",
-        "branding": "navy + electric blue + white",
+        "branding": "ivory field + navy ink + electric blue accents",
         "mood": spec["mood"],
         "avoid": list(AVOID),
         "theme": spec["theme"],
