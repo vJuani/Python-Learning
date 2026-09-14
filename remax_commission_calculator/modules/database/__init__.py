@@ -129,6 +129,7 @@ from .property_change_requests_repository import (
 from .notifications_repository import (
     count_unread_notifications,
     create_notification,
+    get_notification,
     list_notifications,
     mark_all_notifications_read,
     mark_notification_read

@@ -85,6 +85,23 @@
     font-size: 0.95rem;
 }
 
+.office-announcement-form {
+    display: grid;
+    gap: 12px;
+}
+
+.office-announcement-form input[type="text"],
+.office-announcement-form textarea {
+    width: 100%;
+    margin-top: 6px;
+}
+
+.office-announcement-agents {
+    margin: 8px 0 0 1.5rem;
+    max-height: 12rem;
+    overflow: auto;
+}
+
 .agent-contact-form {
     display: grid;
     gap: 8px;

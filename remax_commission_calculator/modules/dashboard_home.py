@@ -547,7 +547,7 @@ def _notification_message(notification, language):
             side=payload.get("side_label", "—"),
             property=payload.get("property", "—"),
         )
-    if kind in ("visit_reminder", "property_match"):
+    if kind in ("visit_reminder", "property_match", "task_overdue", "office_announcement"):
         return payload.get("body") or _t(key, language)
 
     translated = _t(key, language)

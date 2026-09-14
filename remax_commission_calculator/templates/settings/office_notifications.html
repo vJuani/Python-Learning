@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page {% endblock %}
+
+{% block title %}{{ t('office_announcement_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="agenda-hero__kicker">{{ t('settings_title') }}</p>
+        <h2>{{ t('office_announcement_title') }}</h2>
+        <p>{{ t('office_announcement_help') }}</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('settings_notifications') }}">{{ t('pwa_push_open') }}</a>
+    </div>
+</section>
+
+<article class="integration-card">
+    <form method="post" class="office-announcement-form">
+        <label>
+            {{ t('office_announcement_field_title') }}
+            <input type="text" name="title" maxlength="120" required value="{{ form.get('title', '') }}">
+        </label>
+        <label>
+            {{ t('office_announcement_field_body') }}
+            <textarea name="body" rows="4" maxlength="500" required>{{ form.get('body', '') }}</textarea>
+        </label>
+        <label>
+            {{ t('office_announcement_field_url') }}
+            <input type="text" name="url" placeholder="/agenda" value="{{ form.get('url', '') }}">
+        </label>
+        <p class="field-help">{{ t('office_announcement_url_help') }}</p>
+
+        <fieldset class="push-pref-form">
+            <legend>{{ t('office_announcement_audience') }}</legend>
+            <label class="push-pref-form__row">
+                <input type="radio" name="audience" value="all"{% if form.get('audience', 'all') != 'selected' %} checked{% endif %}>
+                {{ t('office_announcement_audience_all') }}
+            </label>
+            <label class="push-pref-form__row">
+                <input type="radio" name="audience" value="selected"{% if form.get('audience') == 'selected' %} checked{% endif %}>
+                {{ t('office_announcement_audience_selected') }}
+            </label>
+            <div class="office-announcement-agents">
+                {% for agent in agents %}
+                <label class="push-pref-form__row">
+                    <input type="checkbox" name="agent_id" value="{{ agent.id }}">
+                    {{ agent.name }}
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+
+        <div class="integration-card__actions">
+            <button type="submit" class="btn btn-primary">{{ t('office_announcement_send') }}</button>
+        </div>
+    </form>
+</article>
+{% endblock %}

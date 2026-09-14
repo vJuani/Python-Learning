@@ -12,6 +12,8 @@ PREF_KEYS = (
     "push_visit_reminders",
     "push_invoice_ready",
     "push_property_matches",
+    "push_task_overdue",
+    "push_office_announcements",
 )
 
 DEFAULT_PREFERENCES = {key: True for key in PREF_KEYS}
@@ -32,11 +34,15 @@ def _as_bool(value, default=True):
 def _row_to_prefs(row):
     if row is None:
         return dict(DEFAULT_PREFERENCES)
-    return {
-        "push_visit_reminders": bool(row[0]),
-        "push_invoice_ready": bool(row[1]),
-        "push_property_matches": bool(row[2]),
-    }
+    prefs = dict(DEFAULT_PREFERENCES)
+    prefs["push_visit_reminders"] = bool(row[0])
+    prefs["push_invoice_ready"] = bool(row[1])
+    prefs["push_property_matches"] = bool(row[2])
+    if len(row) > 3:
+        prefs["push_task_overdue"] = bool(row[3])
+    if len(row) > 4:
+        prefs["push_office_announcements"] = bool(row[4])
+    return prefs
 
 
 def get_user_notification_preferences(organization_id, user_id):
@@ -52,7 +58,9 @@ def get_user_notification_preferences(organization_id, user_id):
             SELECT
                 push_visit_reminders,
                 push_invoice_ready,
-                push_property_matches
+                push_property_matches,
+                push_task_overdue,
+                push_office_announcements
             FROM user_notification_preferences
             WHERE organization_id = ?
                 AND user_id = ?
@@ -78,6 +86,8 @@ def save_user_notification_preferences(
     push_visit_reminders=True,
     push_invoice_ready=True,
     push_property_matches=True,
+    push_task_overdue=True,
+    push_office_announcements=True,
 ):
     organization_id = require_organization_id(organization_id)
     now = _now_iso()
@@ -85,6 +95,8 @@ def save_user_notification_preferences(
         1 if _as_bool(push_visit_reminders) else 0,
         1 if _as_bool(push_invoice_ready) else 0,
         1 if _as_bool(push_property_matches) else 0,
+        1 if _as_bool(push_task_overdue) else 0,
+        1 if _as_bool(push_office_announcements) else 0,
     )
     connection = get_connection()
     cursor = connection.cursor()
@@ -108,9 +120,11 @@ def save_user_notification_preferences(
                     push_visit_reminders,
                     push_invoice_ready,
                     push_property_matches,
+                    push_task_overdue,
+                    push_office_announcements,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (organization_id, user_id, *values, now),
             )
@@ -122,6 +136,8 @@ def save_user_notification_preferences(
                     push_visit_reminders = ?,
                     push_invoice_ready = ?,
                     push_property_matches = ?,
+                    push_task_overdue = ?,
+                    push_office_announcements = ?,
                     updated_at = ?
                 WHERE organization_id = ?
                     AND user_id = ?

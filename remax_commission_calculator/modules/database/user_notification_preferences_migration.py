@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS user_notification_preferences (
     push_visit_reminders INTEGER NOT NULL DEFAULT 1,
     push_invoice_ready INTEGER NOT NULL DEFAULT 1,
     push_property_matches INTEGER NOT NULL DEFAULT 1,
+    push_task_overdue INTEGER NOT NULL DEFAULT 1,
+    push_office_announcements INTEGER NOT NULL DEFAULT 1,
     updated_at TEXT NOT NULL,
     UNIQUE (organization_id, user_id),
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE RESTRICT,
@@ -29,6 +31,8 @@ CREATE TABLE IF NOT EXISTS user_notification_preferences (
     push_visit_reminders SMALLINT NOT NULL DEFAULT 1,
     push_invoice_ready SMALLINT NOT NULL DEFAULT 1,
     push_property_matches SMALLINT NOT NULL DEFAULT 1,
+    push_task_overdue SMALLINT NOT NULL DEFAULT 1,
+    push_office_announcements SMALLINT NOT NULL DEFAULT 1,
     updated_at TEXT NOT NULL,
     UNIQUE (organization_id, user_id),
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE RESTRICT,
@@ -43,6 +47,20 @@ SQLITE_INDEXES = (
 
 POSTGRES_INDEXES = SQLITE_INDEXES
 
+PREF_COLUMNS = (
+    ("push_task_overdue", "INTEGER NOT NULL DEFAULT 1", "SMALLINT NOT NULL DEFAULT 1"),
+    (
+        "push_office_announcements",
+        "INTEGER NOT NULL DEFAULT 1",
+        "SMALLINT NOT NULL DEFAULT 1",
+    ),
+)
+
+
+def _column_exists_sqlite(cursor, table_name, column_name):
+    rows = cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return any(row[1] == column_name for row in rows)
+
 
 def migrate_user_notification_preferences_sqlite():
     connection = get_connection()
@@ -51,6 +69,14 @@ def migrate_user_notification_preferences_sqlite():
         cursor.execute(SQLITE_DDL)
         for statement in SQLITE_INDEXES:
             cursor.execute(statement)
+        for column_name, sqlite_sql, _postgres_sql in PREF_COLUMNS:
+            if not _column_exists_sqlite(
+                cursor, "user_notification_preferences", column_name
+            ):
+                cursor.execute(
+                    "ALTER TABLE user_notification_preferences "
+                    f"ADD COLUMN {column_name} {sqlite_sql}"
+                )
         connection.commit()
     except Exception:
         connection.rollback()
@@ -63,6 +89,11 @@ def migrate_user_notification_preferences_postgres(cursor):
     cursor.execute(POSTGRES_DDL)
     for statement in POSTGRES_INDEXES:
         cursor.execute(statement)
+    for column_name, _sqlite_sql, postgres_sql in PREF_COLUMNS:
+        cursor.execute(
+            "ALTER TABLE user_notification_preferences "
+            f"ADD COLUMN IF NOT EXISTS {column_name} {postgres_sql}"
+        )
 
 
 def migrate_user_notification_preferences():

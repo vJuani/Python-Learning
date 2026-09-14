@@ -1902,6 +1902,23 @@ body.is-auth-page .site-footer {
     right: -0.2rem;
 }
 
+.nav-notifications-link {
+    position: relative;
+    font-size: 1.05rem;
+    line-height: 1;
+    padding-inline: 0.55rem;
+}
+
+.nav-notifications-link .badge-pending {
+    position: absolute;
+    top: -0.35rem;
+    right: -0.2rem;
+}
+
+.nav-notifications-link--mobile-header {
+    display: none;
+}
+
 .diff-row td:last-child {
     color: var(--accent-ink);
     font-weight: 600;
@@ -2393,6 +2410,17 @@ a.dashboard-quick-card:hover {
 
     .header-tools-desktop {
         display: none;
+    }
+
+    .nav-notifications-link--mobile-header {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        min-width: 2.5rem;
+        min-height: 2.5rem;
+        padding-inline: 0.4rem;
+        font-size: 1.15rem;
     }
 
     .header-account {

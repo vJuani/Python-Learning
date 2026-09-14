@@ -32,6 +32,8 @@ PUSH_PREF_BY_TYPE = {
     "visit_reminder": "push_visit_reminders",
     "operation_side_ready_to_invoice": "push_invoice_ready",
     "property_match": "push_property_matches",
+    "task_overdue": "push_task_overdue",
+    "office_announcement": "push_office_announcements",
 }
 
 PREFS_SAVE_MATCH_NOTIFY_LIMIT = 5

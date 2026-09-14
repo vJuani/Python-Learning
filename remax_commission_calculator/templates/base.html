@@ -287,6 +287,18 @@
             </nav>
 
             <div class="header-zone header-zone-right">
+                {% if current_user and not is_guest_session() and (can_manage_users() or is_agent()) %}
+                <a
+                    href="{{ url_for('notifications_list') }}"
+                    class="nav-link nav-notifications-link nav-notifications-link--mobile-header"
+                    aria-label="{{ t('nav_notifications') }}"
+                >
+                    🔔
+                    {% if unread_notifications %}
+                    <span class="badge badge-pending">{{ unread_notifications }}</span>
+                    {% endif %}
+                </a>
+                {% endif %}
                 <button
                     type="button"
                     class="nav-toggle"

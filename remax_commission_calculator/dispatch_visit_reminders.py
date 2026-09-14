@@ -70,6 +70,35 @@ def main(argv=None):
                 )
             total += len(visits)
         print(f"{total} visit(s) in the 30-minute window.")
+
+        overdue_total = 0
+        now_iso = to_utc_iso(instant)
+        for organization in get_organizations():
+            if not organization.get("is_active", True):
+                continue
+            overdue = [
+                task
+                for task in list_agent_tasks(
+                    organization["id"],
+                    statuses=(STATUS_PENDING,),
+                    due_to=now_iso,
+                    limit=200,
+                )
+                if (task.get("task_type") or "") != "visit"
+            ]
+            if not overdue:
+                continue
+            print(
+                f"Organization {organization['id']} "
+                f"({organization['name']}): {len(overdue)} overdue task(s)"
+            )
+            for task in overdue:
+                print(
+                    f"  - overdue task={task.get('id')} "
+                    f"agent={task.get('agent_id')} due_at={task.get('due_at')}"
+                )
+            overdue_total += len(overdue)
+        print(f"{overdue_total} overdue pending task(s).")
         return 0
 
     results = dispatch_due_visit_reminders_all()
@@ -78,6 +107,16 @@ def main(argv=None):
     print(
         f"{dispatched} reminder(s) dispatched "
         f"from {candidates} visit(s) in window."
+    )
+
+    from modules.task_overdue import dispatch_overdue_tasks_all
+
+    overdue = dispatch_overdue_tasks_all()
+    overdue_sent = sum(item.get("dispatched") or 0 for item in overdue)
+    overdue_candidates = sum(item.get("candidates") or 0 for item in overdue)
+    print(
+        f"{overdue_sent} overdue task reminder(s) dispatched "
+        f"from {overdue_candidates} pending overdue task(s)."
     )
     return 0
 

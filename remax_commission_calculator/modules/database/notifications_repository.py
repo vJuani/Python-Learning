@@ -138,6 +138,66 @@ def _find_id_by_event_key(cursor, organization_id, event_key, user_id=None):
     return row[0] if row is not None else None
 
 
+NOTIFICATION_SELECT = """
+    SELECT
+        id,
+        organization_id,
+        user_id,
+        kind,
+        entity_type,
+        entity_id,
+        payload_json,
+        is_read,
+        actor_user_id,
+        created_at,
+        read_at
+    FROM notifications
+"""
+
+
+def _row_to_notification(row):
+    if row is None:
+        return None
+    payload = {}
+    if row[6]:
+        try:
+            payload = json.loads(row[6])
+        except json.JSONDecodeError:
+            payload = {}
+    return {
+        "id": row[0],
+        "organization_id": row[1],
+        "user_id": row[2],
+        "kind": row[3],
+        "entity_type": row[4],
+        "entity_id": row[5],
+        "payload": payload,
+        "is_read": bool(row[7]),
+        "actor_user_id": row[8],
+        "created_at": row[9],
+        "read_at": row[10] if len(row) > 10 else None,
+    }
+
+
+def get_notification(notification_id, user_id, organization_id):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            NOTIFICATION_SELECT
+            + """
+            WHERE id = ?
+                AND user_id = ?
+                AND organization_id = ?
+            """,
+            (notification_id, user_id, organization_id),
+        )
+        return _row_to_notification(cursor.fetchone())
+    finally:
+        connection.close()
+
+
 def list_notifications(user_id, organization_id, limit=50):
     organization_id = require_organization_id(
         organization_id
@@ -147,20 +207,8 @@ def list_notifications(user_id, organization_id, limit=50):
     cursor = connection.cursor()
 
     cursor.execute(
-        """
-        SELECT
-            id,
-            organization_id,
-            user_id,
-            kind,
-            entity_type,
-            entity_id,
-            payload_json,
-            is_read,
-            actor_user_id,
-            created_at,
-            read_at
-        FROM notifications
+        NOTIFICATION_SELECT
+        + """
         WHERE user_id = ?
             AND organization_id = ?
         ORDER BY id DESC
@@ -176,32 +224,7 @@ def list_notifications(user_id, organization_id, limit=50):
     rows = cursor.fetchall()
     connection.close()
 
-    notifications = []
-
-    for row in rows:
-        payload = {}
-
-        if row[6]:
-            try:
-                payload = json.loads(row[6])
-            except json.JSONDecodeError:
-                payload = {}
-
-        notifications.append({
-            "id": row[0],
-            "organization_id": row[1],
-            "user_id": row[2],
-            "kind": row[3],
-            "entity_type": row[4],
-            "entity_id": row[5],
-            "payload": payload,
-            "is_read": bool(row[7]),
-            "actor_user_id": row[8],
-            "created_at": row[9],
-            "read_at": row[10] if len(row) > 10 else None
-        })
-
-    return notifications
+    return [_row_to_notification(row) for row in rows]
 
 
 def count_unread_notifications(user_id, organization_id):

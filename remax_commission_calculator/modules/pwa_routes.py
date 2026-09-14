@@ -18,10 +18,6 @@ from modules.database.user_notification_preferences_repository import (
     get_user_notification_preferences,
     save_user_notification_preferences,
 )
-from modules.database.user_notification_preferences_repository import (
-    get_user_notification_preferences,
-    save_user_notification_preferences,
-)
 from modules.web_push import WebPushError, require_vapid, send_test_push
 
 
@@ -121,6 +117,8 @@ def register_pwa_routes(app, helpers):
                 push_visit_reminders=request.form.get("push_visit_reminders") == "1",
                 push_invoice_ready=request.form.get("push_invoice_ready") == "1",
                 push_property_matches=request.form.get("push_property_matches") == "1",
+                push_task_overdue=request.form.get("push_task_overdue") == "1",
+                push_office_announcements=request.form.get("push_office_announcements") == "1",
             )
             flash_i18n("settings_push_prefs_saved", "success")
             return redirect(url_for("settings_notifications"))

@@ -1,5 +1,16 @@
 {% if can_manage_users() or is_agent() %}
 <div class="main-nav-meta header-nav-meta">
+    {% set notifications_active = request.endpoint in ('notifications_list', 'notifications_mark_read', 'notifications_mark_all_read', 'notifications_open') %}
+    <a
+        href="{{ url_for('notifications_list') }}"
+        class="nav-link nav-notifications-link{% if notifications_active %} active{% endif %}"
+        aria-label="{{ t('nav_notifications') }}"
+    >
+        🔔
+        {% if unread_notifications %}
+        <span class="badge badge-pending">{{ unread_notifications }}</span>
+        {% endif %}
+    </a>
     {% if pending_center_enabled %}
     {% set bell_active = request.endpoint == 'pendings_center' %}
     <details class="nav-dropdown nav-bell-dropdown{% if bell_active %} is-active{% endif %}">
@@ -44,7 +55,12 @@
                 href="{{ url_for('notifications_list') }}"
                 class="nav-dropdown-item"
                 role="menuitem"
-            >{{ t('nav_notifications') }}</a>
+            >
+                {{ t('nav_notifications') }}
+                {% if unread_notifications %}
+                <span class="badge badge-pending">{{ unread_notifications }}</span>
+                {% endif %}
+            </a>
             {% if can_manage_users() %}
             <a
                 href="{{ url_for('approvals_list') }}"

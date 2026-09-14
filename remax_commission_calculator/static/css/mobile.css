@@ -169,9 +169,18 @@
 
     .main-nav-tools-mobile .header-nav-meta,
     .main-nav-tools-mobile .nav-dropdown,
-    .main-nav-tools-mobile .nav-bell-link {
+    .main-nav-tools-mobile .nav-bell-link,
+    .main-nav-tools-mobile .nav-notifications-link {
         justify-content: flex-start;
         text-align: left;
+    }
+
+    .nav-notifications-link--mobile-header {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2.5rem;
+        min-height: 2.5rem;
     }
 
     .main-nav-tools-mobile .nav-dropdown-toggle {

@@ -62,6 +62,7 @@ from modules.database import (
     list_pending_approval_items,
     mark_all_notifications_read,
     mark_notification_read,
+    get_notification,
     update_property_status,
     PROPERTY_STATUS_PENDING,
     PROPERTY_STATUS_APPROVED,
@@ -547,7 +548,9 @@ def inject_auth_helpers():
                 user["id"],
                 user["organization_id"]
             )
-            if user is not None and is_agent(user)
+            if user is not None
+            and not is_guest_session()
+            and user.get("organization_id")
             else 0
         )
     }
@@ -2961,16 +2964,57 @@ def notifications_list():
         abort(403)
 
     organization_id = require_user_organization()
+    language = get_current_language()
+
+    from modules.notification_center import decorate_notification_feed
 
     notifications = list_notifications(
         user["id"],
         organization_id
     )
+    groups = decorate_notification_feed(
+        notifications,
+        organization_id,
+        language,
+    )
 
     return render_template(
         "notifications/list.html",
-        notifications=notifications
+        notifications=notifications,
+        notification_groups=groups,
+        unread_count=count_unread_notifications(
+            user["id"],
+            organization_id,
+        ),
     )
+
+
+@app.route("/notifications/<int:notification_id>/open")
+@login_required
+def notifications_open(notification_id):
+    user = get_current_user()
+
+    if user is None:
+        abort(403)
+
+    organization_id = require_user_organization()
+    item = get_notification(
+        notification_id,
+        user["id"],
+        organization_id,
+    )
+    if item is None:
+        abort(404)
+
+    mark_notification_read(
+        notification_id,
+        user["id"],
+        organization_id,
+    )
+    from modules.notification_center import notification_open_url
+    from modules.web_push import safe_internal_url
+
+    return redirect(safe_internal_url(notification_open_url(item)))
 
 
 @app.route(
@@ -8488,6 +8532,17 @@ register_property_sync_routes(
 )
 
 register_pwa_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+    },
+)
+
+from modules.office_announcement_routes import register_office_announcement_routes
+
+register_office_announcement_routes(
     app,
     helpers={
         "require_user_organization": require_user_organization,

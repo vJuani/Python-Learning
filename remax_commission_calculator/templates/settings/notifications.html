@@ -15,6 +15,11 @@
         <h2>{{ t('pwa_push_title') }}</h2>
         <p>{{ t('pwa_push_subtitle') }}</p>
     </div>
+    {% if is_admin() %}
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('settings_office_notifications') }}">{{ t('office_announcement_title') }}</a>
+    </div>
+    {% endif %}
 </section>
 
 <article class="integration-card">
@@ -34,6 +39,14 @@
         <label class="push-pref-form__row">
             <input type="checkbox" name="push_property_matches" value="1"{% if push_prefs.push_property_matches %} checked{% endif %}>
             {{ t('settings_push_property_matches') }}
+        </label>
+        <label class="push-pref-form__row">
+            <input type="checkbox" name="push_task_overdue" value="1"{% if push_prefs.push_task_overdue %} checked{% endif %}>
+            {{ t('settings_push_task_overdue') }}
+        </label>
+        <label class="push-pref-form__row">
+            <input type="checkbox" name="push_office_announcements" value="1"{% if push_prefs.push_office_announcements %} checked{% endif %}>
+            {{ t('settings_push_office_announcements') }}
         </label>
         <div class="integration-card__actions">
             <button type="submit" class="btn btn-primary">{{ t('save') }}</button>
