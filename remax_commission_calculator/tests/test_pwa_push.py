@@ -2,18 +2,30 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+# Throwaway PKCS8 P-256 key used only in tests. Not a production VAPID secret.
+TEST_VAPID_PRIVATE_PEM = (
+    "-----BEGIN PRIVATE KEY-----\n"
+    "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgYy/9nRYvDz0vEk0u\n"
+    "hHXPX2yFZHGT77ubToDeVI5+/9qhRANCAASx80u/hlCDL7+axnBccKcbXLbQmlJp\n"
+    "gc4Q/3Q0t3i35TSzvPjxxIK2kMGkMg5t5YZ4G47FgiylSCcCEDz/Zsln\n"
+    "-----END PRIVATE KEY-----"
+)
+TEST_VAPID_PRIVATE_B64 = base64.b64encode(TEST_VAPID_PRIVATE_PEM.encode("utf-8")).decode("ascii")
+
 _TEST_TMP = tempfile.TemporaryDirectory()
 os.environ["DATABASE_PATH"] = str(Path(_TEST_TMP.name) / "test_pwa_push.db")
 os.environ["PRIVATE_UPLOAD_ROOT"] = str(Path(_TEST_TMP.name) / "uploads")
 os.environ.pop("DATABASE_URL", None)
 os.environ["WEB_PUSH_VAPID_PUBLIC_KEY"] = "BDummyPublicKeyForTestsOnly-abcdefghijklmnopqrstuvwxyz012345"
-os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = "dummy-private-key-not-used-because-webpush-is-mocked"
+os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = TEST_VAPID_PRIVATE_PEM
+os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY_B64", None)
 os.environ["WEB_PUSH_VAPID_SUBJECT"] = "mailto:admin@jrhone.com"
 
 from pywebpush import WebPushException
@@ -26,7 +38,7 @@ from modules.database.push_subscriptions_repository import (
     list_active_push_subscriptions,
     upsert_push_subscription,
 )
-from modules.web_push import TEST_BODY, TEST_TITLE, TEST_URL
+from modules.web_push import TEST_BODY, TEST_TITLE, TEST_URL, WebPushError, vapid_private_key
 from web_app import app
 
 
@@ -225,6 +237,7 @@ class PwaPushTests(unittest.TestCase):
         self._login()
         public = os.environ.pop("WEB_PUSH_VAPID_PUBLIC_KEY", None)
         private = os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY", None)
+        private_b64 = os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY_B64", None)
         try:
             page = self.client.get("/api/push/public-key")
             self.assertEqual(page.status_code, 503)
@@ -234,6 +247,8 @@ class PwaPushTests(unittest.TestCase):
                 os.environ["WEB_PUSH_VAPID_PUBLIC_KEY"] = public
             if private is not None:
                 os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = private
+            if private_b64 is not None:
+                os.environ["WEB_PUSH_VAPID_PRIVATE_KEY_B64"] = private_b64
 
     def test_10_service_worker_skips_private_routes(self):
         body = (BASE_DIR / "static" / "service-worker.js").read_text(encoding="utf-8")
@@ -252,6 +267,78 @@ class PwaPushTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn("Activar notificaciones".encode("utf-8"), page.data)
         self.assertIn("Enviar notificación de prueba".encode("utf-8"), page.data)
+
+    def test_11_invalid_vapid_private_key_is_clear_error(self):
+        self._login()
+        private = os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY", None)
+        private_b64 = os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY_B64", None)
+        os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = "not-a-pem"
+        try:
+            page = self.client.get("/api/push/public-key")
+            body = page.get_data(as_text=True)
+            self.assertEqual(page.status_code, 503)
+            self.assertEqual(page.get_json()["error"], "pwa_push_err_invalid_vapid_private_key")
+            self.assertNotIn("Could not deserialize", body)
+            self.assertNotIn("Traceback", body)
+        finally:
+            if private is not None:
+                os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = private
+            else:
+                os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY", None)
+            if private_b64 is not None:
+                os.environ["WEB_PUSH_VAPID_PRIVATE_KEY_B64"] = private_b64
+            else:
+                os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY_B64", None)
+
+
+class VapidPrivateKeyLoaderTests(unittest.TestCase):
+    def setUp(self):
+        self._saved = {
+            "WEB_PUSH_VAPID_PUBLIC_KEY": os.environ.get("WEB_PUSH_VAPID_PUBLIC_KEY"),
+            "WEB_PUSH_VAPID_PRIVATE_KEY": os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY"),
+            "WEB_PUSH_VAPID_PRIVATE_KEY_B64": os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY_B64"),
+        }
+
+    def tearDown(self):
+        for name, value in self._saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+    def _clear_private_sources(self):
+        os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY", None)
+        os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY_B64", None)
+
+    def test_valid_private_key_b64(self):
+        self._clear_private_sources()
+        os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = "not-a-pem"
+        os.environ["WEB_PUSH_VAPID_PRIVATE_KEY_B64"] = TEST_VAPID_PRIVATE_B64
+        self.assertEqual(vapid_private_key(), TEST_VAPID_PRIVATE_PEM)
+
+    def test_valid_multiline_pem(self):
+        self._clear_private_sources()
+        os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = TEST_VAPID_PRIVATE_PEM
+        self.assertEqual(vapid_private_key(), TEST_VAPID_PRIVATE_PEM)
+
+    def test_escaped_newlines_pem(self):
+        self._clear_private_sources()
+        os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = TEST_VAPID_PRIVATE_PEM.replace("\n", "\\n")
+        self.assertEqual(vapid_private_key(), TEST_VAPID_PRIVATE_PEM)
+
+    def test_invalid_private_key(self):
+        self._clear_private_sources()
+        os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = "dummy-private-key-not-a-pem"
+        with self.assertRaises(WebPushError) as raised:
+            vapid_private_key()
+        self.assertEqual(raised.exception.message_key, "pwa_push_err_invalid_vapid_private_key")
+        self.assertEqual(raised.exception.status_code, 503)
+
+        self._clear_private_sources()
+        os.environ["WEB_PUSH_VAPID_PRIVATE_KEY_B64"] = "%%%not-valid-base64%%%"
+        with self.assertRaises(WebPushError) as raised:
+            vapid_private_key()
+        self.assertEqual(raised.exception.message_key, "pwa_push_err_invalid_vapid_private_key")
 
 
 if __name__ == "__main__":
