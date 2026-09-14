@@ -25,6 +25,11 @@ uploads/
 # Local email/dev scratch files
 tmp_email_inbox.txt
 
+# Local VAPID key material — never commit
+vapid_private.txt
+vapid_public.txt
+vapid_*.txt
+
 # Local data and generated exports
 *.json
 *.csv

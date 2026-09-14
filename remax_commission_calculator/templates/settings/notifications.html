@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page {% endblock %}
+
+{% block title %}{{ t('pwa_push_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="agenda-hero__kicker">{{ t('settings_title') }}</p>
+        <h2>{{ t('pwa_push_title') }}</h2>
+        <p>{{ t('pwa_push_subtitle') }}</p>
+    </div>
+</section>
+
+<article class="integration-card">
+    <header class="integration-card__head">
+        <h3>{{ t('pwa_install_title') }}</h3>
+        <span id="pwa-install-status" class="integration-card__badge integration-card__badge--muted"
+              data-installed="{{ t('pwa_install_status_installed') }}"
+              data-not-installed="{{ t('pwa_install_status_not_installed') }}">{{ t('pwa_install_status_not_installed') }}</span>
+    </header>
+    <p>{{ t('pwa_install_help') }}</p>
+    <p id="pwa-ios-install-help" class="integration-card__meta" hidden>{{ t('pwa_install_ios_help') }}</p>
+    <div class="integration-card__actions">
+        <button type="button" id="pwa-install-button" class="btn btn-primary" hidden>{{ t('pwa_install_button') }}</button>
+        <a class="btn btn-secondary" href="{{ url_for('settings_integrations') }}">{{ t('settings_integrations_title') }}</a>
+    </div>
+</article>
+
+<article
+    class="integration-card"
+    id="pwa-push-panel"
+    data-label-enabled="{{ t('pwa_push_status_enabled') }}"
+    data-label-disabled="{{ t('pwa_push_status_disabled') }}"
+    data-label-blocked="{{ t('pwa_push_status_blocked') }}"
+    data-label-unsupported="{{ t('pwa_push_status_unsupported') }}"
+    data-label-ios="{{ t('pwa_push_ios_help') }}"
+    data-label-ready="{{ t('pwa_push_ready') }}"
+    data-label-test-sent="{{ t('pwa_push_test_sent') }}"
+>
+    <header class="integration-card__head">
+        <h3>{{ t('pwa_push_title') }}</h3>
+        <span id="pwa-push-status" class="integration-card__badge integration-card__badge--muted">{{ t('pwa_push_status_disabled') }}</span>
+    </header>
+    <p>{{ t('pwa_push_help') }}</p>
+    <p id="pwa-ios-push-help" class="integration-card__meta" hidden>{{ t('pwa_push_ios_help') }}</p>
+    <p id="pwa-push-message" class="integration-card__meta"></p>
+    <div class="integration-card__actions">
+        <button type="button" id="pwa-push-enable" class="btn btn-primary">{{ t('pwa_push_enable') }}</button>
+        <button type="button" id="pwa-push-test" class="btn btn-secondary" hidden>{{ t('pwa_push_test') }}</button>
+    </div>
+</article>
+{% endblock %}

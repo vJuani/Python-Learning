@@ -8,6 +8,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    send_from_directory,
     session,
     url_for
 )
@@ -357,6 +358,7 @@ from modules.integrations import (
 )
 
 from modules.config import (
+    BASE_DIR,
     apply_config,
     get_host,
     get_port,
@@ -403,7 +405,8 @@ PUBLIC_ENDPOINTS = (
     "terms",
     "guest_access",
     "set_language",
-    "static"
+    "static",
+    "web_manifest",
 )
 
 
@@ -415,6 +418,11 @@ def require_authenticated_user():
         return None
 
     if request.endpoint in PUBLIC_ENDPOINTS:
+        return None
+
+    if request.path.startswith("/api/push/"):
+        if get_current_user() is None and get_guest_access() is None:
+            return jsonify({"ok": False, "error": "login_required"}), 401
         return None
 
     # Agent-only ACM / Marketing: never leak the tool via a login redirect.
@@ -813,46 +821,11 @@ def inject_product_branding():
 
 @app.get("/manifest.webmanifest")
 def web_manifest():
-    from modules.branding import (
-        get_brand_asset_version,
-        get_brand_name,
-        get_logo_icon_rel,
+    return send_from_directory(
+        BASE_DIR / "static",
+        "manifest.webmanifest",
+        mimetype="application/manifest+json",
     )
-
-    icon_rel = get_logo_icon_rel()
-    icon_v = get_brand_asset_version(icon_rel)
-
-    return {
-        "name": get_brand_name(),
-        "short_name": get_brand_name(),
-        "description": "JRH One — Gestión. Control. Resultados.",
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#f2f4f8",
-        "theme_color": "#0a1633",
-        "icons": [
-            {
-                "src": url_for(
-                    "static",
-                    filename=icon_rel,
-                    v=icon_v,
-                ),
-                "sizes": "192x192",
-                "type": "image/png",
-                "purpose": "any",
-            },
-            {
-                "src": url_for(
-                    "static",
-                    filename=icon_rel,
-                    v=icon_v,
-                ),
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "any maskable",
-            },
-        ],
-    }
 
 
 @app.template_filter("money")
@@ -8484,8 +8457,18 @@ register_route_routes(
 )
 
 from modules.property_sync_routes import register_property_sync_routes
+from modules.pwa_routes import register_pwa_routes
 
 register_property_sync_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+    },
+)
+
+register_pwa_routes(
     app,
     helpers={
         "require_user_organization": require_user_organization,

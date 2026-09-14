@@ -1930,6 +1930,12 @@ def create_postgres_schema():
 
         migrate_marketing_postgres(cursor)
 
+        from .push_subscriptions_migration import (
+            migrate_push_subscriptions_postgres,
+        )
+
+        migrate_push_subscriptions_postgres(cursor)
+
         for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),
             ("snapshot_parking", "INTEGER"),

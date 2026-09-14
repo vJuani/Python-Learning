@@ -17,6 +17,21 @@
     </div>
 </section>
 
+<article class="integration-card">
+    <header class="integration-card__head">
+        <h3>{{ t('pwa_install_title') }}</h3>
+        <span id="pwa-install-status" class="integration-card__badge integration-card__badge--muted"
+              data-installed="{{ t('pwa_install_status_installed') }}"
+              data-not-installed="{{ t('pwa_install_status_not_installed') }}">{{ t('pwa_install_status_not_installed') }}</span>
+    </header>
+    <p>{{ t('pwa_install_help') }}</p>
+    <p id="pwa-ios-install-help" class="integration-card__meta" hidden>{{ t('pwa_install_ios_help') }}</p>
+    <div class="integration-card__actions">
+        <button type="button" id="pwa-install-button" class="btn btn-primary" hidden>{{ t('pwa_install_button') }}</button>
+        <a class="btn btn-secondary" href="{{ url_for('settings_notifications') }}">{{ t('pwa_push_open') }}</a>
+    </div>
+</article>
+
 {% if contact_channels %}
 <article class="integration-card">
     <header class="integration-card__head">

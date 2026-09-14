@@ -3911,6 +3911,10 @@ def migrate_schema(create_backup=True):
 
     migrate_marketing_sqlite()
 
+    from .push_subscriptions_migration import migrate_push_subscriptions_sqlite
+
+    migrate_push_subscriptions_sqlite()
+
     return backup_path
 
 

@@ -22,6 +22,7 @@
 .integration-card {
     max-width: 42rem;
     padding: 18px 16px;
+    margin-top: 16px;
     border: 1px solid var(--border, #d5dde8);
     border-radius: 16px;
     background: var(--surface, #fff);
@@ -59,6 +60,10 @@
 .integration-card__email,
 .integration-card__meta {
     margin: 8px 0 0;
+}
+
+.integration-card__meta.is-error {
+    color: #b42318;
 }
 
 .integration-card__actions {

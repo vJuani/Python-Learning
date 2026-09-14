@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="application-name" content="{{ brand_name }}">
-    <meta name="apple-mobile-web-app-title" content="{{ brand_name }}">
-    <meta name="description" content="{{ brand_name }} — {{ t('app_slogan') }}">
+    <meta name="application-name" content="JRH One">
+    <meta name="apple-mobile-web-app-title" content="JRH One">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="JRH One — {{ t('app_slogan') }}">
+    <meta name="theme-color" content="#0A1633">
     <meta name="theme-color" content="#0a1633" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
     <script>
@@ -65,11 +69,11 @@
     <link
         rel="icon"
         type="image/png"
-        href="{{ brand_logo_icon_url }}"
+        href="{{ url_for('static', filename='icons/icon-192.png') }}"
     >
     <link
         rel="apple-touch-icon"
-        href="{{ brand_logo_icon_url }}"
+        href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}"
     >
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-one.css') }}">
@@ -561,6 +565,7 @@
     {% include "_mobile_bottom_nav.html" %}
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pwa.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>
