@@ -22,8 +22,6 @@ TEST_TITLE = "JRH One"
 TEST_BODY = "Las notificaciones ya están activadas."
 TEST_URL = "/"
 GONE_STATUSES = {404, 410}
-PEM_BEGIN_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
-PEM_END_RE = re.compile(r"-----END [A-Z0-9 ]*PRIVATE KEY-----")
 VAPID_KEY_ERROR_MARKERS = (
     "could not deserialize",
     "header too long",
@@ -54,37 +52,85 @@ def _private_key_source_present():
     )
 
 
-def _is_pem_private_key(pem):
-    begin = PEM_BEGIN_RE.search(pem or "")
-    end = PEM_END_RE.search(pem or "")
-    return begin is not None and end is not None and begin.start() < end.start()
+def _looks_like_pem(material):
+    return b"-----BEGIN" in (material or b"")
 
 
-def _decode_private_key_b64(raw_b64):
-    compact = "".join(raw_b64.split())
-    try:
-        decoded = base64.b64decode(compact, validate=False)
-        return decoded.decode("utf-8")
-    except (ValueError, UnicodeDecodeError, binascii.Error):
-        raise WebPushError("pwa_push_err_invalid_vapid_private_key", 503)
-
-
-def _normalize_private_key_pem(pem):
-    return (pem or "").replace("\\n", "\n").replace("\r\n", "\n").strip()
-
-
-def vapid_private_key():
+def _resolve_private_key_bytes():
     raw_b64 = _env_value("WEB_PUSH_VAPID_PRIVATE_KEY_B64")
     if raw_b64:
-        pem = _decode_private_key_b64(raw_b64)
-    else:
-        pem = os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY") or ""
-    pem = _normalize_private_key_pem(pem)
-    if not pem:
-        return ""
-    if not _is_pem_private_key(pem):
+        compact = "".join(raw_b64.split())
+        try:
+            return base64.b64decode(compact, validate=False)
+        except (ValueError, binascii.Error):
+            raise WebPushError("pwa_push_err_invalid_vapid_private_key", 503)
+    raw = (os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY") or "").strip()
+    raw = raw.replace("\\n", "\n").replace("\r\n", "\n")
+    if not raw:
+        return b""
+    return raw.encode("utf-8")
+
+
+def _decode_application_server_key(value):
+    compact = "".join(str(value or "").split())
+    if not compact:
+        return b""
+    compact = compact.replace("+", "-").replace("/", "_")
+    padded = compact + "=" * ((4 - len(compact) % 4) % 4)
+    try:
+        return base64.urlsafe_b64decode(padded.encode("ascii"))
+    except (ValueError, binascii.Error, UnicodeEncodeError):
+        return None
+
+
+def _derived_application_server_key(vapid):
+    from cryptography.hazmat.primitives import serialization
+    from py_vapid.utils import b64urlencode
+
+    raw = vapid.public_key.public_bytes(
+        serialization.Encoding.X962,
+        serialization.PublicFormat.UncompressedPoint,
+    )
+    return b64urlencode(raw)
+
+
+def _validate_vapid_instance(vapid):
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    try:
+        private_key = vapid.private_key
+        curve = getattr(private_key, "curve", None)
+    except Exception:
+        logger.warning("web_push invalid vapid private key")
         raise WebPushError("pwa_push_err_invalid_vapid_private_key", 503)
-    return pem
+    if not isinstance(curve, ec.SECP256R1):
+        logger.warning("web_push invalid vapid private key")
+        raise WebPushError("pwa_push_err_invalid_vapid_private_key", 503)
+    expected = _decode_application_server_key(vapid_public_key())
+    derived = _decode_application_server_key(_derived_application_server_key(vapid))
+    if expected is None or derived is None or expected != derived:
+        logger.warning("web_push vapid public key mismatch")
+        raise WebPushError("pwa_push_err_vapid_key_mismatch", 503)
+
+
+def load_vapid_private_key():
+    from py_vapid import Vapid
+
+    material = _resolve_private_key_bytes()
+    if not material:
+        raise WebPushError("pwa_push_err_invalid_vapid_private_key", 503)
+    try:
+        if _looks_like_pem(material):
+            vapid = Vapid.from_pem(material.strip())
+        else:
+            vapid = Vapid.from_string(material.decode("utf-8").strip())
+    except WebPushError:
+        raise
+    except Exception:
+        logger.warning("web_push invalid vapid private key")
+        raise WebPushError("pwa_push_err_invalid_vapid_private_key", 503)
+    _validate_vapid_instance(vapid)
+    return vapid
 
 
 def vapid_subject():
@@ -100,7 +146,7 @@ def require_vapid():
         raise WebPushError("pwa_push_err_vapid_missing", 503)
     return {
         "public_key": vapid_public_key(),
-        "private_key": vapid_private_key(),
+        "vapid": load_vapid_private_key(),
         "subject": vapid_subject(),
     }
 
@@ -157,7 +203,7 @@ def send_web_push(subscription, payload):
                 },
             },
             data=json.dumps(body),
-            vapid_private_key=keys["private_key"],
+            vapid_private_key=keys["vapid"],
             vapid_claims={"sub": keys["subject"]},
         )
     except WebPushException as error:

@@ -18,17 +18,28 @@ TEST_VAPID_PRIVATE_PEM = (
     "-----END PRIVATE KEY-----"
 )
 TEST_VAPID_PRIVATE_B64 = base64.b64encode(TEST_VAPID_PRIVATE_PEM.encode("utf-8")).decode("ascii")
+TEST_VAPID_PUBLIC_KEY = (
+    "BLHzS7-GUIMvv5rGcFxwpxtcttCaUmmBzhD_dDS3eLflNLO8-PHEgraQwaQyDm3lhngbjsWCLKVIJwIQPP9myWc"
+)
+TEST_VAPID_PRIVATE_DER = (
+    "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgYy_9nRYvDz0vEk0uhHXPX2yFZHGT77ubToDeVI5-_9qhRANCAASx80u_hlCDL7-axnBccKcbXLbQmlJpgc4Q_3Q0t3i35TSzvPjxxIK2kMGkMg5t5YZ4G47FgiylSCcCEDz_Zsln"
+)
+TEST_VAPID_OTHER_PUBLIC = (
+    "BIGp9-U3y5GUaCyntr4GjyOV4Shf_HgMGq8JVsHHxbJzGeVeJ9W7fLJvZowY8io9wmWsQ8B_CZS_ALjX29tiYSo"
+)
 
 _TEST_TMP = tempfile.TemporaryDirectory()
 os.environ["DATABASE_PATH"] = str(Path(_TEST_TMP.name) / "test_pwa_push.db")
 os.environ["PRIVATE_UPLOAD_ROOT"] = str(Path(_TEST_TMP.name) / "uploads")
 os.environ.pop("DATABASE_URL", None)
-os.environ["WEB_PUSH_VAPID_PUBLIC_KEY"] = "BDummyPublicKeyForTestsOnly-abcdefghijklmnopqrstuvwxyz012345"
+os.environ["WEB_PUSH_VAPID_PUBLIC_KEY"] = TEST_VAPID_PUBLIC_KEY
 os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = TEST_VAPID_PRIVATE_PEM
 os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY_B64", None)
 os.environ["WEB_PUSH_VAPID_SUBJECT"] = "mailto:admin@jrhone.com"
 
 from pywebpush import WebPushException
+from py_vapid import Vapid
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from modules.auth import ROLE_ADMIN, ROLE_AGENT, hash_password
 from modules.config import BASE_DIR, apply_config
@@ -38,7 +49,7 @@ from modules.database.push_subscriptions_repository import (
     list_active_push_subscriptions,
     upsert_push_subscription,
 )
-from modules.web_push import TEST_BODY, TEST_TITLE, TEST_URL, WebPushError, vapid_private_key
+from modules.web_push import TEST_BODY, TEST_TITLE, TEST_URL, WebPushError, load_vapid_private_key
 from web_app import app
 
 
@@ -195,6 +206,8 @@ class PwaPushTests(unittest.TestCase):
 
         def _capture(subscription_info, **kwargs):
             seen.append(subscription_info["endpoint"])
+            self.assertIsInstance(kwargs.get("vapid_private_key"), Vapid)
+            self.assertNotIsInstance(kwargs.get("vapid_private_key"), str)
             return None
 
         with patch("pywebpush.webpush", side_effect=_capture):
@@ -298,6 +311,7 @@ class VapidPrivateKeyLoaderTests(unittest.TestCase):
             "WEB_PUSH_VAPID_PRIVATE_KEY": os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY"),
             "WEB_PUSH_VAPID_PRIVATE_KEY_B64": os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY_B64"),
         }
+        os.environ["WEB_PUSH_VAPID_PUBLIC_KEY"] = TEST_VAPID_PUBLIC_KEY
 
     def tearDown(self):
         for name, value in self._saved.items():
@@ -310,34 +324,52 @@ class VapidPrivateKeyLoaderTests(unittest.TestCase):
         os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY", None)
         os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY_B64", None)
 
+    def _assert_valid_vapid(self, vapid):
+        self.assertIsInstance(vapid, Vapid)
+        self.assertIsInstance(vapid.private_key.curve, ec.SECP256R1)
+
     def test_valid_private_key_b64(self):
         self._clear_private_sources()
         os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = "not-a-pem"
         os.environ["WEB_PUSH_VAPID_PRIVATE_KEY_B64"] = TEST_VAPID_PRIVATE_B64
-        self.assertEqual(vapid_private_key(), TEST_VAPID_PRIVATE_PEM)
+        self._assert_valid_vapid(load_vapid_private_key())
 
     def test_valid_multiline_pem(self):
         self._clear_private_sources()
         os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = TEST_VAPID_PRIVATE_PEM
-        self.assertEqual(vapid_private_key(), TEST_VAPID_PRIVATE_PEM)
+        self._assert_valid_vapid(load_vapid_private_key())
 
     def test_escaped_newlines_pem(self):
         self._clear_private_sources()
         os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = TEST_VAPID_PRIVATE_PEM.replace("\n", "\\n")
-        self.assertEqual(vapid_private_key(), TEST_VAPID_PRIVATE_PEM)
+        self._assert_valid_vapid(load_vapid_private_key())
+
+    def test_valid_der_base64url(self):
+        self._clear_private_sources()
+        os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = TEST_VAPID_PRIVATE_DER
+        self._assert_valid_vapid(load_vapid_private_key())
+
+    def test_private_public_mismatch(self):
+        self._clear_private_sources()
+        os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = TEST_VAPID_PRIVATE_PEM
+        os.environ["WEB_PUSH_VAPID_PUBLIC_KEY"] = TEST_VAPID_OTHER_PUBLIC
+        with self.assertRaises(WebPushError) as raised:
+            load_vapid_private_key()
+        self.assertEqual(raised.exception.message_key, "pwa_push_err_vapid_key_mismatch")
+        self.assertEqual(raised.exception.status_code, 503)
 
     def test_invalid_private_key(self):
         self._clear_private_sources()
         os.environ["WEB_PUSH_VAPID_PRIVATE_KEY"] = "dummy-private-key-not-a-pem"
         with self.assertRaises(WebPushError) as raised:
-            vapid_private_key()
+            load_vapid_private_key()
         self.assertEqual(raised.exception.message_key, "pwa_push_err_invalid_vapid_private_key")
         self.assertEqual(raised.exception.status_code, 503)
 
         self._clear_private_sources()
         os.environ["WEB_PUSH_VAPID_PRIVATE_KEY_B64"] = "%%%not-valid-base64%%%"
         with self.assertRaises(WebPushError) as raised:
-            vapid_private_key()
+            load_vapid_private_key()
         self.assertEqual(raised.exception.message_key, "pwa_push_err_invalid_vapid_private_key")
 
 
