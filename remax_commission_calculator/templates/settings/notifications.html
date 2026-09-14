@@ -19,6 +19,30 @@
 
 <article class="integration-card">
     <header class="integration-card__head">
+        <h3>{{ t('settings_push_categories_title') }}</h3>
+    </header>
+    <p>{{ t('settings_push_categories_help') }}</p>
+    <form method="post" class="push-pref-form">
+        <label class="push-pref-form__row">
+            <input type="checkbox" name="push_visit_reminders" value="1"{% if push_prefs.push_visit_reminders %} checked{% endif %}>
+            {{ t('settings_push_visit_reminders') }}
+        </label>
+        <label class="push-pref-form__row">
+            <input type="checkbox" name="push_invoice_ready" value="1"{% if push_prefs.push_invoice_ready %} checked{% endif %}>
+            {{ t('settings_push_invoice_ready') }}
+        </label>
+        <label class="push-pref-form__row">
+            <input type="checkbox" name="push_property_matches" value="1"{% if push_prefs.push_property_matches %} checked{% endif %}>
+            {{ t('settings_push_property_matches') }}
+        </label>
+        <div class="integration-card__actions">
+            <button type="submit" class="btn btn-primary">{{ t('save') }}</button>
+        </div>
+    </form>
+</article>
+
+<article class="integration-card">
+    <header class="integration-card__head">
         <h3>{{ t('pwa_install_title') }}</h3>
         <span id="pwa-install-status" class="integration-card__badge integration-card__badge--muted"
               data-installed="{{ t('pwa_install_status_installed') }}"

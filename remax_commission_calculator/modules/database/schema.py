@@ -3915,6 +3915,12 @@ def migrate_schema(create_backup=True):
 
     migrate_push_subscriptions_sqlite()
 
+    from .user_notification_preferences_migration import (
+        migrate_user_notification_preferences_sqlite,
+    )
+
+    migrate_user_notification_preferences_sqlite()
+
     return backup_path
 
 

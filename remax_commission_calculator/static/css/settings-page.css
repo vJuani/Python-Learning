@@ -73,6 +73,18 @@
     margin-top: 14px;
 }
 
+.push-pref-form {
+    margin-top: 8px;
+}
+
+.push-pref-form__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+    font-size: 0.95rem;
+}
+
 .agent-contact-form {
     display: grid;
     gap: 8px;

@@ -102,19 +102,37 @@ def create_notification(
         connection.close()
 
 
-def _find_id_by_event_key(cursor, organization_id, event_key):
-    cursor.execute(
-        """
+def find_notification_by_event_key(organization_id, event_key, user_id=None):
+    """Return the notification id for an org-scoped dedupe key, if any."""
+    if not event_key:
+        return None
+
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        return _find_id_by_event_key(
+            cursor,
+            organization_id,
+            event_key,
+            user_id=user_id,
+        )
+    finally:
+        connection.close()
+
+
+def _find_id_by_event_key(cursor, organization_id, event_key, user_id=None):
+    sql = """
         SELECT id
         FROM notifications
         WHERE organization_id = ?
             AND event_key = ?
-        """,
-        (
-            organization_id,
-            event_key
-        )
-    )
+    """
+    params = [organization_id, event_key]
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
+    cursor.execute(sql, params)
     row = cursor.fetchone()
 
     return row[0] if row is not None else None

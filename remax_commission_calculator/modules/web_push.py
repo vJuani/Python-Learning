@@ -160,6 +160,13 @@ def safe_internal_url(raw):
     return value
 
 
+def is_safe_internal_url(raw):
+    value = " ".join(str(raw or "").split())
+    if not value:
+        return True
+    return value == safe_internal_url(value)
+
+
 def test_payload():
     return {
         "title": TEST_TITLE,
@@ -228,17 +235,21 @@ def send_web_push(subscription, payload):
     return {"ok": True, "status": 201, "gone": False}
 
 
-def send_test_push(organization_id, user_id):
-    require_vapid()
-    subscriptions = list_active_push_subscriptions(organization_id, user_id)
-    if not subscriptions:
-        raise WebPushError("pwa_push_err_no_subscription", 400)
-    payload = test_payload()
+def _deliver_pushes(subscriptions, organization_id, payload):
     sent = 0
     failed = 0
     deactivated = 0
     for item in subscriptions:
-        result = send_web_push(item, payload)
+        try:
+            result = send_web_push(item, payload)
+        except Exception:
+            logger.warning(
+                "web_push failed subscription=%s",
+                item.get("id"),
+                exc_info=True,
+            )
+            failed += 1
+            continue
         if result["ok"]:
             mark_push_subscription_success(item["id"], organization_id)
             sent += 1
@@ -251,11 +262,66 @@ def send_test_push(organization_id, user_id):
         if result["gone"]:
             deactivated += 1
         failed += 1
-    if sent == 0 and failed:
-        raise WebPushError("pwa_push_err_send_failed", 502)
     return {
+        "push_targets_count": len(subscriptions),
+        "sent_count": sent,
+        "failed_count": failed,
+        "deactivated_count": deactivated,
         "sent": sent,
         "failed": failed,
         "deactivated": deactivated,
+    }
+
+
+def send_user_pushes(organization_id, user_id, payload):
+    """Best-effort fan-out to every active device. Never raises."""
+    subscriptions = list_active_push_subscriptions(organization_id, user_id)
+    empty = {
+        "push_targets_count": len(subscriptions),
+        "sent_count": 0,
+        "failed_count": 0,
+        "deactivated_count": 0,
+        "sent": 0,
+        "failed": 0,
+        "deactivated": 0,
+    }
+    if not subscriptions:
+        return empty
+    if not vapid_configured():
+        logger.warning(
+            "notification_dispatch vapid not configured organization_id=%s user_id=%s",
+            organization_id,
+            user_id,
+        )
+        empty["failed_count"] = len(subscriptions)
+        empty["failed"] = len(subscriptions)
+        return empty
+    try:
+        return _deliver_pushes(subscriptions, organization_id, payload)
+    except Exception:
+        logger.warning(
+            "notification_dispatch push fanout failed organization_id=%s user_id=%s",
+            organization_id,
+            user_id,
+            exc_info=True,
+        )
+        empty["failed_count"] = len(subscriptions)
+        empty["failed"] = len(subscriptions)
+        return empty
+
+
+def send_test_push(organization_id, user_id):
+    require_vapid()
+    subscriptions = list_active_push_subscriptions(organization_id, user_id)
+    if not subscriptions:
+        raise WebPushError("pwa_push_err_no_subscription", 400)
+    payload = test_payload()
+    stats = _deliver_pushes(subscriptions, organization_id, payload)
+    if stats["sent_count"] == 0 and stats["failed_count"]:
+        raise WebPushError("pwa_push_err_send_failed", 502)
+    return {
+        "sent": stats["sent_count"],
+        "failed": stats["failed_count"],
+        "deactivated": stats["deactivated_count"],
         "payload": payload,
     }

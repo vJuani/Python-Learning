@@ -14,14 +14,168 @@ noise that could drift from the source of truth.
 import logging
 
 from modules.database.notifications_repository import (
-    create_notification
+    create_notification,
+    find_notification_by_event_key,
+)
+from modules.database.user_notification_preferences_repository import (
+    is_push_category_enabled,
 )
 from modules.database.users_repository import (
     get_user_by_agent_id
 )
+from modules.web_push import is_safe_internal_url, safe_internal_url, send_user_pushes
 
 
 logger = logging.getLogger(__name__)
+
+PUSH_PREF_BY_TYPE = {
+    "visit_reminder": "push_visit_reminders",
+    "operation_side_ready_to_invoice": "push_invoice_ready",
+    "property_match": "push_property_matches",
+}
+
+PREFS_SAVE_MATCH_NOTIFY_LIMIT = 5
+
+
+def send_user_notification(
+    user_id,
+    organization_id,
+    notification_type,
+    title,
+    body,
+    url,
+    metadata=None,
+    *,
+    event_key=None,
+    entity_type=None,
+    entity_id=None,
+    actor_user_id=None,
+):
+    """
+    Persist an in-app notification and fan out Web Push.
+
+    ``event_key`` is the idempotency token. A repeated key never creates
+    a second row and never sends a second push. Push failures never
+    raise to the caller.
+    """
+    empty_push = {
+        "push_targets_count": 0,
+        "sent_count": 0,
+        "failed_count": 0,
+        "deactivated_count": 0,
+    }
+    if user_id is None or organization_id is None:
+        return {
+            "notification_id": None,
+            "created": False,
+            "pushed": False,
+            "push": empty_push,
+        }
+
+    if event_key:
+        existing = find_notification_by_event_key(
+            organization_id,
+            event_key,
+            user_id=user_id,
+        )
+        if existing is not None:
+            logger.info(
+                "notification_dispatch type=%s organization_id=%s user_id=%s "
+                "event_key=%s push_targets_count=0 sent_count=0 failed_count=0 "
+                "deduped=1",
+                notification_type,
+                organization_id,
+                user_id,
+                event_key,
+            )
+            return {
+                "notification_id": existing,
+                "created": False,
+                "pushed": False,
+                "push": empty_push,
+            }
+
+    internal_url = safe_internal_url(url)
+    if url and not is_safe_internal_url(url):
+        logger.warning(
+            "notification_dispatch rejected_external_url type=%s "
+            "organization_id=%s user_id=%s event_key=%s",
+            notification_type,
+            organization_id,
+            user_id,
+            event_key,
+        )
+
+    payload = dict(metadata or {})
+    payload["title"] = title
+    payload["body"] = body
+    payload["url"] = internal_url
+    payload["event_key"] = event_key
+
+    notification_id = create_notification(
+        organization_id,
+        user_id,
+        notification_type,
+        entity_type or "notification",
+        entity_id if entity_id is not None else 0,
+        payload=payload,
+        actor_user_id=actor_user_id,
+        event_key=event_key,
+    )
+    created = True
+
+    pref_key = PUSH_PREF_BY_TYPE.get(notification_type)
+    push_allowed = (
+        created
+        and (
+            pref_key is None
+            or is_push_category_enabled(organization_id, user_id, pref_key)
+        )
+    )
+    push_stats = dict(empty_push)
+    if push_allowed:
+        try:
+            push_stats = send_user_pushes(
+                organization_id,
+                user_id,
+                {
+                    "title": title,
+                    "body": body,
+                    "url": internal_url,
+                    "tag": event_key or notification_type,
+                    "icon": "/static/icons/icon-192.png",
+                    "badge": "/static/icons/icon-192.png",
+                },
+            )
+        except Exception:
+            logger.warning(
+                "notification_dispatch push failed type=%s organization_id=%s "
+                "user_id=%s event_key=%s",
+                notification_type,
+                organization_id,
+                user_id,
+                event_key,
+                exc_info=True,
+            )
+            push_stats = dict(empty_push)
+
+    logger.info(
+        "notification_dispatch type=%s organization_id=%s user_id=%s "
+        "event_key=%s push_targets_count=%s sent_count=%s failed_count=%s",
+        notification_type,
+        organization_id,
+        user_id,
+        event_key,
+        push_stats.get("push_targets_count", 0),
+        push_stats.get("sent_count", 0),
+        push_stats.get("failed_count", 0),
+    )
+    return {
+        "notification_id": notification_id,
+        "created": created,
+        "pushed": bool(push_allowed and (push_stats.get("sent_count") or 0)),
+        "push": push_stats,
+    }
 
 
 def notify_agent_for_property(
@@ -129,16 +283,45 @@ def notify_operation_side_ready_to_invoice(
     operation_id,
     payload=None,
     actor_user_id=None,
+    event_key=None,
 ):
-    """Notify agent that a buyer/seller side is ready to bill."""
-    return notify_agent_for_operation(
+    """Notify agent that a buyer/seller side is ready to bill (in-app + push)."""
+    user = get_user_by_agent_id(agent_id, organization_id)
+    if user is None:
+        return None
+
+    payload = dict(payload or {})
+    property_name = (payload.get("property") or "").strip() or "—"
+    from modules.database.organization_settings_repository import (
+        get_organization_settings,
+    )
+    from modules.i18n import translate
+
+    language = (get_organization_settings(organization_id) or {}).get(
+        "default_language"
+    ) or "es"
+    title = translate("push_invoice_ready_title", language)
+    body = translate(
+        "push_invoice_ready_body",
+        language,
+        property=property_name,
+    )
+    url = "/billing?tab=pending"
+    key = event_key or f"operation_{operation_id}_ready_to_invoice"
+    result = send_user_notification(
+        user["id"],
         organization_id,
-        agent_id,
         "operation_side_ready_to_invoice",
-        operation_id,
-        payload=payload or {},
+        title,
+        body,
+        url,
+        metadata=payload,
+        event_key=key,
+        entity_type="operation",
+        entity_id=operation_id,
         actor_user_id=actor_user_id,
     )
+    return result.get("notification_id") if result else None
 
 
 def notify_user(
@@ -328,3 +511,161 @@ def emit_recurring_charge_generated(
         },
         event_key=f"recurring_charge_generated:{movement_id}",
     )
+
+
+def property_match_event_key(contact_id, match_row):
+    property_id = (
+        match_row.get("internal_property_id")
+        or match_row.get("property_id")
+    )
+    external_id = match_row.get("external_listing_id")
+    if property_id is not None:
+        return f"need_{int(contact_id)}_property_{int(property_id)}_match"
+    if external_id is not None:
+        return f"need_{int(contact_id)}_external_{int(external_id)}_match"
+    return None
+
+
+def _contact_display_name(contact):
+    name = (
+        (contact.get("first_name") or "").strip()
+        or (contact.get("name") or "").strip()
+    )
+    if name:
+        return name.split()[0]
+    return "—"
+
+
+def _org_language(organization_id):
+    from modules.database.organization_settings_repository import (
+        get_organization_settings,
+    )
+
+    settings = get_organization_settings(organization_id) or {}
+    return settings.get("default_language") or "es"
+
+
+def notify_new_property_matches_for_contact(
+    organization_id,
+    contact,
+    *,
+    listings=None,
+    limit=None,
+):
+    """Notify the contact owner about newly ranked matches above threshold."""
+    if not contact or contact.get("id") is None:
+        return []
+
+    contact_org = contact.get("organization_id")
+    if contact_org is not None and int(contact_org) != int(organization_id):
+        return []
+
+    agent_id = contact.get("agent_id")
+    user = get_user_by_agent_id(agent_id, organization_id) if agent_id else None
+    if user is None:
+        return []
+
+    from modules.property_match import HIDDEN_SCORE, rank_contact_properties
+
+    try:
+        ranked = rank_contact_properties(
+            organization_id,
+            contact,
+            agent_id=agent_id,
+            listings=listings,
+        )
+    except Exception:
+        logger.warning(
+            "property_match_rank_failed organization_id=%s contact_id=%s",
+            organization_id,
+            contact.get("id"),
+            exc_info=True,
+        )
+        return []
+
+    language = _org_language(organization_id)
+    from modules.i18n import translate
+
+    title = translate("push_property_match_title", language)
+    name = _contact_display_name(contact)
+    body = translate("push_property_match_body", language, name=name)
+    url = f"/contacts/{int(contact['id'])}/property-matches"
+    sent = []
+    for match_row in ranked:
+        if limit is not None and len(sent) >= int(limit):
+            break
+        if match_row.get("hidden") or match_row.get("discarded"):
+            continue
+        if int(match_row.get("score") or 0) < HIDDEN_SCORE:
+            continue
+        event_key = property_match_event_key(contact["id"], match_row)
+        if not event_key:
+            continue
+        result = send_user_notification(
+            user["id"],
+            organization_id,
+            "property_match",
+            title,
+            body,
+            url,
+            metadata={
+                "contact_id": contact["id"],
+                "contact_name": name,
+                "property_id": match_row.get("internal_property_id")
+                or match_row.get("property_id"),
+                "external_listing_id": match_row.get("external_listing_id"),
+                "score": match_row.get("score"),
+            },
+            event_key=event_key,
+            entity_type="contact",
+            entity_id=contact["id"],
+        )
+        if result.get("created"):
+            sent.append(result)
+    return sent
+
+
+def notify_new_property_matches_for_property(organization_id, property_row):
+    """After a listing is approved, notify agents whose needs now match it."""
+    if not property_row:
+        return []
+    if int(property_row.get("organization_id") or 0) != int(organization_id):
+        return []
+    from modules.database.properties_repository import STATUS_APPROVED
+
+    if (property_row.get("status") or STATUS_APPROVED) != STATUS_APPROVED:
+        return []
+
+    agent_id = property_row.get("agent_id")
+    if agent_id is None:
+        return []
+
+    from modules.database.contacts_repository import list_contacts
+    from modules.listings_normalize import (
+        attach_listing_identity,
+        listing_from_property,
+    )
+
+    listing = attach_listing_identity(
+        listing_from_property(property_row),
+        property_id=property_row.get("id"),
+    )
+    listing["status"] = property_row.get("status")
+    listing["organization_id"] = organization_id
+    listing["agent_id"] = agent_id
+
+    results = []
+    for contact in list_contacts(
+        organization_id,
+        agent_id=agent_id,
+        limit=500,
+    ):
+        results.extend(
+            notify_new_property_matches_for_contact(
+                organization_id,
+                contact,
+                listings=[listing],
+                limit=1,
+            )
+        )
+    return results

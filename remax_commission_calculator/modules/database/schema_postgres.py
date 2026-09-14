@@ -1936,6 +1936,12 @@ def create_postgres_schema():
 
         migrate_push_subscriptions_postgres(cursor)
 
+        from .user_notification_preferences_migration import (
+            migrate_user_notification_preferences_postgres,
+        )
+
+        migrate_user_notification_preferences_postgres(cursor)
+
         for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),
             ("snapshot_parking", "INTEGER"),

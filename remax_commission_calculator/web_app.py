@@ -2735,6 +2735,25 @@ def approvals_property_approve(property_id):
             actor_user_id=current_user["id"]
         )
 
+    try:
+        from modules.notifications_service import (
+            notify_new_property_matches_for_property,
+        )
+
+        approved = get_property_record(property_id, organization_id)
+        if approved is not None:
+            notify_new_property_matches_for_property(
+                organization_id,
+                approved,
+            )
+    except Exception:
+        app.logger.warning(
+            "property_match_notify_failed organization_id=%s property_id=%s",
+            organization_id,
+            property_id,
+            exc_info=True,
+        )
+
     flash_i18n("property_approved", "success")
 
     return redirect(url_for("approvals_list"))

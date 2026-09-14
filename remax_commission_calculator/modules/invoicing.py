@@ -7,6 +7,7 @@ and never mutates operations.was_invoiced.
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date, datetime
 
@@ -71,6 +72,8 @@ from modules.notifications_service import (
     notify_operation_side_ready_to_invoice,
 )
 
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_DESCRIPTION = "Asesoramiento Integral de Gestión"
 DEFAULT_SERVICE_TYPE = "services"
@@ -666,6 +669,15 @@ def set_party_invoice_amount(
         if rate_value <= 0:
             raise InvoicingError("invoice_err_exchange_invalid")
 
+    existing_party = get_operation_party(
+        organization_id,
+        operation_id,
+        side,
+    )
+    already_enabled = bool(
+        existing_party and existing_party.get("billing_enabled")
+    )
+
     party = set_operation_party_invoice_amount(
         organization_id,
         operation_id,
@@ -697,20 +709,31 @@ def set_party_invoice_amount(
             by_user_id=user_id,
         )
 
-    if notify:
-        notify_operation_side_ready_to_invoice(
-            organization_id,
-            operation["agent_db_id"],
-            operation_id,
-            payload={
-                "operation_id": operation.get("id"),
-                "property": operation.get("property"),
-                "side": side,
-                "amount": amount_value,
-                "currency": currency_value,
-            },
-            actor_user_id=user_id,
-        )
+    if notify and enable_billing and not already_enabled:
+        try:
+            notify_operation_side_ready_to_invoice(
+                organization_id,
+                operation["agent_db_id"],
+                operation_id,
+                payload={
+                    "operation_id": operation.get("id"),
+                    "property": operation.get("property"),
+                    "side": side,
+                    "amount": amount_value,
+                    "currency": currency_value,
+                },
+                actor_user_id=user_id,
+                event_key=(
+                    f"operation_{operation_id}_{side}_ready_to_invoice"
+                ),
+            )
+        except Exception:
+            logger.warning(
+                "invoice_ready_notify_failed organization_id=%s operation_id=%s",
+                organization_id,
+                operation_id,
+                exc_info=True,
+            )
 
     return party
 

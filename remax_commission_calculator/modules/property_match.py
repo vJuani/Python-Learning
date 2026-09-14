@@ -573,11 +573,32 @@ def persist_search_preferences(organization_id, contact, incoming):
         contact.get("preferences_json") or contact.get("preferences"),
         incoming,
     )
-    return update_contact(
+    updated = update_contact(
         contact["id"],
         organization_id,
         preferences_json=json.dumps(merged, ensure_ascii=False) if merged else "",
     )
+    try:
+        from modules.notifications_service import (
+            PREFS_SAVE_MATCH_NOTIFY_LIMIT,
+            notify_new_property_matches_for_contact,
+        )
+
+        notify_new_property_matches_for_contact(
+            organization_id,
+            updated or contact,
+            limit=PREFS_SAVE_MATCH_NOTIFY_LIMIT,
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "property_match_notify_failed organization_id=%s contact_id=%s",
+            organization_id,
+            contact.get("id") if contact else None,
+            exc_info=True,
+        )
+    return updated
 
 
 def _feature_label(key, language):

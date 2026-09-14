@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from functools import wraps
 
-from flask import jsonify, render_template, request
+from flask import jsonify, redirect, render_template, request, url_for
 
 from modules.auth import get_current_user, is_guest_session, login_required
 from modules.database.push_subscriptions_repository import (
@@ -13,6 +13,14 @@ from modules.database.push_subscriptions_repository import (
     deactivate_push_subscription,
     list_active_push_subscriptions,
     upsert_push_subscription,
+)
+from modules.database.user_notification_preferences_repository import (
+    get_user_notification_preferences,
+    save_user_notification_preferences,
+)
+from modules.database.user_notification_preferences_repository import (
+    get_user_notification_preferences,
+    save_user_notification_preferences,
 )
 from modules.web_push import WebPushError, require_vapid, send_test_push
 
@@ -85,6 +93,7 @@ def _subscription_from_payload(payload):
 
 def register_pwa_routes(app, helpers):
     require_user_organization = helpers["require_user_organization"]
+    flash_i18n = helpers["flash_i18n"]
 
     @app.after_request
     def _pwa_static_headers(response):
@@ -98,17 +107,29 @@ def register_pwa_routes(app, helpers):
             response.headers["Content-Type"] = "application/manifest+json"
         return response
 
-    @app.route("/settings/notifications")
+    @app.route("/settings/notifications", methods=["GET", "POST"])
     @login_required
     def settings_notifications():
         user = get_current_user()
         if user is None or is_guest_session():
             return ("Forbidden", 403)
         organization_id = require_user_organization()
+        if request.method == "POST":
+            save_user_notification_preferences(
+                organization_id,
+                user["id"],
+                push_visit_reminders=request.form.get("push_visit_reminders") == "1",
+                push_invoice_ready=request.form.get("push_invoice_ready") == "1",
+                push_property_matches=request.form.get("push_property_matches") == "1",
+            )
+            flash_i18n("settings_push_prefs_saved", "success")
+            return redirect(url_for("settings_notifications"))
         active = list_active_push_subscriptions(organization_id, user["id"])
+        prefs = get_user_notification_preferences(organization_id, user["id"])
         return render_template(
             "settings/notifications.html",
             push_has_active=bool(active),
+            push_prefs=prefs,
         )
 
     @app.get("/api/push/public-key")

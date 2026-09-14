@@ -26,8 +26,13 @@
         <article class="approval-item{% if not notification.is_read %} approval-item-unread{% endif %}">
             <div class="approval-item-main">
                 <h3>{{ t('notification_' ~ notification.kind) }}</h3>
-                {% if notification.payload.address %}
+                {% if notification.payload.body %}
+                <p class="approval-item-summary">{{ notification.payload.body }}</p>
+                {% elif notification.payload.address %}
                 <p class="approval-item-summary">{{ notification.payload.address }}</p>
+                {% endif %}
+                {% if notification.payload.url %}
+                <p class="field-help"><a href="{{ notification.payload.url }}">{{ notification.payload.url }}</a></p>
                 {% endif %}
                 {% if notification.payload.reason %}
                 <p class="field-help">{{ t('rejection_reason') }}: {{ notification.payload.reason }}</p>
