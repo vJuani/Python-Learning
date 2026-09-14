@@ -94,16 +94,6 @@
     }
   }
 
-  function pushStatusLabel(state, labels) {
-    if (state === "granted") {
-      return labels.enabled;
-    }
-    if (state === "denied") {
-      return labels.blocked;
-    }
-    return labels.disabled;
-  }
-
   function currentPermission() {
     if (!("Notification" in window)) {
       return "unsupported";
@@ -111,16 +101,48 @@
     return Notification.permission;
   }
 
+  function getCurrentPushSubscription() {
+    if (!("serviceWorker" in navigator) || !navigator.serviceWorker.ready) {
+      return Promise.resolve(null);
+    }
+    return navigator.serviceWorker.ready
+      .then(function (registration) {
+        if (!registration || !registration.pushManager) {
+          return null;
+        }
+        return registration.pushManager.getSubscription();
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function applyPushButtons(state) {
+    show("pwa-push-enable", state === "disabled");
+    show("pwa-push-test", state === "enabled");
+    show("pwa-push-disable", state === "enabled");
+    show("pwa-push-blocked-help", state === "blocked");
+    show("pwa-ios-push-help", isIos() && !isStandalone());
+  }
+
   function refreshPushStatus(labels) {
     var permission = currentPermission();
     if (permission === "unsupported") {
       setText("pwa-push-status", labels.unsupported);
-      return permission;
+      applyPushButtons("unsupported");
+      return Promise.resolve("unsupported");
     }
-    setText("pwa-push-status", pushStatusLabel(permission, labels));
-    show("pwa-push-test", permission === "granted");
-    show("pwa-ios-push-help", isIos() && !isStandalone());
-    return permission;
+    if (permission === "denied") {
+      setText("pwa-push-status", labels.blocked);
+      applyPushButtons("blocked");
+      return Promise.resolve("denied");
+    }
+    return getCurrentPushSubscription().then(function (subscription) {
+      var enabled = permission === "granted" && Boolean(subscription);
+      setText("pwa-push-status", enabled ? labels.enabled : labels.disabled);
+      applyPushButtons(enabled ? "enabled" : "disabled");
+      return enabled ? "granted" : permission;
+    });
   }
 
   function jsonFetch(url, options) {
@@ -151,7 +173,7 @@
     }
     var labels = {
       enabled: root.dataset.labelEnabled || "Habilitadas",
-      disabled: root.dataset.labelDisabled || "No habilitadas",
+      disabled: root.dataset.labelDisabled || "Desactivadas",
       blocked: root.dataset.labelBlocked || "Bloqueadas por el navegador",
       unsupported: root.dataset.labelUnsupported || "Este navegador no soporta notificaciones",
     };
@@ -159,6 +181,7 @@
 
     var enable = byId("pwa-push-enable");
     var test = byId("pwa-push-test");
+    var disable = byId("pwa-push-disable");
     var message = byId("pwa-push-message");
 
     function setMessage(text, isError) {
@@ -210,11 +233,42 @@
           })
           .then(function () {
             setMessage(root.dataset.labelReady || "");
-            refreshPushStatus(labels);
+            return refreshPushStatus(labels);
           })
           .catch(function (error) {
             var key = (error.payload && error.payload.error) || error.message;
             setMessage(root.dataset["err" + (key || "").replace(/_/g, "")] || key, true);
+          });
+      });
+    }
+
+    if (disable) {
+      disable.addEventListener("click", function () {
+        getCurrentPushSubscription()
+          .then(function (subscription) {
+            if (!subscription) {
+              return { ok: true };
+            }
+            var endpoint = subscription.endpoint;
+            return subscription.unsubscribe().then(function () {
+              return jsonFetch("/api/push/unsubscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ endpoint: endpoint }),
+              });
+            });
+          })
+          .then(function () {
+            return refreshPushStatus(labels);
+          })
+          .then(function () {
+            setMessage(root.dataset.labelDisabledOk || "");
+          })
+          .catch(function (error) {
+            var key = (error.payload && error.payload.error) || error.message;
+            setMessage(root.dataset.labelDisableFailed || key, true);
+            refreshPushStatus(labels);
           });
       });
     }

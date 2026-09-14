@@ -280,6 +280,12 @@ class PwaPushTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn("Activar notificaciones".encode("utf-8"), page.data)
         self.assertIn("Enviar notificación de prueba".encode("utf-8"), page.data)
+        self.assertIn("Desactivar notificaciones".encode("utf-8"), page.data)
+        self.assertIn("Desactivadas".encode("utf-8"), page.data)
+        self.assertIn("Habilitadas".encode("utf-8"), page.data)
+        self.assertIn("Bloqueadas por el navegador".encode("utf-8"), page.data)
+        self.assertIn(b"id=\"pwa-push-disable\"", page.data)
+        self.assertIn(b"id=\"pwa-push-blocked-help\"", page.data)
 
     def test_11_invalid_vapid_private_key_is_clear_error(self):
         self._login()
@@ -302,6 +308,110 @@ class PwaPushTests(unittest.TestCase):
                 os.environ["WEB_PUSH_VAPID_PRIVATE_KEY_B64"] = private_b64
             else:
                 os.environ.pop("WEB_PUSH_VAPID_PRIVATE_KEY_B64", None)
+
+    def test_12_unsubscribe_only_current_device(self):
+        upsert_push_subscription(
+            self.org,
+            self.user_id,
+            endpoint="https://push.example.com/phone",
+            p256dh="BValidP256dhKeyMaterialForTests0123456789abcd",
+            auth="ValidAuthSecret012345",
+        )
+        upsert_push_subscription(
+            self.org,
+            self.user_id,
+            endpoint="https://push.example.com/laptop",
+            p256dh="BValidP256dhKeyMaterialForTests0123456789abcd",
+            auth="ValidAuthSecret012345",
+        )
+        self._login()
+        page = self.client.post(
+            "/api/push/unsubscribe",
+            json={"endpoint": "https://push.example.com/phone", "user_id": self.other_user_id},
+        )
+        self.assertEqual(page.status_code, 200)
+        data = page.get_json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["deactivated"])
+        phone = get_push_subscription_by_endpoint("https://push.example.com/phone")
+        laptop = get_push_subscription_by_endpoint("https://push.example.com/laptop")
+        self.assertFalse(phone["is_active"])
+        self.assertTrue(laptop["is_active"])
+        active = {
+            item["endpoint"]
+            for item in list_active_push_subscriptions(self.org, self.user_id)
+        }
+        self.assertNotIn("https://push.example.com/phone", active)
+        self.assertIn("https://push.example.com/laptop", active)
+
+    def test_13_unsubscribe_is_idempotent(self):
+        self._login()
+        self.client.post("/api/push/subscribe", json=self._subscription_payload("once"))
+        first = self.client.post(
+            "/api/push/unsubscribe",
+            json={"endpoint": "https://push.example.com/device-once"},
+        )
+        second = self.client.post(
+            "/api/push/unsubscribe",
+            json={"endpoint": "https://push.example.com/device-once"},
+        )
+        missing = self.client.post("/api/push/unsubscribe", json={})
+        self.assertEqual(first.status_code, 200)
+        self.assertTrue(first.get_json()["ok"])
+        self.assertTrue(first.get_json()["deactivated"])
+        self.assertEqual(second.status_code, 200)
+        self.assertTrue(second.get_json()["ok"])
+        self.assertEqual(missing.status_code, 200)
+        self.assertTrue(missing.get_json()["ok"])
+        self.assertFalse(missing.get_json()["deactivated"])
+        row = get_push_subscription_by_endpoint("https://push.example.com/device-once")
+        self.assertFalse(row["is_active"])
+
+    def test_14_cannot_unsubscribe_another_users_subscription(self):
+        upsert_push_subscription(
+            self.org,
+            self.other_user_id,
+            endpoint="https://push.example.com/theirs-off",
+            p256dh="BValidP256dhKeyMaterialForTests0123456789abcd",
+            auth="ValidAuthSecret012345",
+        )
+        self._login()
+        page = self.client.post(
+            "/api/push/unsubscribe",
+            json={
+                "endpoint": "https://push.example.com/theirs-off",
+                "user_id": self.other_user_id,
+            },
+        )
+        self.assertEqual(page.status_code, 200)
+        self.assertTrue(page.get_json()["ok"])
+        self.assertFalse(page.get_json()["deactivated"])
+        row = get_push_subscription_by_endpoint("https://push.example.com/theirs-off")
+        self.assertEqual(row["user_id"], self.other_user_id)
+        self.assertTrue(row["is_active"])
+
+    def test_15_notifications_ui_toggles_by_state(self):
+        self._login()
+        page = self.client.get("/settings/notifications")
+        html = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Desactivadas", html)
+        self.assertIn("Habilitadas", html)
+        self.assertIn("Bloqueadas por el navegador", html)
+        self.assertRegex(html, r'id="pwa-push-enable"[^>]*>Activar notificaciones')
+        self.assertRegex(html, r'id="pwa-push-test"[^>]*hidden[^>]*>Enviar notificación de prueba')
+        self.assertRegex(html, r'id="pwa-push-disable"[^>]*hidden[^>]*>Desactivar notificaciones')
+        self.assertRegex(html, r'id="pwa-push-blocked-help"[^>]*hidden')
+        script = (BASE_DIR / "static" / "js" / "pwa.js").read_text(encoding="utf-8")
+        self.assertIn("pushManager.getSubscription()", script)
+        self.assertIn("subscription.unsubscribe()", script)
+        self.assertIn("/api/push/unsubscribe", script)
+        self.assertIn('show("pwa-push-enable", state === "disabled")', script)
+        self.assertIn('show("pwa-push-test", state === "enabled")', script)
+        self.assertIn('show("pwa-push-disable", state === "enabled")', script)
+        self.assertIn('show("pwa-push-blocked-help", state === "blocked")', script)
+        self.assertIn("labelDisabledOk", script)
+        self.assertNotIn("user_id", script.split("/api/push/unsubscribe")[1][:400])
 
 
 class VapidPrivateKeyLoaderTests(unittest.TestCase):

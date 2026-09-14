@@ -147,7 +147,7 @@ def register_pwa_routes(app, helpers):
         payload = request.get_json(silent=True) or {}
         endpoint = _clean(payload.get("endpoint"))
         if not endpoint:
-            return _json_error("pwa_push_err_invalid_subscription", 400)
+            return jsonify({"ok": True, "deactivated": False})
         changed = deactivate_push_subscription(organization_id, user["id"], endpoint)
         return jsonify({"ok": True, "deactivated": changed})
 

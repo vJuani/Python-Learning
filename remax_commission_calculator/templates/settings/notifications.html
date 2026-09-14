@@ -40,8 +40,11 @@
     data-label-blocked="{{ t('pwa_push_status_blocked') }}"
     data-label-unsupported="{{ t('pwa_push_status_unsupported') }}"
     data-label-ios="{{ t('pwa_push_ios_help') }}"
+    data-label-blocked-help="{{ t('pwa_push_blocked_help') }}"
     data-label-ready="{{ t('pwa_push_ready') }}"
+    data-label-disabled-ok="{{ t('pwa_push_disabled') }}"
     data-label-test-sent="{{ t('pwa_push_test_sent') }}"
+    data-label-disable-failed="{{ t('pwa_push_err_disable_failed') }}"
 >
     <header class="integration-card__head">
         <h3>{{ t('pwa_push_title') }}</h3>
@@ -49,10 +52,12 @@
     </header>
     <p>{{ t('pwa_push_help') }}</p>
     <p id="pwa-ios-push-help" class="integration-card__meta" hidden>{{ t('pwa_push_ios_help') }}</p>
+    <p id="pwa-push-blocked-help" class="integration-card__meta" hidden>{{ t('pwa_push_blocked_help') }}</p>
     <p id="pwa-push-message" class="integration-card__meta"></p>
     <div class="integration-card__actions">
         <button type="button" id="pwa-push-enable" class="btn btn-primary">{{ t('pwa_push_enable') }}</button>
         <button type="button" id="pwa-push-test" class="btn btn-secondary" hidden>{{ t('pwa_push_test') }}</button>
+        <button type="button" id="pwa-push-disable" class="btn btn-secondary" hidden>{{ t('pwa_push_disable') }}</button>
     </div>
 </article>
 {% endblock %}
