@@ -35,6 +35,11 @@ from modules.marketing_quality import validate_creative
 from modules.marketing_references import collect_reference_images
 from modules.marketing_renderer import FORMAT_SIZES
 from modules.marketing_request import MAX_BATCH_ITEMS
+from modules.marketing_overlay import (
+    overlay_enabled,
+    provider_references,
+    stamp_branding_overlay,
+)
 from modules.marketing_visual_spec import (
     AVOID,
     HIERARCHY,
@@ -210,6 +215,65 @@ def build_marketing_image_prompt(
             if photo_count > 1
             else "no invented secondary photo"
         )
+    photo_block = (
+        "Use the real listing hero photo as the large dominant image. "
+        f"Use {secondary}. Do not invent another property or rooms that are not in the references."
+        if photo_count
+        else (
+            "No listing photo is available. Keep a clean branded field with empty photo slots. "
+            "Do not invent a specific interior or facade for this home."
+        )
+    )
+    branding = branding_from_facts(facts)
+    avoid_items = list(AVOID)
+    if is_blue_template(chosen_style):
+        avoid_items = [
+            item
+            for item in avoid_items
+            if "navy frame" not in item and "PowerPoint navy" not in item
+        ]
+    else:
+        avoid_items = list(AVOID) + ["navy outer frame"]
+    avoid = ", ".join(avoid_items)
+    spec = composition_spec(chosen_style)
+    if spec["theme"] == "blue":
+        canvas_line = (
+            "Canvas: deep navy field. The navy IS the page, not a frame around a smaller card. "
+        )
+    else:
+        canvas_line = (
+            "Canvas: ivory or soft off-white paper. No navy or electric-blue slab wrapping "
+            "the whole piece. "
+        )
+    if overlay_enabled(options):
+        repair = ""
+        if repair_reasons:
+            repair = (
+                " REPAIR PASS: keep the photo layout inside the safe area. "
+                "Do not add text, logos, prices, or faces to fix the previous attempt."
+            )
+        return (
+            "Compose a premium real-estate PHOTO layout only. "
+            f"{canvas_line}"
+            "VISUAL-ONLY MODE: Do NOT render any text, numbers, logos, wordmarks, "
+            "prices, addresses, CTAs, agent names, faces, WhatsApp, Instagram, "
+            "or legal lines. A deterministic template will stamp those later. "
+            "Leave clean empty bands: the top ~110px for a later logo lockup, "
+            "and the lower third for later type, price, CTA, agent and legal. "
+            "LOCKED PHOTO LAYOUT: one large hero and two equal secondary photos "
+            "of the SAME listing. Do not invent another composition. "
+            f"{photo_block} "
+            f"{language_prompt_block(language)} "
+            f"Format: {FORMAT_BRIEFS.get(fmt, FORMAT_BRIEFS['story'])} "
+            f"{safe_area_prompt(fmt)} "
+            f"Style: {STYLE_BRIEFS[chosen_style]}. "
+            "Never write JRH One or Inmobiliaria Principal. "
+            f"User note: {note or 'none'}. "
+            f"Variant {variation_index}: change crop only, keep the same photos. "
+            f"Avoid: {avoid}. "
+            "No comic, no 3D mascot, no cluttered collage."
+            f"{repair}"
+        )
     contact_lines = []
     if copy.get("agent_whatsapp"):
         contact_lines.append(f"WhatsApp {copy['agent_whatsapp']}")
@@ -225,12 +289,8 @@ def build_marketing_image_prompt(
         copy.get("agent_instagram"),
         language=language,
     )
-    legal_name = copy.get("legal_broker_line") or branding_from_facts(facts).get(
-        "legal_broker_name"
-    )
-    legal_license = copy.get("legal_license_line") or branding_from_facts(facts).get(
-        "legal_broker_license"
-    )
+    legal_name = copy.get("legal_broker_line") or branding.get("legal_broker_name")
+    legal_license = copy.get("legal_license_line") or branding.get("legal_broker_license")
     agent_block = (
         "Integrate the REAL agent portrait as a compact professional cutout in the "
         "lower footer, with air around it. Official ficha/ACM photo, clean crop, "
@@ -250,16 +310,6 @@ def build_marketing_image_prompt(
         if show_price and (copy.get("price") or facts.get("price_label"))
         else "Do not show a price."
     )
-    photo_block = (
-        "Use the real listing hero photo as the large dominant image. "
-        f"Use {secondary}. Do not invent another property or rooms that are not in the references."
-        if photo_count
-        else (
-            "No listing photo is available. Create a premium branded office card with facts only. "
-            "Do not invent a specific interior or facade for this home."
-        )
-    )
-    branding = branding_from_facts(facts)
     logo_block = branding_prompt_block(
         branding,
         include_agent=want_agent,
@@ -279,28 +329,6 @@ def build_marketing_image_prompt(
         "cluttered icon walls, amateur flyer or PowerPoint look."
     )
     hierarchy = " → ".join(HIERARCHY)
-    avoid_items = list(AVOID)
-    if is_blue_template(chosen_style):
-        avoid_items = [
-            item
-            for item in avoid_items
-            if "navy frame" not in item and "PowerPoint navy" not in item
-        ]
-    else:
-        avoid_items = list(AVOID) + ["navy outer frame"]
-    avoid = ", ".join(avoid_items)
-    spec = composition_spec(chosen_style)
-    if spec["theme"] == "blue":
-        canvas_line = (
-            "Canvas: deep navy field with cream or white type. "
-            "Electric blue only as a slim CTA accent. The navy IS the page, "
-            "not a frame around a smaller card. Not PowerPoint, not heavy blocks. "
-        )
-    else:
-        canvas_line = (
-            "Canvas: ivory or soft off-white paper. No navy or electric-blue slab wrapping "
-            "the whole piece. Blue is accent only — CTA, thin rules, small icons. "
-        )
     layout_lock = (
         "LOCKED LAYOUT for every piece: office logo + full office name top-left, "
         "short kicker top-right, one large hero photo, two equal secondary photos, "
@@ -415,6 +443,10 @@ def generate_validated_marketing_image(
     size = size or FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
     options["format"] = fmt
     options["layout_engine"] = "openai_images"
+    options["include_agent"] = bool(include_agent)
+    options.setdefault("show_agent_photo", bool(include_agent))
+    if include_price is not None:
+        options["show_price"] = include_price
     language = resolve_creative_language(
         locale=language or options.get("language") or (context or {}).get("language"),
         request_text=request_text or options.get("request_text") or options.get("prompt") or "",
@@ -446,19 +478,44 @@ def generate_validated_marketing_image(
             repair_reasons=repair_reasons,
             language=language,
         )
+        send_refs = (
+            provider_references(references) if overlay_enabled(options) else references
+        )
         last_png = generate_one_marketing_image(
             prompt=last_prompt,
             size=size,
-            references=references,
+            references=send_refs,
             visual_direction=chosen_style,
         )
+        overlay_meta = {}
+        if overlay_enabled(options):
+            overlay_meta = stamp_branding_overlay(
+                last_png,
+                context=context,
+                art=art,
+                fmt=fmt,
+                options=options,
+                style=chosen_style,
+                language=language,
+            )
+            last_png = overlay_meta["png_bytes"]
+            options["pipeline_post_process"] = overlay_meta["post_process"]
+            options["pipeline_post_process_fn"] = overlay_meta["post_process_fn"]
+            options["agent_photo_composited"] = overlay_meta["agent_photo_composited"]
+            options["logo_stamped"] = overlay_meta["logo_stamped"]
+            options["agent_photo_sent_to_provider"] = any(
+                item.get("role") == "agent" for item in (send_refs or [])
+            )
         last_verdict = validate_creative(
             last_png,
             size=size,
             options=options,
             references=references,
-            agent_photo_sent=any(item.get("role") == "agent" for item in (references or [])),
-            agent_photo_composited=any(item.get("role") == "agent" for item in (references or [])),
+            agent_photo_sent=any(item.get("role") == "agent" for item in (send_refs or [])),
+            agent_photo_composited=bool(
+                overlay_meta.get("agent_photo_composited")
+                or any(item.get("role") == "agent" for item in (send_refs or []))
+            ),
             fmt=fmt,
         )
         last_verdict = dict(last_verdict)
@@ -525,6 +582,10 @@ def generate_validated_marketing_image(
             (last_verdict or {}).get("requires_legal_review")
         ),
         "publishable": not bool((last_verdict or {}).get("requires_legal_review")),
+        "agent_photo_composited": bool(options.get("agent_photo_composited")),
+        "logo_stamped": bool(options.get("logo_stamped")),
+        "post_process": options.get("pipeline_post_process"),
+        "post_process_fn": options.get("pipeline_post_process_fn"),
     }
 
 

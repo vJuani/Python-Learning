@@ -19,6 +19,7 @@ from modules.marketing_visual_spec import (
     is_blue_template,
     normalize_style,
     safe_rect,
+    theme_palette,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,10 +97,10 @@ def _api_size(width, height):
     return "1024x1024"
 
 
-def _fit_output(raw, size, fmt=None):
+def _fit_output(raw, size, fmt=None, fill=IVORY):
     image = Image.open(io.BytesIO(raw)).convert("RGB")
     fmt = fmt or format_from_size(size)
-    fitted = fit_contain_safe(image, size, fmt, fill=IVORY)
+    fitted = fit_contain_safe(image, size, fmt, fill=fill)
     out = io.BytesIO()
     fitted.save(out, format="PNG")
     return out.getvalue()
@@ -304,7 +305,8 @@ class OpenAIMarketingImageProvider(MarketingImageProvider):
             raw = self._edits(api_key, model, prompt, api_size, refs)
         else:
             raw = self._generate(api_key, model, prompt, api_size)
-        final = _fit_output(raw, size, format_from_size(size)) if apply_fit else raw
+        fill = theme_palette(visual_direction)["field"]
+        final = _fit_output(raw, size, format_from_size(size), fill=fill) if apply_fit else raw
         audit = {
             "provider": "openai",
             "model": model,

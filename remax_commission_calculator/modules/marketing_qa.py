@@ -21,6 +21,7 @@ from modules.marketing_image_provider import (
     log_marketing_pipeline,
     sha256_bytes,
 )
+from modules.marketing_overlay import overlay_enabled, provider_references
 from modules.marketing_references import collect_reference_images
 from modules.marketing_renderer import FORMAT_SIZES
 from modules.openai_image_service import (
@@ -85,6 +86,11 @@ def run_raw_story_qa(
         "request_text": "Una historia 9:16, pocas palabras, foto real del agente.",
     }
     packed = collect_reference_images(context, options)
+    references = (
+        provider_references(packed["references"])
+        if overlay_enabled(options)
+        else packed["references"]
+    )
     prompt = build_marketing_image_prompt(
         context,
         QA_FORMAT,
@@ -102,7 +108,7 @@ def run_raw_story_qa(
         prompt=prompt,
         size=size,
         visual_direction=None,
-        references=packed["references"],
+        references=references,
         apply_fit=False,
     )
     raw = audit["raw_bytes"]

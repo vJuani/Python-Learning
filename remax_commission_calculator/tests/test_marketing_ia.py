@@ -56,6 +56,7 @@ from jinja2 import Environment
 from modules.marketing_art_director import STORY_DIRECTIONS, plan_item
 from modules.marketing_copy import _sanitize_ai_copy, generate_marketing_copy, summarize_listing_copy
 from modules.marketing_composer import compose_marketing_image
+from modules.marketing_overlay import stamp_branding_overlay
 from modules.marketing_image_provider import MarketingImageError, MockMarketingImageProvider, get_marketing_image_model
 from modules.marketing_language import (
     MARKETING_COPY,
@@ -854,9 +855,11 @@ class MarketingIaTests(unittest.TestCase):
         self.assertTrue(options.get("include_agent"))
         self.assertTrue(options.get("show_agent_photo"))
         self.assertTrue(options.get("agent_photo_loaded"))
-        self.assertTrue(options.get("agent_photo_sent_to_provider"))
+        self.assertFalse(options.get("agent_photo_sent_to_provider"))
         self.assertTrue(options.get("agent_photo_composited"))
-        self.assertTrue((MockMarketingImageProvider.last_call or {}).get("agent_photo_sent_to_provider"))
+        self.assertFalse((MockMarketingImageProvider.last_call or {}).get("agent_photo_sent_to_provider"))
+        self.assertNotIn("agent", (MockMarketingImageProvider.last_call or {}).get("reference_roles") or [])
+        self.assertNotIn("logo", (MockMarketingImageProvider.last_call or {}).get("reference_roles") or [])
         self.assertGreaterEqual((MockMarketingImageProvider.last_call or {}).get("property_refs") or 0, 1)
         path = resolve_asset_file(result["assets"][0])
         self.assertTrue(path and path.is_file())
@@ -1126,34 +1129,32 @@ class MarketingIaTests(unittest.TestCase):
             style="premium",
             language="es",
         )
-        self.assertIn("finished premium real-estate", prompt)
-        self.assertIn("Santamarina", prompt)
-        self.assertIn("REAL agent portrait", prompt)
+        self.assertIn("VISUAL-ONLY MODE", prompt)
+        self.assertIn("Do NOT render any text", prompt)
         self.assertIn("STRICT SAFE AREA", prompt)
         self.assertIn("left 48px", prompt)
         self.assertIn("bottom 80px", prompt)
-        self.assertIn("vertical captions", prompt)
-        self.assertIn("ALLOWED COPY ONLY", prompt)
         self.assertIn("ivory or soft off-white", prompt)
         self.assertIn("navy outer frame", prompt)
         self.assertIn(STYLE_BRIEFS[EDITORIAL_PREMIUM][:24], prompt)
         self.assertIn("Spanish only", prompt)
-        self.assertIn("Contáctanos", prompt)
-        self.assertIn("DEPARTAMENTO EN VENTA", prompt)
-        self.assertIn("Victoria, PBA", prompt)
-        self.assertIn("Tu próximo hogar está acá", prompt)
-        self.assertNotIn("En Victoria", prompt)
-        self.assertNotIn("Discover Your Next Investment", prompt)
-        self.assertIn("RE/MAX Data House", prompt)
-        self.assertIn("Mauro Marvisi", prompt)
-        self.assertIn("CUCICBA", prompt)
-        self.assertIn("WhatsApp +54 9 11 3170 4333", prompt)
-        self.assertIn("Instagram @josebarreiro", prompt)
-        self.assertIn("Corredor Público Mauro Marvisi", prompt)
-        self.assertNotIn("phone '", prompt)
+        self.assertNotIn("WhatsApp +54 9 11 3170 4333", prompt)
+        self.assertNotIn("Place the REAL office logo", prompt)
         self.assertNotIn("remax-pin.png", prompt)
         self.assertNotIn("Place the JRH One", prompt)
         self.assertNotIn("Brand: JRH One", prompt)
+        copy = summarize_listing_copy(
+            context["facts"],
+            context.get("agent"),
+            language="es",
+        )
+        self.assertEqual(copy["headline"], "DEPARTAMENTO EN VENTA")
+        self.assertIn("Santamarina", copy["street"])
+        self.assertIn("Victoria", copy["zone"])
+        self.assertEqual(copy["cta"], "Contáctanos")
+        self.assertEqual(copy["agent_whatsapp"], "+54 9 11 3170 4333")
+        self.assertEqual(copy["agent_instagram"], "@josebarreiro")
+        self.assertIn("Mauro Marvisi", copy["legal_footer"])
         english = build_marketing_image_prompt(
             context,
             "story",
@@ -1163,7 +1164,7 @@ class MarketingIaTests(unittest.TestCase):
             language="en",
         )
         self.assertIn("English only", english)
-        self.assertIn(MARKETING_COPY["en"]["cta"], english)
+        self.assertIn("VISUAL-ONLY MODE", english)
         self.assertNotIn("Contáctanos", english)
         blue = build_marketing_image_prompt(
             context,
@@ -1173,10 +1174,10 @@ class MarketingIaTests(unittest.TestCase):
             style="blue",
             language="es",
         )
-        self.assertIn("LOCKED LAYOUT", blue)
+        self.assertIn("VISUAL-ONLY MODE", blue)
         self.assertIn("deep navy", blue)
         self.assertIn(STYLE_BRIEFS[BLUE_PREMIUM][:20], blue)
-        self.assertIn("WhatsApp +54 9 11 3170 4333", blue)
+        self.assertNotIn("WhatsApp +54 9 11 3170 4333", blue)
 
     def test_43b_outer_field_is_ivory_not_navy(self):
         inner = Image.new("RGB", (400, 700), (180, 180, 180))
@@ -1209,7 +1210,9 @@ class MarketingIaTests(unittest.TestCase):
         )
         self.assertEqual(len(one["assets"]), 1)
         self.assertEqual(one["assets"][0]["format"], "story")
-        self.assertTrue((one["assets"][0].get("options") or {}).get("agent_photo_sent_to_provider"))
+        self.assertFalse((one["assets"][0].get("options") or {}).get("agent_photo_sent_to_provider"))
+        self.assertTrue((one["assets"][0].get("options") or {}).get("agent_photo_composited"))
+        self.assertTrue((one["assets"][0].get("options") or {}).get("logo_stamped"))
         generated = generate_marketing_images(
             self._property(),
             formats=["story"],
@@ -1456,12 +1459,9 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("office-logo.png", names)
         self.assertNotIn("jrh-one-logo.png", names)
         prompt = build_marketing_image_prompt(context, "story", include_agent=True, language="es")
-        self.assertIn("CREATIVE BRAND LOCK", prompt)
-        self.assertIn("marca visible de la inmobiliaria activa", prompt)
-        self.assertIn("José Barreiro", prompt)
-        self.assertIn("WhatsApp +54 9 11 3170 4333", prompt)
-        self.assertIn("@josebarreiro", prompt)
-        self.assertIn("Mauro Marvisi", prompt)
+        self.assertIn("VISUAL-ONLY MODE", prompt)
+        self.assertNotIn("Place the REAL office logo", prompt)
+        self.assertNotIn("WhatsApp +54 9 11 3170 4333", prompt)
         copy = summarize_listing_copy(facts, context.get("agent"), language="es")
         self.assertEqual(copy["agent_whatsapp"], "+54 9 11 3170 4333")
         self.assertEqual(copy["agent_instagram"], "@josebarreiro")
@@ -1470,7 +1470,7 @@ class MarketingIaTests(unittest.TestCase):
         self.assertNotIn("agent_phone", copy)
         self.assertNotIn("JRH One wordmark", prompt)
         self.assertNotIn("branded as Inmobiliaria Principal", prompt)
-        self.assertIn("Never write Inmobiliaria Principal", prompt)
+        self.assertIn("Never write JRH One or Inmobiliaria Principal", prompt)
         self.assertIn("Mauro", copy["legal_footer"])
         flagged = validate_creative_branding(
             planned_copy={"headline": "JRH One Luxury", "cta": "Now"},
@@ -1490,6 +1490,60 @@ class MarketingIaTests(unittest.TestCase):
         options = batch["assets"][0].get("options") or {}
         self.assertEqual(options.get("creative_brand_name"), "RE/MAX Data House")
         self.assertFalse(options.get("requires_legal_review"))
+        self.assertEqual(options.get("pipeline_post_process"), "branding_overlay")
+        self.assertTrue(options.get("logo_stamped"))
+
+    def test_50_overlay_stamps_real_logo_and_facts(self):
+        context = build_property_marketing_context(self._property())
+        logo_path = _PRIVATE_ROOT / f"organizations/{self.org}/branding/qa-fixed-logo.png"
+        logo_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGBA", (80, 80), (255, 0, 180, 255)).save(logo_path, format="PNG")
+        facts = dict(context["facts"])
+        facts["marketing_logo_url"] = str(logo_path)
+        facts["marketing_logo"] = str(logo_path)
+        facts["marketing_logo_path"] = str(logo_path)
+        facts["logo_path"] = str(logo_path)
+        facts["organization_logo"] = str(logo_path)
+        facts["office_logo"] = str(logo_path)
+        context["facts"] = facts
+        blank = Image.new("RGB", FORMAT_SIZES["story"], (120, 80, 80))
+        buffer = io.BytesIO()
+        blank.save(buffer, format="PNG")
+        stamped = stamp_branding_overlay(
+            buffer.getvalue(),
+            context=context,
+            fmt="story",
+            options={
+                "include_agent": True,
+                "show_agent_photo": True,
+                "show_price": True,
+                "show_features": True,
+            },
+            style="light",
+            language="es",
+        )
+        self.assertTrue(stamped["logo_stamped"])
+        self.assertTrue(stamped["agent_photo_composited"])
+        self.assertEqual(stamped["post_process"], "branding_overlay")
+        image = Image.open(io.BytesIO(stamped["png_bytes"])).convert("RGB")
+        self.assertEqual(image.size, FORMAT_SIZES["story"])
+        header = image.crop((40, 20, 104, 84))
+        magenta = sum(
+            1
+            for pixel in header.getdata()
+            if pixel[0] > 240 and pixel[1] < 20 and pixel[2] > 160
+        )
+        self.assertGreater(magenta, 80)
+        self.assertNotEqual(image.getpixel((80, 1700)), (120, 80, 80))
+        from modules.marketing_overlay import provider_references
+
+        packed = collect_reference_images(
+            context,
+            {"include_agent": True, "show_agent_photo": True},
+        )
+        sent = [item["role"] for item in provider_references(packed["references"])]
+        self.assertNotIn("logo", sent)
+        self.assertNotIn("agent", sent)
 
 
 def _quality_png():

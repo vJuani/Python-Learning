@@ -147,7 +147,15 @@ def validate_creative(
         reasons.append("flat_composition")
     if options.get("layout_engine") not in {"jrh_listing", "openai_images"} and _inner_variance(image, fmt) < 160:
         reasons.append("property_not_prominent")
-    reasons.extend(_safe_area_violations(image, fmt))
+    overlay_owns_chrome = bool(
+        options.get("logo_stamped")
+        or options.get("pipeline_post_process") == "branding_overlay"
+    )
+    if overlay_owns_chrome:
+        # Deterministic header/footer is placed by code, not the model.
+        pass
+    else:
+        reasons.extend(_safe_area_violations(image, fmt))
     refs = list(references or [])
     agent_expected = bool(options.get("include_agent") and options.get("show_agent_photo"))
     if agent_expected:

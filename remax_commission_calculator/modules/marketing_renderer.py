@@ -185,7 +185,18 @@ def _wrap(draw, text, used_font, max_width):
 
 @lru_cache(maxsize=12)
 def _logo_rgba(path):
-    image = _open_image(path)
+    source = str(path or "")
+    if source.lower().endswith(".svg"):
+        try:
+            import cairosvg
+
+            png = cairosvg.svg2png(url=source)
+            image = Image.open(io.BytesIO(png))
+            image.load()
+            return _as_rgba(image).copy()
+        except Exception:
+            return None
+    image = _open_image(source)
     if image is None:
         return None
     return _as_rgba(image).copy()
@@ -252,7 +263,26 @@ def _office_brand(facts):
 
 
 def _office_logo(facts):
-    return facts.get("organization_logo") or facts.get("office_logo") or facts.get("logo_path")
+    """Exact office logo file. Never invents or redraws a mark."""
+    from modules.organization_marketing_logo import (
+        resolve_stored_logo_file,
+        scan_organization_logo,
+    )
+
+    facts = facts or {}
+    for key in (
+        "marketing_logo_url",
+        "marketing_logo",
+        "marketing_logo_path",
+        "logo_path",
+        "organization_logo",
+        "office_logo",
+    ):
+        resolved = resolve_stored_logo_file(facts.get(key))
+        if resolved:
+            return str(resolved)
+    scanned = scan_organization_logo(facts.get("organization_id"))
+    return str(scanned) if scanned else None
 
 
 def _header(canvas, facts, *, accent, invert=False, kicker="", fill=None, mute=None):
@@ -314,6 +344,19 @@ def _draw_icon(draw, xy, color, size):
     draw.line((x + 4, y + size * 0.55, x + size - 4, y + size * 0.55), fill=color, width=2)
 
 
+def _visible_agent_contacts(agent):
+    """WhatsApp and Instagram only. Hide a missing channel. Never show phone."""
+    agent = agent or {}
+    whatsapp = " ".join(str(agent.get("whatsapp") or "").split())
+    instagram = " ".join(str(agent.get("instagram") or "").split())
+    lines = []
+    if whatsapp:
+        lines.append(whatsapp)
+    if instagram:
+        lines.append(instagram)
+    return lines
+
+
 def _cta_pill(draw, xy, text, *, width, accent=ELECTRIC, min_w=None):
     if not text:
         return
@@ -337,7 +380,7 @@ def _agent_block(canvas, agent, *, xy, width, show_photo=True, circular=False, s
     draw = ImageDraw.Draw(canvas)
     name = agent.get("name") or ""
     title = agent.get("title") or ""
-    contacts = [item for item in (agent.get("whatsapp") or "", agent.get("instagram") or "") if item]
+    contacts = _visible_agent_contacts(agent)
     name_font = font(_u(width, 22), bold=True)
     title_font = font(_u(width, 14))
     contact_font = font(_u(width, 13))

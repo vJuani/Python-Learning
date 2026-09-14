@@ -119,20 +119,25 @@ class AgentContactChannelTests(unittest.TestCase):
     def test_prompt_case_b_hides_instagram(self):
         link_agent_whatsapp(self.agent_id, self.org, "1131704333", enable_marketing=True)
         link_agent_instagram(self.agent_id, self.org, "josebarreiro", enable_marketing=False)
+        copy = summarize_listing_copy({}, get_agent_branding(self.agent_id, self.org), language="es")
+        self.assertEqual(copy["agent_whatsapp"], "+54 9 11 3170 4333")
+        self.assertEqual(copy["agent_instagram"], "")
         prompt = self._prompt()
-        self.assertIn("WhatsApp +54 9 11 3170 4333", prompt)
+        self.assertIn("VISUAL-ONLY MODE", prompt)
+        self.assertNotIn("WhatsApp +54 9 11 3170 4333", prompt)
         self.assertNotIn("@josebarreiro", prompt)
-        self.assertIn("WhatsApp only", prompt)
-        self.assertIn("Do not add Instagram", prompt)
 
     def test_prompt_case_d_name_and_title_only(self):
         link_agent_whatsapp(self.agent_id, self.org, "1131704333", enable_marketing=False)
         link_agent_instagram(self.agent_id, self.org, "josebarreiro", enable_marketing=False)
+        copy = summarize_listing_copy({}, get_agent_branding(self.agent_id, self.org), language="es")
+        self.assertEqual(copy["agent_name"], "José Barreiro")
+        self.assertEqual(copy["agent_whatsapp"], "")
+        self.assertEqual(copy["agent_instagram"], "")
         prompt = self._prompt()
-        self.assertIn("José Barreiro", prompt)
+        self.assertIn("VISUAL-ONLY MODE", prompt)
         self.assertNotIn("+54 9 11 3170 4333", prompt)
         self.assertNotIn("@josebarreiro", prompt)
-        self.assertIn("name and title only", prompt)
 
     def test_unlink_hides_channel(self):
         link_agent_whatsapp(self.agent_id, self.org, "1131704333", enable_marketing=True)

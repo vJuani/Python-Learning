@@ -45,6 +45,7 @@ from modules.marketing_image_provider import (
     MarketingImageError,
     get_marketing_image_provider_name,
 )
+from modules.marketing_overlay import overlay_enabled, provider_references
 from modules.marketing_quality import validate_creative
 from modules.marketing_references import collect_reference_images
 from modules.marketing_photo_selector import select_photos_for_item
@@ -516,7 +517,10 @@ def _process_item(organization_id, asset_id, *, retry=False):
             options["photo_ids"] = [item.get("id") for item in selected if item.get("id")]
         packed = collect_reference_images(context, options)
         references = packed["references"]
-        agent_sent = any(item.get("role") == "agent" for item in references)
+        provider_refs = (
+            provider_references(references) if overlay_enabled(options) else references
+        )
+        agent_sent = any(item.get("role") == "agent" for item in provider_refs)
         logger.info(
             "marketing item=%s property_agent_id=%s agent_branding_found=%s "
             "agent_photo_found=%s agent_photo_variant=%s agent_photo_loaded=%s "
@@ -548,16 +552,17 @@ def _process_item(organization_id, asset_id, *, retry=False):
             style=options.get("style"),
             cta=options.get("cta") or art.get("cta") or "",
             include_price=options.get("show_price", True),
-            include_agent=bool(options.get("include_agent") and options.get("show_agent_photo")),
+            include_agent=bool(options.get("include_agent")),
             variation_index=max(1, int(options.get("format_index") or 1)),
             size=size,
             references=references,
             language=options.get("language") or context.get("language") or "es",
         )
         png_bytes = generated["png_bytes"]
-        agent_composited = agent_sent
+        agent_composited = bool(generated.get("agent_photo_composited"))
         options["layout_engine"] = "openai_images"
         options["agent_photo_composited"] = agent_composited
+        options["logo_stamped"] = bool(generated.get("logo_stamped") or options.get("logo_stamped"))
         options["layout_attempts"] = (generated.get("quality") or {}).get("attempt") or 1
         options["quality_reasons"] = (generated.get("quality") or {}).get("reasons") or []
         options["language"] = generated.get("language") or options.get("language") or "es"
@@ -582,7 +587,10 @@ def _process_item(organization_id, asset_id, *, retry=False):
         options["pipeline_provider"] = pipeline_audit.get("provider") or get_marketing_image_provider_name()
         options["pipeline_model"] = pipeline_audit.get("model") or get_openai_image_model()
         options["pipeline_endpoint"] = pipeline_audit.get("endpoint")
-        options["pipeline_post_process"] = pipeline_audit.get("post_process")
+        options["pipeline_post_process"] = (
+            generated.get("post_process") or pipeline_audit.get("post_process")
+        )
+        options["pipeline_post_process_fn"] = generated.get("post_process_fn")
         logger.info(
             "marketing item=%s agent_photo_composited=%s source=%s "
             "legacy_compositor=%s provider=%s model=%s endpoint=%s post_process=%s",

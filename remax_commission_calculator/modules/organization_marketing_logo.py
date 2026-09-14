@@ -16,7 +16,7 @@ from modules.database.tenant import require_organization_id
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
 MAX_LOGO_BYTES = 2 * 1024 * 1024
 SOURCE_UPLOAD = "upload"
 SOURCE_URL = "url"
@@ -86,7 +86,7 @@ def resolve_stored_logo_file(candidate):
     return None
 
 
-def _scan_general_logo(organization_id):
+def scan_organization_logo(organization_id):
     if not organization_id:
         return None
     folders = (
@@ -96,6 +96,7 @@ def _scan_general_logo(organization_id):
     for folder in folders:
         for name in (
             "logo.png",
+            "logo.svg",
             "logo.webp",
             "logo.jpg",
             "logo.jpeg",
@@ -252,7 +253,7 @@ def get_organization_marketing_branding(
     preferred = _clean(settings.get("marketing_logo_source")).lower()
     upload_file = resolve_stored_logo_file(stored_path)
     url_as_file = resolve_stored_logo_file(settings.get("marketing_logo_url"))
-    general_file = resolve_stored_logo_file(settings.get("logo_path")) or _scan_general_logo(
+    general_file = resolve_stored_logo_file(settings.get("logo_path")) or scan_organization_logo(
         organization_id
     )
 
