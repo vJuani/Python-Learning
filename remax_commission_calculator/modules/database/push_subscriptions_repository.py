@@ -188,6 +188,27 @@ def deactivate_push_subscription(organization_id, user_id, endpoint):
     return changed > 0
 
 
+def deactivate_all_push_subscriptions(organization_id, user_id):
+    organization_id = require_organization_id(organization_id)
+    now = _now_iso()
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE push_subscriptions
+        SET is_active = 0, updated_at = ?
+        WHERE organization_id = ?
+            AND user_id = ?
+            AND is_active = 1
+        """,
+        (now, organization_id, user_id),
+    )
+    changed = cursor.rowcount
+    connection.commit()
+    connection.close()
+    return max(changed, 0)
+
+
 def mark_push_subscription_success(subscription_id, organization_id):
     organization_id = require_organization_id(organization_id)
     now = _now_iso()

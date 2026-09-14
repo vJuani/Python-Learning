@@ -9,7 +9,9 @@ from flask import jsonify, render_template, request
 
 from modules.auth import get_current_user, is_guest_session, login_required
 from modules.database.push_subscriptions_repository import (
+    deactivate_all_push_subscriptions,
     deactivate_push_subscription,
+    list_active_push_subscriptions,
     upsert_push_subscription,
 )
 from modules.web_push import WebPushError, require_vapid, send_test_push
@@ -90,6 +92,8 @@ def register_pwa_routes(app, helpers):
         if path.endswith("/service-worker.js"):
             response.headers["Service-Worker-Allowed"] = "/"
             response.headers["Cache-Control"] = "no-cache"
+        if path.endswith("/static/js/pwa.js"):
+            response.headers["Cache-Control"] = "no-cache"
         if path.endswith(".webmanifest") or path.endswith("manifest.webmanifest"):
             response.headers["Content-Type"] = "application/manifest+json"
         return response
@@ -100,8 +104,12 @@ def register_pwa_routes(app, helpers):
         user = get_current_user()
         if user is None or is_guest_session():
             return ("Forbidden", 403)
-        require_user_organization()
-        return render_template("settings/notifications.html")
+        organization_id = require_user_organization()
+        active = list_active_push_subscriptions(organization_id, user["id"])
+        return render_template(
+            "settings/notifications.html",
+            push_has_active=bool(active),
+        )
 
     @app.get("/api/push/public-key")
     @json_login_required
@@ -150,6 +158,22 @@ def register_pwa_routes(app, helpers):
             return jsonify({"ok": True, "deactivated": False})
         changed = deactivate_push_subscription(organization_id, user["id"], endpoint)
         return jsonify({"ok": True, "deactivated": changed})
+
+    @app.get("/api/push/status")
+    @json_login_required
+    def api_push_status():
+        user = get_current_user()
+        organization_id = require_user_organization()
+        active = list_active_push_subscriptions(organization_id, user["id"])
+        return jsonify({"ok": True, "has_active": bool(active), "count": len(active)})
+
+    @app.post("/api/push/reset")
+    @json_login_required
+    def api_push_reset():
+        user = get_current_user()
+        organization_id = require_user_organization()
+        deactivated = deactivate_all_push_subscriptions(organization_id, user["id"])
+        return jsonify({"ok": True, "deactivated": deactivated})
 
     @app.post("/api/push/test")
     @json_login_required

@@ -273,6 +273,8 @@ class PwaPushTests(unittest.TestCase):
         self.assertIn("/treasury", body)
         self.assertIn("isPrivatePath", body)
         self.assertIn("caches.match", body)
+        self.assertIn("jrh-one-static-v2", body)
+        self.assertIn("/static/js/pwa.js", body)
         notifications = self.client.get("/settings/notifications")
         self.assertIn(notifications.status_code, {302, 401})
         self._login()
@@ -281,10 +283,12 @@ class PwaPushTests(unittest.TestCase):
         self.assertIn("Activar notificaciones".encode("utf-8"), page.data)
         self.assertIn("Enviar notificación de prueba".encode("utf-8"), page.data)
         self.assertIn("Desactivar notificaciones".encode("utf-8"), page.data)
+        self.assertIn("Restablecer notificaciones".encode("utf-8"), page.data)
         self.assertIn("Desactivadas".encode("utf-8"), page.data)
         self.assertIn("Habilitadas".encode("utf-8"), page.data)
         self.assertIn("Bloqueadas por el navegador".encode("utf-8"), page.data)
         self.assertIn(b"id=\"pwa-push-disable\"", page.data)
+        self.assertIn(b"id=\"pwa-push-reset\"", page.data)
         self.assertIn(b"id=\"pwa-push-blocked-help\"", page.data)
 
     def test_11_invalid_vapid_private_key_is_clear_error(self):
@@ -398,20 +402,87 @@ class PwaPushTests(unittest.TestCase):
         self.assertIn("Desactivadas", html)
         self.assertIn("Habilitadas", html)
         self.assertIn("Bloqueadas por el navegador", html)
-        self.assertRegex(html, r'id="pwa-push-enable"[^>]*>Activar notificaciones')
-        self.assertRegex(html, r'id="pwa-push-test"[^>]*hidden[^>]*>Enviar notificación de prueba')
-        self.assertRegex(html, r'id="pwa-push-disable"[^>]*hidden[^>]*>Desactivar notificaciones')
-        self.assertRegex(html, r'id="pwa-push-blocked-help"[^>]*hidden')
+        self.assertIn('id="pwa-push-enable"', html)
+        self.assertIn("Activar notificaciones", html)
+        self.assertIn("Desactivar notificaciones", html)
+        self.assertIn("Restablecer notificaciones", html)
+        self.assertRegex(html, r'id="pwa-push-disable"[^>]*>\s*Desactivar notificaciones')
+        self.assertNotRegex(html, r'id="pwa-push-disable"[^>]*hidden')
+        self.assertRegex(html, r'id="pwa-push-reset"[^>]*>\s*Restablecer notificaciones')
+        self.assertNotRegex(html, r'id="pwa-push-reset"[^>]*hidden')
         script = (BASE_DIR / "static" / "js" / "pwa.js").read_text(encoding="utf-8")
         self.assertIn("pushManager.getSubscription()", script)
         self.assertIn("subscription.unsubscribe()", script)
         self.assertIn("/api/push/unsubscribe", script)
+        self.assertIn("/api/push/reset", script)
+        self.assertIn("pwa-push-disable", script)
+        self.assertIn("pwa-push-reset", script)
         self.assertIn('show("pwa-push-enable", state === "disabled")', script)
         self.assertIn('show("pwa-push-test", state === "enabled")', script)
         self.assertIn('show("pwa-push-disable", state === "enabled")', script)
-        self.assertIn('show("pwa-push-blocked-help", state === "blocked")', script)
         self.assertIn("labelDisabledOk", script)
         self.assertNotIn("user_id", script.split("/api/push/unsubscribe")[1][:400])
+
+    def test_16_disable_button_visible_when_subscription_active(self):
+        upsert_push_subscription(
+            self.org,
+            self.user_id,
+            endpoint="https://push.example.com/active-ui",
+            p256dh="BValidP256dhKeyMaterialForTests0123456789abcd",
+            auth="ValidAuthSecret012345",
+        )
+        self._login()
+        page = self.client.get("/settings/notifications")
+        html = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('data-has-active="1"', html)
+        self.assertIn("Habilitadas", html)
+        self.assertRegex(html, r'id="pwa-push-disable"[^>]*>\s*Desactivar notificaciones')
+        self.assertNotRegex(html, r'id="pwa-push-disable"[^>]*hidden')
+        self.assertRegex(html, r'id="pwa-push-reset"[^>]*>\s*Restablecer notificaciones')
+        self.assertNotRegex(html, r'id="pwa-push-reset"[^>]*hidden')
+        self.assertRegex(html, r'id="pwa-push-enable"[^>]*hidden')
+        self.assertNotRegex(html, r'id="pwa-push-test"[^>]*hidden')
+
+    def test_17_reset_deactivates_only_current_user_subscriptions(self):
+        upsert_push_subscription(
+            self.org,
+            self.user_id,
+            endpoint="https://push.example.com/me-one",
+            p256dh="BValidP256dhKeyMaterialForTests0123456789abcd",
+            auth="ValidAuthSecret012345",
+        )
+        upsert_push_subscription(
+            self.org,
+            self.user_id,
+            endpoint="https://push.example.com/me-two",
+            p256dh="BValidP256dhKeyMaterialForTests0123456789abcd",
+            auth="ValidAuthSecret012345",
+        )
+        upsert_push_subscription(
+            self.org,
+            self.other_user_id,
+            endpoint="https://push.example.com/other-keep",
+            p256dh="BValidP256dhKeyMaterialForTests0123456789abcd",
+            auth="ValidAuthSecret012345",
+        )
+        self._login()
+        page = self.client.post(
+            "/api/push/reset",
+            json={"user_id": self.other_user_id},
+        )
+        self.assertEqual(page.status_code, 200)
+        data = page.get_json()
+        self.assertTrue(data["ok"])
+        self.assertGreaterEqual(data["deactivated"], 2)
+        mine = list_active_push_subscriptions(self.org, self.user_id)
+        self.assertEqual(mine, [])
+        other = get_push_subscription_by_endpoint("https://push.example.com/other-keep")
+        self.assertEqual(other["user_id"], self.other_user_id)
+        self.assertTrue(other["is_active"])
+        again = self.client.post("/api/push/reset", json={})
+        self.assertEqual(again.status_code, 200)
+        self.assertTrue(again.get_json()["ok"])
 
 
 class VapidPrivateKeyLoaderTests(unittest.TestCase):

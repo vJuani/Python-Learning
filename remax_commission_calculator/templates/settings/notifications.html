@@ -35,6 +35,7 @@
 <article
     class="integration-card"
     id="pwa-push-panel"
+    data-has-active="{{ '1' if push_has_active else '0' }}"
     data-label-enabled="{{ t('pwa_push_status_enabled') }}"
     data-label-disabled="{{ t('pwa_push_status_disabled') }}"
     data-label-blocked="{{ t('pwa_push_status_blocked') }}"
@@ -43,21 +44,26 @@
     data-label-blocked-help="{{ t('pwa_push_blocked_help') }}"
     data-label-ready="{{ t('pwa_push_ready') }}"
     data-label-disabled-ok="{{ t('pwa_push_disabled') }}"
+    data-label-reset-ok="{{ t('pwa_push_reset_ok') }}"
     data-label-test-sent="{{ t('pwa_push_test_sent') }}"
     data-label-disable-failed="{{ t('pwa_push_err_disable_failed') }}"
+    data-label-reset-failed="{{ t('pwa_push_err_reset_failed') }}"
 >
     <header class="integration-card__head">
         <h3>{{ t('pwa_push_title') }}</h3>
-        <span id="pwa-push-status" class="integration-card__badge integration-card__badge--muted">{{ t('pwa_push_status_disabled') }}</span>
+        <span id="pwa-push-status" class="integration-card__badge{% if not push_has_active %} integration-card__badge--muted{% endif %}">
+            {% if push_has_active %}{{ t('pwa_push_status_enabled') }}{% else %}{{ t('pwa_push_status_disabled') }}{% endif %}
+        </span>
     </header>
     <p>{{ t('pwa_push_help') }}</p>
     <p id="pwa-ios-push-help" class="integration-card__meta" hidden>{{ t('pwa_push_ios_help') }}</p>
     <p id="pwa-push-blocked-help" class="integration-card__meta" hidden>{{ t('pwa_push_blocked_help') }}</p>
     <p id="pwa-push-message" class="integration-card__meta"></p>
     <div class="integration-card__actions">
-        <button type="button" id="pwa-push-enable" class="btn btn-primary">{{ t('pwa_push_enable') }}</button>
-        <button type="button" id="pwa-push-test" class="btn btn-secondary" hidden>{{ t('pwa_push_test') }}</button>
-        <button type="button" id="pwa-push-disable" class="btn btn-secondary" hidden>{{ t('pwa_push_disable') }}</button>
+        <button type="button" id="pwa-push-enable" class="btn btn-primary"{% if push_has_active %} hidden{% endif %}>{{ t('pwa_push_enable') }}</button>
+        <button type="button" id="pwa-push-test" class="btn btn-secondary"{% if not push_has_active %} hidden{% endif %}>{{ t('pwa_push_test') }}</button>
+        <button type="button" id="pwa-push-disable" class="btn btn-secondary">{{ t('pwa_push_disable') }}</button>
+        <button type="button" id="pwa-push-reset" class="btn btn-secondary">{{ t('pwa_push_reset') }}</button>
     </div>
 </article>
 {% endblock %}
