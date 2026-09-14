@@ -11,7 +11,14 @@ from modules.auth import (
     is_guest_session,
     login_required,
 )
-from modules.jrh_ai_service import ask_jrh, confirm_jrh_action
+from modules.jrh_ai_service import (
+    SESSION_DRAFT_KEY,
+    SESSION_RESULT_KEY,
+    ask_jrh,
+    confirm_jrh_action,
+)
+
+POST_ONLY_ASK_ENDPOINTS = frozenset({"jrh_ask_confirm", "jrh_ask_cancel"})
 from modules.jrh_intent import (
     INTENT_AGENDA,
     INTENT_CONTACT,
@@ -218,6 +225,11 @@ def register_jrh_routes(app, helpers):
             name = row.get("href_name")
             args = row.get("href_args") or {}
             href = row.get("href") or ""
+            if name in POST_ONLY_ASK_ENDPOINTS or str(row.get("method") or "").upper() == "POST":
+                row["href"] = ""
+                row["method"] = "POST"
+                actions.append(row)
+                continue
             if name:
                 try:
                     href = url_for(name, **args)
@@ -272,8 +284,11 @@ def register_jrh_routes(app, helpers):
                         session=session,
                     )
                 )
+                session.pop(SESSION_RESULT_KEY, None)
             except Exception:
                 flash_i18n("jrh_err_generic", "error")
+        elif session.get(SESSION_RESULT_KEY):
+            result = attach_ask_urls(session.pop(SESSION_RESULT_KEY))
         return _ask_page(
             user,
             organization_id,
@@ -282,9 +297,11 @@ def register_jrh_routes(app, helpers):
             is_mobile=bool(request.args.get("mobile")),
         )
 
-    @app.route("/jrh/ask/confirm", methods=["POST"])
+    @app.route("/jrh/ask/confirm", methods=["GET", "POST"])
     @login_required
     def jrh_ask_confirm():
+        if request.method == "GET":
+            return redirect(url_for("jrh_ask"))
         if is_guest_session():
             abort(403)
         user = get_current_user()
@@ -292,9 +309,7 @@ def register_jrh_routes(app, helpers):
         agent_id, scope_blocked = get_agent_scope()
         if not _can_ask(user, agent_id, scope_blocked):
             abort(403)
-        from flask import session
-
-        result = attach_ask_urls(
+        session[SESSION_RESULT_KEY] = attach_ask_urls(
             confirm_jrh_action(
                 organization_id=organization_id,
                 user=user,
@@ -303,12 +318,16 @@ def register_jrh_routes(app, helpers):
                 language=get_current_language(),
             )
         )
-        return _ask_page(
-            user,
-            organization_id,
-            agent_id,
-            jrh_ask=result,
-        )
+        return redirect(url_for("jrh_ask"))
+
+    @app.route("/jrh/ask/cancel", methods=["POST"])
+    @login_required
+    def jrh_ask_cancel():
+        if is_guest_session():
+            abort(403)
+        session.pop(SESSION_DRAFT_KEY, None)
+        session.pop(SESSION_RESULT_KEY, None)
+        return redirect(url_for("jrh_ask"))
 
     helpers["attach_intent_urls"] = attach_intent_urls
     helpers["attach_ask_urls"] = attach_ask_urls

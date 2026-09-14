@@ -69,6 +69,7 @@ from modules.pending_actions import (
 logger = logging.getLogger(__name__)
 
 SESSION_DRAFT_KEY = "jrh_ai_draft"
+SESSION_RESULT_KEY = "jrh_ai_last_result"
 
 
 def _t(key, language, **kwargs):
@@ -1417,7 +1418,6 @@ def _handle_create_task(
             else {}
         ),
         actions=[
-            {"label_key": "jrh_ai_confirm_task", "href_name": "jrh_ask_confirm"},
             {
                 "label_key": "jrh_cta_review",
                 "href_name": "agenda_compose",
@@ -2607,7 +2607,7 @@ def _handle_start_contact_need(
         language=language,
         summary=draft["contact_name"],
         cards=[{"title": draft["contact_name"], "subtitle": subtitle}],
-        actions=[{"label_key": "jrh_ai_confirm_task", "href_name": "jrh_ask_confirm"}],
+        actions=[],
         confirm_required=True,
         confidence=confidence,
         entity=chosen,

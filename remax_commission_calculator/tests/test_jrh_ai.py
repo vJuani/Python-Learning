@@ -954,6 +954,76 @@ class JrhAiTests(unittest.TestCase):
         self.assertNotIn("Entendí 1 cosa", home_body)
         self.assertNotIn("Te llevo al listado", home_body)
 
+    def test_42_confirm_preview_has_no_get_link(self):
+        result = self._ask(
+            "agendame una visita mañana a las 18",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        self.assertTrue(result["confirm_required"])
+        hrefs = [action.get("href_name") for action in result["actions"]]
+        self.assertNotIn("jrh_ask_confirm", hrefs)
+        client = self._login("jrh_ai_agent")
+        page = client.post(
+            "/jrh",
+            data={"prompt": "agendame una visita mañana a las 18"},
+        )
+        body = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertNotIn('href="/jrh/ask/confirm"', body)
+        self.assertIn('action="/jrh/ask/confirm"', body)
+        self.assertIn('method="post"', body.lower())
+        home = client.post(
+            "/jrh/interpret",
+            data={"prompt": "agendame una visita el jueves a las 17"},
+        )
+        home_body = home.get_data(as_text=True)
+        self.assertEqual(home.status_code, 200)
+        self.assertNotIn('href="/jrh/ask/confirm"', home_body)
+        self.assertIn('action="/jrh/ask/confirm"', home_body)
+
+    def test_43_get_confirm_redirects_without_writing(self):
+        client = self._login("jrh_ai_agent")
+        client.post("/jrh", data={"prompt": "agendame una visita mañana a las 18"})
+        before = _task_count(self.org, self.own_agent)
+        opened = client.get("/jrh/ask/confirm")
+        self.assertEqual(opened.status_code, 302)
+        self.assertIn("/jrh", opened.headers.get("Location", ""))
+        self.assertNotIn("/jrh/ask/confirm", opened.headers.get("Location", "").rstrip("/"))
+        self.assertEqual(_task_count(self.org, self.own_agent), before)
+        refreshed = client.get("/jrh")
+        self.assertEqual(refreshed.status_code, 200)
+
+    def test_44_post_confirm_redirects_to_ask(self):
+        client = self._login("jrh_ai_agent")
+        preview = client.post(
+            "/jrh",
+            data={"prompt": "agendame una visita mañana a las 18"},
+        )
+        self.assertEqual(preview.status_code, 200)
+        before = _task_count(self.org, self.own_agent)
+        confirmed = client.post("/jrh/ask/confirm")
+        self.assertEqual(confirmed.status_code, 302)
+        self.assertTrue(confirmed.headers.get("Location", "").endswith("/jrh"))
+        self.assertEqual(_task_count(self.org, self.own_agent), before + 1)
+        follow = client.get("/jrh")
+        self.assertEqual(follow.status_code, 200)
+        self.assertIn("visita", follow.get_data(as_text=True).lower())
+        again = client.get("/jrh/ask/confirm")
+        self.assertEqual(again.status_code, 302)
+
+    def test_45_cancel_clears_draft_without_writing(self):
+        client = self._login("jrh_ai_agent")
+        client.post("/jrh", data={"prompt": "agendame una visita mañana a las 18"})
+        before = _task_count(self.org, self.own_agent)
+        canceled = client.post("/jrh/ask/cancel")
+        self.assertEqual(canceled.status_code, 302)
+        self.assertTrue(canceled.headers.get("Location", "").endswith("/jrh"))
+        self.assertEqual(_task_count(self.org, self.own_agent), before)
+        confirmed = client.post("/jrh/ask/confirm")
+        self.assertEqual(confirmed.status_code, 302)
+        self.assertEqual(_task_count(self.org, self.own_agent), before)
+
 
 if __name__ == "__main__":
     unittest.main()

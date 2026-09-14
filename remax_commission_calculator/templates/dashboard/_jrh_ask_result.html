@@ -61,13 +61,16 @@
             {% endif %}
             <div class="jrh-chat__actions jrh-ask__actions">
                 {% for action in jrh_ask.actions %}
-                {% if action.href %}
+                {% if action.href and action.method != 'POST' and action.href_name != 'jrh_ask_confirm' %}
                 <a class="btn btn-small btn-primary" href="{{ action.href }}">{{ action.label or t(action.label_key) }}</a>
                 {% endif %}
                 {% endfor %}
                 {% if jrh_ask.confirm_required %}
                 <form method="post" action="{{ url_for('jrh_ask_confirm') }}">
                     <button type="submit" class="btn btn-small btn-primary">{{ t('jrh_ai_confirm_task') }}</button>
+                </form>
+                <form method="post" action="{{ url_for('jrh_ask_cancel') }}">
+                    <button type="submit" class="btn btn-small btn-secondary">{{ t('cancel') }}</button>
                 </form>
                 {% endif %}
             </div>
