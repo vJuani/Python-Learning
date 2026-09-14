@@ -103,7 +103,7 @@ def main(argv=None):
 
     results = dispatch_due_visit_reminders_all()
     dispatched = sum(item.get("dispatched") or 0 for item in results)
-    candidates = sum(item.get("candidates") or 0 for item in results)
+    candidates = sum(item.get("candidates_found") or 0 for item in results)
     print(
         f"{dispatched} reminder(s) dispatched "
         f"from {candidates} visit(s) in window."

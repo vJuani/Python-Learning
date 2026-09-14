@@ -14,3 +14,6 @@ from modules.database import create_tables
 create_tables(create_backup=False)
 
 from web_app import app  # noqa: E402
+from modules.visit_reminder_scheduler import start_visit_reminder_scheduler
+
+start_visit_reminder_scheduler()

@@ -1942,6 +1942,12 @@ def create_postgres_schema():
 
         migrate_user_notification_preferences_postgres(cursor)
 
+        from .visit_reminder_runs_migration import (
+            migrate_visit_reminder_runs_postgres,
+        )
+
+        migrate_visit_reminder_runs_postgres(cursor)
+
         for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),
             ("snapshot_parking", "INTEGER"),

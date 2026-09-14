@@ -298,6 +298,115 @@ class VisitReminderAuditTests(unittest.TestCase):
         self.assertIn("candidates_found=", html)
         self.assertIn("notifications_created=", html)
         self.assertIn("push_sent=", html)
+        self.assertIn("last_cron_run=never", html)
+        self.assertIn("automatic_running=False", html)
+
+    def test_probe_creates_plus_30_visit_and_reports_fields(self):
+        now = self._now()
+        self._login(self.admin_id, ROLE_ADMIN)
+        with patch(
+            "modules.visit_reminders.now_utc",
+            return_value=now,
+        ), patch(
+            "modules.notifications_service.send_user_pushes",
+            return_value={"sent_count": 1, "failed_count": 0, "push_targets_count": 1},
+        ):
+            page = self.client.post(
+                "/settings/agenda-reminders",
+                data={"action": "probe"},
+            )
+        self.assertEqual(page.status_code, 200)
+        html = page.get_data(as_text=True)
+        self.assertIn("candidates_found=1", html)
+        self.assertIn("notification_created", html)
+        self.assertIn("minutes_until_start", html)
+        self.assertIn("skip_reason", html)
+        self.assertIn("resolved_user_id", html)
+        self.assertIn("candidatos encontrados=1", html)
+        self.assertIn("enviados=1", html)
+
+    def test_scan_report_exposes_exact_fields(self):
+        now = self._now()
+        due_at = to_utc_iso(now + timedelta(minutes=30))
+        task = self._visit(due_at)
+        with patch(
+            "modules.notifications_service.send_user_pushes",
+            return_value={"sent_count": 1, "failed_count": 0, "push_targets_count": 1},
+        ):
+            result = scan_visit_reminders(self.org, now=now)
+        row = result["candidates"][0]
+        self.assertEqual(result["timezone"], "America/Argentina/Buenos_Aires")
+        self.assertTrue(result["now_local"])
+        self.assertEqual(row["event_id"], task["id"])
+        self.assertEqual(row["event_type"], "visit")
+        self.assertEqual(row["event_status"], "pending")
+        self.assertEqual(row["starts_at"], due_at)
+        self.assertAlmostEqual(row["minutes_until_start"], 30.0)
+        self.assertEqual(row["assigned_user_id"], self.user_id)
+        self.assertEqual(row["resolved_user_id"], self.user_id)
+        self.assertTrue(row["push_visit_reminders"])
+        self.assertEqual(
+            row["dedupe_key"],
+            visit_reminder_event_key(task["id"], due_at),
+        )
+        self.assertFalse(row["already_sent"])
+        self.assertTrue(row["candidate"])
+        self.assertIsNone(row["skip_reason"])
+        self.assertTrue(row["notification_created"])
+        self.assertEqual(row["push_targets_count"], 1)
+        self.assertEqual(row["push_sent_count"], 1)
+        self.assertEqual(row["push_failed_count"], 0)
+
+    def test_probe_does_not_touch_other_organization(self):
+        other = add_organization("Other Visit Org")
+        other_agent = add_agent("Other Agent", "Alto", other)
+        now = self._now()
+        create_agent_task(
+            other,
+            other_agent,
+            title="Foreign visit",
+            task_type="visit",
+            due_at=to_utc_iso(now + timedelta(minutes=30)),
+        )
+        from modules.database.agent_tasks_repository import list_agent_tasks
+
+        before = len(list_agent_tasks(other, limit=50))
+        self._login(self.admin_id, ROLE_ADMIN)
+        with patch(
+            "modules.visit_reminders.now_utc",
+            return_value=now,
+        ), patch(
+            "modules.notifications_service.send_user_pushes",
+            return_value={"sent_count": 1, "failed_count": 0, "push_targets_count": 1},
+        ):
+            page = self.client.post(
+                "/settings/agenda-reminders",
+                data={"action": "probe"},
+            )
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(len(list_agent_tasks(other, limit=50)), before)
+
+    def test_inprocess_scheduler_starts_only_when_enabled(self):
+        from modules.visit_reminder_scheduler import (
+            inprocess_scheduler_state,
+            start_visit_reminder_scheduler,
+            stop_visit_reminder_scheduler,
+        )
+
+        stop_visit_reminder_scheduler()
+        self.assertFalse(
+            start_visit_reminder_scheduler(enabled=False, first_delay_seconds=30)
+        )
+        with patch("modules.visit_reminder_scheduler._tick"):
+            started = start_visit_reminder_scheduler(
+                enabled=True,
+                interval_seconds=30,
+                first_delay_seconds=30,
+            )
+            self.assertTrue(started)
+            self.assertTrue(inprocess_scheduler_state()["alive"])
+            stop_visit_reminder_scheduler()
+        self.assertFalse(inprocess_scheduler_state()["alive"])
 
 
 if __name__ == "__main__":

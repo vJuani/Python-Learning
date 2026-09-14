@@ -3921,6 +3921,10 @@ def migrate_schema(create_backup=True):
 
     migrate_user_notification_preferences_sqlite()
 
+    from .visit_reminder_runs_migration import migrate_visit_reminder_runs_sqlite
+
+    migrate_visit_reminder_runs_sqlite()
+
     return backup_path
 
 

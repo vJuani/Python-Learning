@@ -24,23 +24,18 @@ period.
 
 ## Visit reminders (agenda, ~30 minutes)
 
-Visit push reminders are **not** started by Gunicorn. The web process has
-no APScheduler and no background loop.
+Gunicorn starts an in-process loop (`modules/visit_reminder_scheduler.py`)
+because this service runs **one worker**. It scans pending visits due in
+25–35 minutes every 5 minutes. Dedupe key
+`agenda_visit_<id>_30m_<due_at>` prevents duplicates.
 
-Create a **separate Railway Cron Job** (same repo, same root directory
-`remax_commission_calculator`, same volume / `DATABASE_PATH` / VAPID vars):
+Disable with `VISIT_REMINDER_SCHEDULER=0` if you switch to a separate
+Railway Cron Job (`python dispatch_visit_reminders.py`, schedule
+`*/5 * * * *`) instead.
 
-| Field | Value |
-|-------|--------|
-| Command | `python dispatch_visit_reminders.py` |
-| Schedule | `*/5 * * * *` (every 5 minutes) |
-
-Each run is one-shot: it scans pending `visit` tasks due in 25–35 minutes
-(UTC clock, `due_at` stored as naive UTC ISO from organization local time)
-and exits. Dedupe key `agenda_visit_<id>_30m_<due_at>` prevents duplicates.
-
-If Railway logs never show `agenda_reminder_scheduler_started`, the Cron
-Job is not running. Admin QA: **Configuración → Notificaciones → QA visitas próximas**.
+Admin QA: **Agenda** or **Configuración → Notificaciones → Probar reminder
+de visitas**. If `last_cron_run=never` after the web process has been up
+for more than ~15 seconds, the in-process loop did not start.
 
 # Deploy staging on Railway (SQLite)
 

@@ -1,7 +1,7 @@
-"""Periodic visit reminder dispatch. One-shot; safe for Railway Cron.
+"""Visit reminder scan. Idempotent; safe to run from Cron or in-process.
 
-This module is NOT started by Gunicorn. Production must invoke
-``python dispatch_visit_reminders.py`` on a Cron schedule (every 5 min).
+Production Gunicorn (1 worker) starts ``visit_reminder_scheduler``.
+``python dispatch_visit_reminders.py`` remains valid as an optional Cron.
 """
 
 from __future__ import annotations
@@ -196,7 +196,217 @@ def _list_window_candidates(organization_id, instant):
     ]
 
 
-def scan_visit_reminders(organization_id, *, now=None, send=True):
+def _list_nearby_tasks(organization_id, instant):
+    """Pending tasks around now, including near-misses outside the 25–35 window."""
+    query_from = to_utc_iso(instant - timedelta(minutes=30))
+    query_to = to_utc_iso(instant + timedelta(minutes=120))
+    return list_agent_tasks(
+        organization_id,
+        statuses=(STATUS_PENDING,),
+        due_from=query_from,
+        due_to=query_to,
+        order="asc",
+        limit=200,
+    )
+
+
+def _push_target_count(organization_id, user_id):
+    if user_id is None:
+        return 0
+    from modules.database.push_subscriptions_repository import (
+        list_active_push_subscriptions,
+    )
+
+    return len(list_active_push_subscriptions(organization_id, user_id))
+
+
+def classify_visit_for_reminder(task, organization_id, instant):
+    """Explain whether this task is a reminder candidate and why not."""
+    task_id = task.get("id")
+    status = task.get("status") or STATUS_PENDING
+    task_type = task.get("task_type")
+    due_at = task.get("due_at")
+    minutes = minutes_until(due_at, instant)
+    user = resolve_visit_recipient(task, organization_id)
+    user_id = None if user is None else user.get("id")
+    preference_enabled = (
+        is_push_category_enabled(organization_id, user_id, PREF_KEY)
+        if user_id is not None
+        else False
+    )
+    event_key = visit_reminder_event_key(task_id, due_at) if task_id else None
+    already = (
+        find_notification_by_event_key(organization_id, event_key)
+        if event_key
+        else None
+    )
+    already_sent = already is not None
+    targets = _push_target_count(organization_id, user_id)
+
+    skip_reason = None
+    candidate = True
+    if not is_visit_task_type(task_type):
+        candidate = False
+        skip_reason = f"type_not_visit:{task_type}"
+    elif status in SKIP_STATUSES or status not in ACTIVE_STATUSES:
+        candidate = False
+        skip_reason = f"status_{status}"
+    elif minutes is None:
+        candidate = False
+        skip_reason = "invalid_due_at"
+    elif not (WINDOW_START_MINUTES <= minutes <= WINDOW_END_MINUTES):
+        candidate = False
+        skip_reason = (
+            f"outside_window minutes_until={round(minutes, 1)} "
+            f"need={WINDOW_START_MINUTES}..{WINDOW_END_MINUTES}"
+        )
+    elif task_id is None:
+        candidate = False
+        skip_reason = "missing_task_id"
+    elif user_id is None:
+        skip_reason = "no_recipient"
+    elif already_sent:
+        skip_reason = "already_sent"
+    elif not preference_enabled:
+        skip_reason = "preference_off"
+    elif targets == 0:
+        skip_reason = "no_push_subscription"
+
+    return {
+        "event_id": task_id,
+        "event_type": task_type,
+        "event_status": status,
+        "starts_at": due_at,
+        "minutes_until_start": None if minutes is None else round(minutes, 1),
+        "assigned_agent_id": task.get("agent_id"),
+        "assigned_user_id": user_id,
+        "resolved_user_id": user_id,
+        "push_visit_reminders": preference_enabled,
+        "dedupe_key": event_key,
+        "already_sent": already_sent,
+        "candidate": candidate,
+        "skip_reason": skip_reason,
+        "dispatcher_reason": skip_reason,
+        "push_targets_count": targets,
+        "notification_created": False,
+        "push_sent_count": 0,
+        "push_failed_count": 0,
+        "created": False,
+        "dispatched": False,
+        "sent_count": 0,
+        "failed_count": 0,
+        "user_id": user_id,
+        "organization_id": organization_id,
+        "status": status,
+        "type": task_type,
+        "preference_enabled": preference_enabled,
+        "skipped_reason": skip_reason,
+    }
+
+
+def _pick_probe_agent(organization_id, current_user=None):
+    """Prefer the current agent; else an org agent whose user has an active push."""
+    if current_user and current_user.get("agent_id"):
+        user = get_user_by_agent_id(current_user["agent_id"], organization_id)
+        if user is not None:
+            return current_user["agent_id"], user["id"]
+
+    from modules.database.users_repository import get_users
+
+    for user in get_users(organization_id):
+        if not user.get("is_active") or user.get("agent_id") is None:
+            continue
+        if _push_target_count(organization_id, user["id"]) > 0:
+            return user["agent_id"], user["id"]
+    for user in get_users(organization_id):
+        if user.get("is_active") and user.get("agent_id") is not None:
+            return user["agent_id"], user["id"]
+    return None, None
+
+
+def ensure_probe_visit(organization_id, *, current_user=None, now=None):
+    """Reuse an in-window pending visit or create one ~30 minutes ahead."""
+    instant, _, _ = reminder_window(now)
+    existing = _list_window_candidates(organization_id, instant)
+    if existing:
+        return existing[0], False
+    agent_id, _user_id = _pick_probe_agent(organization_id, current_user)
+    if agent_id is None:
+        raise RuntimeError("no_agent_for_probe")
+    from modules.database.agent_tasks_repository import create_agent_task
+
+    due_at = to_utc_iso(instant + timedelta(minutes=30))
+    task = create_agent_task(
+        organization_id,
+        agent_id,
+        title="QA reminder visita",
+        task_type=VISIT_TYPE,
+        due_at=due_at,
+        created_by_user_id=None if not current_user else current_user.get("id"),
+    )
+    return task, True
+
+
+def scheduler_status(organization_id, *, now=None):
+    from modules.database.visit_reminder_runs_repository import (
+        get_last_visit_reminder_run,
+    )
+    from modules.visit_reminder_scheduler import inprocess_scheduler_state
+
+    instant = aware_utc(now) or now_utc()
+    last_cron = get_last_visit_reminder_run(organization_id, source="cron")
+    last_qa = get_last_visit_reminder_run(organization_id, source="qa")
+    last_run = None if last_cron is None else last_cron.get("ran_at")
+    next_run = None
+    running = False
+    if last_run:
+        parsed = parse_utc_iso(last_run)
+        if parsed is not None:
+            age_minutes = (instant - parsed).total_seconds() / 60.0
+            running = age_minutes <= CRON_INTERVAL_MINUTES * 3
+            next_run = to_utc_iso(
+                parsed + timedelta(minutes=CRON_INTERVAL_MINUTES)
+            )
+    inprocess = inprocess_scheduler_state()
+    alive = bool(inprocess.get("alive"))
+    if alive:
+        running = True
+        next_run = inprocess.get("next_run") or next_run
+    return {
+        "automatic_running": running,
+        "inprocess_alive": alive,
+        "inprocess_started_at": inprocess.get("started_at"),
+        "inprocess_last_tick_at": inprocess.get("last_tick_at"),
+        "inprocess_last_error": inprocess.get("last_error"),
+        "last_cron_run": last_run,
+        "next_cron_run": next_run,
+        "last_qa_run": None if last_qa is None else last_qa.get("ran_at"),
+        "interval": CRON_INTERVAL,
+    }
+
+
+def _record_run(organization_id, source, result):
+    from modules.database.visit_reminder_runs_repository import (
+        record_visit_reminder_run,
+    )
+
+    record_visit_reminder_run(
+        organization_id,
+        source=source,
+        ran_at=result.get("now"),
+        candidate_count=result.get("candidates_found") or 0,
+        dispatched=result.get("notifications_created") or 0,
+    )
+
+
+def scan_visit_reminders(
+    organization_id,
+    *,
+    now=None,
+    send=True,
+    source="cron",
+    include_near_misses=False,
+):
     """
     Scan one organization for visits in the 30-minute reminder window.
 
@@ -206,8 +416,11 @@ def scan_visit_reminders(organization_id, *, now=None, send=True):
     timezone_name = _org_timezone_name(organization_id)
     tz = organization_timezone(organization_id)
     language = _org_language(organization_id)
-    visits = _list_window_candidates(organization_id, instant)
+    now_local = ""
+    local_now = instant.astimezone(tz)
+    now_local = local_now.strftime("%Y-%m-%d %H:%M:%S")
 
+    visits = _list_window_candidates(organization_id, instant)
     logger.info(
         "agenda_reminder_scan now=%s timezone=%s window_start=%s "
         "window_end=%s candidate_count=%s organization_id=%s",
@@ -219,10 +432,10 @@ def scan_visit_reminders(organization_id, *, now=None, send=True):
         organization_id,
     )
 
-    candidates = []
+    rows = []
     notifications_created = 0
     push_sent = 0
-    skipped = 0
+    push_failed = 0
 
     for task in visits:
         record = _process_candidate(
@@ -233,25 +446,46 @@ def scan_visit_reminders(organization_id, *, now=None, send=True):
             language=language,
             send=send,
         )
-        candidates.append(record)
-        if record.get("created"):
+        rows.append(record)
+        if record.get("notification_created") or record.get("created"):
             notifications_created += 1
-        if record.get("skipped_reason"):
-            skipped += 1
-        push_sent += int(record.get("sent_count") or 0)
+        push_sent += int(record.get("push_sent_count") or record.get("sent_count") or 0)
+        push_failed += int(
+            record.get("push_failed_count") or record.get("failed_count") or 0
+        )
         if record.get("dispatched"):
             logger.info(
                 "agenda_reminder_dispatched event_id=%s user_id=%s "
                 "sent_count=%s failed_count=%s",
                 record.get("event_id"),
-                record.get("user_id"),
-                record.get("sent_count") or 0,
-                record.get("failed_count") or 0,
+                record.get("resolved_user_id") or record.get("user_id"),
+                record.get("push_sent_count") or 0,
+                record.get("push_failed_count") or 0,
             )
 
-    return {
+    if include_near_misses:
+        seen = {item.get("event_id") for item in rows}
+        for task in _list_nearby_tasks(organization_id, instant):
+            if task.get("id") in seen:
+                continue
+            rows.append(classify_visit_for_reminder(task, organization_id, instant))
+
+    omitted = [
+        {
+            "event_id": item.get("event_id"),
+            "skip_reason": item.get("skip_reason"),
+            "candidate": item.get("candidate"),
+            "notification_created": item.get("notification_created"),
+            "push_sent_count": item.get("push_sent_count") or 0,
+        }
+        for item in rows
+        if item.get("skip_reason")
+    ]
+
+    result = {
         "organization_id": organization_id,
         "now": to_utc_iso(instant),
+        "now_local": now_local,
         "timezone": timezone_name,
         "window_start": to_utc_iso(window_start),
         "window_end": to_utc_iso(window_end),
@@ -262,75 +496,92 @@ def scan_visit_reminders(organization_id, *, now=None, send=True):
         "notifications_created": notifications_created,
         "dispatched": notifications_created,
         "push_sent": push_sent,
-        "skipped": skipped,
-        "candidates": candidates,
+        "push_failed": push_failed,
+        "skipped": len(omitted),
+        "omitted": omitted,
+        "candidates": rows,
+        "scheduler": scheduler_status(organization_id, now=instant),
     }
+    try:
+        _record_run(organization_id, source, result)
+    except Exception:
+        logger.warning(
+            "visit_reminder_run_record_failed organization_id=%s source=%s",
+            organization_id,
+            source,
+            exc_info=True,
+        )
+    return result
+
+
+def probe_visit_reminders(organization_id, *, current_user=None, now=None):
+    """Admin QA: ensure a +30m visit exists in this org, then scan once."""
+    created_task = None
+    created_new = False
+    try:
+        created_task, created_new = ensure_probe_visit(
+            organization_id,
+            current_user=current_user,
+            now=now,
+        )
+    except RuntimeError as error:
+        result = scan_visit_reminders(
+            organization_id,
+            now=now,
+            send=True,
+            source="qa",
+            include_near_misses=True,
+        )
+        result["probe_error"] = str(error)
+        result["created_visit"] = False
+        return result
+
+    result = scan_visit_reminders(
+        organization_id,
+        now=now,
+        send=True,
+        source="qa",
+        include_near_misses=True,
+    )
+    result["created_visit"] = created_new
+    result["probe_task_id"] = None if not created_task else created_task.get("id")
+    return result
 
 
 def _process_candidate(organization_id, task, *, instant, tz, language, send):
-    task_id = task.get("id")
-    status = task.get("status") or STATUS_PENDING
-    task_type = task.get("task_type")
-    due_at = task.get("due_at")
-    event_key = visit_reminder_event_key(task_id, due_at) if task_id else None
-    already = (
-        find_notification_by_event_key(organization_id, event_key)
-        if event_key
-        else None
-    )
-    already_sent = already is not None
-    user = resolve_visit_recipient(task, organization_id)
-    user_id = None if user is None else user.get("id")
-    preference_enabled = (
-        is_push_category_enabled(organization_id, user_id, PREF_KEY)
-        if user_id is not None
-        else False
-    )
-    skipped_reason = None
-    if task_id is None:
-        skipped_reason = "missing_task_id"
-    elif user_id is None:
-        skipped_reason = "no_recipient"
-    elif status in SKIP_STATUSES or status not in ACTIVE_STATUSES:
-        skipped_reason = f"status_{status}"
-    elif already_sent:
-        skipped_reason = "already_sent"
+    record = classify_visit_for_reminder(task, organization_id, instant)
+    task_id = record["event_id"]
+    user_id = record["resolved_user_id"]
+    due_at = record["starts_at"]
+    event_key = record["dedupe_key"]
 
     logger.info(
         "agenda_reminder_candidate event_id=%s user_id=%s organization_id=%s "
         "starts_at=%s status=%s type=%s dedupe_key=%s preference_enabled=%s "
-        "already_sent=%s",
+        "already_sent=%s candidate=%s skip_reason=%s",
         task_id,
         user_id,
         organization_id,
         due_at,
-        status,
-        task_type,
+        record["event_status"],
+        record["event_type"],
         event_key,
-        int(bool(preference_enabled)),
-        int(already_sent),
+        int(bool(record["push_visit_reminders"])),
+        int(record["already_sent"]),
+        int(record["candidate"]),
+        record["skip_reason"] or "",
     )
 
-    empty_push = {"sent_count": 0, "failed_count": 0, "push_targets_count": 0}
-    record = {
-        "event_id": task_id,
-        "user_id": user_id,
-        "organization_id": organization_id,
-        "starts_at": due_at,
-        "status": status,
-        "type": task_type,
-        "dedupe_key": event_key,
-        "preference_enabled": preference_enabled,
-        "already_sent": already_sent,
-        "skipped_reason": skipped_reason,
-        "created": False,
-        "dispatched": False,
-        "sent_count": 0,
-        "failed_count": 0,
-    }
-    if skipped_reason or not send:
-        if not send and skipped_reason is None:
+    send_blocked = record["skip_reason"] in {
+        "no_recipient",
+        "already_sent",
+        "missing_task_id",
+    } or not record["candidate"]
+    if send_blocked or not send:
+        if not send and record["skip_reason"] is None:
+            record["skip_reason"] = "dry_run"
             record["skipped_reason"] = "dry_run"
+        record["dispatcher_reason"] = record["skip_reason"]
         return record
 
     address = _visit_address(task)
@@ -367,24 +618,43 @@ def _process_candidate(organization_id, task, *, instant, tz, language, send):
             task_id,
             exc_info=True,
         )
+        record["skip_reason"] = "send_failed"
         record["skipped_reason"] = "send_failed"
+        record["dispatcher_reason"] = "send_failed"
         return record
 
-    push = result.get("push") or empty_push
+    push = result.get("push") or {}
     created = bool(result.get("created"))
+    sent_count = int(push.get("sent_count") or 0)
+    failed_count = int(push.get("failed_count") or 0)
+    targets = int(push.get("push_targets_count") or record["push_targets_count"] or 0)
     record.update(
         {
+            "notification_created": created,
             "created": created,
             "dispatched": created,
-            "sent_count": int(push.get("sent_count") or 0),
-            "failed_count": int(push.get("failed_count") or 0),
-            "already_sent": (not created) or already_sent,
-            "skipped_reason": None if created else "already_sent",
-            "preference_enabled": preference_enabled,
+            "push_sent_count": sent_count,
+            "push_failed_count": failed_count,
+            "push_targets_count": targets,
+            "sent_count": sent_count,
+            "failed_count": failed_count,
+            "already_sent": (not created) or record["already_sent"],
         }
     )
-    if created and not preference_enabled:
-        record["skipped_reason"] = "preference_off"
+    if not created:
+        record["skip_reason"] = "already_sent"
+    elif not record["push_visit_reminders"]:
+        record["skip_reason"] = "preference_off"
+    elif sent_count == 0 and failed_count > 0:
+        record["skip_reason"] = f"push_failed failed_count={failed_count}"
+    elif sent_count == 0 and targets == 0:
+        record["skip_reason"] = "no_push_subscription"
+    elif sent_count == 0:
+        record["skip_reason"] = "push_sent_count_0"
+    else:
+        record["skip_reason"] = None
+    record["skipped_reason"] = record["skip_reason"]
+    record["dispatcher_reason"] = record["skip_reason"]
     return record
 
 
@@ -395,7 +665,7 @@ def dispatch_due_visit_reminders(organization_id, *, now=None):
     Window is +25 to +35 minutes from ``now`` (UTC). Idempotent via
     ``event_key`` that includes the current ``due_at``.
     """
-    return scan_visit_reminders(organization_id, now=now, send=True)
+    return scan_visit_reminders(organization_id, now=now, send=True, source="cron")
 
 
 def dispatch_due_visit_reminders_all(*, now=None):
@@ -431,3 +701,4 @@ def clear_visit_reminder_dedupe(organization_id, task_id):
         entity_type="agent_task",
         entity_id=task_id,
     )
+

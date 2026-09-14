@@ -8564,8 +8564,12 @@ register_visit_reminder_qa_routes(
 
 if __name__ == "__main__":
     from modules.database import create_tables
+    from modules.visit_reminder_scheduler import start_visit_reminder_scheduler
 
     create_tables()
+    # The Flask reloader parent process must not start a second loop.
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not get_flask_debug():
+        start_visit_reminder_scheduler()
 
     app.run(
         host=get_host(),

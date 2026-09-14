@@ -46,6 +46,12 @@
                 <a class="btn btn-secondary" href="{{ url_for('agenda_route', date=agenda.due_date or none) }}">{{ t('route_open_today') }}</a>
             </p>
             {% endif %}
+            {% if is_admin() %}
+            <form method="post" action="{{ url_for('settings_agenda_reminders') }}" class="agenda-hero__route">
+                <input type="hidden" name="action" value="probe">
+                <button type="submit" class="btn btn-secondary">{{ t('agenda_reminder_probe_button') }}</button>
+            </form>
+            {% endif %}
         </div>
         {% if can_manage %}
         <details class="agenda-new-menu hide-mobile">

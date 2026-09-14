@@ -12,21 +12,33 @@
 <section class="page-header">
     <div class="page-header-text">
         <p class="agenda-hero__kicker">{{ t('settings_title') }}</p>
-        <h2>{{ t('agenda_reminder_qa_title') }}</h2>
+        <h2>{{ t('agenda_reminder_probe_button') }}</h2>
         <p>{{ t('agenda_reminder_qa_help') }}</p>
     </div>
     <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('agenda_index') }}">{{ t('agenda_title') }}</a>
         <a class="btn btn-secondary" href="{{ url_for('settings_notifications') }}">{{ t('pwa_push_open') }}</a>
     </div>
 </section>
 
 <article class="integration-card">
+    <header class="integration-card__head">
+        <h3>{{ t('agenda_reminder_qa_scheduler') }}</h3>
+    </header>
+    <p>automatic_running={{ scheduler.automatic_running }}</p>
+    <p>inprocess_alive={{ scheduler.inprocess_alive }}</p>
+    <p>inprocess_started_at={{ scheduler.inprocess_started_at or 'never' }}</p>
+    <p>inprocess_last_tick_at={{ scheduler.inprocess_last_tick_at or 'never' }}</p>
+    <p>inprocess_last_error={{ scheduler.inprocess_last_error or 'none' }}</p>
+    <p>last_cron_run={{ scheduler.last_cron_run or 'never' }}</p>
+    <p>next_cron_run={{ scheduler.next_cron_run or 'n/a' }}</p>
+    <p>last_qa_run={{ scheduler.last_qa_run or 'never' }}</p>
+    <p>interval={{ scheduler.interval }}</p>
     <p class="field-help">{{ t('agenda_reminder_qa_cron_note') }}</p>
-    <p class="field-help">timezone={{ timezone_name }} · interval=*/5 * * * *</p>
     <form method="post" class="office-announcement-form">
-        <input type="hidden" name="action" value="scan">
+        <input type="hidden" name="action" value="probe">
         <div class="integration-card__actions">
-            <button type="submit" class="btn btn-primary">{{ t('agenda_reminder_qa_run') }}</button>
+            <button type="submit" class="btn btn-primary">{{ t('agenda_reminder_probe_button') }}</button>
         </div>
     </form>
 </article>
@@ -36,38 +48,71 @@
     <header class="integration-card__head">
         <h3>{{ t('agenda_reminder_qa_result') }}</h3>
     </header>
+    <p>now_local={{ scan.now_local }}</p>
+    <p>timezone={{ scan.timezone }}</p>
+    <p>candidatos encontrados={{ scan.candidates_found }}</p>
+    <p>enviados={{ scan.push_sent }}</p>
+    <p>omitidos={{ scan.skipped }}</p>
     <p>candidates_found={{ scan.candidates_found }}</p>
     <p>notifications_created={{ scan.notifications_created }}</p>
     <p>push_sent={{ scan.push_sent }}</p>
-    <p>now={{ scan.now }} · window={{ scan.window_start }} → {{ scan.window_end }}</p>
+    <p>push_failed={{ scan.push_failed }}</p>
+    {% if scan.created_visit %}
+    <p>{{ t('agenda_reminder_qa_created', task_id=scan.probe_task_id) }}</p>
+    {% endif %}
+    {% if scan.probe_error %}
+    <p>probe_error={{ scan.probe_error }}</p>
+    {% endif %}
+    {% if scan.omitted %}
+    <p><strong>{{ t('agenda_reminder_qa_omitted') }}</strong></p>
+    <ul>
+        {% for item in scan.omitted %}
+        <li>event_id={{ item.event_id }} skip_reason={{ item.skip_reason }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
     {% if scan.candidates %}
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
                 <tr>
                     <th>event_id</th>
-                    <th>user_id</th>
+                    <th>event_type</th>
+                    <th>event_status</th>
                     <th>starts_at</th>
-                    <th>type</th>
-                    <th>status</th>
+                    <th>minutes_until_start</th>
+                    <th>assigned_user_id</th>
+                    <th>resolved_user_id</th>
+                    <th>push_visit_reminders</th>
+                    <th>dedupe_key</th>
                     <th>already_sent</th>
-                    <th>preference_enabled</th>
-                    <th>skipped_reason</th>
-                    <th>sent_count</th>
+                    <th>candidate</th>
+                    <th>skip_reason</th>
+                    <th>notification_created</th>
+                    <th>push_targets_count</th>
+                    <th>push_sent_count</th>
+                    <th>push_failed_count</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in scan.candidates %}
                 <tr>
                     <td>{{ item.event_id }}</td>
-                    <td>{{ item.user_id }}</td>
+                    <td>{{ item.event_type }}</td>
+                    <td>{{ item.event_status }}</td>
                     <td>{{ item.starts_at }}</td>
-                    <td>{{ item.type }}</td>
-                    <td>{{ item.status }}</td>
+                    <td>{{ item.minutes_until_start }}</td>
+                    <td>{{ item.assigned_user_id }}</td>
+                    <td>{{ item.resolved_user_id }}</td>
+                    <td>{{ item.push_visit_reminders }}</td>
+                    <td>{{ item.dedupe_key }}</td>
                     <td>{{ item.already_sent }}</td>
-                    <td>{{ item.preference_enabled }}</td>
-                    <td>{{ item.skipped_reason or '—' }}</td>
-                    <td>{{ item.sent_count }}</td>
+                    <td>{{ item.candidate }}</td>
+                    <td>{{ item.skip_reason or '—' }}</td>
+                    <td>{{ item.notification_created }}</td>
+                    <td>{{ item.push_targets_count }}</td>
+                    <td>{{ item.push_sent_count }}</td>
+                    <td>{{ item.push_failed_count }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
