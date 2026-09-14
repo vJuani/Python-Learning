@@ -320,3 +320,39 @@ def mark_all_notifications_read(
 
     connection.commit()
     connection.close()
+
+
+def delete_notifications_for_entity(
+    organization_id,
+    *,
+    kind,
+    entity_type,
+    entity_id,
+):
+    """Delete org-scoped notifications for one entity. QA/reset only."""
+    organization_id = require_organization_id(organization_id)
+    if entity_id is None or not kind or not entity_type:
+        return 0
+
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            DELETE FROM notifications
+            WHERE organization_id = ?
+                AND kind = ?
+                AND entity_type = ?
+                AND entity_id = ?
+            """,
+            (organization_id, kind, entity_type, int(entity_id)),
+        )
+        deleted = cursor.rowcount or 0
+        connection.commit()
+        return deleted
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+

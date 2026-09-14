@@ -8551,6 +8551,16 @@ register_office_announcement_routes(
     },
 )
 
+from modules.visit_reminder_qa_routes import register_visit_reminder_qa_routes
+
+register_visit_reminder_qa_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "flash_i18n": flash_i18n,
+    },
+)
+
 
 if __name__ == "__main__":
     from modules.database import create_tables

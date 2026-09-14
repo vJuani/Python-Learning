@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-settings-page {% endblock %}
+
+{% block title %}{{ t('agenda_reminder_qa_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="agenda-hero__kicker">{{ t('settings_title') }}</p>
+        <h2>{{ t('agenda_reminder_qa_title') }}</h2>
+        <p>{{ t('agenda_reminder_qa_help') }}</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('settings_notifications') }}">{{ t('pwa_push_open') }}</a>
+    </div>
+</section>
+
+<article class="integration-card">
+    <p class="field-help">{{ t('agenda_reminder_qa_cron_note') }}</p>
+    <p class="field-help">timezone={{ timezone_name }} · interval=*/5 * * * *</p>
+    <form method="post" class="office-announcement-form">
+        <input type="hidden" name="action" value="scan">
+        <div class="integration-card__actions">
+            <button type="submit" class="btn btn-primary">{{ t('agenda_reminder_qa_run') }}</button>
+        </div>
+    </form>
+</article>
+
+{% if scan %}
+<article class="integration-card">
+    <header class="integration-card__head">
+        <h3>{{ t('agenda_reminder_qa_result') }}</h3>
+    </header>
+    <p>candidates_found={{ scan.candidates_found }}</p>
+    <p>notifications_created={{ scan.notifications_created }}</p>
+    <p>push_sent={{ scan.push_sent }}</p>
+    <p>now={{ scan.now }} · window={{ scan.window_start }} → {{ scan.window_end }}</p>
+    {% if scan.candidates %}
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>event_id</th>
+                    <th>user_id</th>
+                    <th>starts_at</th>
+                    <th>type</th>
+                    <th>status</th>
+                    <th>already_sent</th>
+                    <th>preference_enabled</th>
+                    <th>skipped_reason</th>
+                    <th>sent_count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in scan.candidates %}
+                <tr>
+                    <td>{{ item.event_id }}</td>
+                    <td>{{ item.user_id }}</td>
+                    <td>{{ item.starts_at }}</td>
+                    <td>{{ item.type }}</td>
+                    <td>{{ item.status }}</td>
+                    <td>{{ item.already_sent }}</td>
+                    <td>{{ item.preference_enabled }}</td>
+                    <td>{{ item.skipped_reason or '—' }}</td>
+                    <td>{{ item.sent_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</article>
+{% endif %}
+
+<article class="integration-card">
+    <header class="integration-card__head">
+        <h3>{{ t('agenda_reminder_qa_reset_title') }}</h3>
+    </header>
+    <p>{{ t('agenda_reminder_qa_reset_help') }}</p>
+    <form method="post" class="office-announcement-form">
+        <input type="hidden" name="action" value="reset">
+        <label>
+            {{ t('agenda_reminder_qa_task_id') }}
+            <input type="number" name="task_id" min="1" required>
+        </label>
+        <div class="integration-card__actions">
+            <button type="submit" class="btn btn-secondary">{{ t('agenda_reminder_qa_reset_submit') }}</button>
+        </div>
+    </form>
+</article>
+{% endblock %}
