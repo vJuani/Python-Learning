@@ -1863,6 +1863,7 @@ def create_postgres_schema():
         for column_name, column_sql in (
             ("event_key", "TEXT"),
             ("read_at", "TEXT"),
+            ("priority", "TEXT"),
         ):
             cursor.execute(
                 f"""

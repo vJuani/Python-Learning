@@ -336,7 +336,7 @@ def parse_agenda_prompt(prompt, *, today=None, now_local=None):
         "property_query": property_query,
         "description": prompt,
         "duration_minutes": DEFAULT_DURATION.get(task_type, 30),
-        "reminder_minutes": 15 if task_type == "visit" else None,
+        "reminder_minutes": 30 if task_type == "visit" else None,
         "attendance_status": (
             "pending_confirmation" if task_type == "visit" else None
         ),

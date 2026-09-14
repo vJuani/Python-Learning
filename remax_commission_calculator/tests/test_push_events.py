@@ -228,7 +228,9 @@ class PushEventsTests(unittest.TestCase):
         )
         mocked.assert_called_once()
         payload = mocked.call_args.args[2]
-        self.assertEqual(payload["url"], f"/agenda/{task['id']}/edit")
+        self.assertTrue(payload["url"].startswith("/notifications/"))
+        self.assertTrue(payload["url"].endswith("/open"))
+        self.assertEqual(payload["type"], "visit_reminder")
         self.assertIn("Santamarina 1335", payload["body"])
 
     def test_visit_skips_outside_window(self):
@@ -320,7 +322,8 @@ class PushEventsTests(unittest.TestCase):
             )
         )
         mocked.assert_called_once()
-        self.assertEqual(mocked.call_args.args[2]["url"], "/billing?tab=pending")
+        self.assertTrue(mocked.call_args.args[2]["url"].startswith("/notifications/"))
+        self.assertTrue(mocked.call_args.args[2]["url"].endswith("/open"))
 
     def test_invoice_skips_save_without_state_change(self):
         op_id = self._operation()
@@ -407,10 +410,8 @@ class PushEventsTests(unittest.TestCase):
             )
         )
         mocked.assert_called_once()
-        self.assertEqual(
-            mocked.call_args.args[2]["url"],
-            f"/contacts/{contact['id']}/property-matches",
-        )
+        self.assertTrue(mocked.call_args.args[2]["url"].startswith("/notifications/"))
+        self.assertTrue(mocked.call_args.args[2]["url"].endswith("/open"))
         self.assertIn("Martín", mocked.call_args.args[2]["body"])
 
     def test_match_no_duplicate_same_need_property(self):
@@ -571,7 +572,10 @@ class PushEventsTests(unittest.TestCase):
             if item["payload"].get("event_key") == "agenda_visit_url_check"
         )
         self.assertEqual(stored["payload"]["url"], "/")
-        self.assertEqual(mocked.call_args.args[2]["url"], "/")
+        self.assertEqual(
+            mocked.call_args.args[2]["url"],
+            f"/notifications/{result['notification_id']}/open",
+        )
 
     def test_dedupe_blocks_second_send(self):
         with patch(
@@ -609,9 +613,9 @@ class PushEventsTests(unittest.TestCase):
         page = self.client.get("/settings/notifications")
         html = page.get_data(as_text=True)
         self.assertEqual(page.status_code, 200)
-        self.assertIn("Visitas próximas", html)
+        self.assertIn("Recordatorios de Agenda", html)
         self.assertIn("Facturación habilitada", html)
-        self.assertIn("Nuevos matches", html)
+        self.assertIn("Propiedades y matches", html)
         saved = self.client.post(
             "/settings/notifications",
             data={"push_invoice_ready": "1"},

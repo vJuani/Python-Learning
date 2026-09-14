@@ -545,7 +545,7 @@ def register_agenda_routes(app, helpers):
                     "due_date": defaults["due_date"],
                     "due_time": defaults["due_time"],
                     "duration_minutes": 60,
-                    "reminder_minutes": 15,
+                    "reminder_minutes": 30,
                 }
             else:
                 try:
@@ -576,7 +576,7 @@ def register_agenda_routes(app, helpers):
                     "due_date": defaults["due_date"],
                     "due_time": defaults["due_time"],
                     "duration_minutes": 60,
-                    "reminder_minutes": 15,
+                    "reminder_minutes": 30,
                 }
             apply_known_contact(draft, compose_contact, language=language)
             draft = refresh_item(draft)

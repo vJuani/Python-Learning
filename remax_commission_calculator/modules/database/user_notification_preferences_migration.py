@@ -54,6 +54,16 @@ PREF_COLUMNS = (
         "INTEGER NOT NULL DEFAULT 1",
         "SMALLINT NOT NULL DEFAULT 1",
     ),
+    ("push_agenda_changes", "INTEGER NOT NULL DEFAULT 1", "SMALLINT NOT NULL DEFAULT 1"),
+    (
+        "push_agenda_assignments",
+        "INTEGER NOT NULL DEFAULT 1",
+        "SMALLINT NOT NULL DEFAULT 1",
+    ),
+    ("push_operations", "INTEGER NOT NULL DEFAULT 1", "SMALLINT NOT NULL DEFAULT 1"),
+    ("push_crm", "INTEGER NOT NULL DEFAULT 1", "SMALLINT NOT NULL DEFAULT 1"),
+    ("push_treasury", "INTEGER NOT NULL DEFAULT 1", "SMALLINT NOT NULL DEFAULT 1"),
+    ("push_system", "INTEGER NOT NULL DEFAULT 1", "SMALLINT NOT NULL DEFAULT 1"),
 )
 
 

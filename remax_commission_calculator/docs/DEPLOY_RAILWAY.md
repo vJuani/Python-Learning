@@ -22,20 +22,27 @@ or concurrent executions are safe because every generated movement is
 uniquely identified by organization, recurring configuration, and billing
 period.
 
-## Visit reminders (agenda, ~30 minutes)
+## Notifications worker (agenda reminders + overdue tasks)
 
-Gunicorn starts an in-process loop (`modules/visit_reminder_scheduler.py`)
-because this service runs **one worker**. It scans pending visits due in
-25–35 minutes every 5 minutes. Dedupe key
-`agenda_visit_<id>_30m_<due_at>` prevents duplicates.
+Preferred: a Railway Cron Job or a dedicated worker service. Do not add
+new loops inside Gunicorn.
 
-Disable with `VISIT_REMINDER_SCHEDULER=0` if you switch to a separate
-Railway Cron Job (`python dispatch_visit_reminders.py`, schedule
-`*/5 * * * *`) instead.
+| Mode | Command |
+|------|---------|
+| Railway Cron (one-shot, every 5 min) | `python notification_worker.py` or `python dispatch_visit_reminders.py` |
+| Dedicated worker | `python notification_worker.py --loop` |
+| HTTP Cron | `POST /internal/jobs/notifications/tick` with header `X-Job-Secret` |
 
-Admin QA: **Agenda** or **Configuración → Notificaciones → Probar reminder
-de visitas**. If `last_cron_run=never` after the web process has been up
-for more than ~15 seconds, the in-process loop did not start.
+Set `NOTIFICATION_JOB_SECRET` if you use the HTTP tick. Disable the
+in-process fallback with `VISIT_REMINDER_SCHEDULER=0` after Cron/worker
+is running.
+
+The scanner uses each event's `reminder_minutes` (visits default to 30)
+with a ±5 minute window. Timezone: organization setting, default
+`America/Argentina/Buenos_Aires`. Dedupe key:
+`agenda_event_<id>_reminder_<minutes>m_<due_at>`.
+
+Admin QA: **Configuración → Notificaciones → Probar reminder de visitas**.
 
 # Deploy staging on Railway (SQLite)
 

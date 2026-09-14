@@ -13,171 +13,55 @@ noise that could drift from the source of truth.
 
 import logging
 
-from modules.database.notifications_repository import (
-    create_notification,
-    find_notification_by_event_key,
-)
-from modules.database.user_notification_preferences_repository import (
-    is_push_category_enabled,
-)
 from modules.database.users_repository import (
     get_user_by_agent_id
 )
-from modules.web_push import is_safe_internal_url, safe_internal_url, send_user_pushes
+from modules.notifications.service import notify_user as dispatch_user_notification
+from modules.notifications.service import send_user_notification
+from modules.web_push import send_user_pushes
 
 
 logger = logging.getLogger(__name__)
 
-PUSH_PREF_BY_TYPE = {
-    "visit_reminder": "push_visit_reminders",
-    "operation_side_ready_to_invoice": "push_invoice_ready",
-    "property_match": "push_property_matches",
-    "task_overdue": "push_task_overdue",
-    "office_announcement": "push_office_announcements",
-}
-
 PREFS_SAVE_MATCH_NOTIFY_LIMIT = 5
 
 
-def send_user_notification(
-    user_id,
-    organization_id,
-    notification_type,
-    title,
-    body,
-    url,
-    metadata=None,
+def _legacy_dispatch(
     *,
-    event_key=None,
-    entity_type=None,
-    entity_id=None,
+    organization_id,
+    agent_id=None,
+    user_id=None,
+    kind,
+    entity_type,
+    entity_id,
+    payload=None,
     actor_user_id=None,
+    event_key=None,
+    url=None,
 ):
-    """
-    Persist an in-app notification and fan out Web Push.
-
-    ``event_key`` is the idempotency token. A repeated key never creates
-    a second row and never sends a second push. Push failures never
-    raise to the caller.
-    """
-    empty_push = {
-        "push_targets_count": 0,
-        "sent_count": 0,
-        "failed_count": 0,
-        "deactivated_count": 0,
-    }
-    if user_id is None or organization_id is None:
-        return {
-            "notification_id": None,
-            "created": False,
-            "pushed": False,
-            "push": empty_push,
-        }
-
-    if event_key:
-        existing = find_notification_by_event_key(
-            organization_id,
-            event_key,
-            user_id=user_id,
-        )
-        if existing is not None:
-            logger.info(
-                "notification_dispatch type=%s organization_id=%s user_id=%s "
-                "event_key=%s push_targets_count=0 sent_count=0 failed_count=0 "
-                "deduped=1",
-                notification_type,
-                organization_id,
-                user_id,
-                event_key,
-            )
-            return {
-                "notification_id": existing,
-                "created": False,
-                "pushed": False,
-                "push": empty_push,
-            }
-
-    internal_url = safe_internal_url(url)
-    if url and not is_safe_internal_url(url):
-        logger.warning(
-            "notification_dispatch rejected_external_url type=%s "
-            "organization_id=%s user_id=%s event_key=%s",
-            notification_type,
-            organization_id,
-            user_id,
-            event_key,
-        )
-
-    payload = dict(metadata or {})
-    payload["title"] = title
-    payload["body"] = body
-    payload["url"] = internal_url
-    payload["event_key"] = event_key
-
-    notification_id = create_notification(
-        organization_id,
+    payload = dict(payload or {})
+    title = (
+        payload.get("title")
+        or payload.get("address")
+        or payload.get("property")
+        or kind
+    )
+    body = payload.get("body") or payload.get("address") or payload.get("reason") or ""
+    result = dispatch_user_notification(
         user_id,
-        notification_type,
-        entity_type or "notification",
-        entity_id if entity_id is not None else 0,
-        payload=payload,
+        organization_id,
+        kind,
+        title,
+        body,
+        url or payload.get("url"),
+        event_key=event_key or payload.get("event_key") or f"{kind}_{entity_id}",
+        metadata=payload,
+        entity_type=entity_type,
+        entity_id=entity_id,
         actor_user_id=actor_user_id,
-        event_key=event_key,
+        agent_id=agent_id,
     )
-    created = True
-
-    pref_key = PUSH_PREF_BY_TYPE.get(notification_type)
-    push_allowed = (
-        created
-        and (
-            pref_key is None
-            or is_push_category_enabled(organization_id, user_id, pref_key)
-        )
-    )
-    push_stats = dict(empty_push)
-    if push_allowed:
-        try:
-            push_stats = send_user_pushes(
-                organization_id,
-                user_id,
-                {
-                    "title": title,
-                    "body": body,
-                    "url": internal_url,
-                    "tag": event_key or notification_type,
-                    "icon": "/static/icons/icon-192.png",
-                    "badge": "/static/icons/icon-192.png",
-                },
-            )
-        except Exception:
-            logger.warning(
-                "notification_dispatch push failed type=%s organization_id=%s "
-                "user_id=%s event_key=%s",
-                notification_type,
-                organization_id,
-                user_id,
-                event_key,
-                exc_info=True,
-            )
-            push_stats = dict(empty_push)
-
-    logger.info(
-        "notification_dispatch type=%s organization_id=%s user_id=%s "
-        "event_key=%s push_targets_count=%s sent_count=%s failed_count=%s",
-        notification_type,
-        organization_id,
-        user_id,
-        event_key,
-        push_stats.get("push_targets_count", 0),
-        push_stats.get("sent_count", 0),
-        push_stats.get("failed_count", 0),
-    )
-    return {
-        "notification_id": notification_id,
-        "created": created,
-        "pushed": bool(push_allowed and (push_stats.get("sent_count") or 0)),
-        "push": push_stats,
-    }
+    return None if not result else result.get("notification_id")
 
 
 def notify_agent_for_property(
@@ -188,22 +72,15 @@ def notify_agent_for_property(
     payload,
     actor_user_id=None
 ):
-    user = get_user_by_agent_id(
-        agent_id,
-        organization_id
-    )
-
-    if user is None:
-        return None
-
-    return create_notification(
-        organization_id,
-        user["id"],
-        kind,
-        "property",
-        property_id,
+    return _legacy_dispatch(
+        organization_id=organization_id,
+        agent_id=agent_id,
+        kind=kind,
+        entity_type="property",
+        entity_id=property_id,
         payload=payload,
-        actor_user_id=actor_user_id
+        actor_user_id=actor_user_id,
+        url=f"/properties/{int(property_id)}",
     )
 
 
@@ -215,22 +92,14 @@ def notify_agent_for_property_change(
     payload,
     actor_user_id=None
 ):
-    user = get_user_by_agent_id(
-        agent_id,
-        organization_id
-    )
-
-    if user is None:
-        return None
-
-    return create_notification(
-        organization_id,
-        user["id"],
-        kind,
-        "property_change",
-        change_request_id,
+    return _legacy_dispatch(
+        organization_id=organization_id,
+        agent_id=agent_id,
+        kind=kind,
+        entity_type="property_change",
+        entity_id=change_request_id,
         payload=payload,
-        actor_user_id=actor_user_id
+        actor_user_id=actor_user_id,
     )
 
 
@@ -242,22 +111,15 @@ def notify_agent_for_operation(
     payload,
     actor_user_id=None
 ):
-    user = get_user_by_agent_id(
-        agent_id,
-        organization_id
-    )
-
-    if user is None:
-        return None
-
-    return create_notification(
-        organization_id,
-        user["id"],
-        kind,
-        "operation",
-        operation_id,
+    return _legacy_dispatch(
+        organization_id=organization_id,
+        agent_id=agent_id,
+        kind=kind,
+        entity_type="operation",
+        entity_id=operation_id,
         payload=payload,
-        actor_user_id=actor_user_id
+        actor_user_id=actor_user_id,
+        url=f"/operations/{int(operation_id)}",
     )
 
 
@@ -347,13 +209,13 @@ def notify_user(
     if user_id is None:
         return None
 
-    return create_notification(
-        organization_id,
-        user_id,
-        kind,
-        entity_type,
-        entity_id,
-        payload=payload or {},
+    return _legacy_dispatch(
+        organization_id=organization_id,
+        user_id=user_id,
+        kind=kind,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        payload=payload,
         actor_user_id=actor_user_id,
         event_key=event_key,
     )

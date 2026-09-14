@@ -1,5 +1,5 @@
 /* JRH One PWA service worker. Caches static assets only. Never caches private data. */
-const CACHE_NAME = "jrh-one-static-v2";
+const CACHE_NAME = "jrh-one-static-v3";
 const STATIC_PREFIXES = [
   "/static/css/",
   "/static/js/",
@@ -149,10 +149,15 @@ self.addEventListener("push", function (event) {
       var parsed = event.data.json();
       payload.title = parsed.title || payload.title;
       payload.body = parsed.body || "";
-      payload.url = safeInternalUrl(parsed.url);
+      payload.url = parsed.notification_id
+        ? "/notifications/" + parsed.notification_id + "/open"
+        : safeInternalUrl(parsed.url);
       payload.tag = parsed.tag || payload.tag;
       payload.icon = parsed.icon || payload.icon;
       payload.badge = parsed.badge || payload.badge;
+      payload.type = parsed.type || "";
+      payload.priority = parsed.priority || "info";
+      payload.notification_id = parsed.notification_id || null;
     } catch (error) {
       payload.body = event.data.text() || "";
     }
@@ -163,7 +168,12 @@ self.addEventListener("push", function (event) {
       icon: payload.icon,
       badge: payload.badge,
       tag: payload.tag,
-      data: { url: payload.url },
+      data: {
+        url: payload.url,
+        type: payload.type,
+        priority: payload.priority,
+        notification_id: payload.notification_id,
+      },
     })
   );
 });

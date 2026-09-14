@@ -29,26 +29,17 @@
     </header>
     <p>{{ t('settings_push_categories_help') }}</p>
     <form method="post" class="push-pref-form">
-        <label class="push-pref-form__row">
-            <input type="checkbox" name="push_visit_reminders" value="1"{% if push_prefs.push_visit_reminders %} checked{% endif %}>
-            {{ t('settings_push_visit_reminders') }}
-        </label>
-        <label class="push-pref-form__row">
-            <input type="checkbox" name="push_invoice_ready" value="1"{% if push_prefs.push_invoice_ready %} checked{% endif %}>
-            {{ t('settings_push_invoice_ready') }}
-        </label>
-        <label class="push-pref-form__row">
-            <input type="checkbox" name="push_property_matches" value="1"{% if push_prefs.push_property_matches %} checked{% endif %}>
-            {{ t('settings_push_property_matches') }}
-        </label>
-        <label class="push-pref-form__row">
-            <input type="checkbox" name="push_task_overdue" value="1"{% if push_prefs.push_task_overdue %} checked{% endif %}>
-            {{ t('settings_push_task_overdue') }}
-        </label>
-        <label class="push-pref-form__row">
-            <input type="checkbox" name="push_office_announcements" value="1"{% if push_prefs.push_office_announcements %} checked{% endif %}>
-            {{ t('settings_push_office_announcements') }}
-        </label>
+        {% for group in push_pref_groups %}
+        <fieldset class="push-pref-form__group">
+            <legend>{{ t(group.title_key) }}</legend>
+            {% for key in group.pref_keys %}
+            <label class="push-pref-form__row">
+                <input type="checkbox" name="{{ key }}" value="1"{% if push_prefs[key] %} checked{% endif %}>
+                {{ t(push_pref_labels[key]) }}
+            </label>
+            {% endfor %}
+        </fieldset>
+        {% endfor %}
         <div class="integration-card__actions">
             <button type="submit" class="btn btn-primary">{{ t('save') }}</button>
         </div>

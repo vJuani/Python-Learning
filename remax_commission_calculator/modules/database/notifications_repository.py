@@ -23,7 +23,8 @@ def create_notification(
     entity_id,
     payload=None,
     actor_user_id=None,
-    event_key=None
+    event_key=None,
+    priority="info",
 ):
     """
     Insert an informational notification event.
@@ -64,9 +65,10 @@ def create_notification(
                     is_read,
                     actor_user_id,
                     created_at,
-                    event_key
+                    event_key,
+                    priority
                 )
-                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
                 """,
                 (
                     organization_id,
@@ -77,7 +79,8 @@ def create_notification(
                     json.dumps(payload or {}),
                     actor_user_id,
                     _now_iso(),
-                    event_key
+                    event_key,
+                    priority or "info",
                 )
             )
             connection.commit()
@@ -150,7 +153,8 @@ NOTIFICATION_SELECT = """
         is_read,
         actor_user_id,
         created_at,
-        read_at
+        read_at,
+        priority
     FROM notifications
 """
 
@@ -176,6 +180,7 @@ def _row_to_notification(row):
         "actor_user_id": row[8],
         "created_at": row[9],
         "read_at": row[10] if len(row) > 10 else None,
+        "priority": (row[11] if len(row) > 11 else None) or payload.get("priority") or "info",
     }
 
 

@@ -18,6 +18,7 @@ from modules.database.user_notification_preferences_repository import (
     get_user_notification_preferences,
     save_user_notification_preferences,
 )
+from modules.notifications.catalog import PREF_GROUPS, PREF_KEYS, PREF_LABEL_KEYS
 from modules.web_push import WebPushError, require_vapid, send_test_push
 
 
@@ -114,11 +115,7 @@ def register_pwa_routes(app, helpers):
             save_user_notification_preferences(
                 organization_id,
                 user["id"],
-                push_visit_reminders=request.form.get("push_visit_reminders") == "1",
-                push_invoice_ready=request.form.get("push_invoice_ready") == "1",
-                push_property_matches=request.form.get("push_property_matches") == "1",
-                push_task_overdue=request.form.get("push_task_overdue") == "1",
-                push_office_announcements=request.form.get("push_office_announcements") == "1",
+                **{key: request.form.get(key) == "1" for key in PREF_KEYS},
             )
             flash_i18n("settings_push_prefs_saved", "success")
             return redirect(url_for("settings_notifications"))
@@ -128,6 +125,8 @@ def register_pwa_routes(app, helpers):
             "settings/notifications.html",
             push_has_active=bool(active),
             push_prefs=prefs,
+            push_pref_groups=PREF_GROUPS,
+            push_pref_labels=PREF_LABEL_KEYS,
         )
 
     @app.get("/api/push/public-key")

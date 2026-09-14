@@ -23,7 +23,7 @@ from modules.database.user_notification_preferences_repository import (
 )
 from modules.database.users_repository import get_user_by_agent_id
 from modules.i18n import translate
-from modules.notifications_service import send_user_notification
+from modules.notifications.catalog import PREF_AGENDA_REMINDERS
 from modules.organization_time import (
     UTC,
     format_local_time,
@@ -38,6 +38,9 @@ logger = logging.getLogger(__name__)
 
 WINDOW_START_MINUTES = 25
 WINDOW_END_MINUTES = 35
+REMINDER_TOLERANCE_MINUTES = 5
+DEFAULT_VISIT_REMINDER_MINUTES = 30
+MAX_REMINDER_MINUTES = 120
 QUERY_PAD_MINUTES = 5
 CRON_INTERVAL_MINUTES = 5
 CRON_INTERVAL = "*/5 * * * *"
@@ -54,7 +57,7 @@ VISIT_TYPE_ALIASES = frozenset(
 ACTIVE_STATUSES = frozenset({STATUS_PENDING})
 SKIP_STATUSES = frozenset({STATUS_COMPLETED, STATUS_CANCELLED})
 KIND = "visit_reminder"
-PREF_KEY = "push_visit_reminders"
+PREF_KEY = PREF_AGENDA_REMINDERS
 
 
 def normalize_visit_task_type(value):
@@ -68,13 +71,40 @@ def is_visit_task_type(value):
     return normalize_visit_task_type(value) == VISIT_TYPE
 
 
-def visit_reminder_event_key(task_id, due_at):
+def resolved_reminder_minutes(task):
+    raw = None if task is None else task.get("reminder_minutes")
+    if raw is None or raw == "":
+        if is_visit_task_type(None if task is None else task.get("task_type")):
+            return DEFAULT_VISIT_REMINDER_MINUTES
+        return None
+    try:
+        minutes = int(raw)
+    except (TypeError, ValueError):
+        minutes = None
+    if minutes is None or minutes <= 0:
+        if is_visit_task_type(None if task is None else task.get("task_type")):
+            return DEFAULT_VISIT_REMINDER_MINUTES
+        return None
+    return minutes
+
+
+def visit_reminder_event_key(task_id, due_at, reminder_minutes=None):
+    minutes = (
+        DEFAULT_VISIT_REMINDER_MINUTES
+        if reminder_minutes is None
+        else int(reminder_minutes)
+    )
+    stamp = str(due_at or "").replace(" ", "T")
+    return f"agenda_event_{int(task_id)}_reminder_{minutes}m_{stamp}"
+
+
+def visit_reminder_legacy_event_key(task_id, due_at):
     stamp = str(due_at or "").replace(" ", "T")
     return f"agenda_visit_{int(task_id)}_30m_{stamp}"
 
 
 def visit_reminder_event_key_prefix(task_id):
-    return f"agenda_visit_{int(task_id)}_30m"
+    return f"agenda_event_{int(task_id)}_reminder_"
 
 
 def aware_utc(value):
@@ -88,16 +118,22 @@ def aware_utc(value):
     return parse_utc_iso(value)
 
 
-def reminder_window(now=None):
+def reminder_window(now=None, reminder_minutes=None):
     """
-    Inclusive 25–35 minute window ahead of ``now``.
+    Inclusive tolerant window around the configured reminder.
 
-    Clock is UTC. Agenda ``due_at`` is naive UTC ISO; UI times are
-    converted from the organization timezone before insert.
+    Default visit reminder is 30 minutes (25–35). Clock is UTC.
+    Agenda ``due_at`` is naive UTC ISO; UI times are converted from
+    the organization timezone before insert.
     """
     instant = aware_utc(now) or now_utc()
-    window_start = instant + timedelta(minutes=WINDOW_START_MINUTES)
-    window_end = instant + timedelta(minutes=WINDOW_END_MINUTES)
+    target = (
+        DEFAULT_VISIT_REMINDER_MINUTES
+        if reminder_minutes is None
+        else int(reminder_minutes)
+    )
+    window_start = instant + timedelta(minutes=target - REMINDER_TOLERANCE_MINUTES)
+    window_end = instant + timedelta(minutes=target + REMINDER_TOLERANCE_MINUTES)
     return instant, window_start, window_end
 
 
@@ -109,11 +145,18 @@ def minutes_until(due_at, now):
     return (due - instant).total_seconds() / 60.0
 
 
-def in_reminder_window(due_at, now):
+def in_reminder_window(due_at, now, reminder_minutes=None):
     delta = minutes_until(due_at, now)
     if delta is None:
         return False
-    return WINDOW_START_MINUTES <= delta <= WINDOW_END_MINUTES
+    target = (
+        DEFAULT_VISIT_REMINDER_MINUTES
+        if reminder_minutes is None
+        else int(reminder_minutes)
+    )
+    return (target - REMINDER_TOLERANCE_MINUTES) <= delta <= (
+        target + REMINDER_TOLERANCE_MINUTES
+    )
 
 
 def resolve_visit_recipient(task, organization_id):
@@ -173,12 +216,13 @@ def _visit_address(task):
 
 
 def _list_window_candidates(organization_id, instant):
-    """SQL prefilter (padded), then exact 25–35 minute datetime filter."""
-    query_from = to_utc_iso(
-        instant + timedelta(minutes=WINDOW_START_MINUTES - QUERY_PAD_MINUTES)
-    )
+    """SQL prefilter (padded), then per-event reminder window."""
+    query_from = to_utc_iso(instant - timedelta(minutes=QUERY_PAD_MINUTES))
     query_to = to_utc_iso(
-        instant + timedelta(minutes=WINDOW_END_MINUTES + QUERY_PAD_MINUTES)
+        instant
+        + timedelta(
+            minutes=MAX_REMINDER_MINUTES + REMINDER_TOLERANCE_MINUTES + QUERY_PAD_MINUTES
+        )
     )
     rows = list_agent_tasks(
         organization_id,
@@ -188,12 +232,14 @@ def _list_window_candidates(organization_id, instant):
         order="asc",
         limit=200,
     )
-    return [
-        task
-        for task in rows
-        if is_visit_task_type(task.get("task_type"))
-        and in_reminder_window(task.get("due_at"), instant)
-    ]
+    matches = []
+    for task in rows:
+        reminder = resolved_reminder_minutes(task)
+        if reminder is None:
+            continue
+        if in_reminder_window(task.get("due_at"), instant, reminder):
+            matches.append(task)
+    return matches
 
 
 def _list_nearby_tasks(organization_id, instant):
@@ -234,31 +280,39 @@ def classify_visit_for_reminder(task, organization_id, instant):
         if user_id is not None
         else False
     )
-    event_key = visit_reminder_event_key(task_id, due_at) if task_id else None
-    already = (
-        find_notification_by_event_key(organization_id, event_key)
-        if event_key
-        else None
+    reminder = resolved_reminder_minutes(task)
+    event_key = (
+        visit_reminder_event_key(task_id, due_at, reminder) if task_id and reminder else None
     )
+    already = None
+    if event_key:
+        already = find_notification_by_event_key(organization_id, event_key)
+        if already is None and reminder == DEFAULT_VISIT_REMINDER_MINUTES and task_id:
+            already = find_notification_by_event_key(
+                organization_id,
+                visit_reminder_legacy_event_key(task_id, due_at),
+            )
     already_sent = already is not None
     targets = _push_target_count(organization_id, user_id)
 
     skip_reason = None
     candidate = True
-    if not is_visit_task_type(task_type):
+    if reminder is None:
         candidate = False
-        skip_reason = f"type_not_visit:{task_type}"
+        skip_reason = "no_reminder_configured"
     elif status in SKIP_STATUSES or status not in ACTIVE_STATUSES:
         candidate = False
         skip_reason = f"status_{status}"
     elif minutes is None:
         candidate = False
         skip_reason = "invalid_due_at"
-    elif not (WINDOW_START_MINUTES <= minutes <= WINDOW_END_MINUTES):
+    elif not in_reminder_window(due_at, instant, reminder):
+        low = reminder - REMINDER_TOLERANCE_MINUTES
+        high = reminder + REMINDER_TOLERANCE_MINUTES
         candidate = False
         skip_reason = (
             f"outside_window minutes_until={round(minutes, 1)} "
-            f"need={WINDOW_START_MINUTES}..{WINDOW_END_MINUTES}"
+            f"need={low}..{high}"
         )
     elif task_id is None:
         candidate = False
@@ -277,22 +331,29 @@ def classify_visit_for_reminder(task, organization_id, instant):
         "event_type": task_type,
         "event_status": status,
         "starts_at": due_at,
+        "minutes_until": None if minutes is None else round(minutes, 1),
         "minutes_until_start": None if minutes is None else round(minutes, 1),
+        "reminder_minutes": reminder,
         "assigned_agent_id": task.get("agent_id"),
         "assigned_user_id": user_id,
         "resolved_user_id": user_id,
         "push_visit_reminders": preference_enabled,
+        "preference": preference_enabled,
+        "dedupe": event_key,
         "dedupe_key": event_key,
         "already_sent": already_sent,
         "candidate": candidate,
         "skip_reason": skip_reason,
         "dispatcher_reason": skip_reason,
+        "push_targets": targets,
         "push_targets_count": targets,
         "notification_created": False,
         "push_sent_count": 0,
         "push_failed_count": 0,
         "created": False,
         "dispatched": False,
+        "sent": 0,
+        "failed": 0,
         "sent_count": 0,
         "failed_count": 0,
         "user_id": user_id,
@@ -335,13 +396,14 @@ def ensure_probe_visit(organization_id, *, current_user=None, now=None):
         raise RuntimeError("no_agent_for_probe")
     from modules.database.agent_tasks_repository import create_agent_task
 
-    due_at = to_utc_iso(instant + timedelta(minutes=30))
+    due_at = to_utc_iso(instant + timedelta(minutes=DEFAULT_VISIT_REMINDER_MINUTES))
     task = create_agent_task(
         organization_id,
         agent_id,
         title="QA reminder visita",
         task_type=VISIT_TYPE,
         due_at=due_at,
+        reminder_minutes=DEFAULT_VISIT_REMINDER_MINUTES,
         created_by_user_id=None if not current_user else current_user.get("id"),
     )
     return task, True
@@ -586,7 +648,12 @@ def _process_candidate(organization_id, task, *, instant, tz, language, send):
 
     address = _visit_address(task)
     time_label = format_local_time(due_at, tz) or "—"
-    title = translate("push_visit_reminder_title", language)
+    reminder = record.get("reminder_minutes") or DEFAULT_VISIT_REMINDER_MINUTES
+    kind = KIND if is_visit_task_type(record.get("event_type")) else "agenda_reminder"
+    title_key = (
+        "push_visit_reminder_title" if kind == KIND else "push_agenda_reminder_title"
+    )
+    title = translate(title_key, language, minutes=int(reminder))
     body = translate(
         "push_visit_reminder_body",
         language,
@@ -595,21 +662,28 @@ def _process_candidate(organization_id, task, *, instant, tz, language, send):
     )
     url = f"/agenda/{int(task_id)}/edit"
     try:
-        result = send_user_notification(
-            user_id,
-            organization_id,
-            KIND,
-            title,
-            body,
-            url,
-            metadata={
-                "task_id": task_id,
-                "address": address,
-                "due_at": due_at,
+        from modules.notifications.events import emit_event
+
+        result = emit_event(
+            "agenda.reminder" if kind == KIND else "agenda.meeting_reminder",
+            {
+                "organization_id": organization_id,
+                "user_id": user_id,
+                "type": kind,
+                "title": title,
+                "body": body,
+                "url": url,
+                "event_key": event_key,
+                "entity_type": "agent_task",
+                "entity_id": task_id,
+                "minutes_until": record.get("minutes_until_start"),
+                "metadata": {
+                    "task_id": task_id,
+                    "address": address,
+                    "due_at": due_at,
+                    "reminder_minutes": reminder,
+                },
             },
-            event_key=event_key,
-            entity_type="agent_task",
-            entity_id=task_id,
         )
     except Exception:
         logger.warning(
@@ -635,7 +709,10 @@ def _process_candidate(organization_id, task, *, instant, tz, language, send):
             "dispatched": created,
             "push_sent_count": sent_count,
             "push_failed_count": failed_count,
+            "push_targets": targets,
             "push_targets_count": targets,
+            "sent": sent_count,
+            "failed": failed_count,
             "sent_count": sent_count,
             "failed_count": failed_count,
             "already_sent": (not created) or record["already_sent"],
@@ -695,10 +772,13 @@ def clear_visit_reminder_dedupe(organization_id, task_id):
         delete_notifications_for_entity,
     )
 
-    return delete_notifications_for_entity(
-        organization_id,
-        kind=KIND,
-        entity_type="agent_task",
-        entity_id=task_id,
-    )
+    deleted = 0
+    for kind in (KIND, "agenda_reminder"):
+        deleted += delete_notifications_for_entity(
+            organization_id,
+            kind=kind,
+            entity_type="agent_task",
+            entity_id=task_id,
+        )
+    return deleted
 

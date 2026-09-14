@@ -25,6 +25,31 @@
     box-shadow: inset 3px 0 0 var(--accent, #1d4ed8);
 }
 
+.notification-item--important {
+    box-shadow: inset 3px 0 0 #d97706;
+}
+
+.notification-item--urgent {
+    box-shadow: inset 3px 0 0 #dc2626;
+}
+
+.notification-item--unread.notification-item--urgent {
+    border-color: #dc2626;
+}
+
+.push-pref-form__group {
+    margin: 0 0 1rem;
+    padding: 0.75rem 0 0;
+    border: 0;
+    border-top: 1px solid var(--border, #d5dde8);
+}
+
+.push-pref-form__group legend {
+    padding: 0;
+    font-weight: 700;
+    font-size: 0.92rem;
+}
+
 .notification-item__main {
     display: flex;
     gap: 0.75rem;

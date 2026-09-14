@@ -4,17 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from modules.notifications.catalog import PREF_KEYS
+
 from .connection import get_connection
 from .tenant import require_organization_id
 
-
-PREF_KEYS = (
-    "push_visit_reminders",
-    "push_invoice_ready",
-    "push_property_matches",
-    "push_task_overdue",
-    "push_office_announcements",
-)
 
 DEFAULT_PREFERENCES = {key: True for key in PREF_KEYS}
 
@@ -31,17 +25,13 @@ def _as_bool(value, default=True):
     return str(value).strip() not in ("0", "false", "False", "")
 
 
-def _row_to_prefs(row):
-    if row is None:
-        return dict(DEFAULT_PREFERENCES)
+def _row_to_prefs(row, columns):
     prefs = dict(DEFAULT_PREFERENCES)
-    prefs["push_visit_reminders"] = bool(row[0])
-    prefs["push_invoice_ready"] = bool(row[1])
-    prefs["push_property_matches"] = bool(row[2])
-    if len(row) > 3:
-        prefs["push_task_overdue"] = bool(row[3])
-    if len(row) > 4:
-        prefs["push_office_announcements"] = bool(row[4])
+    if row is None:
+        return prefs
+    for index, column_name in enumerate(columns):
+        if index < len(row) and column_name in prefs:
+            prefs[column_name] = bool(row[index])
     return prefs
 
 
@@ -50,24 +40,20 @@ def get_user_notification_preferences(organization_id, user_id):
     if user_id is None:
         return dict(DEFAULT_PREFERENCES)
 
+    select_sql = ", ".join(PREF_KEYS)
     connection = get_connection()
     cursor = connection.cursor()
     try:
         cursor.execute(
-            """
-            SELECT
-                push_visit_reminders,
-                push_invoice_ready,
-                push_property_matches,
-                push_task_overdue,
-                push_office_announcements
+            f"""
+            SELECT {select_sql}
             FROM user_notification_preferences
             WHERE organization_id = ?
                 AND user_id = ?
             """,
             (organization_id, user_id),
         )
-        return _row_to_prefs(cursor.fetchone())
+        return _row_to_prefs(cursor.fetchone(), PREF_KEYS)
     finally:
         connection.close()
 
@@ -79,25 +65,15 @@ def is_push_category_enabled(organization_id, user_id, pref_key):
     return bool(prefs.get(pref_key, True))
 
 
-def save_user_notification_preferences(
-    organization_id,
-    user_id,
-    *,
-    push_visit_reminders=True,
-    push_invoice_ready=True,
-    push_property_matches=True,
-    push_task_overdue=True,
-    push_office_announcements=True,
-):
+def save_user_notification_preferences(organization_id, user_id, **kwargs):
     organization_id = require_organization_id(organization_id)
     now = _now_iso()
-    values = (
-        1 if _as_bool(push_visit_reminders) else 0,
-        1 if _as_bool(push_invoice_ready) else 0,
-        1 if _as_bool(push_property_matches) else 0,
-        1 if _as_bool(push_task_overdue) else 0,
-        1 if _as_bool(push_office_announcements) else 0,
-    )
+    current = get_user_notification_preferences(organization_id, user_id)
+    values = []
+    for key in PREF_KEYS:
+        if key in kwargs:
+            current[key] = _as_bool(kwargs[key], True)
+        values.append(1 if current[key] else 0)
     connection = get_connection()
     cursor = connection.cursor()
     try:
@@ -111,33 +87,28 @@ def save_user_notification_preferences(
             (organization_id, user_id),
         )
         existing = cursor.fetchone()
+        columns_sql = ", ".join(PREF_KEYS)
+        placeholders = ", ".join("?" for _ in PREF_KEYS)
+        assignments = ", ".join(f"{key} = ?" for key in PREF_KEYS)
         if existing is None:
             cursor.execute(
-                """
+                f"""
                 INSERT INTO user_notification_preferences (
                     organization_id,
                     user_id,
-                    push_visit_reminders,
-                    push_invoice_ready,
-                    push_property_matches,
-                    push_task_overdue,
-                    push_office_announcements,
+                    {columns_sql},
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, {placeholders}, ?)
                 """,
                 (organization_id, user_id, *values, now),
             )
         else:
             cursor.execute(
-                """
+                f"""
                 UPDATE user_notification_preferences
                 SET
-                    push_visit_reminders = ?,
-                    push_invoice_ready = ?,
-                    push_property_matches = ?,
-                    push_task_overdue = ?,
-                    push_office_announcements = ?,
+                    {assignments},
                     updated_at = ?
                 WHERE organization_id = ?
                     AND user_id = ?

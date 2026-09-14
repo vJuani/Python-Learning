@@ -53,9 +53,9 @@ def _set_next_run(seconds):
 
 
 def _tick():
-    from modules.visit_reminders import dispatch_due_visit_reminders_all
+    from modules.notifications.jobs import run_notification_jobs
 
-    dispatch_due_visit_reminders_all()
+    run_notification_jobs(source="inprocess")
 
 
 def _loop(interval_seconds, first_delay_seconds):

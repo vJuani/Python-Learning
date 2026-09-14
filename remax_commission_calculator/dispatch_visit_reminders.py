@@ -101,22 +101,15 @@ def main(argv=None):
         print(f"{overdue_total} overdue pending task(s).")
         return 0
 
-    results = dispatch_due_visit_reminders_all()
-    dispatched = sum(item.get("dispatched") or 0 for item in results)
-    candidates = sum(item.get("candidates_found") or 0 for item in results)
+    from modules.notifications.jobs import run_notification_jobs
+
+    summary = run_notification_jobs(source="cron")
     print(
-        f"{dispatched} reminder(s) dispatched "
-        f"from {candidates} visit(s) in window."
+        f"{summary['agenda_created']} reminder(s) dispatched "
+        f"from {summary['agenda_candidates']} agenda event(s) in window."
     )
-
-    from modules.task_overdue import dispatch_overdue_tasks_all
-
-    overdue = dispatch_overdue_tasks_all()
-    overdue_sent = sum(item.get("dispatched") or 0 for item in overdue)
-    overdue_candidates = sum(item.get("candidates") or 0 for item in overdue)
     print(
-        f"{overdue_sent} overdue task reminder(s) dispatched "
-        f"from {overdue_candidates} pending overdue task(s)."
+        f"{summary['overdue_created']} overdue task reminder(s) dispatched."
     )
     return 0
 

@@ -14,6 +14,7 @@ from .connection import get_connection
 NOTIFICATION_COLUMNS = (
     ("event_key", "TEXT"),
     ("read_at", "TEXT"),
+    ("priority", "TEXT"),
 )
 
 

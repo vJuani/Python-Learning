@@ -421,6 +421,9 @@ def require_authenticated_user():
     if request.endpoint in PUBLIC_ENDPOINTS:
         return None
 
+    if request.path.startswith("/internal/jobs/"):
+        return None
+
     if request.path.startswith("/api/push/"):
         if get_current_user() is None and get_guest_access() is None:
             return jsonify({"ok": False, "error": "login_required"}), 401
@@ -8551,7 +8554,10 @@ register_office_announcement_routes(
     },
 )
 
+from modules.notification_job_routes import register_notification_job_routes
 from modules.visit_reminder_qa_routes import register_visit_reminder_qa_routes
+
+register_notification_job_routes(app)
 
 register_visit_reminder_qa_routes(
     app,

@@ -37,7 +37,7 @@
             <p class="notification-group__heading">{{ group.heading }}</p>
             {% endif %}
             {% for notification in group['items'] %}
-            <article class="notification-item{% if not notification.is_read %} notification-item--unread{% endif %}">
+            <article class="notification-item{% if not notification.is_read %} notification-item--unread{% endif %} notification-item--{{ notification.priority or 'info' }}">
                 <a
                     class="notification-item__main"
                     href="{{ url_for('notifications_open', notification_id=notification.id) }}"

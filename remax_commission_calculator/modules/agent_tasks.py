@@ -125,6 +125,67 @@ def emit_task_event(event_type, task, *, actor_user_id=None, **extra):
     )
 
     try:
+        from modules.notifications.events import emit_event
+        from modules.i18n import translate
+        from modules.database.organization_settings_repository import (
+            get_organization_settings,
+        )
+
+        language = (
+            (get_organization_settings(task.get("organization_id")) or {}).get(
+                "default_language"
+            )
+            or "es"
+        )
+        title = (task.get("title") or "").strip() or "—"
+        task_id = task.get("id")
+        org_id = task.get("organization_id")
+        actor_id = actor_user_id
+        event_map = {
+            "task_created": ("agenda.assigned", "agenda_assigned", "notification_agenda_assigned"),
+            "task_updated": ("agenda.changed", "agenda_changed", "notification_agenda_changed"),
+            "task_rescheduled": ("agenda.changed", "agenda_changed", "notification_agenda_changed"),
+            "task_cancelled": ("agenda.cancelled", "agenda_cancelled", "notification_agenda_cancelled"),
+            "task_completed": ("task.completed", "task_completed", "notification_task_completed"),
+        }
+        mapped = event_map.get(event_type)
+        assignee = None
+        if task.get("agent_id") and org_id:
+            from modules.database.users_repository import get_user_by_agent_id
+
+            assignee = get_user_by_agent_id(task.get("agent_id"), org_id)
+        self_action = (
+            assignee is not None
+            and actor_id is not None
+            and int(assignee.get("id") or 0) == int(actor_id)
+        )
+        if mapped and org_id and task_id and not self_action:
+            event_name, type_name, title_key = mapped
+            emit_event(
+                event_name,
+                {
+                    "organization_id": org_id,
+                    "agent_id": task.get("agent_id"),
+                    "type": type_name,
+                    "title": translate(title_key, language),
+                    "body": title,
+                    "url": f"/agenda/{int(task_id)}/edit",
+                    "event_key": f"{type_name}_{int(task_id)}_{event_type}",
+                    "entity_type": "agent_task",
+                    "entity_id": task_id,
+                    "actor_user_id": actor_id,
+                    "metadata": extra,
+                },
+            )
+    except Exception:
+        logger.warning(
+            "agent_task_notification_failed type=%s task=%s",
+            event_type,
+            task.get("id") if task else None,
+            exc_info=True,
+        )
+
+    try:
         from modules.google_calendar import sync_task_event
 
         sync_task_event(
@@ -1238,7 +1299,7 @@ def default_form_values(organization_id, *, now=None, **overrides):
         "contact_name": "",
         "contact_id": "",
         "duration_minutes": 60,
-        "reminder_minutes": 15,
+        "reminder_minutes": 30,
         "description": "",
         "ai_suggestion": "",
     }

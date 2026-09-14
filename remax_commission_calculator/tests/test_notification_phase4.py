@@ -154,7 +154,8 @@ class NotificationPhase4Tests(unittest.TestCase):
                 user_id=self.user_id,
             )
         )
-        self.assertEqual(mocked.call_args.args[2]["url"], f"/agenda/{task['id']}/edit")
+        self.assertTrue(mocked.call_args.args[2]["url"].startswith("/notifications/"))
+        self.assertTrue(mocked.call_args.args[2]["url"].endswith("/open"))
         self.assertIn("Seguimiento con Martín", mocked.call_args.args[2]["body"])
 
     def test_overdue_skips_visits(self):
@@ -229,7 +230,8 @@ class NotificationPhase4Tests(unittest.TestCase):
         self.assertTrue(
             find_notification_by_event_key(self.org, second_key, user_id=self.user_id)
         )
-        self.assertEqual(mocked.call_args.args[2]["url"], f"/agenda/{task['id']}/edit")
+        self.assertTrue(mocked.call_args.args[2]["url"].startswith("/notifications/"))
+        self.assertTrue(mocked.call_args.args[2]["url"].endswith("/open"))
 
     def test_overdue_only_assigned_agent(self):
         self._overdue_task(title="Solo Ana")
@@ -538,7 +540,7 @@ class NotificationPhase4Tests(unittest.TestCase):
                     "kind": "property_match",
                     "entity_id": 10,
                     "is_read": False,
-                    "created_at": "2026-09-14T12:00:00",
+                    "created_at": to_utc_iso(now_utc()),
                     "payload": {
                         "title": "Nuevo match de propiedad",
                         "body": f"Match {index}",
@@ -548,8 +550,9 @@ class NotificationPhase4Tests(unittest.TestCase):
             )
         groups = decorate_notification_feed(items, self.org, "es")
         self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["ui_type"], "today")
         self.assertEqual(groups[0]["count"], 3)
-        self.assertIn("3", groups[0]["heading"])
+        self.assertEqual(groups[0]["heading"], "Hoy")
         self.assertEqual(len(groups[0]["items"]), 3)
 
 
