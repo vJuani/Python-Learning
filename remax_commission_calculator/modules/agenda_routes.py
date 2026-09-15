@@ -34,6 +34,7 @@ from modules.contacts import (
 )
 from modules.agent_tasks import (
     AGENDA_FILTERS,
+    AGENDA_VIEWS,
     DURATION_CHOICES,
     PRIORITIES,
     REMINDER_CHOICES,
@@ -92,6 +93,27 @@ from modules.visit_outcome import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _filter_agenda_origin(agenda, origin):
+    """Hide overlay or internal cards without changing stored tasks."""
+    if origin not in ("jrh", "google"):
+        return agenda
+
+    want_google = origin == "google"
+
+    def keep(task):
+        return (task.get("source") == "google") is want_google
+
+    sections = []
+    for section in agenda.get("sections") or []:
+        tasks = [task for task in section.get("tasks") or [] if keep(task)]
+        if tasks:
+            sections.append({**section, "tasks": tasks})
+
+    filtered = dict(agenda)
+    filtered["sections"] = sections
+    return filtered
 
 _ITEM_KEYS = (
     "title",
@@ -332,6 +354,14 @@ def register_agenda_routes(app, helpers):
         if agenda_filter not in AGENDA_FILTERS:
             agenda_filter = "upcoming"
 
+        agenda_view = (request.args.get("view") or "").strip()
+        if agenda_view not in AGENDA_VIEWS:
+            agenda_view = "today"
+
+        calendar_mode = (request.args.get("cal") or "month").strip()
+        if calendar_mode not in ("month", "week", "day"):
+            calendar_mode = "month"
+
         agenda = build_agenda_view(
             organization_id,
             agent_id=agent_id,
@@ -353,6 +383,12 @@ def register_agenda_routes(app, helpers):
             except Exception:
                 logger.exception("agenda_google_overlay_failed")
 
+        agenda_origin = (request.args.get("origin") or "").strip()
+        if agenda_origin in ("jrh", "google"):
+            agenda = _filter_agenda_origin(agenda, agenda_origin)
+        else:
+            agenda_origin = ""
+
         tz = organization_timezone(organization_id)
         calendar = calendar_chip_for(
             organization_id,
@@ -361,10 +397,25 @@ def register_agenda_routes(app, helpers):
             can_manage=viewer_is_agent,
         )
 
+        completed_agenda = None
+        if agenda_view == "tasks" and agenda_filter != "completed":
+            completed_agenda = build_agenda_view(
+                organization_id,
+                agent_id=agent_id,
+                agenda_filter="completed",
+                language=language,
+                limit=20,
+            )
+
         return render_template(
             "agenda/index.html",
             agenda=agenda,
             agenda_filters=AGENDA_FILTERS,
+            agenda_views=AGENDA_VIEWS,
+            agenda_view=agenda_view,
+            calendar_mode=calendar_mode,
+            agenda_origin=agenda_origin,
+            completed_agenda=completed_agenda,
             task_types=TASK_TYPES,
             can_manage=viewer_is_agent,
             agents=agents,
