@@ -92,10 +92,8 @@ body.is-login-page .flash-messages {
 }
 
 .login-marketing__logo {
-    display: block;
     width: min(17.5rem, 100%);
     height: auto;
-    object-fit: contain;
 }
 
 .login-marketing__headline {
@@ -224,14 +222,10 @@ body.is-login-page .flash-messages {
 }
 
 .login-card .auth-brand-logo {
-    display: block;
     width: 100%;
     max-width: 220px;
     height: auto;
-    max-height: none;
     margin: 0 auto;
-    object-fit: contain;
-    object-position: center;
 }
 
 .login-card__header {

@@ -81,7 +81,6 @@
     .jrh-sidebar__logo--icon {
         width: 2rem;
         height: 2rem;
-        object-fit: contain;
     }
 
     .jrh-sidebar__logo--full {
@@ -89,8 +88,6 @@
         height: 1.85rem;
         width: auto;
         max-width: 9.5rem;
-        object-fit: contain;
-        object-position: left center;
     }
 
     html[data-sidebar="pinned"] .jrh-sidebar__logo--icon,
@@ -100,7 +97,8 @@
 
     html[data-sidebar="pinned"] .jrh-sidebar__logo--full,
     .app-rail.jrh-sidebar.is-hover-open .jrh-sidebar__logo--full {
-        display: block;
+        display: inline-flex;
+        align-items: center;
     }
 
     .jrh-sidebar__pin {

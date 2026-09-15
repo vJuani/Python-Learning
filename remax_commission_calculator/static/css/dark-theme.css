@@ -428,6 +428,30 @@
     color: var(--text);
 }
 
+[data-theme="dark"] body.is-login-page .login-marketing__headline,
+[data-theme="dark"] body.is-login-page .login-feature__title {
+    color: var(--text);
+}
+
+[data-theme="dark"] body.is-login-page .login-marketing__description,
+[data-theme="dark"] body.is-login-page .login-feature__text,
+[data-theme="dark"] body.is-login-page .login-quote p,
+[data-theme="dark"] body.is-login-page .login-page__legal p,
+[data-theme="dark"] body.is-login-page .login-page__legal-links a {
+    color: var(--text-muted);
+}
+
+[data-theme="dark"] body.is-login-page .login-quote {
+    background: var(--surface);
+    border-color: var(--border-soft);
+    box-shadow: none;
+}
+
+[data-theme="dark"] body.is-login-page .login-feature__icon {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
 [data-theme="dark"] .app-rail-promo {
     background: linear-gradient(180deg, var(--card-muted) 0%, var(--surface) 100%);
     border-color: var(--border-soft);

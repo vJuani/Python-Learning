@@ -88,9 +88,9 @@ class ThemeTokenTests(unittest.TestCase):
 
     def test_service_worker_busts_css_cache(self):
         body = (BASE_DIR / "static" / "service-worker.js").read_text(encoding="utf-8")
-        self.assertIn("jrh-one-static-v4", body)
+        self.assertIn("jrh-one-static-v5", body)
         self.assertIn('url.pathname.indexOf("/static/css/") === 0', body)
-        self.assertNotIn("jrh-one-static-v3", body)
+        self.assertNotIn("jrh-one-static-v4", body)
 
     def test_hero_buttons_share_height_token_consumers(self):
         css = (BASE_DIR / "static" / "css" / "home-v2.css").read_text(encoding="utf-8")

@@ -1,40 +1,42 @@
-{# JRH One product logo — variant: light | dark | theme | icon | horizontal | full #}
-{% set logo_variant = logo_variant|default('light') %}
+{# JRH One product mark. Set brand_slot; logo_variant is a legacy alias. #}
 {% set logo_extra_class = logo_extra_class|default('') %}
-{% if logo_variant == 'theme' %}
-<img
-    src="{{ brand_logo_light_url }}"
-    alt="{{ brand_name }}"
-    class="brand-logo brand-logo--light {{ logo_extra_class }}"
->
-<img
-    src="{{ brand_logo_dark_url }}"
-    alt=""
-    class="brand-logo brand-logo--dark {{ logo_extra_class }}"
-    aria-hidden="true"
->
-{% elif logo_variant == 'dark' %}
-<img
-    src="{{ brand_logo_dark_url }}"
-    alt="{{ brand_name }}"
-    class="brand-logo brand-logo--dark {{ logo_extra_class }}"
->
-{% elif logo_variant == 'icon' %}
-<img
-    src="{{ brand_logo_icon_url }}"
-    alt="{{ brand_name }}"
-    class="brand-logo brand-logo--icon {{ logo_extra_class }}"
->
-{% elif logo_variant in ('horizontal', 'full') %}
-<img
-    src="{{ brand_logo_horizontal_url }}"
-    alt="{{ brand_name }}"
-    class="brand-logo brand-logo--horizontal {{ logo_extra_class }}"
->
-{% else %}
-<img
-    src="{{ brand_logo_light_url }}"
-    alt="{{ brand_name }}"
-    class="brand-logo brand-logo--light {{ logo_extra_class }}"
->
+{% set brand_slot = brand_slot|default(none) %}
+{% if brand_slot is none %}
+    {% if logo_variant|default('light') == 'theme' %}
+        {% set brand_slot = 'navbar' %}
+    {% elif logo_variant == 'dark' %}
+        {% set brand_slot = 'auth-panel' %}
+    {% elif logo_variant == 'icon' %}
+        {% set brand_slot = 'icon' %}
+    {% elif logo_variant in ('horizontal', 'full') %}
+        {% set brand_slot = 'navbar' %}
+    {% else %}
+        {% set brand_slot = 'navbar' %}
+    {% endif %}
 {% endif %}
+<span class="brand-logo-slot brand-logo-slot--{{ brand_slot }} {{ logo_extra_class }}">
+{% if brand_slot == 'sidebar-icon' %}
+<img src="{{ brand_marks.isotype_dark_green }}" alt="{{ brand_name }}" class="brand-logo brand-logo--on-dark brand-logo--accent-green" decoding="async">
+<img src="{{ brand_marks.isotype_dark_violet }}" alt="" class="brand-logo brand-logo--on-dark brand-logo--accent-violet" decoding="async" aria-hidden="true">
+{% elif brand_slot == 'sidebar-lockup' %}
+<img src="{{ brand_marks.horizontal_dark_green }}" alt="{{ brand_name }}" class="brand-logo brand-logo--on-dark brand-logo--accent-green" decoding="async">
+<img src="{{ brand_marks.horizontal_dark_violet }}" alt="" class="brand-logo brand-logo--on-dark brand-logo--accent-violet" decoding="async" aria-hidden="true">
+{% elif brand_slot == 'login-primary' or brand_slot == 'login-panel' %}
+<img src="{{ brand_marks.primary_light }}" alt="{{ brand_name }}" class="brand-logo brand-logo--on-light" decoding="async">
+<img src="{{ brand_marks.primary_dark_green }}" alt="" class="brand-logo brand-logo--on-dark brand-logo--accent-green" decoding="async" aria-hidden="true">
+<img src="{{ brand_marks.primary_dark_violet }}" alt="" class="brand-logo brand-logo--on-dark brand-logo--accent-violet" decoding="async" aria-hidden="true">
+{% elif brand_slot == 'auth-panel' %}
+<img src="{{ brand_marks.primary_dark_green }}" alt="{{ brand_name }}" class="brand-logo brand-logo--on-dark brand-logo--accent-green" decoding="async">
+<img src="{{ brand_marks.primary_dark_violet }}" alt="" class="brand-logo brand-logo--on-dark brand-logo--accent-violet" decoding="async" aria-hidden="true">
+{% elif brand_slot == 'icon' %}
+<img src="{{ brand_marks.app_icon }}" alt="{{ brand_name }}" class="brand-logo brand-logo--app-icon" decoding="async">
+{% elif brand_slot == 'footer' %}
+<img src="{{ brand_marks.isotype_light }}" alt="{{ brand_name }}" class="brand-logo brand-logo--on-light" decoding="async">
+<img src="{{ brand_marks.isotype_dark_green }}" alt="" class="brand-logo brand-logo--on-dark brand-logo--accent-green" decoding="async" aria-hidden="true">
+<img src="{{ brand_marks.isotype_dark_violet }}" alt="" class="brand-logo brand-logo--on-dark brand-logo--accent-violet" decoding="async" aria-hidden="true">
+{% else %}
+<img src="{{ brand_marks.horizontal_light }}" alt="{{ brand_name }}" class="brand-logo brand-logo--on-light" decoding="async">
+<img src="{{ brand_marks.horizontal_dark_green }}" alt="" class="brand-logo brand-logo--on-dark brand-logo--accent-green" decoding="async" aria-hidden="true">
+<img src="{{ brand_marks.horizontal_dark_violet }}" alt="" class="brand-logo brand-logo--on-dark brand-logo--accent-violet" decoding="async" aria-hidden="true">
+{% endif %}
+</span>

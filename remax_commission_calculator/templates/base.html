@@ -74,11 +74,13 @@
     <link
         rel="icon"
         type="image/png"
-        href="{{ url_for('static', filename='icons/icon-192.png') }}"
+        sizes="192x192"
+        href="{{ brand_marks.favicon }}"
     >
     <link
         rel="apple-touch-icon"
-        href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}"
+        sizes="180x180"
+        href="{{ brand_marks.apple_touch }}"
     >
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-one.css') }}">
@@ -106,26 +108,19 @@
     </style>
     {% endif %}
     {% block extra_css %}{% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-logo.css') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}{% if current_user or guest_access %} has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password', 'privacy', 'terms') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
     <aside class="app-rail jrh-sidebar" aria-label="{{ t('nav_aria') }}">
         <div class="jrh-sidebar__brand">
             <a href="{{ url_for('dashboard') }}" class="jrh-sidebar__logo-link">
-                <img
-                    src="{{ brand_logo_icon_url }}"
-                    alt="{{ brand_name }}"
-                    class="jrh-sidebar__logo--icon"
-                    width="32"
-                    height="32"
-                >
-                <img
-                    src="{{ url_for('static', filename='brand/login-header-lockup.png') }}"
-                    alt="{{ brand_name }}"
-                    class="jrh-sidebar__logo--full"
-                    width="210"
-                    height="40"
-                >
+                {% with brand_slot='sidebar-icon', logo_extra_class='jrh-sidebar__logo--icon' %}
+                {% include "_brand_logo.html" %}
+                {% endwith %}
+                {% with brand_slot='sidebar-lockup', logo_extra_class='jrh-sidebar__logo--full' %}
+                {% include "_brand_logo.html" %}
+                {% endwith %}
             </a>
             {% if not use_legacy_nav %}
             <button
@@ -200,16 +195,15 @@
                     class="site-brand"
                 >
                     <span class="site-brand-logo-shell hide-mobile">
-                        {% with logo_variant='theme', logo_extra_class='site-brand-logo' %}
+                        {% with brand_slot='navbar', logo_extra_class='site-brand-logo' %}
                         {% include "_brand_logo.html" %}
                         {% endwith %}
                     </span>
-                    <img
-                        src="{{ brand_login_header_lockup_url }}"
-                        alt="{{ brand_name }}"
-                        class="site-brand-logo site-brand-logo--lockup hide-desktop"
-                        decoding="async"
-                    >
+                    <span class="hide-desktop">
+                        {% with brand_slot='navbar', logo_extra_class='site-brand-logo site-brand-logo--lockup' %}
+                        {% include "_brand_logo.html" %}
+                        {% endwith %}
+                    </span>
                 </a>
             </div>
 
@@ -234,12 +228,9 @@
 
             <nav id="main-nav" class="main-nav header-zone header-zone-center" aria-label="{{ t('nav_aria') }}">
                 <div class="mobile-drawer-brand hide-desktop">
-                    <img
-                        src="{{ brand_login_header_lockup_url }}"
-                        alt=""
-                        class="mobile-drawer-brand-logo"
-                        decoding="async"
-                    >
+                    {% with brand_slot='navbar', logo_extra_class='mobile-drawer-brand-logo' %}
+                    {% include "_brand_logo.html" %}
+                    {% endwith %}
                     <div class="mobile-drawer-brand-text">
                         <strong>{{ brand_name }}</strong>
                         <span>{{ t('app_slogan') }}</span>
@@ -589,7 +580,7 @@
         <div class="footer-content">
             <div class="footer-brand">
                 <div class="footer-brand-mark">
-                    {% with logo_variant='icon', logo_extra_class='footer-brand-icon' %}
+                    {% with brand_slot='footer', logo_extra_class='footer-brand-icon' %}
                     {% include "_brand_logo.html" %}
                     {% endwith %}
                     <p>{{ brand_name }} · {{ t('app_slogan') }}</p>

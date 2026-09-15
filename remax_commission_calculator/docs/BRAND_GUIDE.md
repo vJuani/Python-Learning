@@ -1,56 +1,52 @@
-# JRH One — Visual Brand Guide (brief)
+# JRH One — Visual Brand Guide
 
-Product identity **option 2**: professional SaaS, navy base, electric blue accents.
+Identity is the six official lockups. Do not invent a new logo or recolor the mark by hand.
+
+Canonical files live in `static/brand/` and are exported from `static/images/1.png`–`6.png` by `scripts/export_brand_marks.py`.
 
 ## Colors
 
 | Token | Hex | Usage |
 |-------|-----|--------|
-| Navy | `#0A1633` | Sidebar, headers, primary text |
-| Navy soft | `#111F3D` | Dark surfaces, email header |
-| Electric blue | `#0D47FF` | Primary buttons, links, KPI accent |
-| Steel | `#33415C` | Secondary text |
-| Surface muted | `#F2F4F8` | App background |
-| White | `#FFFFFF` | Cards, panels |
+| Brand | `#156A4A` | Light primary |
+| Brand hover | `#0E4F38` | Hover, PWA theme |
+| Accent | `#23805A` | Light secondary accent |
+| Night | `#080A0F` | Dark surfaces, email header |
+| Violet | `#7C5CFF` | Dark / IA accent |
+| Surface muted | `#F6F8F6` | Light app background |
+| White | `#FFFFFF` | Cards |
 
-CSS variables live in `static/css/style.css` (`:root`) and overrides in `static/css/jrh-one.css`.
+CSS tokens: `static/css/tokens.css`. Product chrome uses `--color-brand`; organization color is `--org-accent` only.
 
-## Typography
+## Marks
 
-- **Font:** Poppins (Google Fonts)
-- **Weights:** 300–700
-- Headings: 600–700, navy
-- Body / labels: 400–500, steel for secondary
+| Slot | File | Use |
+|------|------|-----|
+| Logo principal light | `logo-primary-light.png` | Login, landing, institutional, wide headers |
+| Logo horizontal light | `logo-horizontal-light.png` | Navbar, topbar, compact desktop headers |
+| Isotipo light | `isotype-light.png` | Footer / small IDs on light |
+| App icon | `app-icon.png` + `static/icons/*` | Favicon, PWA, shortcuts |
+| Logo dark green | `logo-dark-green.png` | Dark chrome with green continuity (sidebar, general dark) |
+| Logo dark violet | `logo-dark-violet.png` | Login dark, JRH IA, tech dark |
 
-## Logo assets
+Collapsed sidebar uses the **white isotype** (`isotype-dark-green` / `isotype-dark-violet`) so the mark stays legible on the green rail.
 
-Canonical folder: **`static/brand/`** — see `static/brand/README.md`.
+## Template API
 
-| File | Purpose |
-|------|---------|
-| `brand-icon.png` | Favicon, PWA icon |
-| `brand-logo-light.png` | Horizontal logo on light backgrounds |
-| `brand-logo-dark.png` | Horizontal logo on navy / dark surfaces |
-| `email-footer.png` | Email signature footer image |
+All product UI logos go through `templates/_brand_logo.html` and `brand_marks` from `modules/branding.py`.
 
-Legacy fallbacks remain in `static/images/` until brand files are uploaded.
+Set `brand_slot`:
 
-Override via env: `APP_BRAND_ICON`, `APP_BRAND_LOGO_LIGHT`, `APP_BRAND_LOGO_DARK`, `APP_BRAND_EMAIL_FOOTER`.
+- `login-primary` / `login-panel`
+- `navbar`
+- `sidebar-icon` / `sidebar-lockup`
+- `auth-panel`
+- `footer`
+- `icon`
 
-| Asset | Path | Use |
-|-------|------|-----|
-| Horizontal (legacy) | `static/images/jrh-one-logo-horizontal.jpg` | Sidebar, header |
-| Full (legacy) | `static/images/jrh-one-logo-full.jpg` | Auth panel, emails |
-| Icon (legacy) | `static/images/jrh-one-icon.jpg` | Favicon, PWA |
+CSS in `static/css/brand-logo.css` picks light vs dark and green vs violet from `data-theme` and page body classes (`is-login-page`, `is-jrh-ask-page`, `is-home-v2`).
 
-Template partial: `templates/_brand_logo.html` (`logo_variant`: horizontal | full | icon).
-
-## Tagline
-
-- ES: **Gestión. Control. Resultados.**
-- EN: **Manage. Control. Deliver.**
-
-Configured in i18n (`app_slogan`) and email copy.
+Do not hardcode `static/brand/...` in extra templates.
 
 ## Environment
 
@@ -58,19 +54,14 @@ Configured in i18n (`app_slogan`) and email copy.
 APP_BRAND_NAME=JRH One
 APP_DOMAIN=jrhone.com
 APP_BASE_URL=https://app.jrhone.com
+APP_BRAND_MARK_PRIMARY_LIGHT=brand/logo-primary-light.png
+APP_BRAND_CHROME_FAVICON=icons/icon-192.png
 ```
-
-Central module: `modules/branding.py`.
 
 ## Emails
 
-- Base layout: `templates/email/base.html` (navy header band, Poppins, blue CTA)
-- Transactional templates extend base and use inline styles for client compatibility
+Header band is night (`#080A0F`) so the dark lockup stays visible. Logo URL: `get_brand_logo_dark_rel()` (green-accent dark lockup).
 
-## Pending (second pass)
+## Legacy
 
-- Full dark-mode audit per module
-- Illustration / icon set for empty states
-- Landing page marketing site
-- SVG logo exports (current assets are JPG)
-- Replace `cc-theme` / `cc-rail` localStorage keys (would reset user prefs)
+`static/images/jrh-one-*.jpg` and `logo-*.png` are unused by the product UI. Keep them until a dedicated cleanup; PDFs resolve via `resolve_brand_logo_path()` which prefers the new marks.

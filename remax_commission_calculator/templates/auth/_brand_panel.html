@@ -1,6 +1,6 @@
 <aside class="auth-brand-panel" aria-label="{{ brand_name }}">
     <div class="auth-brand-panel-inner">
-        {% with logo_variant='dark', logo_extra_class='auth-brand-panel-logo' %}
+        {% with brand_slot='auth-panel', logo_extra_class='auth-brand-panel-logo' %}
         {% include "_brand_logo.html" %}
         {% endwith %}
         <p class="auth-brand-panel-name">{{ brand_name }}</p>

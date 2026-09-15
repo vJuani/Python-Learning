@@ -3,31 +3,7 @@
  * Loaded after style.css; uses tokens from tokens.css.
  */
 
-/* ── Theme-aware logos ───────────────────────────────────── */
-.brand-logo--dark {
-    display: none;
-}
-
-[data-theme="dark"] .brand-logo--light {
-    display: none;
-}
-
-[data-theme="dark"] .brand-logo--dark {
-    display: inline-block;
-}
-
-.brand-logo--icon {
-    max-height: 2rem;
-    width: auto;
-}
-
-.brand-logo--horizontal,
-.brand-logo--light,
-.brand-logo--dark {
-    max-height: 2rem;
-    width: auto;
-    object-fit: contain;
-}
+/* Logo visibility lives in brand-logo.css (loaded last). */
 
 .footer-brand-mark {
     display: flex;
@@ -99,7 +75,6 @@
 }
 
 .auth-brand-panel-logo {
-    display: block;
     max-width: 11rem;
     height: auto;
     margin: 0 auto var(--space-4);
