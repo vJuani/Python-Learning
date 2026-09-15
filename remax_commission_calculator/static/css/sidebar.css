@@ -4,7 +4,7 @@
     --jrh-sidebar-navy: var(--rail-bg);
     --jrh-sidebar-ink: var(--rail-text);
     --jrh-sidebar-muted: var(--rail-text-muted);
-    --jrh-sidebar-hover: rgba(255, 255, 255, 0.07);
+    --jrh-sidebar-hover: var(--rail-hover, rgba(95, 175, 139, 0.22));
     --jrh-sidebar-active: var(--rail-active-bg);
     --jrh-sidebar-accent: var(--rail-active-border);
     --jrh-sidebar-collapsed: 4.5rem;
@@ -204,7 +204,7 @@
     }
 
     .jrh-sidebar__link.is-featured {
-        color: #e0fbff;
+        color: var(--brand-400);
     }
 
     .jrh-sidebar__icon {

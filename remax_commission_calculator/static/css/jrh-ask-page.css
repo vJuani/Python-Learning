@@ -176,10 +176,10 @@ body.is-jrh-ask-page .app-main-inner {
     gap: 0.55rem;
     min-width: 11rem;
     padding: 0.75rem 0.85rem;
-    border: 1px solid var(--border-soft, #e4eaf2);
+    border: 1px solid var(--color-border, var(--border-soft, #DCE4DF));
     border-radius: 14px;
-    background: #fff;
-    color: var(--jrh-navy, #0a1633);
+    background: var(--color-surface, #fff);
+    color: var(--color-text, var(--jrh-navy, #152021));
     font: inherit;
     font-weight: 700;
     text-align: left;
@@ -190,7 +190,7 @@ body.is-jrh-ask-page .app-main-inner {
     width: 1.15rem;
     height: 1.15rem;
     flex-shrink: 0;
-    color: var(--accent, var(--accent));
+    color: var(--color-brand);
 }
 
 .jrh-studio__mascot-wrap {
@@ -316,7 +316,7 @@ body.is-jrh-ask-page .app-main-inner {
     border-radius: 50%;
     overflow: hidden;
     flex-shrink: 0;
-    background: var(--accent-soft, #e8efff);
+    background: var(--color-brand-soft, var(--accent-soft, #E4F1EA));
 }
 
 .jrh-chat__avatar img,

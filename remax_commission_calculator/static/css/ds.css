@@ -220,9 +220,10 @@
 }
 
 .ds-ai-card {
-    border-color: color-mix(in srgb, var(--ia-accent) 36%, var(--card-border));
+    border-color: var(--color-border);
     background:
-        linear-gradient(180deg, var(--ia-soft), var(--card-bg) 62%);
+        radial-gradient(circle at 96% 12%, color-mix(in srgb, var(--color-info) 12%, transparent), transparent 26%),
+        linear-gradient(180deg, var(--color-brand-soft), var(--card-bg) 62%);
 }
 
 .ds-ai-card__form {
@@ -242,8 +243,8 @@
 }
 
 .ds-ai-card__field:focus-within {
-    border-color: var(--ia-accent);
-    box-shadow: 0 0 0 3px var(--ia-soft);
+    border-color: var(--color-brand);
+    box-shadow: var(--shadow-focus);
 }
 
 .ds-ai-card__input {
@@ -275,10 +276,10 @@
 .ds-ai-chip {
     min-height: 2rem;
     padding: 0 var(--space-3);
-    border: 1px solid var(--border-soft);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-pill);
-    background: transparent;
-    color: var(--text-secondary);
+    background: var(--color-surface-secondary);
+    color: var(--color-text-muted);
     font: inherit;
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
@@ -287,8 +288,9 @@
 
 .ds-ai-card__chips .jrh-studio__chip:hover,
 .ds-ai-chip:hover {
-    color: var(--text-primary);
-    background: var(--accent-soft);
+    color: var(--color-brand-hover);
+    background: var(--color-brand-soft);
+    border-color: var(--color-brand);
 }
 
 .ds-table-wrap {

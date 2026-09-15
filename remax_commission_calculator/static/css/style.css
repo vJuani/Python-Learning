@@ -656,12 +656,14 @@ a {
 }
 
 .btn-primary {
-    background: var(--accent);
-    color: #ffffff;
+    background: var(--btn-primary-bg, var(--color-brand));
+    border-color: var(--btn-primary-border, var(--color-brand));
+    color: var(--btn-primary-text, #ffffff);
 }
 
 .btn-primary:hover {
-    background: var(--accent-hover);
+    background: var(--btn-primary-bg-hover, var(--color-brand-hover));
+    border-color: var(--btn-primary-bg-hover, var(--color-brand-hover));
 }
 
 .btn-secondary {
@@ -935,8 +937,8 @@ select.ui-select::-ms-expand {
 
 .form-input:focus {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
+    border-color: var(--input-border-focus, var(--color-brand));
+    box-shadow: var(--shadow-focus, 0 0 0 3px var(--input-focus-ring));
 }
 
 .password-field {
@@ -2824,8 +2826,8 @@ a.dashboard-quick-card:hover {
 .form-group select:focus,
 .form-group textarea:focus {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
+    border-color: var(--input-border-focus, var(--color-brand));
+    box-shadow: var(--shadow-focus, 0 0 0 3px var(--input-focus-ring));
 }
 
 .btn-back {

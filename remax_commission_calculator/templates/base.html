@@ -17,6 +17,8 @@
             try {
                 if (localStorage.getItem("cc-theme") === "dark") {
                     document.documentElement.setAttribute("data-theme", "dark");
+                } else {
+                    document.documentElement.setAttribute("data-theme", "light");
                 }
                 if (localStorage.getItem("jrh-sidebar-pinned") === "1") {
                     document.documentElement.setAttribute("data-sidebar", "pinned");
@@ -93,11 +95,13 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme.css') }}">
     {% if organization_branding_css %}
     <style>
-        :root {
-            --accent: {{ organization_branding_css.accent }};
-            --accent-hover: {{ organization_branding_css.accent_hover }};
-            --accent-soft: {{ organization_branding_css.accent_soft }};
-            --accent-ink: {{ organization_branding_css.accent_ink }};
+        :root,
+        [data-theme="light"],
+        [data-theme="dark"] {
+            --org-accent: {{ organization_branding_css.accent }};
+            --org-accent-hover: {{ organization_branding_css.accent_hover }};
+            --org-accent-soft: {{ organization_branding_css.accent_soft }};
+            --org-accent-ink: {{ organization_branding_css.accent_ink }};
         }
     </style>
     {% endif %}

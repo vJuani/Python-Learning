@@ -1,5 +1,5 @@
 /* JRH One PWA service worker. Caches static assets only. Never caches private data. */
-const CACHE_NAME = "jrh-one-static-v3";
+const CACHE_NAME = "jrh-one-static-v4";
 const STATIC_PREFIXES = [
   "/static/css/",
   "/static/js/",
@@ -102,6 +102,22 @@ self.addEventListener("fetch", function (event) {
   if (url.pathname === "/static/js/pwa.js") {
     event.respondWith(
       fetch(request).catch(function () {
+        return caches.match(request);
+      })
+    );
+    return;
+  }
+  if (url.pathname.indexOf("/static/css/") === 0) {
+    event.respondWith(
+      fetch(request).then(function (response) {
+        if (response && response.ok && response.type === "basic") {
+          var copy = response.clone();
+          caches.open(CACHE_NAME).then(function (cache) {
+            cache.put(request, copy);
+          });
+        }
+        return response;
+      }).catch(function () {
         return caches.match(request);
       })
     );

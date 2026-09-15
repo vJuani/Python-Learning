@@ -3,11 +3,7 @@ document.addEventListener("DOMContentLoaded", function () {
     var root = document.documentElement;
 
     function applyTheme(theme) {
-        if (theme === "dark") {
-            root.setAttribute("data-theme", "dark");
-        } else {
-            root.removeAttribute("data-theme");
-        }
+        root.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
 
         themeToggles.forEach(function (themeToggle) {
             var label = theme === "dark"
