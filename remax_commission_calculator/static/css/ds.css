@@ -370,6 +370,16 @@ body.is-dashboard-page .app-main-inner {
 }
 
 @media (max-width: 768px) {
+    body.is-dashboard-page .ds-page-header,
+    body.is-dashboard-page .ds-metrics,
+    body.is-dashboard-page .ds-home__layout {
+        display: none !important;
+    }
+
+    body.is-dashboard-page .app-main-inner {
+        padding-top: 0.65rem;
+    }
+
     .ds-page-header__title {
         font-size: 1.25rem;
     }
