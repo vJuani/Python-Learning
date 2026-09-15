@@ -9,100 +9,12 @@
 {% endblock %}
 
 {% block content %}
-<div class="home-panel">
-    {% if current_user %}
-    {% set dash_first = (current_user.first_name or '').strip() %}
-    {% set dash_last = (current_user.last_name or '').strip() %}
-    {% set dash_name = (dash_first ~ ' ' ~ dash_last).strip() or current_user.username %}
-    {% set dash_parts = dash_name.split() %}
-    <section class="home-mobile-greeting hide-desktop" aria-label="{{ t('dashboard_summary_title') }}">
-        <span class="home-mobile-greeting__avatar">{{ dash_parts[0][0:1]|upper }}{% if dash_parts|length > 1 %}{{ dash_parts[1][0:1]|upper }}{% endif %}</span>
-        <div class="home-mobile-greeting__body">
-            <strong>{{ t('dashboard_mobile_greeting', name=dash_name) }}</strong>
-            <p>{{ t('dashboard_mobile_greeting_sub') }}</p>
-        </div>
-        <form method="get" action="{{ url_for('dashboard') }}">
-            <select name="period" class="home-panel__period-select" onchange="this.form.submit()" aria-label="{{ t('dashboard_period') }}">
-                {% for value, label in home_panel.period_options %}
-                <option value="{{ value }}" {% if home_panel.period == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </form>
-    </section>
-    <section class="home-mobile-kpis hide-desktop" aria-label="{{ t('dashboard_summary_title') }}">
-        <article class="home-mobile-kpi">
-            <span class="home-mobile-kpi__label">{{ t('dashboard_kpi_commissions_month') }}</span>
-            <strong class="money">{{ home_panel.kpis.commission_month|money }}</strong>
-            {% if home_panel.kpis.commission_change is not none %}<small>↑ {{ home_panel.kpis.commission_change }}%</small>{% endif %}
-        </article>
-        <article class="home-mobile-kpi">
-            <span class="home-mobile-kpi__label">{{ t('dashboard_kpi_operations_active') }}</span>
-            <strong>{{ home_panel.kpis.operations_active }}</strong>
-            {% if home_panel.kpis.operations_today %}<small>↑ {{ home_panel.kpis.operations_today }} {{ t('dashboard_kpi_updates_today_short') }}</small>{% endif %}
-        </article>
-        <article class="home-mobile-kpi">
-            <span class="home-mobile-kpi__label">{{ t('dashboard_kpi_pending_invoices') }}</span>
-            <strong>{{ home_panel.kpis.pending_invoices_count }}</strong>
-            <small class="money">{{ home_panel.kpis.pending_invoices_amount|money }}</small>
-        </article>
-        <article class="home-mobile-kpi">
-            <span class="home-mobile-kpi__label">{{ t('dashboard_kpi_properties_active') }}</span>
-            <strong>{{ home_panel.kpis.properties_active }}</strong>
-            {% if home_panel.kpis.properties_recent %}<small>↑ {{ home_panel.kpis.properties_recent }}</small>{% endif %}
-        </article>
-    </section>
-    <div class="hide-desktop pending-block-mobile">
-        {% include "dashboard/_pending_block.html" %}
-        {% include "dashboard/_agenda_block.html" %}
-    </div>
-    {% if home_panel.tasks %}
-    <section class="home-mobile-section hide-desktop">
-        <div class="home-mobile-section__head">
-            <h2>{{ t('dashboard_mobile_next_task') }}</h2>
-        </div>
-        <p><strong>{{ home_panel.tasks[0].label }}</strong></p>
-        <span class="entity-card__sub">{{ home_panel.tasks[0].due_label }}</span>
-    </section>
-    {% endif %}
-    <section class="home-mobile-section hide-desktop">
-        <div class="home-mobile-section__head">
-            <h2>{{ t('dashboard_mobile_my_operations') }}</h2>
-            <a href="{{ url_for('operations_list') }}">{{ t('dashboard_mobile_view_all') }} →</a>
-        </div>
-        {% for operation in home_panel.active_operations[:5] %}
-        <div class="home-mobile-op">
-            <div>
-                {% if operation.db_id %}
-                <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}" class="home-mobile-op__id">{{ operation.id }}</a>
-                {% else %}
-                <span class="home-mobile-op__id">{{ operation.id }}</span>
-                {% endif %}
-                <div class="home-mobile-op__title">{{ operation.property }}</div>
-            </div>
-            <span class="entity-card__badge entity-card__badge--{{ operation.stage_tone }}">{{ operation.stage_label }}</span>
-            <span class="home-mobile-op__meta">{{ operation.updated_label }}</span>
-        </div>
-        {% else %}
-        <p class="entity-card__sub">{{ t('empty_operations_hint') }}</p>
-        {% endfor %}
-    </section>
-    <nav class="home-mobile-quick hide-desktop" aria-label="{{ t('dashboard_quick_actions_title') }}">
-        <a href="{{ url_for('properties_new') if can_write() else url_for('properties_list') }}"><span class="home-mobile-quick__icon">⌂</span>{{ t('dashboard_mobile_action_property') }}</a>
-        <a href="{{ url_for('billing_list') }}"><span class="home-mobile-quick__icon">📄</span>{{ t('dashboard_mobile_action_billing') }}</a>
-        <a href="{{ url_for('agents_list') if is_admin() else url_for('dashboard') }}"><span class="home-mobile-quick__icon">👤</span>{{ t('dashboard_mobile_action_clients') }}</a>
-        <a href="{{ url_for('agenda_index') }}"><span class="home-mobile-quick__icon">📅</span>{{ t('dashboard_mobile_action_agenda') }}</a>
-    </nav>
-    {% if can_write() and can_create_operations %}
-    <a href="{{ url_for('operations_new') }}" class="mobile-fab mobile-fab--center hide-desktop" aria-label="{{ t('new_operation') }}">+</a>
-    {% endif %}
-    {% endif %}
-
-    <header class="home-panel__header hide-mobile">
-        <div class="home-panel__intro">
-            <h1>{{ home_panel.title }}</h1>
-            <p>{{ home_panel.subtitle }}</p>
-        </div>
-        <form class="home-panel__period" method="get" action="{{ url_for('dashboard') }}">
+<div class="ds-home home-panel">
+    {% set page_header_eyebrow = home_panel.today_label %}
+    {% set page_header_title = home_panel.title %}
+    {% set page_header_description = home_panel.subtitle %}
+    {% set page_header_actions %}
+        <form class="ds-filters" method="get" action="{{ url_for('dashboard') }}">
             <label class="visually-hidden" for="dashboard-period">{{ t('dashboard_period') }}</label>
             <select id="dashboard-period" name="period" class="home-panel__period-select" onchange="this.form.submit()">
                 {% for value, label in home_panel.period_options %}
@@ -110,74 +22,56 @@
                 {% endfor %}
             </select>
         </form>
-    </header>
+        {% if can_write() and can_create_operations %}
+        <a href="{{ url_for('operations_new') }}" class="btn btn-primary">{{ t('new_operation') }}</a>
+        {% endif %}
+    {% endset %}
+    {% include "components/page_header.html" %}
 
-    <section class="home-kpis" aria-label="{{ t('dashboard_summary_title') }}">
-        <article class="home-kpi-card">
-            <span class="home-kpi-card__icon home-kpi-card__icon--wallet" aria-hidden="true"></span>
-            <div class="home-kpi-card__body">
-                <span class="home-kpi-card__label">{{ t('dashboard_kpi_commissions_month') }}</span>
-                <strong class="home-kpi-card__value money">{{ home_panel.kpis.commission_month|money }}</strong>
-                {% if home_panel.kpis.commission_change is not none %}
-                <span class="home-kpi-card__meta home-kpi-card__meta--positive">
-                    {{ t('dashboard_kpi_vs_previous', change=home_panel.kpis.commission_change) }}
-                </span>
-                {% endif %}
-            </div>
-        </article>
+    <section class="ds-metrics" aria-label="{{ t('dashboard_summary_title') }}">
+        {% set metric_label = t('dashboard_kpi_commissions_month') %}
+        {% set metric_value = home_panel.kpis.commission_month|money %}
+        {% set metric_value_class = 'money' %}
+        {% set metric_meta = t('dashboard_kpi_vs_previous', change=home_panel.kpis.commission_change) if home_panel.kpis.commission_change is not none else '' %}
+        {% set metric_meta_tone = 'up' if home_panel.kpis.commission_change is not none else '' %}
+        {% include "components/metric_card.html" %}
 
-        <article class="home-kpi-card">
-            <span class="home-kpi-card__icon home-kpi-card__icon--invoice" aria-hidden="true"></span>
-            <div class="home-kpi-card__body">
-                <span class="home-kpi-card__label">{{ t('dashboard_kpi_pending_invoices') }}</span>
-                <strong class="home-kpi-card__value">{{ home_panel.kpis.pending_invoices_count }}</strong>
-                <span class="home-kpi-card__meta money">{{ home_panel.kpis.pending_invoices_amount|money }}</span>
-            </div>
-        </article>
+        {% set metric_label = t('dashboard_kpi_pending_invoices') %}
+        {% set metric_value = home_panel.kpis.pending_invoices_count %}
+        {% set metric_value_class = '' %}
+        {% set metric_meta = home_panel.kpis.pending_invoices_amount|money %}
+        {% set metric_meta_tone = '' %}
+        {% include "components/metric_card.html" %}
 
-        <article class="home-kpi-card">
-            <span class="home-kpi-card__icon home-kpi-card__icon--home" aria-hidden="true"></span>
-            <div class="home-kpi-card__body">
-                <span class="home-kpi-card__label">{{ t('dashboard_kpi_properties_active') }}</span>
-                <strong class="home-kpi-card__value">{{ home_panel.kpis.properties_active }}</strong>
-                {% if home_panel.kpis.properties_recent %}
-                <span class="home-kpi-card__meta home-kpi-card__meta--positive">
-                    {{ t('dashboard_kpi_new_this_week', count=home_panel.kpis.properties_recent) }}
-                </span>
-                {% endif %}
-            </div>
-        </article>
+        {% set metric_label = t('dashboard_kpi_properties_active') %}
+        {% set metric_value = home_panel.kpis.properties_active %}
+        {% set metric_value_class = '' %}
+        {% set metric_meta = t('dashboard_kpi_new_this_week', count=home_panel.kpis.properties_recent) if home_panel.kpis.properties_recent else '' %}
+        {% set metric_meta_tone = 'up' if home_panel.kpis.properties_recent else '' %}
+        {% include "components/metric_card.html" %}
 
-        <article class="home-kpi-card">
-            <span class="home-kpi-card__icon home-kpi-card__icon--handshake" aria-hidden="true"></span>
-            <div class="home-kpi-card__body">
-                <span class="home-kpi-card__label">{{ t('dashboard_kpi_operations_active') }}</span>
-                <strong class="home-kpi-card__value">{{ home_panel.kpis.operations_active }}</strong>
-                {% if home_panel.kpis.operations_today %}
-                <span class="home-kpi-card__meta home-kpi-card__meta--positive">
-                    {{ t('dashboard_kpi_updates_today', count=home_panel.kpis.operations_today) }}
-                </span>
-                {% endif %}
-            </div>
-        </article>
+        {% set metric_label = t('dashboard_kpi_operations_active') %}
+        {% set metric_value = home_panel.kpis.operations_active %}
+        {% set metric_value_class = '' %}
+        {% set metric_meta = t('dashboard_kpi_updates_today', count=home_panel.kpis.operations_today) if home_panel.kpis.operations_today else '' %}
+        {% set metric_meta_tone = 'up' if home_panel.kpis.operations_today else '' %}
+        {% include "components/metric_card.html" %}
     </section>
 
-    <div class="home-panel__layout">
-        <div class="home-panel__main">
-            <div class="hide-mobile">
-                {% include "dashboard/_pending_block.html" %}
-                {% include "dashboard/_agenda_block.html" %}
-            </div>
+    <div class="ds-home__layout home-panel__layout">
+        <div class="ds-home__main home-panel__main">
+            {% include "dashboard/_pending_block.html" %}
+            {% include "dashboard/_agenda_block.html" %}
 
-            <section class="home-card">
-                <div class="home-card__header">
-                    <h2>{{ t('dashboard_active_operations_title') }}</h2>
-                    <a href="{{ url_for('operations_list') }}" class="home-card__link">{{ t('nav_operations') }}</a>
-                </div>
-
+            {% set content_card_title = t('dashboard_active_operations_title') %}
+            {% set content_card_link_href = url_for('operations_list') %}
+            {% set content_card_link_label = t('nav_operations') %}
+            {% set content_card_chip = none %}
+            {% set content_card_class = '' %}
+            {% set content_card_body %}
                 {% if home_panel.active_operations %}
-                <div class="table-wrapper">
-                    <table class="home-table">
+                <div class="ds-table-wrap hide-mobile">
+                    <table class="ds-table home-table">
                         <thead>
                             <tr>
                                 <th>{{ t('dashboard_col_operation_id') }}</th>
@@ -210,18 +104,38 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="ds-table-cards hide-desktop">
+                    {% for operation in home_panel.active_operations[:5] %}
+                    <article class="ds-table-card">
+                        {% if operation.db_id %}
+                        <a href="{{ url_for('operations_detail', operation_id=operation.db_id) }}" class="home-table__id">{{ operation.id }}</a>
+                        {% else %}
+                        <strong>{{ operation.id }}</strong>
+                        {% endif %}
+                        <p>{{ operation.property }}</p>
+                        <span class="home-stage home-stage--{{ operation.stage_tone }}">{{ operation.stage_label }}</span>
+                        <span class="home-table__muted">{{ operation.updated_label }}</span>
+                    </article>
+                    {% endfor %}
+                </div>
                 {% else %}
-                <div class="home-empty">{{ t('empty_operations_hint') }}</div>
+                {% set empty_title = t('empty_operations_title') %}
+                {% set empty_description = t('empty_operations_hint') %}
+                {% set empty_primary_href = url_for('operations_new') if can_write() and can_create_operations else none %}
+                {% set empty_primary_label = t('new_operation') %}
+                {% set empty_ia_href = url_for('jrh_ask') %}
+                {% set empty_ia_label = t('jrh_ask_cta') %}
+                {% include "components/empty_state.html" %}
                 {% endif %}
-            </section>
+            {% endset %}
+            {% include "components/content_card.html" %}
 
             <div class="home-panel__split">
-                <section class="home-card">
-                    <div class="home-card__header">
-                        <h2>{{ t('dashboard_active_properties_title') }}</h2>
-                        <a href="{{ url_for('properties_list') }}" class="home-card__link">{{ t('nav_properties') }}</a>
-                    </div>
-
+                {% set content_card_title = t('dashboard_active_properties_title') %}
+                {% set content_card_link_href = url_for('properties_list') %}
+                {% set content_card_link_label = t('nav_properties') %}
+                {% set content_card_chip = none %}
+                {% set content_card_body %}
                     {% if home_panel.active_properties %}
                     <ul class="home-property-list">
                         {% for property in home_panel.active_properties %}
@@ -236,16 +150,23 @@
                         {% endfor %}
                     </ul>
                     {% else %}
-                    <div class="home-empty">{{ t('empty_properties_hint') }}</div>
+                    {% set empty_title = t('empty_properties_title') %}
+                    {% set empty_description = t('empty_properties_hint') %}
+                    {% set empty_primary_href = url_for('properties_new') if can_write() else none %}
+                    {% set empty_primary_label = t('new_property') %}
+                    {% set empty_ia_href = none %}
+                    {% set empty_ia_label = none %}
+                    {% include "components/empty_state.html" %}
                     {% endif %}
-                </section>
+                {% endset %}
+                {% include "components/content_card.html" %}
 
-                <section class="home-card home-card--commissions">
-                    <div class="home-card__header">
-                        <h2>{{ t('dashboard_my_commissions_title') }}</h2>
-                        <span class="home-card__chip">{{ t('dashboard_this_month_filter') }}</span>
-                    </div>
-
+                {% set content_card_title = t('dashboard_my_commissions_title') %}
+                {% set content_card_link_href = none %}
+                {% set content_card_link_label = none %}
+                {% set content_card_chip = t('dashboard_this_month_filter') %}
+                {% set content_card_class = 'home-card--commissions' %}
+                {% set content_card_body %}
                     <div class="home-commissions-summary">
                         <div class="home-commissions-summary__total">
                             <strong class="money">{{ home_panel.commissions.total|money }}</strong>
@@ -268,38 +189,44 @@
                             </div>
                         </dl>
                     </div>
-
                     <div class="home-chart-wrap">
                         <p class="home-chart-title">{{ t('dashboard_commission_trend_title') }}</p>
                         <canvas id="home-commission-chart" height="140" aria-label="{{ t('dashboard_commission_trend_title') }}"></canvas>
                     </div>
-                </section>
+                {% endset %}
+                {% include "components/content_card.html" %}
             </div>
 
             {% if team_block %}
-            <section class="home-card">
-                <div class="home-card__header">
-                    <h2>{{ team_block.labels.title }}</h2>
-                    <a href="{{ url_for('team_report', team_leader_id=team_block.leader_id) }}" class="home-card__link">{{ team_block.labels.open_report }}</a>
-                </div>
+            {% set content_card_title = team_block.labels.title %}
+            {% set content_card_link_href = url_for('team_report', team_leader_id=team_block.leader_id) %}
+            {% set content_card_link_label = team_block.labels.open_report %}
+            {% set content_card_chip = none %}
+            {% set content_card_class = '' %}
+            {% set content_card_body %}
                 <div class="home-team-grid">
                     <div><span>{{ team_block.labels.production }}</span><strong class="money">{{ team_block.month_production|money }}</strong></div>
                     <div><span>{{ team_block.labels.juniors }}</span><strong>{{ team_block.juniors_active }}</strong></div>
                     <div><span>{{ team_block.labels.income }}</span><strong class="money">{{ team_block.team_income|money }}</strong></div>
                     <div><span>{{ team_block.labels.pending }}</span><strong>{{ team_block.pending_count }}</strong></div>
                 </div>
-            </section>
+            {% endset %}
+            {% include "components/content_card.html" %}
             {% endif %}
         </div>
 
-        <aside class="home-panel__aside" aria-label="{{ t('dashboard_tools_title') }}">
-            <section class="home-card">
-                <div class="home-card__header">
-                    <h2>{{ t('dashboard_tasks_title') }} ({{ home_panel.tasks|length }})</h2>
-                </div>
+        <aside class="ds-home__aside home-panel__aside" aria-label="{{ t('dashboard_tools_title') }}">
+            {% include "components/ai_card.html" %}
+
+            {% set content_card_title = t('dashboard_tasks_title') ~ ' (' ~ (home_panel.tasks|length) ~ ')' %}
+            {% set content_card_link_href = url_for('agenda_index') %}
+            {% set content_card_link_label = t('agenda_view_all') %}
+            {% set content_card_chip = none %}
+            {% set content_card_class = '' %}
+            {% set content_card_body %}
                 {% if home_panel.tasks %}
                 <ul class="home-task-list">
-                    {% for task in home_panel.tasks %}
+                    {% for task in home_panel.tasks[:4] %}
                     <li class="home-task-item">
                         <input type="checkbox" disabled {% if task.done %}checked{% endif %} aria-hidden="true">
                         <div>
@@ -310,15 +237,22 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <div class="home-empty">{{ t('dashboard_empty_tasks') }}</div>
+                {% set empty_title = t('dashboard_empty_tasks_title') %}
+                {% set empty_description = t('dashboard_empty_tasks_hint') %}
+                {% set empty_primary_href = url_for('agenda_new') %}
+                {% set empty_primary_label = t('agenda_new_task') %}
+                {% set empty_ia_href = url_for('jrh_ask') %}
+                {% set empty_ia_label = t('dashboard_schedule_with_ia') %}
+                {% include "components/empty_state.html" %}
                 {% endif %}
-            </section>
+            {% endset %}
+            {% include "components/content_card.html" %}
 
-            <section class="home-card">
-                <div class="home-card__header">
-                    <h2>{{ t('dashboard_reminders_title') }} ({{ home_panel.reminders|length }})</h2>
-                </div>
-                {% if home_panel.reminders %}
+            {% if home_panel.reminders %}
+            {% set content_card_title = t('dashboard_reminders_title') ~ ' (' ~ (home_panel.reminders|length) ~ ')' %}
+            {% set content_card_link_href = none %}
+            {% set content_card_link_label = none %}
+            {% set content_card_body %}
                 <ul class="home-reminder-list">
                     {% for reminder in home_panel.reminders %}
                     <li class="home-reminder-item home-reminder-item--{{ reminder.tone }}">
@@ -330,24 +264,25 @@
                     </li>
                     {% endfor %}
                 </ul>
-                {% else %}
-                <div class="home-empty">{{ t('dashboard_empty_reminders') }}</div>
-                {% endif %}
-            </section>
+            {% endset %}
+            {% include "components/content_card.html" %}
+            {% endif %}
 
-            <section class="home-card">
-                <div class="home-card__header">
-                    <h2>{{ t('dashboard_quick_actions_title') }}</h2>
-                </div>
-                <div class="home-quick-grid">
+            {% if home_panel.quick_actions %}
+            {% set content_card_title = t('dashboard_quick_actions_title') %}
+            {% set content_card_link_href = none %}
+            {% set content_card_link_label = none %}
+            {% set content_card_body %}
+                <div class="ds-actions">
                     {% for action in home_panel.quick_actions %}
-                    <a href="{{ url_for(action.endpoint) }}" class="home-quick-action home-quick-action--{{ action.icon }}">
-                        <span class="home-quick-action__icon" aria-hidden="true"></span>
-                        <span>{{ action.label }}</span>
-                    </a>
+                    {% set action_href = url_for(action.endpoint) %}
+                    {% set action_label = action.label %}
+                    {% include "components/action_card.html" %}
                     {% endfor %}
                 </div>
-            </section>
+            {% endset %}
+            {% include "components/content_card.html" %}
+            {% endif %}
         </aside>
     </div>
 </div>
@@ -357,6 +292,7 @@
 <script>
     window.__homeCommissionChart = {{ home_panel.commissions.trend | tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/jrh-voice.js') }}" defer></script>
 <script
     src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
     onerror="window.__chartJsFailed = true"

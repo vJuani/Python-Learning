@@ -1,0 +1,7 @@
+<article class="ds-metric-card">
+    <span class="ds-metric-card__label">{{ metric_label }}</span>
+    <strong class="ds-metric-card__value{% if metric_value_class %} {{ metric_value_class }}{% endif %}">{{ metric_value }}</strong>
+    {% if metric_meta %}
+    <span class="ds-metric-card__meta{% if metric_meta_tone %} ds-metric-card__meta--{{ metric_meta_tone }}{% endif %}">{{ metric_meta }}</span>
+    {% endif %}
+</article>

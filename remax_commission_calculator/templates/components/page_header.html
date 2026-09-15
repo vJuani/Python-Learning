@@ -1,0 +1,21 @@
+<header class="ds-page-header">
+    <div class="ds-page-header__text">
+        {% if page_header_eyebrow %}
+        <p class="ds-page-header__eyebrow">{{ page_header_eyebrow }}</p>
+        {% endif %}
+        <h1 class="ds-page-header__title">{{ page_header_title }}</h1>
+        {% if page_header_description %}
+        <p class="ds-page-header__desc">{{ page_header_description }}</p>
+        {% endif %}
+    </div>
+    {% if page_header_actions %}
+    <div class="ds-page-header__actions">
+        {{ page_header_actions }}
+    </div>
+    {% endif %}
+    {% if page_header_filters %}
+    <div class="ds-page-header__filters">
+        {{ page_header_filters }}
+    </div>
+    {% endif %}
+</header>

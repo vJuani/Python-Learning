@@ -1,0 +1,389 @@
+/* JRH One Design System V2 — shared UI contract. */
+
+.ds-home {
+    display: grid;
+    gap: var(--space-5);
+}
+
+.ds-home__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 20rem);
+    gap: var(--space-4);
+    align-items: start;
+}
+
+.ds-home__main,
+.ds-home__aside {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.ds-table-cards {
+    display: grid;
+    gap: var(--space-3);
+}
+
+.ds-table-card {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.ds-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+}
+
+.ds-page-header__eyebrow {
+    margin: 0 0 var(--space-1);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.ds-page-header__title {
+    margin: 0 0 var(--space-1);
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    line-height: var(--line-height-tight);
+}
+
+.ds-page-header__desc {
+    margin: 0;
+    max-width: 40rem;
+    font-size: var(--font-size-base);
+    color: var(--text-secondary);
+}
+
+.ds-page-header__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+.ds-page-header__filters {
+    flex-basis: 100%;
+}
+
+.ds-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-4);
+}
+
+.ds-metric-card {
+    display: grid;
+    gap: var(--space-1);
+    min-height: 5.5rem;
+    padding: var(--space-4);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-xs);
+}
+
+.ds-metric-card__label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-muted);
+}
+
+.ds-metric-card__value {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    line-height: 1.2;
+    color: var(--text-primary);
+}
+
+.ds-metric-card__meta {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.ds-metric-card__meta--up {
+    color: var(--success);
+}
+
+.ds-card,
+.home-card {
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-xs);
+    padding: var(--space-5);
+}
+
+.ds-card__header,
+.home-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+.ds-card__title,
+.home-card__header h2 {
+    margin: 0;
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+.ds-card__link,
+.home-card__link {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-link);
+    text-decoration: none;
+}
+
+.ds-card__link:hover,
+.home-card__link:hover {
+    color: var(--text-link-hover);
+}
+
+.ds-attention,
+.pending-block {
+    border-color: color-mix(in srgb, var(--warning) 28%, var(--card-border));
+}
+
+.ds-empty {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-2);
+    padding: var(--space-6) var(--space-2);
+}
+
+.ds-empty__icon {
+    width: 2rem;
+    height: 2rem;
+    color: var(--text-muted);
+}
+
+.ds-empty__title {
+    margin: 0;
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+.ds-empty__desc {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.ds-empty__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+}
+
+.ds-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+
+.ds-action-card {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: var(--space-3);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    background: var(--interactive-bg);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+}
+
+.ds-action-card:hover,
+.ds-action-card:focus-visible {
+    background: var(--interactive-bg-hover);
+    border-color: var(--interactive-border-hover);
+    outline: none;
+}
+
+.ds-ai-card {
+    border-color: color-mix(in srgb, var(--jrh-cyan, #22d3ee) 28%, var(--card-border));
+}
+
+.ds-ai-card__form {
+    display: grid;
+    gap: var(--space-3);
+}
+
+.ds-ai-card__field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 2.75rem;
+    padding: 0 var(--space-2) 0 var(--space-3);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+}
+
+.ds-ai-card__field:focus-within {
+    border-color: var(--input-border-focus);
+    box-shadow: var(--shadow-focus);
+}
+
+.ds-ai-card__input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--input-text);
+    font: inherit;
+    font-size: var(--font-size-sm);
+}
+
+.ds-ai-card__input:focus {
+    outline: none;
+}
+
+.ds-ai-card__mic,
+.ds-ai-card__submit {
+    flex-shrink: 0;
+}
+
+.ds-ai-card__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.ds-ai-card__chips .jrh-studio__chip,
+.ds-ai-chip {
+    min-height: 2rem;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+}
+
+.ds-ai-card__chips .jrh-studio__chip:hover,
+.ds-ai-chip:hover {
+    color: var(--text-primary);
+    background: var(--accent-soft);
+}
+
+.ds-table-wrap {
+    overflow-x: auto;
+}
+
+.ds-table,
+.home-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.ds-table th,
+.home-table th {
+    text-align: left;
+    padding: var(--space-2) var(--space-2);
+    background: var(--content-bg);
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--table-border);
+}
+
+.ds-table td,
+.home-table td {
+    padding: var(--space-3) var(--space-2);
+    border-bottom: 1px solid var(--table-border);
+    font-size: var(--font-size-sm);
+    color: var(--table-cell-text);
+}
+
+.ds-table tbody tr:hover,
+.home-table tbody tr:hover {
+    background: var(--table-row-hover);
+}
+
+.ds-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem var(--space-2);
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+}
+
+.ds-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.ds-filters input,
+.ds-filters select {
+    min-height: 2.5rem;
+}
+
+body.is-dashboard-page .app-main-inner {
+    max-width: none;
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-8);
+}
+
+@media (min-width: 1025px) {
+    body.is-dashboard-page .app-main-inner {
+        padding-left: var(--shell-gutter-lg);
+        padding-right: var(--shell-gutter-lg);
+    }
+}
+
+@media (max-width: 1200px) {
+    .ds-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ds-home__layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .ds-page-header__title {
+        font-size: 1.25rem;
+    }
+
+    .ds-metrics {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .ds-metric-card {
+        min-height: 0;
+        padding: var(--space-3);
+    }
+
+    .ds-metric-card__value {
+        font-size: var(--font-size-lg);
+    }
+}

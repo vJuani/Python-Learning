@@ -1,0 +1,11 @@
+<section class="ds-card{% if content_card_class %} {{ content_card_class }}{% endif %}">
+    <div class="ds-card__header">
+        <h2 class="ds-card__title">{{ content_card_title }}</h2>
+        {% if content_card_link_href %}
+        <a href="{{ content_card_link_href }}" class="ds-card__link">{{ content_card_link_label }}</a>
+        {% elif content_card_chip %}
+        <span class="home-card__chip">{{ content_card_chip }}</span>
+        {% endif %}
+    </div>
+    {{ content_card_body }}
+</section>

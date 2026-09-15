@@ -1,0 +1,37 @@
+<section class="ds-card ds-ai-card" aria-label="{{ t('nav_jrh_ia') }}">
+    <div class="ds-card__header">
+        <h2 class="ds-card__title">{{ t('nav_jrh_ia') }}</h2>
+        <a href="{{ url_for('jrh_ask') }}" class="ds-card__link">{{ t('jrh_ask_cta') }}</a>
+    </div>
+    <form class="ds-ai-card__form" method="post" action="{{ url_for('jrh_ask') }}" data-ds-ai>
+        <label class="visually-hidden" for="ds-ai-prompt">{{ t('jrh_ask_placeholder') }}</label>
+        <div class="ds-ai-card__field">
+            <input
+                id="ds-ai-prompt"
+                class="ds-ai-card__input"
+                type="text"
+                name="prompt"
+                data-jrh-ask-input
+                placeholder="{{ t('jrh_ask_placeholder') }}"
+                autocomplete="off"
+                required
+            >
+            <button
+                type="button"
+                class="btn btn-small btn-ghost ds-ai-card__mic"
+                data-jrh-voice
+                aria-label="{{ t('jrh_voice_talk') }}"
+            >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+                    <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.75"/>
+                    <path d="M6 11a6 6 0 0 0 12 0M12 17v3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <button type="submit" class="btn btn-small btn-primary ds-ai-card__submit">{{ t('jrh_ask_submit') }}</button>
+        </div>
+        <p class="visually-hidden" data-jrh-voice-status hidden></p>
+        {% set chip_class = 'ds-ai-card__chips' %}
+        {% set chip_item_class = 'ds-ai-chip' %}
+        {% include "dashboard/_jrh_quick_chips.html" %}
+    </form>
+</section>

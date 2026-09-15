@@ -1506,6 +1506,8 @@ def get_empty_dashboard_context():
             dashboard,
             language=get_current_language(),
         ),
+        "can_create_operations": False,
+        "jrh_chip_actions": [],
     }
 
 
@@ -1583,10 +1585,18 @@ def get_dashboard_context(
         user_id=user.get("id") if user else None,
     )
 
+    from modules.jrh_home import build_jrh_chip_actions
+
     return {
         "dashboard": dashboard,
         "team_block": team_block,
         "home_panel": home_panel,
+        "can_create_operations": can_create_operations(organization_id),
+        "jrh_chip_actions": build_jrh_chip_actions(
+            can_acm=False,
+            can_productivity=False,
+            can_marketing=is_admin(user),
+        ),
     }
 
 
