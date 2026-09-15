@@ -671,18 +671,18 @@ a {
 }
 
 .btn-secondary:hover {
-    background: var(--bg-soft);
-    border-color: #c3cedb;
+    background: var(--btn-secondary-bg-hover);
+    border-color: var(--border-strong);
 }
 
 .btn-edit {
     background: var(--edit-soft);
-    color: var(--edit);
-    border-color: #bfdbfe;
+    color: var(--accent-ink);
+    border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
 }
 
 .btn-edit:hover {
-    background: #bfdbfe;
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface));
 }
 
 .btn-danger {

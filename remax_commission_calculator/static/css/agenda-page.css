@@ -33,7 +33,7 @@
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .agenda-hero__hello {
@@ -110,7 +110,7 @@
     gap: 8px;
     margin: 0 0 14px;
     padding: 12px 14px 10px;
-    border: 1.5px solid var(--accent, #0d47ff);
+    border: 1.5px solid var(--accent, var(--accent));
     border-radius: 18px;
     background: var(--surface, #fff);
 }
@@ -120,7 +120,7 @@
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .agenda-ia__row {
@@ -149,11 +149,11 @@
     border: 0;
     border-radius: 999px;
     background: rgba(13, 71, 255, 0.1);
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .agenda-ia__mic.is-listening {
-    background: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
     color: #fff;
 }
 
@@ -292,8 +292,8 @@
 }
 
 .agenda-filter.is-active {
-    background: var(--accent, #0d47ff);
-    border-color: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
+    border-color: var(--accent, var(--accent));
     color: #fff;
 }
 
@@ -371,7 +371,7 @@
 .agenda-upcoming__row > summary strong {
     min-width: 1.5rem;
     text-align: right;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .agenda-upcoming__row .agenda-list {
@@ -387,7 +387,7 @@
     border-radius: 16px;
     background: var(--surface, #fff);
     border-left-width: 4px;
-    border-left-color: var(--accent, #0d47ff);
+    border-left-color: var(--accent, var(--accent));
 }
 
 .agenda-card--call {
@@ -396,7 +396,7 @@
 
 .agenda-card--visit,
 .agenda-card--meeting {
-    border-left-color: var(--accent, #0d47ff);
+    border-left-color: var(--accent, var(--accent));
 }
 
 .agenda-card--overdue {
@@ -453,7 +453,7 @@
     padding: 2px 8px;
     border-radius: 999px;
     background: rgba(13, 71, 255, 0.1);
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
     font-size: 0.66rem;
     font-weight: 800;
     letter-spacing: 0.04em;
@@ -579,7 +579,7 @@
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .agenda-recommend a {
@@ -591,7 +591,7 @@
 
 .agenda-recommend__action {
     margin-top: 8px;
-    color: var(--accent, #0d47ff) !important;
+    color: var(--accent, var(--accent)) !important;
 }
 
 .agenda-fab {
@@ -607,7 +607,7 @@
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
     color: #fff;
     font-size: 2rem;
     line-height: 1;
@@ -657,7 +657,7 @@
     font-weight: 800;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .agenda-chat {
@@ -671,7 +671,7 @@
     margin: 0;
     padding: 10px 14px;
     border-radius: 16px 16px 4px 16px;
-    background: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
     color: #fff;
 }
 
@@ -693,7 +693,7 @@
     font-size: 0.88rem;
     font-weight: 700;
     background: rgba(13, 71, 255, 0.08);
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .agenda-status[data-status="processing"] {
@@ -746,7 +746,7 @@
     margin: 0 0 8px;
     font-size: 0.92rem;
     font-weight: 700;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .agenda-preview__contact,
@@ -849,7 +849,7 @@
     font-weight: 800;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .agenda-preview__actions,
@@ -863,7 +863,7 @@
     min-height: 52px;
     border: 0;
     border-radius: 14px;
-    background: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
     color: #fff;
     font-weight: 700;
 }
@@ -885,7 +885,7 @@
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .agenda-followup-hero h1 {
@@ -924,7 +924,7 @@
     width: 100%;
     border: 0;
     border-radius: 16px;
-    background: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
     color: #fff;
     font-size: 1rem;
     font-weight: 800;
@@ -1006,7 +1006,7 @@
     padding: 4px 10px;
     border-radius: 999px;
     background: rgba(13, 71, 255, 0.1);
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
     font-size: 0.86rem;
     font-weight: 800;
 }
@@ -1059,7 +1059,7 @@
 }
 
 .agenda-followup-chip-option input:checked + span {
-    background: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
     color: #fff;
 }
 

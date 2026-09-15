@@ -60,7 +60,7 @@ body.is-properties-page .app-main-inner {
 }
 
 .properties-btn--primary {
-    background: #0d47ff;
+    background: var(--accent);
     color: #fff;
 }
 
@@ -99,7 +99,7 @@ body.is-properties-page .app-main-inner {
     content: "";
     position: absolute;
     inset: 0.55rem;
-    background: #0d47ff;
+    background: var(--accent);
     mask-size: contain;
     mask-repeat: no-repeat;
     mask-position: center;
@@ -424,7 +424,7 @@ body.is-properties-page .app-main-inner {
 }
 
 .properties-pagination__controls a.is-active {
-    background: #0d47ff;
+    background: var(--accent);
     color: #fff;
 }
 
@@ -508,7 +508,7 @@ body.is-properties-page .app-main-inner {
     border-radius: 999px;
 }
 
-.properties-legend__dot--1 { background: #0d47ff; }
+.properties-legend__dot--1 { background: var(--accent); }
 .properties-legend__dot--2 { background: #22c55e; }
 
 .properties-status-dot {
@@ -519,7 +519,7 @@ body.is-properties-page .app-main-inner {
 
 .properties-status-dot--active,
 .properties-status-dot--closed { background: #22c55e; }
-.properties-status-dot--progress { background: #0d47ff; }
+.properties-status-dot--progress { background: var(--accent); }
 .properties-status-dot--pending { background: #f59e0b; }
 .properties-status-dot--reserved { background: #8b5cf6; }
 .properties-status-dot--rejected { background: #ef4444; }

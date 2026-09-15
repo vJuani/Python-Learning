@@ -72,8 +72,8 @@
         justify-content: center;
         padding: var(--space-10) var(--space-8);
         background:
-            radial-gradient(circle at 20% 20%, rgba(13, 71, 255, 0.22), transparent 45%),
-            linear-gradient(165deg, var(--jrh-navy) 0%, #0d2248 100%);
+            radial-gradient(circle at 20% 20%, rgba(95, 175, 139, 0.28), transparent 45%),
+            linear-gradient(165deg, var(--brand-700) 0%, var(--navy) 100%);
         color: var(--text-inverse);
     }
 

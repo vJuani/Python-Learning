@@ -109,7 +109,7 @@ body.is-login-page .flash-messages {
 }
 
 .login-marketing__headline-accent {
-    color: #0d47ff;
+    color: var(--accent);
 }
 
 .login-marketing__description {
@@ -143,7 +143,7 @@ body.is-login-page .flash-messages {
     flex-shrink: 0;
     border-radius: 0.8rem;
     background: #eef4ff;
-    color: #0d47ff;
+    color: var(--accent);
 }
 
 .login-feature__icon svg {
@@ -183,7 +183,7 @@ body.is-login-page .flash-messages {
     font-size: 1.85rem;
     line-height: 1;
     font-weight: 700;
-    color: #0d47ff;
+    color: var(--accent);
     font-family: Georgia, "Times New Roman", serif;
 }
 
@@ -306,7 +306,7 @@ body.is-login-page .flash-messages {
 
 .login-input:focus {
     outline: none;
-    border-color: #0d47ff;
+    border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(13, 71, 255, 0.1);
 }
 
@@ -374,13 +374,13 @@ body.is-login-page .flash-messages {
     width: 0.9rem;
     height: 0.9rem;
     margin: 0;
-    accent-color: #0d47ff;
+    accent-color: var(--accent);
 }
 
 .login-link {
     font-size: 0.8rem;
     font-weight: 600;
-    color: #0d47ff;
+    color: var(--accent);
     text-decoration: none;
     white-space: nowrap;
 }
@@ -395,7 +395,7 @@ body.is-login-page .flash-messages {
     margin-top: 0.25rem;
     border: none;
     border-radius: 0.65rem;
-    background: #0d47ff;
+    background: var(--accent);
     color: #ffffff;
     font: inherit;
     font-size: 0.92rem;
@@ -462,7 +462,7 @@ body.is-login-page .flash-messages {
 
 .login-card__footer a {
     margin-left: 0.2rem;
-    color: #0d47ff;
+    color: var(--accent);
     font-weight: 600;
     text-decoration: none;
 }
@@ -492,7 +492,7 @@ body.is-login-page .flash-messages {
 .login-page__legal-links a {
     font-size: 0.7rem;
     font-weight: 600;
-    color: #0d47ff;
+    color: var(--accent);
     text-decoration: none;
 }
 

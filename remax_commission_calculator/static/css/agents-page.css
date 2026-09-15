@@ -52,7 +52,7 @@ body.is-agents-page .app-main-inner {
 }
 
 .agents-btn--primary {
-    background: #0d47ff;
+    background: var(--accent);
     color: #fff;
 }
 
@@ -97,7 +97,7 @@ body.is-agents-page .app-main-inner {
     content: "";
     position: absolute;
     inset: 0.55rem;
-    background: #0d47ff;
+    background: var(--accent);
     mask-size: contain;
     mask-repeat: no-repeat;
     mask-position: center;
@@ -381,7 +381,7 @@ body.is-agents-page .app-main-inner {
 }
 
 .agents-pagination__controls a.is-active {
-    background: #0d47ff;
+    background: var(--accent);
     color: #fff;
 }
 
@@ -532,7 +532,7 @@ body.is-agents-page .app-main-inner {
     border-radius: 999px;
 }
 
-.agents-legend__dot--1 { background: #0d47ff; }
+.agents-legend__dot--1 { background: var(--accent); }
 .agents-legend__dot--2 { background: #22c55e; }
 .agents-legend__dot--3 { background: #f59e0b; }
 .agents-legend__dot--4 { background: #8b5cf6; }
