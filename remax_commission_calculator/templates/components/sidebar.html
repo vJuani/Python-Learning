@@ -1,0 +1,6 @@
+{% set sidebar_mode = sidebar_mode|default('rail') %}
+<nav class="jrh-sidebar__nav" aria-label="{{ t('nav_aria') }}" data-sidebar-mode="{{ sidebar_mode }}">
+    {% for group in app_nav.groups %}
+    {% include "components/sidebar_group.html" %}
+    {% endfor %}
+</nav>

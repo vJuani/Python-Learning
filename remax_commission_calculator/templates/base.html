@@ -18,7 +18,10 @@
                 if (localStorage.getItem("cc-theme") === "dark") {
                     document.documentElement.setAttribute("data-theme", "dark");
                 }
-                if (localStorage.getItem("cc-rail") === "collapsed") {
+                if (localStorage.getItem("jrh-sidebar-pinned") === "1") {
+                    document.documentElement.setAttribute("data-sidebar", "pinned");
+                } else {
+                    document.documentElement.setAttribute("data-sidebar", "collapsed");
                     document.documentElement.setAttribute("data-rail", "collapsed");
                 }
             } catch (error) {
@@ -80,6 +83,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth-pages.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app-pages.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app-shell.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-mockup.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/pendings-page.css') }}">
@@ -100,17 +104,40 @@
 </head>
 <body class="{% block body_class %}{% endblock %}{% if current_user or guest_access %} has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password', 'privacy', 'terms') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
-    <aside class="app-rail" aria-label="{{ t('nav_aria') }}">
-        <div class="app-rail-top">
-            <a href="{{ url_for('dashboard') }}" class="app-rail-brand">
+    <aside class="app-rail jrh-sidebar" aria-label="{{ t('nav_aria') }}">
+        <div class="jrh-sidebar__brand">
+            <a href="{{ url_for('dashboard') }}" class="jrh-sidebar__logo-link">
+                <img
+                    src="{{ brand_logo_icon_url }}"
+                    alt="{{ brand_name }}"
+                    class="jrh-sidebar__logo--icon"
+                    width="32"
+                    height="32"
+                >
                 <img
                     src="{{ url_for('static', filename='brand/login-header-lockup.png') }}"
                     alt="{{ brand_name }}"
-                    class="app-rail-logo-lockup"
+                    class="jrh-sidebar__logo--full"
                     width="210"
                     height="40"
                 >
             </a>
+            {% if not use_legacy_nav %}
+            <button
+                type="button"
+                class="jrh-sidebar__pin"
+                data-sidebar-pin
+                aria-pressed="false"
+                aria-label="{{ t('nav_pin') }}"
+                data-label-pin="{{ t('nav_pin') }}"
+                data-label-unpin="{{ t('nav_unpin') }}"
+                title="{{ t('nav_pin') }}"
+            >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+                    <path d="M15 4.5 19.5 9M9 8l7 7-2 5-8-8 5-2Z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            {% else %}
             <button
                 type="button"
                 class="rail-toggle"
@@ -123,9 +150,18 @@
                 <span class="rail-toggle-icon" aria-hidden="true"></span>
                 <span class="visually-hidden rail-toggle-text">{{ t('rail_collapse') }}</span>
             </button>
+            {% endif %}
         </div>
+        {% if organization_display_name %}
+        <p class="jrh-sidebar__org">{{ organization_display_name }}</p>
+        {% endif %}
         <nav id="app-rail-nav" class="app-rail-nav">
+            {% if use_legacy_nav %}
             {% include "_app_nav_links.html" %}
+            {% else %}
+            {% set sidebar_mode = 'rail' %}
+            {% include "components/sidebar.html" %}
+            {% endif %}
         </nav>
         <div class="app-rail-footer">
             {% if current_user %}
@@ -206,7 +242,12 @@
                 </div>
 
                 <div class="main-nav-links">
+                    {% if use_legacy_nav %}
                     {% include "_app_nav_links.html" %}
+                    {% else %}
+                    {% set sidebar_mode = 'drawer' %}
+                    {% include "components/sidebar.html" %}
+                    {% endif %}
                 </div>
 
                 <div class="main-nav-tools main-nav-tools-mobile">
@@ -577,6 +618,7 @@
     {% include "_mobile_bottom_nav.html" %}
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pwa.js') }}?v=push-disable-2"></script>
     {% block extra_js %}{% endblock %}
 </body>

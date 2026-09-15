@@ -1,0 +1,33 @@
+{% if group.children %}
+<div class="jrh-sidebar__group{% if group.active %} is-active{% endif %}{% if group.expanded %} is-open{% endif %}" data-nav-group="{{ group.key }}">
+    <button
+        type="button"
+        class="jrh-sidebar__link jrh-sidebar__toggle{% if group.active %} is-active{% endif %}"
+        aria-expanded="{{ 'true' if group.expanded else 'false' }}"
+        aria-controls="nav-group-{{ group.key }}-{{ sidebar_mode }}"
+        data-tooltip="{{ group.label }}"
+    >
+        {% set icon_svg = group.icon_svg %}
+        {% include "components/sidebar_icon.html" %}
+        <span class="jrh-sidebar__label">{{ group.label }}</span>
+        {% if group.badge %}
+        <span class="jrh-sidebar__badge jrh-sidebar__badge--group" aria-label="{{ group.badge }}">{{ group.badge }}</span>
+        {% endif %}
+        <span class="jrh-sidebar__chevron" aria-hidden="true"></span>
+    </button>
+    <div
+        id="nav-group-{{ group.key }}-{{ sidebar_mode }}"
+        class="jrh-sidebar__children"
+        {% if not group.expanded %}hidden{% endif %}
+    >
+        {% for item in group.children %}
+        {% set nested = true %}
+        {% include "components/sidebar_item.html" %}
+        {% endfor %}
+    </div>
+</div>
+{% elif group.item %}
+{% set item = group.item %}
+{% set nested = false %}
+{% include "components/sidebar_item.html" %}
+{% endif %}

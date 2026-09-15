@@ -1,0 +1,17 @@
+{% set item_label = item.label %}
+<a
+    href="{{ item.href }}"
+    class="jrh-sidebar__link{% if item.active %} is-active{% endif %}{% if item.featured %} is-featured{% endif %}{% if nested %} is-child{% endif %}"
+    {% if item.active %}aria-current="page"{% endif %}
+    data-tooltip="{{ item_label }}"
+>
+    {% set icon_svg = item.icon_svg %}
+    {% include "components/sidebar_icon.html" %}
+    <span class="jrh-sidebar__label">{{ item_label }}</span>
+    {% if item.chip %}
+    <span class="jrh-sidebar__chip">{{ item.chip }}</span>
+    {% endif %}
+    {% if item.badge %}
+    <span class="jrh-sidebar__badge" aria-label="{{ item.badge }}">{{ item.badge }}</span>
+    {% endif %}
+</a>

@@ -546,16 +546,45 @@ def inject_auth_helpers():
             if user is not None and is_admin(user)
             else 0
         ),
-        "unread_notifications": (
-            count_unread_notifications(
-                user["id"],
-                user["organization_id"]
-            )
-            if user is not None
-            and not is_guest_session()
-            and user.get("organization_id")
-            else 0
+        "unread_notifications": _current_unread_notifications(),
+    }
+
+
+def _current_unread_notifications():
+    cached = getattr(g, "unread_notifications_count", None)
+    if cached is not None:
+        return cached
+    user = get_current_user()
+    count = 0
+    if (
+        user is not None
+        and not is_guest_session()
+        and user.get("organization_id")
+    ):
+        count = count_unread_notifications(
+            user["id"],
+            user["organization_id"],
         )
+    g.unread_notifications_count = count
+    return count
+
+
+@app.context_processor
+def inject_app_nav():
+    from modules.app_nav import build_app_nav, use_legacy_nav
+    from modules.i18n import translate
+
+    user = get_current_user()
+    unread = _current_unread_notifications()
+    return {
+        "use_legacy_nav": use_legacy_nav(),
+        "app_nav": build_app_nav(
+            user,
+            endpoint=request.endpoint,
+            unread_notifications=unread,
+            language=get_current_language(),
+            translate=translate,
+        ),
     }
 
 
