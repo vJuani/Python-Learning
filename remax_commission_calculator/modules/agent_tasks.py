@@ -1015,6 +1015,12 @@ def build_agenda_view(
             day=today.day,
             month=_month_label(today, language),
         ),
+        "week_strip": _agenda_week_strip(
+            today,
+            due_date=due_date,
+            language=language,
+        ),
+        "week_heading": _agenda_week_heading(today, due_date=due_date, language=language),
         "timezone_name": str(tz),
         "now_local": now_local,
         **_missing_followup_fields(
@@ -1312,6 +1318,87 @@ def default_form_values(organization_id, *, now=None, **overrides):
     )
 
     return values
+
+
+def _weekday_short(value, language):
+    full = _weekday_label(value, language)
+    shorts = {
+        "lunes": "Lun",
+        "martes": "Mar",
+        "miércoles": "Mié",
+        "jueves": "Jue",
+        "viernes": "Vie",
+        "sábado": "Sáb",
+        "domingo": "Dom",
+        "Monday": "Mon",
+        "Tuesday": "Tue",
+        "Wednesday": "Wed",
+        "Thursday": "Thu",
+        "Friday": "Fri",
+        "Saturday": "Sat",
+        "Sunday": "Sun",
+    }
+    return shorts.get(full, full[:3].title())
+
+
+def _month_short(value, language):
+    full = _month_label(value, language)
+    shorts = {
+        "enero": "Ene",
+        "febrero": "Feb",
+        "marzo": "Mar",
+        "abril": "Abr",
+        "mayo": "May",
+        "junio": "Jun",
+        "julio": "Jul",
+        "agosto": "Ago",
+        "septiembre": "Sep",
+        "octubre": "Oct",
+        "noviembre": "Nov",
+        "diciembre": "Dic",
+        "January": "Jan",
+        "February": "Feb",
+        "March": "Mar",
+        "April": "Apr",
+        "May": "May",
+        "June": "Jun",
+        "July": "Jul",
+        "August": "Aug",
+        "September": "Sep",
+        "October": "Oct",
+        "November": "Nov",
+        "December": "Dec",
+    }
+    return shorts.get(full, full[:3].title())
+
+
+def _agenda_week_heading(today, *, due_date=None, language="es"):
+    heading_day = today
+    if due_date:
+        try:
+            heading_day = date.fromisoformat(str(due_date))
+        except ValueError:
+            heading_day = today
+    return f"{_month_short(heading_day, language)} {heading_day.year}"
+
+
+def _agenda_week_strip(today, *, due_date=None, language="es"):
+    selected = str(due_date or today.isoformat())
+    week_start = today - timedelta(days=today.weekday())
+    days = []
+    for offset in range(7):
+        day = week_start + timedelta(days=offset)
+        iso = day.isoformat()
+        days.append(
+            {
+                "iso": iso,
+                "dow": _weekday_short(day, language),
+                "day": day.day,
+                "is_today": day == today,
+                "is_selected": iso == selected,
+            }
+        )
+    return days
 
 
 def _weekday_label(value, language):

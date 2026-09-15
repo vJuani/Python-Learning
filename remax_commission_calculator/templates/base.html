@@ -109,6 +109,7 @@
     {% endif %}
     {% block extra_css %}{% endblock %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-logo.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-app.css') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}{% if current_user or guest_access %} has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password', 'privacy', 'terms') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
@@ -189,6 +190,21 @@
     <div class="app-frame">
     <header class="site-header">
         <div class="header-grid">
+            {% if current_user or guest_access %}
+            <button
+                type="button"
+                class="nav-toggle"
+                aria-expanded="false"
+                aria-controls="main-nav"
+                aria-label="{{ t('nav_menu') }}"
+                title="{{ t('nav_menu') }}"
+                data-label-menu="{{ t('nav_menu') }}"
+                data-label-close="{{ t('nav_close') }}"
+            >
+                <span class="nav-toggle-bars" aria-hidden="true"></span>
+                <span class="visually-hidden nav-toggle-label">{{ t('nav_menu') }}</span>
+            </button>
+            {% endif %}
             <div class="header-zone header-zone-left">
                 <a
                     href="{% if current_user or guest_access %}{{ url_for('dashboard') }}{% else %}{{ url_for('login') }}{% endif %}"
@@ -199,12 +215,13 @@
                         {% include "_brand_logo.html" %}
                         {% endwith %}
                     </span>
-                    <span class="hide-desktop">
+                    <span class="hide-desktop m-topbar-brand">
                         {% with brand_slot='navbar', logo_extra_class='site-brand-logo site-brand-logo--lockup' %}
                         {% include "_brand_logo.html" %}
                         {% endwith %}
                     </span>
                 </a>
+                <p class="m-topbar-title hide-desktop">{% block mobile_topbar_title %}{% endblock %}</p>
             </div>
 
             {% if current_user or guest_access %}
@@ -336,19 +353,15 @@
                     {% endif %}
                 </a>
                 {% endif %}
-                <button
-                    type="button"
-                    class="nav-toggle"
-                    aria-expanded="false"
-                    aria-controls="main-nav"
-                    aria-label="{{ t('nav_menu') }}"
-                    title="{{ t('nav_menu') }}"
-                    data-label-menu="{{ t('nav_menu') }}"
-                    data-label-close="{{ t('nav_close') }}"
-                >
-                    <span class="nav-toggle-bars" aria-hidden="true"></span>
-                    <span class="visually-hidden nav-toggle-label">{{ t('nav_menu') }}</span>
+                {% if current_user %}
+                {% set rail_first = (current_user.first_name or '').strip() %}
+                {% set rail_last = (current_user.last_name or '').strip() %}
+                {% set header_name = (rail_first ~ ' ' ~ rail_last).strip() or current_user.username %}
+                {% set header_parts = header_name.split() %}
+                <button type="button" class="m-topbar-avatar hide-desktop" data-mobile-nav-more aria-label="{{ t('nav_more') }}">
+                    {{ header_parts[0][0:1]|upper }}{% if header_parts|length > 1 %}{{ header_parts[1][0:1]|upper }}{% endif %}
                 </button>
+                {% endif %}
 
                 <div class="header-tools header-tools-desktop">
                     <div class="header-tools-group header-tools-meta">

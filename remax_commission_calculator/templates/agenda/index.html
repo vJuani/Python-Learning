@@ -4,6 +4,8 @@
 
 {% block body_class %}is-agenda-page {% endblock %}
 
+{% block mobile_topbar_title %}{{ t('agenda_title') }}{% endblock %}
+
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/jrh-voice.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
@@ -62,6 +64,21 @@
         </details>
         {% endif %}
     </section>
+
+    {% if agenda.week_strip %}
+    <header class="m-agenda-head hide-desktop">
+        <h1 class="m-agenda-month">{{ agenda.week_heading }}</h1>
+        <a class="m-agenda-today" href="{{ url_for('agenda_index') }}">{{ t('agenda_filter_today') }}</a>
+    </header>
+    <nav class="m-agenda-week hide-desktop" aria-label="{{ t('agenda_title') }}">
+        {% for day in agenda.week_strip %}
+        <a href="{{ url_for('agenda_index', date=day.iso) }}" class="{% if day.is_selected %}is-selected{% endif %}">
+            {{ day.dow }}
+            <strong>{{ day.day }}</strong>
+        </a>
+        {% endfor %}
+    </nav>
+    {% endif %}
 
     {% set calendar = calendar or {"state": "unconfigured"} %}
     {% set calendar_connected = calendar.connected or calendar.state in ('synced', 'error') %}
@@ -248,7 +265,7 @@
 
     {% if can_manage %}
     <details class="agenda-fab hide-desktop">
-        <summary class="agenda-fab__button" aria-label="{{ t('agenda_new_action') }}">+</summary>
+        <summary class="agenda-fab__button" aria-label="{{ t('agenda_new_cta') }}">+ {{ t('agenda_new_cta') }}</summary>
         <div class="agenda-fab__menu">
             {% include "agenda/_create_menu.html" %}
         </div>

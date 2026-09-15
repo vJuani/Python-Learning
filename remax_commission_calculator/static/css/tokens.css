@@ -23,6 +23,12 @@
     --color-warning: #B45309;
     --color-danger: #C2410C;
     --color-info: #3E63DD;
+    --color-bg-secondary: #EEF2EE;
+    --color-surface-elevated: #FFFFFF;
+    --purple-primary: #7C5CFF;
+    --purple-light: #B79CFF;
+    --blue-accent: #3E63DD;
+    --brand-green-dark: #2D8C63;
 
     /* Brand — Irish green */
     --brand-700: #0E4F38;
@@ -267,6 +273,12 @@
     --color-warning: #FBBF24;
     --color-danger: #F87171;
     --color-info: #3E63DD;
+    --color-bg-secondary: #0D1220;
+    --color-surface-elevated: #161F33;
+    --purple-primary: #7C5CFF;
+    --purple-light: #B79CFF;
+    --blue-accent: #3E63DD;
+    --brand-green-dark: #2D8C63;
 
     --brand-700: #2d8c63;
     --brand-600: #2d8c63;
