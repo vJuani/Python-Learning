@@ -239,11 +239,18 @@
     /* ── Shared bits ────────────────────────────────────── */
     .m-chip-row {
         display: flex;
-        gap: 8px;
+        gap: 12px;
         overflow-x: auto;
-        padding-bottom: 2px;
+        overflow-y: hidden;
+        padding: 2px 4px 4px;
         margin: 0 0 16px;
         -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        background: transparent;
+    }
+
+    .m-chip-row::-webkit-scrollbar {
+        display: none;
     }
 
     .m-chip-row a,
@@ -390,16 +397,21 @@
 
     .m-jrh-card__bot {
         flex: 0 0 auto;
-        width: 56px;
-        height: 56px;
+        width: 44px;
+        height: 44px;
+        overflow: visible;
+        background: transparent;
     }
 
     .m-jrh-card__bot img,
     .m-jrh-card__bot svg,
     .m-jrh-card .jrh-bot-avatar {
-        width: 56px;
-        height: 56px;
+        width: 44px;
+        height: 44px;
         object-fit: contain;
+        object-position: center;
+        background: transparent;
+        transform: none;
     }
 
     .m-composer {
@@ -1529,7 +1541,14 @@
     body.m-more-open,
     html.m-sheet-open,
     body.m-sheet-open {
-        overflow: hidden;
+        overscroll-behavior: none;
+    }
+
+    body.m-scroll-locked {
+        position: fixed;
+        left: 0;
+        right: 0;
+        width: 100%;
     }
 
     .m-more {
@@ -1537,23 +1556,33 @@
         top: calc(56px + env(safe-area-inset-top, 0px));
         left: 0;
         right: 0;
-        bottom: 0;
+        bottom: var(--m-nav-h);
         z-index: 28;
         display: none;
         flex-direction: column;
-        gap: var(--m-gap);
         width: 100%;
         max-width: 100%;
         min-width: 0;
         margin: 0;
-        padding: 8px 16px calc(var(--m-nav-h) + 16px);
-        overflow: auto;
+        padding: 0;
+        overflow: hidden;
         background: var(--color-bg);
-        -webkit-overflow-scrolling: touch;
     }
 
     .m-more.is-open {
         display: flex;
+    }
+
+    .m-more__scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: var(--m-gap);
+        padding: 8px 16px 24px;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
     }
 
     .m-more .m-hello {
@@ -1665,13 +1694,24 @@
         align-items: center;
         min-height: 52px;
         padding: 0;
+        margin-top: 8px;
         color: #f97066;
         text-decoration: none;
         font-size: 1.05rem;
         font-weight: 700;
         border: 0;
         background: transparent;
-        margin-top: 4px;
+        position: relative;
+        z-index: 2;
+        pointer-events: auto;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .m-more__end {
+        flex: 0 0 8px;
+        height: 8px;
+        pointer-events: none;
     }
 
     .mobile-drawer-section .header-nav-meta {
@@ -1999,6 +2039,12 @@
         margin: 0;
     }
 
+    body.is-jrh-ask-page,
+    body.is-jrh-ask-page .app-main-inner {
+        background: var(--color-bg);
+        color: var(--color-text);
+    }
+
     body.is-jrh-ask-page .app-main-inner {
         padding-bottom: calc(var(--m-nav-h) + 12px);
     }
@@ -2008,10 +2054,10 @@
         flex-direction: column;
         position: relative;
         min-height: 0;
-        gap: 12px;
+        gap: 10px;
         width: 100%;
         max-width: 100%;
-        padding-top: 4px;
+        padding: 4px 0 8px;
     }
 
     body.is-jrh-ask-page .jrh-studio__hero,
@@ -2029,6 +2075,10 @@
         display: none;
     }
 
+    body.is-jrh-ask-page .jrh-studio__mascot-wrap.hide-mobile {
+        display: none !important;
+    }
+
     body.is-jrh-ask-page .jrh-studio__intro {
         order: 1;
         display: flex;
@@ -2036,39 +2086,86 @@
         gap: 6px;
         min-width: 0;
         width: 100%;
+        padding-right: 0;
     }
 
     body.is-jrh-ask-page .jrh-studio__title {
         display: block;
         margin: 0;
-        font-size: 1.9rem;
+        font-size: 1.7rem;
         line-height: 1.15;
         letter-spacing: -0.04em;
+        color: var(--color-text);
     }
 
     body.is-jrh-ask-page .m-jrh-lead.hide-desktop {
         display: block !important;
         margin: 0;
-        font-size: 1rem;
+        font-size: 0.95rem;
         color: var(--color-text-muted);
     }
 
     body.is-jrh-ask-page .jrh-studio__mascot-wrap {
-        order: 1;
-        display: flex;
-        position: absolute;
-        right: 0;
-        top: 0;
-        justify-content: flex-end;
-        min-height: 0;
-        width: auto;
-        pointer-events: none;
+        display: none !important;
     }
 
-    body.is-jrh-ask-page .jrh-studio__mascot img,
-    body.is-jrh-ask-page .jrh-bot-hero {
-        max-height: 56px;
-        width: auto;
+    body.is-jrh-ask-page .jrh-studio__empty {
+        margin: 4px 0 0;
+        padding: 0;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+    }
+
+    body.is-jrh-ask-page .jrh-studio__empty-bot {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 52px;
+        height: 52px;
+        margin: 6px 0 2px;
+        border-radius: 0;
+        overflow: visible;
+        background: transparent;
+    }
+
+    html[data-theme="dark"] body.is-jrh-ask-page .jrh-studio__empty-bot {
+        background: transparent;
+    }
+
+    body.is-jrh-ask-page .jrh-studio__empty-bot img,
+    body.is-jrh-ask-page .jrh-studio__empty-bot svg,
+    body.is-jrh-ask-page .jrh-studio__empty-bot .jrh-bot-avatar {
+        width: 52px !important;
+        height: 52px !important;
+        max-width: 52px;
+        max-height: 52px;
+        object-fit: contain !important;
+        object-position: center;
+        transform: none;
+        background: transparent !important;
+        filter: none;
+        animation: none;
+        border-radius: 0;
+    }
+
+    body.is-jrh-ask-page .jrh-studio__empty-title {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: var(--color-text);
+    }
+
+    body.is-jrh-ask-page .jrh-studio__empty-hint {
+        max-width: 34ch;
+        font-size: 0.9rem;
+        line-height: 1.4;
+        color: var(--color-text-muted);
+    }
+
+    body.is-jrh-ask-page .jrh-studio__empty p {
+        margin: 0;
     }
 
     body.is-jrh-ask-page .jrh-studio__layout {
@@ -2082,7 +2179,8 @@
 
     body.is-jrh-ask-page .jrh-studio__thread {
         min-height: 0;
-        padding: 8px 0;
+        flex: 0 0 auto;
+        padding: 4px 0 0;
         width: 100%;
         max-width: 100%;
         background: transparent;
@@ -2090,46 +2188,15 @@
         box-shadow: none;
     }
 
-    body.is-jrh-ask-page .jrh-studio:has(.jrh-studio__empty) .jrh-studio__mascot-wrap {
-        display: none;
-    }
-
-    body.is-jrh-ask-page .jrh-studio__empty {
-        margin: 12px 0 0;
-        padding: 12px 0 8px;
-        text-align: center;
-    }
-
-    body.is-jrh-ask-page .jrh-studio__empty-bot {
-        display: flex;
-        justify-content: center;
-        margin-bottom: 8px;
-    }
-
-    body.is-jrh-ask-page .jrh-studio__empty-bot img,
-    body.is-jrh-ask-page .jrh-studio__empty-bot .jrh-bot-avatar {
-        width: 72px;
-        height: 72px;
-    }
-
-    body.is-jrh-ask-page .jrh-studio__empty-title {
-        font-size: 1.15rem;
-        font-weight: 800;
-    }
-
-    body.is-jrh-ask-page .jrh-studio__empty p {
-        margin: 0;
-    }
-
     body.is-jrh-ask-page .jrh-studio__composer {
         order: 3;
-        position: sticky;
-        bottom: calc(var(--m-nav-h) + var(--m-keyboard, 0px));
+        position: relative;
+        bottom: auto;
         z-index: 8;
-        margin: 0;
-        padding: 8px 0 4px;
-        background: color-mix(in srgb, var(--color-bg) 94%, transparent);
-        backdrop-filter: blur(10px);
+        margin: 4px 0 0;
+        padding: 4px 0 0;
+        background: transparent;
+        backdrop-filter: none;
         width: 100%;
         max-width: 100%;
         min-width: 0;
@@ -2138,7 +2205,10 @@
     }
 
     body.m-keyboard-open.is-jrh-ask-page .jrh-studio__composer {
+        position: sticky;
         bottom: var(--m-keyboard, 0px);
+        background: color-mix(in srgb, var(--color-bg) 94%, transparent);
+        backdrop-filter: blur(10px);
     }
 
     body.is-jrh-ask-page .jrh-studio__actions {
@@ -2158,6 +2228,9 @@
         min-width: 0;
         width: 100%;
         padding: 4px 4px 4px 12px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 16px;
     }
 
     body.is-jrh-ask-page .jrh-studio__input {
@@ -2191,17 +2264,17 @@
     }
 
     body.is-jrh-ask-page .jrh-studio__actions {
-        display: flex;
+        display: flex !important;
         flex-wrap: nowrap;
-        gap: 8px;
+        gap: 12px;
         overflow-x: auto;
         overflow-y: hidden;
-        padding: 4px 0 8px;
-        margin: 8px 0 0;
+        padding: 2px 0 8px;
+        margin: 2px 0 8px;
         -webkit-overflow-scrolling: touch;
-        scroll-snap-type: x proximity;
         scrollbar-width: none;
         background: transparent;
+        grid-template-columns: none !important;
     }
 
     body.is-jrh-ask-page .jrh-studio__actions::-webkit-scrollbar {
@@ -2214,12 +2287,19 @@
         flex: 0 0 auto;
         min-width: 0;
         max-width: none;
+        min-height: 40px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        color: var(--color-text);
         white-space: nowrap;
         overflow: visible;
         text-overflow: unset;
-        scroll-snap-align: start;
-        font-size: 0.9rem;
-        line-height: 1.25;
+        font-size: 0.86rem;
+        font-weight: 650;
+        line-height: 1.2;
+        box-shadow: none;
     }
 
     .m-agenda-tabs {
@@ -2558,6 +2638,8 @@
         left: 0;
         right: 0;
         bottom: 0;
+        top: auto;
+        height: auto;
         z-index: 80;
         display: none;
         width: 100%;
@@ -2567,11 +2649,12 @@
 
     .m-sheet.is-open {
         display: block;
-        pointer-events: auto;
+        pointer-events: none;
     }
 
     .m-sheet__panel {
         position: relative;
+        pointer-events: auto;
         padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px));
         border-radius: 22px 22px 0 0;
         background: var(--color-surface);
@@ -2674,6 +2757,54 @@
 
     html[data-theme="dark"] .m-sheet__apply {
         background: var(--purple-primary);
+    }
+
+    .m-sheet__body [data-sheet-panel],
+    .m-sheet__body .properties-toolbar__more-panel {
+        position: static !important;
+        inset: auto !important;
+        display: grid;
+        gap: 12px;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 0 0 8px;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        background: transparent;
+        max-height: none;
+        overflow: visible;
+    }
+
+    .m-sheet__body .m-sheet-head {
+        display: none;
+    }
+
+    .m-sheet__body .m-sheet-actions {
+        display: grid !important;
+        margin-top: 8px;
+    }
+
+    .m-sheet__body label,
+    .m-sheet__body a,
+    .m-sheet__body .contacts-filter,
+    .m-sheet__body .jrh-studio__chip {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    .m-sheet__body input,
+    .m-sheet__body select {
+        width: 100%;
+        min-height: 48px;
+        font-size: 16px;
+        border-radius: 14px;
+        border: 1px solid var(--color-border);
+        background: var(--color-surface-secondary);
+        color: var(--color-text);
+        padding: 0 12px;
     }
 
     .m-voice {

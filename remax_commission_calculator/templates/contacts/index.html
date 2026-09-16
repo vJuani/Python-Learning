@@ -56,7 +56,7 @@
         {% endfor %}
         <details class="contacts-filters-more">
             <summary>{{ t('contacts_filters') }}</summary>
-            <div class="contacts-filters-more__panel">
+            <div class="contacts-filters-more__panel" data-sheet-panel>
                 {% for key, label in [
                     ('sellers', t('contacts_filter_sellers')),
                     ('owners', t('contacts_filter_owners')),

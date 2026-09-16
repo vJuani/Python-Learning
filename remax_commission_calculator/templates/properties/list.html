@@ -82,7 +82,7 @@
     <div class="properties-page__layout">
         <div class="properties-page__main">
             <section class="properties-card">
-                <form class="properties-toolbar" method="get" action="{{ url_for('properties_list') }}">
+                <form id="properties-filter-form" class="properties-toolbar" method="get" action="{{ url_for('properties_list') }}">
                     <input type="hidden" name="nearby_id" value="{{ properties_panel.filters.nearby_id }}">
                     <input type="hidden" name="center_lat" value="{{ properties_panel.filters.center_lat }}">
                     <input type="hidden" name="center_lng" value="{{ properties_panel.filters.center_lng }}">
@@ -132,7 +132,7 @@
                     </label>
                     <details class="properties-toolbar__more" data-filter-sheet>
                         <summary class="properties-btn properties-btn--ghost">{{ t('properties_more_filters') }}</summary>
-                        <div class="properties-toolbar__more-panel">
+                        <div class="properties-toolbar__more-panel" data-sheet-panel>
                             <div class="m-sheet-head hide-desktop">
                                 <h2>{{ t('filters_open') }}</h2>
                                 <button type="button" class="m-sheet-close" data-close-property-filters aria-label="{{ t('nav_close') }}">×</button>

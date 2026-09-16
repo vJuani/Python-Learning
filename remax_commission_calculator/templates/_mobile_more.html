@@ -10,6 +10,7 @@
     hidden
     aria-label="{{ t('nav_more') }}"
 >
+    <div class="m-more__scroll">
     <header class="m-hello">
         <h1 class="m-more__title">{{ t('nav_more') }}</h1>
         <p>{{ t('m_more_sub') }}</p>
@@ -78,7 +79,8 @@
                     class="m-appearance-value"
                     data-label-dark="{{ t('m_theme_value_dark') }}"
                     data-label-light="{{ t('m_theme_value_light') }}"
-                >{{ t('m_theme_value_dark') }}</strong>
+                    data-label-system="{{ t('m_theme_value_system') }}"
+                >{{ t('m_theme_value_system') }}</strong>
             </button>
             {% if is_admin() or is_agent() %}
             <a class="m-row" href="{{ url_for('settings_integrations') }}">
@@ -127,5 +129,7 @@
     </section>
 
     <a href="{{ url_for('logout') }}" class="m-more__logout">{{ t('logout') }}</a>
+    <div class="m-more__end" aria-hidden="true"></div>
+    </div>
 </section>
 {% endif %}

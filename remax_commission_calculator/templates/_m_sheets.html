@@ -20,10 +20,21 @@
             <button type="button" class="m-sheet-close" data-close-sheet aria-label="{{ t('nav_close') }}">×</button>
         </header>
         <div class="m-sheet__options" role="radiogroup" aria-label="{{ t('nav_appearance') }}">
-            <button type="button" class="m-sheet__option" data-set-theme="light">{{ t('theme_toggle_light') }}</button>
-            <button type="button" class="m-sheet__option" data-set-theme="dark">{{ t('theme_dark_label') }}</button>
+            <button type="button" class="m-sheet__option" data-set-theme="light">{{ t('m_theme_value_light') }}</button>
+            <button type="button" class="m-sheet__option" data-set-theme="dark">{{ t('m_theme_value_dark') }}</button>
+            <button type="button" class="m-sheet__option" data-set-theme="system">{{ t('m_theme_value_system') }}</button>
         </div>
         <button type="button" class="m-sheet__apply" data-close-sheet>{{ t('save') }}</button>
+    </div>
+</div>
+
+<div id="m-sheet-dynamic" class="m-sheet" hidden>
+    <div class="m-sheet__panel" role="dialog" aria-labelledby="m-sheet-dynamic-title">
+        <header class="m-sheet__head">
+            <h2 id="m-sheet-dynamic-title" data-sheet-title>{{ t('filters_open') }}</h2>
+            <button type="button" class="m-sheet-close" data-close-sheet aria-label="{{ t('nav_close') }}">×</button>
+        </header>
+        <div class="m-sheet__body" data-sheet-body></div>
     </div>
 </div>
 

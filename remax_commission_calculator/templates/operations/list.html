@@ -149,7 +149,7 @@
 
         <details class="operations-mobile-advanced hide-desktop">
             <summary class="visually-hidden">{{ t('operations_advanced_filters') }}</summary>
-            <div class="operations-mobile-advanced__panel">
+            <div class="operations-mobile-advanced__panel" data-sheet-panel>
                 <form method="get" action="{{ url_for('operations_list') }}">
                     <input type="hidden" name="tab" value="{{ operations_panel.filters.tab }}">
                     <label><span>{{ t('property') }}</span><input type="search" name="q" value="{{ operations_panel.filters.q }}"></label>

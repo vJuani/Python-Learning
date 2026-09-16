@@ -16,7 +16,7 @@
     {% if extra_chips %}
     <details class="jrh-chip-more">
         <summary class="{{ chip_item_class|default('jrh-studio__chip') }} jrh-chip-more__toggle">{{ t('jrh_quick_more') }}</summary>
-        <div class="jrh-chip-more__panel">
+        <div class="jrh-chip-more__panel" data-sheet-panel>
             {% for action in extra_chips %}
             <button
                 type="button"

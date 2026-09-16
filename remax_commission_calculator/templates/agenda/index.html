@@ -370,7 +370,7 @@
     {% if can_manage %}
     <details class="agenda-fab hide-desktop">
         <summary class="agenda-fab__button" aria-label="{{ t('agenda_new_cta') }}">+ {{ t('agenda_new_cta') }}</summary>
-        <div class="agenda-fab__menu">
+        <div class="agenda-fab__menu" data-sheet-panel>
             {% include "agenda/_create_menu.html" %}
         </div>
     </details>

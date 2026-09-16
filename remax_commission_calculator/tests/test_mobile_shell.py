@@ -79,6 +79,7 @@ class MobileShellTests(unittest.TestCase):
         self.assertIn("data-open-sheet=\"language\"", more)
         self.assertIn("data-open-sheet=\"appearance\"", more)
         self.assertIn("m-account", more)
+        self.assertIn('href="/logout"', more)
         self.assertNotIn("Navegación", more)
         self.assertNotIn("No tenés notificaciones", more)
         self.assertNotIn("m-drawer-close", more)
@@ -112,7 +113,9 @@ class MobileShellTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn("data-open-property-filters", body)
         self.assertIn("data-filter-sheet", body)
+        self.assertIn("data-sheet-panel", body)
         self.assertIn("data-close-property-filters", body)
+        self.assertIn('id="m-sheet-dynamic"', body)
         self.assertIn("data-m-sheet-backdrop", body)
         self.assertIn("m-sheet-actions", body)
 
@@ -122,6 +125,11 @@ class MobileShellTests(unittest.TestCase):
         self.assertIn('id="m-sheet-appearance"', body)
         self.assertIn('id="m-voice"', body)
         self.assertIn("data-set-theme", body)
+        self.assertIn('data-set-theme="system"', body)
+        self.assertIn("Claro", body)
+        self.assertIn("Oscuro", body)
+        self.assertIn("Sistema", body)
+        self.assertIn('id="m-sheet-dynamic"', body)
 
     def test_notifications_page_has_mobile_title(self):
         page = self._login(self.admin_id, ROLE_ADMIN).get("/notifications")

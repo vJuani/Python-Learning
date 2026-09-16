@@ -1,12 +1,37 @@
 document.addEventListener("DOMContentLoaded", function () {
     var themeToggles = document.querySelectorAll(".theme-toggle");
     var root = document.documentElement;
+    var systemMq = window.matchMedia("(prefers-color-scheme: dark)");
 
-    function applyTheme(theme) {
-        root.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
+    function readThemePref() {
+        try {
+            var stored = localStorage.getItem("cc-theme");
+            if (stored === "dark" || stored === "light" || stored === "system") {
+                return stored;
+            }
+        } catch (error) {
+            /* ignore */
+        }
+        return "system";
+    }
+
+    function resolveTheme(pref) {
+        if (pref === "system") {
+            return systemMq.matches ? "dark" : "light";
+        }
+        return pref === "dark" ? "dark" : "light";
+    }
+
+    function applyTheme(pref) {
+        if (pref !== "dark" && pref !== "light" && pref !== "system") {
+            pref = "system";
+        }
+        var resolved = resolveTheme(pref);
+        root.setAttribute("data-theme", resolved);
+        root.setAttribute("data-theme-pref", pref);
 
         themeToggles.forEach(function (themeToggle) {
-            var label = theme === "dark"
+            var label = resolved === "dark"
                 ? themeToggle.getAttribute("data-label-light")
                 : themeToggle.getAttribute("data-label-dark");
 
@@ -15,24 +40,29 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         try {
-            localStorage.setItem("cc-theme", theme);
+            localStorage.setItem("cc-theme", pref);
         } catch (error) {
             /* ignore */
         }
-        syncAppearanceLabels(theme);
+        document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
+            var media = meta.getAttribute("media") || "";
+            if (!media) {
+                meta.setAttribute("content", resolved === "dark" ? "#080A0F" : "#0E4F38");
+            }
+        });
+        syncAppearanceLabels(pref, resolved);
     }
 
     window.__jrhApplyTheme = applyTheme;
 
-    function syncAppearanceLabels(theme) {
-        var isDark = theme === "dark";
+    function syncAppearanceLabels(pref, resolved) {
+        resolved = resolved || resolveTheme(pref);
         document.querySelectorAll(".m-appearance-value").forEach(function (node) {
-            node.textContent = isDark
-                ? (node.getAttribute("data-label-dark") || "Dark")
-                : (node.getAttribute("data-label-light") || "Light");
+            var key = pref === "system" ? "system" : resolved;
+            node.textContent = node.getAttribute("data-label-" + key) || key;
         });
         document.querySelectorAll("[data-set-theme]").forEach(function (btn) {
-            btn.classList.toggle("is-active", btn.getAttribute("data-set-theme") === theme);
+            btn.classList.toggle("is-active", btn.getAttribute("data-set-theme") === pref);
         });
     }
 
@@ -43,13 +73,22 @@ document.addEventListener("DOMContentLoaded", function () {
                 applyTheme(isDark ? "light" : "dark");
             });
         });
+    }
 
-        var currentTheme = root.getAttribute("data-theme") === "dark"
-            ? "dark"
-            : "light";
-        applyTheme(currentTheme);
-    } else {
-        applyTheme(root.getAttribute("data-theme") === "dark" ? "dark" : "light");
+    applyTheme(readThemePref());
+
+    if (typeof systemMq.addEventListener === "function") {
+        systemMq.addEventListener("change", function () {
+            if (readThemePref() === "system") {
+                applyTheme("system");
+            }
+        });
+    } else if (typeof systemMq.addListener === "function") {
+        systemMq.addListener(function () {
+            if (readThemePref() === "system") {
+                applyTheme("system");
+            }
+        });
     }
 
     var railToggles = document.querySelectorAll(".rail-toggle");
@@ -132,9 +171,36 @@ document.addEventListener("DOMContentLoaded", function () {
     var moreButtons = document.querySelectorAll("[data-mobile-nav-more]");
     var morePanel = document.getElementById("mobile-more");
     var sheetBackdrop = document.querySelector("[data-m-sheet-backdrop]");
+    var dynamicSheet = document.getElementById("m-sheet-dynamic");
+    var dynamicBody = dynamicSheet && dynamicSheet.querySelector("[data-sheet-body]");
+    var dynamicTitle = dynamicSheet && dynamicSheet.querySelector("[data-sheet-title]");
+    var portaledPanel = null;
+    var portaledHome = null;
+    var scrollLockY = 0;
 
     function isMobileNav() {
         return mobileMq.matches;
+    }
+
+    function lockPageScroll() {
+        if (document.body.classList.contains("m-scroll-locked")) {
+            return;
+        }
+        scrollLockY = window.scrollY || window.pageYOffset || 0;
+        document.body.style.top = "-" + scrollLockY + "px";
+        document.body.classList.add("m-scroll-locked");
+    }
+
+    function unlockPageScroll() {
+        if (document.body.classList.contains("m-more-open") || document.body.classList.contains("m-sheet-open")) {
+            return;
+        }
+        if (!document.body.classList.contains("m-scroll-locked")) {
+            return;
+        }
+        document.body.classList.remove("m-scroll-locked");
+        document.body.style.top = "";
+        window.scrollTo(0, scrollLockY);
     }
 
     function syncMoreActive(isOpen) {
@@ -146,19 +212,65 @@ document.addEventListener("DOMContentLoaded", function () {
         document.body.classList.toggle("m-nav-open", isOpen);
         document.documentElement.classList.toggle("m-more-open", isOpen);
         document.body.classList.toggle("m-more-open", isOpen);
+        if (isOpen) {
+            lockPageScroll();
+        } else {
+            unlockPageScroll();
+        }
+    }
+
+    function restorePortaledPanel() {
+        if (portaledPanel && portaledHome) {
+            portaledHome.appendChild(portaledPanel);
+        }
+        portaledPanel = null;
+        portaledHome = null;
+    }
+
+    function openPortaledPanel(panel, title) {
+        if (!isMobileNav() || !dynamicSheet || !dynamicBody || !panel) {
+            return false;
+        }
+        var form = panel.closest("form");
+        restorePortaledPanel();
+        portaledHome = panel.parentNode;
+        portaledPanel = panel;
+        if (form) {
+            if (!form.id) {
+                form.id = "m-sheet-bound-form";
+            }
+            panel.querySelectorAll("input, select, textarea, button").forEach(function (el) {
+                el.setAttribute("form", form.id);
+            });
+        }
+        if (dynamicTitle) {
+            dynamicTitle.textContent = title || "";
+        }
+        dynamicBody.appendChild(panel);
+        openNamedSheet("dynamic");
+        var sheetPanel = dynamicSheet.querySelector(".m-sheet__panel");
+        if (sheetPanel) {
+            sheetPanel.scrollTop = 0;
+        }
+        return true;
     }
 
     function closeAllSheets() {
-        setPropertyFiltersOpen(false);
+        restorePortaledPanel();
         document.querySelectorAll(".m-sheet").forEach(function (sheet) {
             sheet.hidden = true;
             sheet.classList.remove("is-open");
+        });
+        document.querySelectorAll("[data-filter-sheet], .properties-toolbar__more").forEach(function (details) {
+            details.open = false;
+            details.classList.remove("is-sheet-open");
         });
         document.documentElement.classList.remove("m-sheet-open");
         document.body.classList.remove("m-sheet-open");
         if (sheetBackdrop) {
             sheetBackdrop.hidden = true;
         }
+        unlockPageScroll();
     }
 
     function openNamedSheet(name) {
@@ -167,10 +279,15 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
         document.querySelectorAll(".m-sheet").forEach(function (node) {
+            if (node === sheet) {
+                return;
+            }
             node.hidden = true;
             node.classList.remove("is-open");
         });
-        setPropertyFiltersOpen(false);
+        if (name !== "dynamic") {
+            restorePortaledPanel();
+        }
         sheet.hidden = false;
         sheet.classList.add("is-open");
         document.documentElement.classList.add("m-sheet-open");
@@ -178,19 +295,34 @@ document.addEventListener("DOMContentLoaded", function () {
         if (sheetBackdrop) {
             sheetBackdrop.hidden = false;
         }
+        lockPageScroll();
     }
 
     function setPropertyFiltersOpen(isOpen) {
         var details = document.querySelector("[data-filter-sheet], .properties-toolbar__more");
-        document.documentElement.classList.toggle("m-sheet-open", !!isOpen);
-        document.body.classList.toggle("m-sheet-open", !!isOpen);
+        if (!isOpen) {
+            closeAllSheets();
+            return;
+        }
+        var panel = details && details.querySelector("[data-sheet-panel], .properties-toolbar__more-panel");
+        var titleNode = details && details.querySelector("summary");
+        var title = titleNode ? titleNode.textContent.trim() : "";
+        if (panel && openPortaledPanel(panel, title)) {
+            if (details) {
+                details.open = false;
+            }
+            return;
+        }
+        document.documentElement.classList.add("m-sheet-open");
+        document.body.classList.add("m-sheet-open");
         if (details) {
-            details.open = !!isOpen;
-            details.classList.toggle("is-sheet-open", !!isOpen);
+            details.open = true;
+            details.classList.toggle("is-sheet-open", true);
         }
         if (sheetBackdrop) {
-            sheetBackdrop.hidden = !isOpen;
+            sheetBackdrop.hidden = false;
         }
+        lockPageScroll();
     }
 
     function setMoreOpen(isOpen) {
@@ -748,8 +880,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     document.querySelectorAll("[data-set-theme]").forEach(function (btn) {
         btn.addEventListener("click", function () {
-            var theme = btn.getAttribute("data-set-theme") === "dark" ? "dark" : "light";
-            applyTheme(theme);
+            var pref = btn.getAttribute("data-set-theme");
+            if (pref !== "dark" && pref !== "light" && pref !== "system") {
+                pref = "light";
+            }
+            applyTheme(pref);
         });
     });
 
@@ -837,8 +972,13 @@ document.addEventListener("DOMContentLoaded", function () {
     var operationsMobileFiltersOpen = document.querySelector("[data-operations-mobile-filters-open]");
     var operationsMobileAdvanced = document.querySelector(".operations-mobile-advanced");
     if (operationsMobileFiltersOpen && operationsMobileAdvanced) {
-        operationsMobileFiltersOpen.addEventListener("click", function () {
-            operationsMobileAdvanced.setAttribute("open", "open");
+        operationsMobileFiltersOpen.addEventListener("click", function (event) {
+            event.preventDefault();
+            var panel = operationsMobileAdvanced.querySelector("[data-sheet-panel]");
+            var title = operationsMobileFiltersOpen.textContent.trim();
+            if (!openPortaledPanel(panel, title) && operationsMobileAdvanced) {
+                operationsMobileAdvanced.setAttribute("open", "open");
+            }
         });
         operationsMobileAdvanced.addEventListener("click", function (event) {
             if (event.target === operationsMobileAdvanced) {
@@ -846,6 +986,24 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     }
+
+    document.querySelectorAll(
+        "[data-filter-sheet], .jrh-chip-more, .contacts-filters-more, .operations-mobile-advanced, .agenda-fab, .contacts-hero__add"
+    ).forEach(function (details) {
+        var summary = details.querySelector(":scope > summary");
+        var panel = details.querySelector("[data-sheet-panel]");
+        if (!summary || !panel) {
+            return;
+        }
+        summary.addEventListener("click", function (event) {
+            if (!isMobileNav()) {
+                return;
+            }
+            event.preventDefault();
+            details.open = false;
+            openPortaledPanel(panel, summary.textContent.trim());
+        });
+    });
 
     function syncMobileKeyboard() {
         if (!window.visualViewport || !isMobileNav()) {

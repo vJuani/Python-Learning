@@ -15,11 +15,12 @@
     <script>
         (function () {
             try {
-                if (localStorage.getItem("cc-theme") === "dark") {
-                    document.documentElement.setAttribute("data-theme", "dark");
-                } else {
-                    document.documentElement.setAttribute("data-theme", "light");
-                }
+                var pref = localStorage.getItem("cc-theme");
+                var theme = pref === "dark" || pref === "light"
+                    ? pref
+                    : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+                document.documentElement.setAttribute("data-theme", theme);
+                document.documentElement.setAttribute("data-theme-pref", pref === "dark" || pref === "light" ? pref : "system");
                 if (localStorage.getItem("jrh-sidebar-pinned") === "1") {
                     document.documentElement.setAttribute("data-sidebar", "pinned");
                 } else {
