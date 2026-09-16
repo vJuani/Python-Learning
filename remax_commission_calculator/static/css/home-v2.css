@@ -74,7 +74,7 @@
     max-height: 120px;
     object-fit: contain;
     background: transparent;
-    filter: drop-shadow(0 8px 14px rgba(13, 71, 255, 0.16));
+    filter: drop-shadow(0 8px 14px rgba(16, 120, 80, 0.18));
     animation: jrhFloat 5s ease-in-out infinite;
 }
 
@@ -464,7 +464,7 @@
 [data-theme="dark"] .jrh-hero__mascot img,
 [data-theme="dark"] .jrh-hero .jrh-bot-hero {
     background: transparent;
-    filter: drop-shadow(0 8px 16px rgba(13, 71, 255, 0.22));
+    filter: drop-shadow(0 8px 16px rgba(16, 120, 80, 0.22));
 }
 
 @media (prefers-reduced-motion: reduce) {

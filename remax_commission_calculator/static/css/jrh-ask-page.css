@@ -208,7 +208,7 @@ body.is-jrh-ask-page .app-main-inner {
     width: 16rem;
     height: 16rem;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(13, 71, 255, 0.16), transparent 68%);
+    background: radial-gradient(circle, rgba(16, 120, 80, 0.16), transparent 68%);
     animation: jrhGlow 5.5s ease-in-out infinite;
     pointer-events: none;
 }
@@ -229,7 +229,7 @@ body.is-jrh-ask-page .app-main-inner {
     height: auto;
     object-fit: contain;
     background: transparent;
-    filter: drop-shadow(0 12px 20px rgba(13, 71, 255, 0.18));
+    filter: drop-shadow(0 12px 20px rgba(16, 120, 80, 0.18));
     animation: jrhFloat 5s ease-in-out infinite;
 }
 
@@ -469,7 +469,7 @@ body.is-jrh-ask-page .app-main-inner {
     height: 2.6rem;
     object-fit: contain;
     background: transparent;
-    filter: drop-shadow(0 4px 8px rgba(13, 71, 255, 0.16));
+    filter: drop-shadow(0 4px 8px rgba(16, 120, 80, 0.16));
 }
 
 .jrh-float strong,
@@ -633,9 +633,9 @@ body.is-jrh-ask-page.is-jrh-thinking .jrh-studio__glow,
 [data-theme="dark"] .jrh-float img,
 [data-theme="dark"] .jrh-bot-floating {
     background: transparent;
-    filter: drop-shadow(0 8px 16px rgba(13, 71, 255, 0.22));
+    filter: drop-shadow(0 8px 16px rgba(16, 120, 80, 0.22));
 }
 
 [data-theme="dark"] .jrh-studio__glow {
-    background: radial-gradient(circle, rgba(13, 71, 255, 0.12), transparent 68%);
+    background: radial-gradient(circle, rgba(16, 120, 80, 0.12), transparent 68%);
 }
