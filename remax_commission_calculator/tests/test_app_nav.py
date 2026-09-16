@@ -194,6 +194,9 @@ class AppNavTests(unittest.TestCase):
         self.assertNotIn('href="/users"', body)
         self.assertIn('aria-label="', body)
         self.assertIn("jrh-sidebar", body)
+        self.assertIn("jrh-sidebar__logo--full", body)
+        self.assertIn("logo-horizontal-dark-green.png", body)
+        self.assertIn("isotype-dark-green.png", body)
 
     def test_http_admin_page_shows_treasury(self):
         client = app.test_client()

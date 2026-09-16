@@ -1,4 +1,5 @@
 <aside class="login-marketing" aria-label="{{ brand_name }}">
+    <div class="login-brand-content">
     <div class="login-marketing__brand">
         {% with brand_slot='login-panel', logo_extra_class='login-marketing__logo' %}
         {% include "_brand_logo.html" %}
@@ -75,4 +76,5 @@
         <span class="login-quote__icon" aria-hidden="true">“</span>
         <p>{{ t('login_quote_text') }}</p>
     </blockquote>
+    </div>
 </aside>
