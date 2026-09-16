@@ -818,6 +818,7 @@ def inject_product_branding():
         get_logo_full_rel,
         get_logo_horizontal_rel,
         get_logo_icon_rel,
+        iter_brand_mark_rels,
     )
     from modules.jrh_branding import jrh_mascot_context
 
@@ -831,10 +832,15 @@ def inject_product_branding():
     icon_rel = get_logo_icon_rel()
     light_rel = get_brand_logo_light_rel()
     dark_rel = get_brand_logo_dark_rel()
+    brand_marks = {
+        name: _brand_static_url(rel_path)
+        for name, rel_path in iter_brand_mark_rels()
+    }
 
     return {
         "brand_name": get_brand_name(),
         "brand_domain": get_app_domain(),
+        "brand_marks": brand_marks,
         "brand_logo_horizontal_url": _brand_static_url(
             get_logo_horizontal_rel(),
         ),
@@ -847,20 +853,26 @@ def inject_product_branding():
         "brand_email_footer_url": _brand_static_url(
             get_brand_email_footer_rel(),
         ),
-        "brand_login_header_lockup_url": _brand_static_url(
-            "brand/login-header-lockup.png",
-        ),
+        "brand_login_header_lockup_url": brand_marks["primary_light"],
         "jrh_mascot": jrh_mascot_context(url_for),
     }
 
 
 @app.get("/manifest.webmanifest")
 def web_manifest():
-    return send_from_directory(
-        BASE_DIR / "static",
-        "manifest.webmanifest",
-        mimetype="application/manifest+json",
-    )
+    from modules.branding import get_brand_asset_version, get_web_manifest_payload
+
+    def _icon_url(rel_path: str) -> str:
+        return url_for(
+            "static",
+            filename=rel_path,
+            v=get_brand_asset_version(rel_path),
+        )
+
+    payload = get_web_manifest_payload(_icon_url)
+    response = jsonify(payload)
+    response.headers["Content-Type"] = "application/manifest+json"
+    return response
 
 
 @app.template_filter("money")

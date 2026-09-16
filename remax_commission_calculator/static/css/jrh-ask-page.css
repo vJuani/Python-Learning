@@ -45,7 +45,7 @@ body.is-jrh-ask-page .app-main-inner {
     font-weight: 800;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .jrh-studio__title {
@@ -97,7 +97,7 @@ body.is-jrh-ask-page .app-main-inner {
 }
 
 .jrh-studio__field:focus-within {
-    border-color: var(--accent, #0d47ff);
+    border-color: var(--accent, var(--accent));
     box-shadow: 0 0 0 3px rgba(13, 71, 255, 0.12);
 }
 
@@ -126,7 +126,7 @@ body.is-jrh-ask-page .app-main-inner {
     height: 2.5rem;
     border-radius: 999px;
     background: transparent;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
     font-size: 1.1rem;
 }
 
@@ -141,7 +141,7 @@ body.is-jrh-ask-page .app-main-inner {
     height: 2.7rem;
     padding: 0 1rem;
     border-radius: 12px;
-    background: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
     color: #fff;
     font-weight: 800;
 }
@@ -176,10 +176,10 @@ body.is-jrh-ask-page .app-main-inner {
     gap: 0.55rem;
     min-width: 11rem;
     padding: 0.75rem 0.85rem;
-    border: 1px solid var(--border-soft, #e4eaf2);
+    border: 1px solid var(--color-border, var(--border-soft, #DCE4DF));
     border-radius: 14px;
-    background: #fff;
-    color: var(--jrh-navy, #0a1633);
+    background: var(--color-surface, #fff);
+    color: var(--color-text, var(--jrh-navy, #152021));
     font: inherit;
     font-weight: 700;
     text-align: left;
@@ -190,7 +190,7 @@ body.is-jrh-ask-page .app-main-inner {
     width: 1.15rem;
     height: 1.15rem;
     flex-shrink: 0;
-    color: var(--accent, #0d47ff);
+    color: var(--color-brand);
 }
 
 .jrh-studio__mascot-wrap {
@@ -316,7 +316,7 @@ body.is-jrh-ask-page .app-main-inner {
     border-radius: 50%;
     overflow: hidden;
     flex-shrink: 0;
-    background: var(--accent-soft, #e8efff);
+    background: var(--color-brand-soft, var(--accent-soft, #E4F1EA));
 }
 
 .jrh-chat__avatar img,
@@ -338,7 +338,7 @@ body.is-jrh-ask-page .app-main-inner {
 }
 
 .jrh-chat__avatar.is-fallback {
-    background: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
 }
 
 .jrh-chat__meta {
@@ -358,7 +358,7 @@ body.is-jrh-ask-page .app-main-inner {
 }
 
 .jrh-chat__row.is-user .jrh-chat__bubble {
-    background: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
     color: #fff;
 }
 
@@ -426,7 +426,7 @@ body.is-jrh-ask-page .app-main-inner {
 }
 
 .jrh-studio__today strong {
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .jrh-studio__integrations {
@@ -633,9 +633,9 @@ body.is-jrh-ask-page.is-jrh-thinking .jrh-studio__glow,
 [data-theme="dark"] .jrh-float img,
 [data-theme="dark"] .jrh-bot-floating {
     background: transparent;
-    filter: drop-shadow(0 8px 16px rgba(16, 120, 80, 0.22));
+    filter: drop-shadow(0 8px 16px rgba(124, 92, 255, 0.28));
 }
 
 [data-theme="dark"] .jrh-studio__glow {
-    background: radial-gradient(circle, rgba(16, 120, 80, 0.12), transparent 68%);
+    background: radial-gradient(circle, rgba(124, 92, 255, 0.16), transparent 68%);
 }

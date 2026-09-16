@@ -13,7 +13,7 @@
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .contacts-hero {
@@ -66,7 +66,7 @@
 }
 
 .contacts-filter.is-active {
-    background: var(--accent, #0d47ff);
+    background: var(--accent, var(--accent));
     color: #fff;
 }
 
@@ -101,7 +101,7 @@
 .contact-profile__status {
     margin: 0;
     font-weight: 800;
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
 }
 
 .contacts-card p,
@@ -179,7 +179,7 @@
     padding: 4px 10px;
     border-radius: 999px;
     background: rgba(13, 71, 255, 0.1);
-    color: var(--accent, #0d47ff);
+    color: var(--accent, var(--accent));
     font-size: 0.86rem;
     font-weight: 800;
 }

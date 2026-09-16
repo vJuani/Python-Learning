@@ -57,7 +57,6 @@ body.is-auth-page .site-header .brand-logo {
 }
 
 .auth-brand-logo {
-    display: block;
     max-width: 10rem;
     height: auto;
     margin: 0 auto var(--space-2);

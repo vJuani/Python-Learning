@@ -58,7 +58,7 @@ body.is-legal-page .site-footer {
 }
 
 .legal-page a {
-    color: var(--accent, #0d47ff);
+    color: var(--color-brand, var(--accent));
 }
 
 .legal-page__nav {

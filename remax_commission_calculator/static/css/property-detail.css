@@ -67,7 +67,7 @@ body.is-property-detail-page .jrh-float {
 
 .pd-kicker {
     margin: 0;
-    color: #0d47ff;
+    color: var(--accent);
     font-size: 0.72rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -120,15 +120,15 @@ body.is-property-detail-page .jrh-float {
 }
 
 .pd-actions .btn-primary {
-    background: #0d47ff;
-    border-color: #0d47ff;
+    background: var(--accent);
+    border-color: var(--accent);
 }
 
 .pd-jrh {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    color: #0d47ff;
+    color: var(--accent);
     font-weight: 600;
     text-decoration: none;
     font-size: 0.88rem;

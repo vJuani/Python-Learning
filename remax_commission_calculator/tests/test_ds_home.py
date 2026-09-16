@@ -1,4 +1,4 @@
-"""Design System V2 home: admin uses DS chrome, agent home stays intact."""
+"""Design System V2 home: admin desktop uses DS; mobile keeps the mockup."""
 
 from __future__ import annotations
 
@@ -55,7 +55,8 @@ class DesignSystemHomeTests(unittest.TestCase):
         self.assertIn("ds-home__layout", body)
         self.assertIn("ds-home__main", body)
         self.assertIn("ds-home__aside", body)
-        self.assertNotIn("home-mobile-quick", body)
+        self.assertIn("home-mobile-quick", body)
+        self.assertIn("home-mobile-greeting", body)
         self.assertNotIn("jrh-hero", body)
 
     def test_agent_home_is_unchanged(self):

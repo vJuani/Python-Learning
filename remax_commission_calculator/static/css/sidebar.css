@@ -1,12 +1,12 @@
 /* JRH One sidebar — collapsed icons, hover/pin expand, mobile accordion. */
 
 :root {
-    --jrh-sidebar-navy: #07111f;
-    --jrh-sidebar-ink: #c5d0e0;
-    --jrh-sidebar-muted: #8b97ab;
-    --jrh-sidebar-hover: rgba(255, 255, 255, 0.06);
-    --jrh-sidebar-active: rgba(34, 211, 238, 0.14);
-    --jrh-sidebar-accent: #22d3ee;
+    --jrh-sidebar-navy: var(--rail-bg);
+    --jrh-sidebar-ink: var(--rail-text);
+    --jrh-sidebar-muted: var(--rail-text-muted);
+    --jrh-sidebar-hover: var(--rail-hover, rgba(95, 175, 139, 0.22));
+    --jrh-sidebar-active: var(--rail-active-bg);
+    --jrh-sidebar-accent: var(--rail-active-border);
     --jrh-sidebar-collapsed: 4.5rem;
     --jrh-sidebar-expanded: 17.5rem;
     --jrh-sidebar-ease: 200ms ease;
@@ -86,7 +86,6 @@
     .jrh-sidebar__logo--icon {
         width: 2rem;
         height: 2rem;
-        object-fit: contain;
     }
 
     .jrh-sidebar__logo--full {
@@ -94,8 +93,6 @@
         height: 1.85rem;
         width: auto;
         max-width: 9.5rem;
-        object-fit: contain;
-        object-position: left center;
     }
 
     html[data-sidebar="pinned"] .jrh-sidebar__logo--icon,
@@ -105,7 +102,8 @@
 
     html[data-sidebar="pinned"] .jrh-sidebar__logo--full,
     .app-rail.jrh-sidebar.is-hover-open .jrh-sidebar__logo--full {
-        display: block;
+        display: inline-flex;
+        align-items: center;
     }
 
     .jrh-sidebar__pin {
@@ -209,7 +207,7 @@
     }
 
     .jrh-sidebar__link.is-featured {
-        color: #e0fbff;
+        color: var(--brand-400);
     }
 
     .jrh-sidebar__icon {
@@ -257,7 +255,7 @@
         padding: 0.05rem 0.4rem;
         border-radius: 999px;
         background: var(--jrh-sidebar-accent);
-        color: #04202a;
+        color: var(--rail-bg);
         font-size: 0.65rem;
         font-weight: 700;
     }
@@ -266,7 +264,7 @@
         margin-left: 0.35rem;
         padding: 0.05rem 0.35rem;
         border-radius: 999px;
-        background: rgba(34, 211, 238, 0.16);
+        background: var(--rail-active-bg);
         color: var(--jrh-sidebar-accent);
         font-size: 0.62rem;
         font-weight: 700;
@@ -331,8 +329,8 @@
         transform: translateY(-50%);
         padding: 0.3rem 0.55rem;
         border-radius: 0.4rem;
-        background: #0b1728;
-        color: #fff;
+        background: var(--jrh-navy);
+        color: var(--text-inverse);
         font-size: 0.75rem;
         white-space: nowrap;
         z-index: 80;
@@ -401,7 +399,7 @@
         padding: 0.1rem 0.45rem;
         border-radius: 999px;
         background: var(--jrh-sidebar-accent);
-        color: #04202a;
+        color: var(--rail-bg);
         font-size: 0.7rem;
         font-weight: 700;
     }
@@ -410,7 +408,7 @@
         margin-left: 0.4rem;
         padding: 0.05rem 0.4rem;
         border-radius: 999px;
-        background: rgba(34, 211, 238, 0.16);
+        background: var(--rail-active-bg);
         color: var(--jrh-sidebar-accent);
         font-size: 0.65rem;
         font-weight: 700;

@@ -273,7 +273,7 @@ class PwaPushTests(unittest.TestCase):
         self.assertIn("/treasury", body)
         self.assertIn("isPrivatePath", body)
         self.assertIn("caches.match", body)
-        self.assertIn("jrh-one-static-v3", body)
+        self.assertIn("jrh-one-static-v5", body)
         self.assertIn("/static/js/pwa.js", body)
         notifications = self.client.get("/settings/notifications")
         self.assertIn(notifications.status_code, {302, 401})

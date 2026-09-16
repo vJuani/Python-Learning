@@ -9,14 +9,16 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="description" content="JRH One — {{ t('app_slogan') }}">
-    <meta name="theme-color" content="#0A1633">
-    <meta name="theme-color" content="#0a1633" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#0E4F38">
+    <meta name="theme-color" content="#0E4F38" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#080A0F" media="(prefers-color-scheme: dark)">
     <script>
         (function () {
             try {
                 if (localStorage.getItem("cc-theme") === "dark") {
                     document.documentElement.setAttribute("data-theme", "dark");
+                } else {
+                    document.documentElement.setAttribute("data-theme", "light");
                 }
                 if (localStorage.getItem("jrh-sidebar-pinned") === "1") {
                     document.documentElement.setAttribute("data-sidebar", "pinned");
@@ -72,11 +74,13 @@
     <link
         rel="icon"
         type="image/png"
-        href="{{ url_for('static', filename='icons/icon-192.png') }}"
+        sizes="192x192"
+        href="{{ brand_marks.favicon }}"
     >
     <link
         rel="apple-touch-icon"
-        href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}"
+        sizes="180x180"
+        href="{{ brand_marks.apple_touch }}"
     >
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-one.css') }}">
@@ -93,35 +97,31 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme.css') }}">
     {% if organization_branding_css %}
     <style>
-        :root {
-            --accent: {{ organization_branding_css.accent }};
-            --accent-hover: {{ organization_branding_css.accent_hover }};
-            --accent-soft: {{ organization_branding_css.accent_soft }};
-            --accent-ink: {{ organization_branding_css.accent_ink }};
+        :root,
+        [data-theme="light"],
+        [data-theme="dark"] {
+            --org-accent: {{ organization_branding_css.accent }};
+            --org-accent-hover: {{ organization_branding_css.accent_hover }};
+            --org-accent-soft: {{ organization_branding_css.accent_soft }};
+            --org-accent-ink: {{ organization_branding_css.accent_ink }};
         }
     </style>
     {% endif %}
     {% block extra_css %}{% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-logo.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-app.css') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}{% if current_user or guest_access %} has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password', 'privacy', 'terms') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
     <aside class="app-rail jrh-sidebar" aria-label="{{ t('nav_aria') }}">
         <div class="jrh-sidebar__brand">
             <a href="{{ url_for('dashboard') }}" class="jrh-sidebar__logo-link">
-                <img
-                    src="{{ brand_logo_icon_url }}"
-                    alt="{{ brand_name }}"
-                    class="jrh-sidebar__logo--icon"
-                    width="32"
-                    height="32"
-                >
-                <img
-                    src="{{ url_for('static', filename='brand/login-header-lockup.png') }}"
-                    alt="{{ brand_name }}"
-                    class="jrh-sidebar__logo--full"
-                    width="210"
-                    height="40"
-                >
+                {% with brand_slot='sidebar-icon', logo_extra_class='jrh-sidebar__logo--icon' %}
+                {% include "_brand_logo.html" %}
+                {% endwith %}
+                {% with brand_slot='sidebar-lockup', logo_extra_class='jrh-sidebar__logo--full' %}
+                {% include "_brand_logo.html" %}
+                {% endwith %}
             </a>
             {% if not use_legacy_nav %}
             <button
@@ -190,23 +190,38 @@
     <div class="app-frame">
     <header class="site-header">
         <div class="header-grid">
+            {% if current_user or guest_access %}
+            <button
+                type="button"
+                class="nav-toggle"
+                aria-expanded="false"
+                aria-controls="main-nav"
+                aria-label="{{ t('nav_menu') }}"
+                title="{{ t('nav_menu') }}"
+                data-label-menu="{{ t('nav_menu') }}"
+                data-label-close="{{ t('nav_close') }}"
+            >
+                <span class="nav-toggle-bars" aria-hidden="true"></span>
+                <span class="visually-hidden nav-toggle-label">{{ t('nav_menu') }}</span>
+            </button>
+            {% endif %}
             <div class="header-zone header-zone-left">
                 <a
                     href="{% if current_user or guest_access %}{{ url_for('dashboard') }}{% else %}{{ url_for('login') }}{% endif %}"
                     class="site-brand"
                 >
                     <span class="site-brand-logo-shell hide-mobile">
-                        {% with logo_variant='theme', logo_extra_class='site-brand-logo' %}
+                        {% with brand_slot='navbar', logo_extra_class='site-brand-logo' %}
                         {% include "_brand_logo.html" %}
                         {% endwith %}
                     </span>
-                    <img
-                        src="{{ brand_login_header_lockup_url }}"
-                        alt="{{ brand_name }}"
-                        class="site-brand-logo site-brand-logo--lockup hide-desktop"
-                        decoding="async"
-                    >
+                    <span class="hide-desktop m-topbar-brand">
+                        {% with brand_slot='navbar', logo_extra_class='site-brand-logo site-brand-logo--lockup' %}
+                        {% include "_brand_logo.html" %}
+                        {% endwith %}
+                    </span>
                 </a>
+                <p class="m-topbar-title hide-desktop">{% block mobile_topbar_title %}{% endblock %}</p>
             </div>
 
             {% if current_user or guest_access %}
@@ -230,12 +245,9 @@
 
             <nav id="main-nav" class="main-nav header-zone header-zone-center" aria-label="{{ t('nav_aria') }}">
                 <div class="mobile-drawer-brand hide-desktop">
-                    <img
-                        src="{{ brand_login_header_lockup_url }}"
-                        alt=""
-                        class="mobile-drawer-brand-logo"
-                        decoding="async"
-                    >
+                    {% with brand_slot='navbar', logo_extra_class='mobile-drawer-brand-logo' %}
+                    {% include "_brand_logo.html" %}
+                    {% endwith %}
                     <div class="mobile-drawer-brand-text">
                         <strong>{{ brand_name }}</strong>
                         <span>{{ t('app_slogan') }}</span>
@@ -341,19 +353,15 @@
                     {% endif %}
                 </a>
                 {% endif %}
-                <button
-                    type="button"
-                    class="nav-toggle"
-                    aria-expanded="false"
-                    aria-controls="main-nav"
-                    aria-label="{{ t('nav_menu') }}"
-                    title="{{ t('nav_menu') }}"
-                    data-label-menu="{{ t('nav_menu') }}"
-                    data-label-close="{{ t('nav_close') }}"
-                >
-                    <span class="nav-toggle-bars" aria-hidden="true"></span>
-                    <span class="visually-hidden nav-toggle-label">{{ t('nav_menu') }}</span>
+                {% if current_user %}
+                {% set rail_first = (current_user.first_name or '').strip() %}
+                {% set rail_last = (current_user.last_name or '').strip() %}
+                {% set header_name = (rail_first ~ ' ' ~ rail_last).strip() or current_user.username %}
+                {% set header_parts = header_name.split() %}
+                <button type="button" class="m-topbar-avatar hide-desktop" data-mobile-nav-more aria-label="{{ t('nav_more') }}">
+                    {{ header_parts[0][0:1]|upper }}{% if header_parts|length > 1 %}{{ header_parts[1][0:1]|upper }}{% endif %}
                 </button>
+                {% endif %}
 
                 <div class="header-tools header-tools-desktop">
                     <div class="header-tools-group header-tools-meta">
@@ -585,7 +593,7 @@
         <div class="footer-content">
             <div class="footer-brand">
                 <div class="footer-brand-mark">
-                    {% with logo_variant='icon', logo_extra_class='footer-brand-icon' %}
+                    {% with brand_slot='footer', logo_extra_class='footer-brand-icon' %}
                     {% include "_brand_logo.html" %}
                     {% endwith %}
                     <p>{{ brand_name }} · {{ t('app_slogan') }}</p>

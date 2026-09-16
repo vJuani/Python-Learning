@@ -97,7 +97,7 @@ a {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--brand-navy);
+    background: transparent;
     border-radius: 10px;
     padding: 0.32rem 0.72rem;
     flex-shrink: 0;
@@ -107,7 +107,6 @@ a {
     height: 2.35rem;
     width: auto;
     object-fit: contain;
-    display: block;
 }
 
 .header-tools {
@@ -656,12 +655,14 @@ a {
 }
 
 .btn-primary {
-    background: var(--accent);
-    color: #ffffff;
+    background: var(--btn-primary-bg, var(--color-brand));
+    border-color: var(--btn-primary-border, var(--color-brand));
+    color: var(--btn-primary-text, #ffffff);
 }
 
 .btn-primary:hover {
-    background: var(--accent-hover);
+    background: var(--btn-primary-bg-hover, var(--color-brand-hover));
+    border-color: var(--btn-primary-bg-hover, var(--color-brand-hover));
 }
 
 .btn-secondary {
@@ -671,18 +672,18 @@ a {
 }
 
 .btn-secondary:hover {
-    background: var(--bg-soft);
-    border-color: #c3cedb;
+    background: var(--btn-secondary-bg-hover);
+    border-color: var(--border-strong);
 }
 
 .btn-edit {
     background: var(--edit-soft);
-    color: var(--edit);
-    border-color: #bfdbfe;
+    color: var(--accent-ink);
+    border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
 }
 
 .btn-edit:hover {
-    background: #bfdbfe;
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface));
 }
 
 .btn-danger {
@@ -935,8 +936,8 @@ select.ui-select::-ms-expand {
 
 .form-input:focus {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
+    border-color: var(--input-border-focus, var(--color-brand));
+    box-shadow: var(--shadow-focus, 0 0 0 3px var(--input-focus-ring));
 }
 
 .password-field {
@@ -2824,8 +2825,8 @@ a.dashboard-quick-card:hover {
 .form-group select:focus,
 .form-group textarea:focus {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
+    border-color: var(--input-border-focus, var(--color-brand));
+    box-shadow: var(--shadow-focus, 0 0 0 3px var(--input-focus-ring));
 }
 
 .btn-back {

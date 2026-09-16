@@ -85,7 +85,7 @@ body.is-cash-ai-page .app-main-inner {
 }
 
 .cash-ai-btn--primary {
-    background: #0d47ff;
+    background: var(--accent);
     color: #fff;
 }
 
@@ -242,7 +242,7 @@ body.is-cash-ai-page .app-main-inner {
     height: 1.45rem;
     padding: 0 0.35rem;
     border-radius: 999px;
-    background: #0d47ff;
+    background: var(--accent);
     color: #fff;
     font-size: 0.72rem;
     font-weight: 700;
@@ -1031,7 +1031,7 @@ body.is-cash-ai-page .app-main-inner {
     height: 0.5rem;
     margin-top: 0.35rem;
     border-radius: 999px;
-    background: #0d47ff;
+    background: var(--accent);
     flex-shrink: 0;
 }
 

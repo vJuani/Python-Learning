@@ -2,6 +2,8 @@
 
 {% block body_class %}is-properties-page {% endblock %}
 
+{% block mobile_topbar_title %}{{ t('properties_page_title') }}{% endblock %}
+
 {% block title %}{{ t('properties_page_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
@@ -240,15 +242,10 @@
                 </div>
                 {% endif %}
 
-                <nav class="properties-status-tabs hide-desktop" aria-label="{{ t('status') }}">
-                    <a href="{{ url_for('properties_list', q=properties_panel.filters.q, type=properties_panel.filters.type, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if not properties_panel.filters.status %}is-active{% endif %}">
-                        {{ t('all') }}
-                    </a>
-                    {% for item in properties_panel.status_summary[:3] %}
-                    <a href="{{ url_for('properties_list', status=item.bucket, q=properties_panel.filters.q, type=properties_panel.filters.type, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if properties_panel.filters.status == item.bucket %}is-active{% endif %}">
-                        {{ item.label }} {{ item.count }}
-                    </a>
-                    {% endfor %}
+                <nav class="m-purpose-chips m-chip-row hide-desktop" aria-label="{{ t('property_listing_purpose') }}">
+                    <a href="{{ url_for('properties_list', q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if not properties_panel.filters.listing_purpose %}is-active{% endif %}">{{ t('all') }}</a>
+                    <a href="{{ url_for('properties_list', listing_purpose='sale', q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if properties_panel.filters.listing_purpose == 'sale' %}is-active{% endif %}">{{ t('listing_purpose_sale') }}</a>
+                    <a href="{{ url_for('properties_list', listing_purpose='rental', q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if properties_panel.filters.listing_purpose == 'rental' %}is-active{% endif %}">{{ t('listing_purpose_rental') }}</a>
                 </nav>
 
                 {% if properties_panel.rows %}
@@ -345,21 +342,12 @@
                 <div class="property-mobile-list hide-desktop">
                     {% for row in properties_panel.rows %}
                     <article class="property-mobile-card">
-                        {% with src=row.cover_url, modifier='property-media-placeholder--card' %}
-                        {% include "properties/_cover.html" %}
-                        {% endwith %}
-                        <div>
-                            <span class="property-mobile-card__type">{{ row.category_label }}</span>
-                            <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__title">{{ row.address }}</a>
-                            {% if row.is_synced %}
-                            <span class="property-sync-badge">{{ row.sync_source_label or t('sync_badge_synced') }}</span>
-                            {% endif %}
-                            {% if row.distance_label %}
-                            <p class="property-mobile-card__addr">{{ row.distance_label }}</p>
-                            {% endif %}
-                            {% if row.neighborhood %}
-                            <p class="property-mobile-card__addr">{{ row.neighborhood }}</p>
-                            {% endif %}
+                        <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__media">
+                            {% with src=row.cover_url, modifier='property-media-placeholder--card' %}
+                            {% include "properties/_cover.html" %}
+                            {% endwith %}
+                        </a>
+                        <div class="property-mobile-card__body">
                             <p class="property-mobile-card__price money">
                                 {% if row.listing_price is not none %}
                                 {{ row.listing_price|listing_money(row.listing_currency) }}
@@ -367,27 +355,16 @@
                                 —
                                 {% endif %}
                             </p>
-                            {% if not row.currency_known and row.listing_price is not none %}
-                            <p class="property-mobile-card__addr">{{ t('listing_currency_unknown') }}</p>
-                            {% endif %}
-                            {% if row.purpose_label %}
-                            <p class="property-mobile-card__addr">{{ row.purpose_label }}</p>
-                            {% endif %}
-                            {% if row.fact_parts or row.area_label %}
-                            <p class="property-mobile-card__addr">{{ (row.fact_parts + ([row.area_label] if row.area_label else []))|join(' · ') }}</p>
-                            {% endif %}
-                            {% if row.feature_labels or row.parking_label %}
-                            <p class="property-mobile-card__addr">{{ (row.feature_labels + ([row.parking_label] if row.parking_label else []))|join(' · ') }}</p>
-                            {% endif %}
-                            {% if row.commercial_status_label %}
-                            <p class="property-mobile-card__addr">{{ row.commercial_status_label }}</p>
-                            {% endif %}
-                            <span class="entity-card__agent">
-                                <span class="entity-card__avatar">{{ row.agent_initials }}</span>
-                                {{ row.agent_name or '—' }}
-                            </span>
+                            <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__title">{{ row.address }}{% if row.neighborhood %} · {{ row.neighborhood }}{% endif %}</a>
+                            <div class="property-mobile-card__meta">
+                                {% if row.fact_parts %}<span>{{ row.fact_parts|join(' · ') }}</span>{% endif %}
+                                {% if row.area_label %}<span>{{ row.area_label }}</span>{% endif %}
+                            </div>
+                            <div class="property-mobile-card__badges">
+                                {% if row.purpose_label %}<span class="m-chip">{{ row.purpose_label }}</span>{% endif %}
+                                <span class="entity-card__badge entity-card__badge--{{ row.display_status.tone }}">{{ row.display_status.label }}</span>
+                            </div>
                         </div>
-                        <span class="entity-card__badge entity-card__badge--{{ row.display_status.tone }}">{{ row.display_status.label }}</span>
                     </article>
                     {% endfor %}
                 </div>

@@ -250,7 +250,7 @@ body.is-agent-account-page .app-main-inner { max-width: none; }
     white-space: nowrap;
 }
 
-.aa-btn--primary { background: var(--brand-primary, #0d47ff); color: #fff; }
+.aa-btn--primary { background: var(--brand-primary, var(--color-brand)); color: #fff; }
 .aa-btn--outline { background: transparent; border-color: var(--border-subtle, #e5e7eb); color: var(--text); }
 .aa-btn--ghost { background: var(--content-bg); border-color: var(--border-subtle, #e5e7eb); color: var(--text); }
 .aa-btn--danger { background: var(--danger, #dc2626); color: #fff; }
@@ -269,8 +269,8 @@ body.is-agent-account-page .app-main-inner { max-width: none; }
     border-radius: 999px;
     display: grid;
     place-items: center;
-    background: color-mix(in srgb, var(--brand-primary, #0d47ff) 12%, var(--surface));
-    color: var(--brand-primary, #0d47ff);
+    background: color-mix(in srgb, var(--brand-primary, var(--color-brand)) 12%, var(--surface));
+    color: var(--brand-primary, var(--color-brand));
     font-size: 0.82rem;
     font-weight: 700;
 }
@@ -306,7 +306,7 @@ body.is-agent-account-page .app-main-inner { max-width: none; }
 
 .aa-type-pill--payment, .aa-type-pill--commission, .aa-type-pill--credit { color: var(--success, #059669); }
 .aa-type-pill--fee, .aa-type-pill--charge { color: var(--danger, #dc2626); }
-.aa-type-pill--adjustment { color: var(--brand-primary, #0d47ff); }
+.aa-type-pill--adjustment { color: var(--brand-primary, var(--color-brand)); }
 
 .aa-history-row--cancelled { opacity: 0.72; }
 .aa-history-row--cancelled .aa-history-row__concept { text-decoration: line-through; color: var(--text-muted); }

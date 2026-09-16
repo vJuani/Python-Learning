@@ -18,11 +18,50 @@
     >
         <span class="mobile-bottom-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none">
-                <path d="M4 20V9.5L12 4l8 5.5V20H4Z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
-                <path d="M10 20v-6h4v6" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.75"/>
+                <path d="M20 20l-3-3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
             </svg>
         </span>
-        <span class="mobile-bottom-nav-label">{{ t('nav_properties') }}</span>
+        <span class="mobile-bottom-nav-label">{{ t('nav_search') }}</span>
+    </a>
+    {% if is_agent() %}
+    <a
+        href="{{ url_for('agenda_index') }}"
+        class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('agenda_') %} active{% endif %}"
+    >
+        <span class="mobile-bottom-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+                <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75"/>
+                <path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+            </svg>
+        </span>
+        <span class="mobile-bottom-nav-label">{{ t('agenda_title') }}</span>
+    </a>
+    <a
+        href="{{ url_for('contacts_index') }}"
+        class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('contacts_') %} active{% endif %}"
+    >
+        <span class="mobile-bottom-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+                <circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.75"/>
+                <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                <path d="M16 8h5M18.5 5.5v5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+            </svg>
+        </span>
+        <span class="mobile-bottom-nav-label">{{ t('contacts_title') }}</span>
+    </a>
+    {% elif is_admin() %}
+    <a
+        href="{{ url_for('reports_index') }}"
+        class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('reports') %} active{% endif %}"
+    >
+        <span class="mobile-bottom-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 3a9 9 0 1 0 9 9" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                <path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+            </svg>
+        </span>
+        <span class="mobile-bottom-nav-label">{{ t('nav_reports') }}</span>
     </a>
     <a
         href="{{ url_for('operations_list') }}"
@@ -38,33 +77,21 @@
         </span>
         <span class="mobile-bottom-nav-label">{{ t('nav_operations') }}</span>
     </a>
-    {% if is_agent() %}
-    <a
-        href="{{ url_for('agenda_index') }}"
-        class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('agenda_') %} active{% endif %}"
-    >
-        <span class="mobile-bottom-nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-                <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75"/>
-                <path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
-            </svg>
-        </span>
-        <span class="mobile-bottom-nav-label">{{ t('agenda_title') }}</span>
-    </a>
-    {% elif is_admin() %}
-    <a
-        href="{{ url_for('reports_index') }}"
-        class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('reports') %} active{% endif %}"
-    >
-        <span class="mobile-bottom-nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 3a9 9 0 1 0 9 9" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
-                <path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
-            </svg>
-        </span>
-        <span class="mobile-bottom-nav-label">{{ t('nav_reports') }}</span>
-    </a>
     {% else %}
+    <a
+        href="{{ url_for('operations_list') }}"
+        class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('operations_') %} active{% endif %}"
+    >
+        <span class="mobile-bottom-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="M8 7h12M8 12h12M8 17h12" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                <circle cx="4.5" cy="7" r="1" fill="currentColor"/>
+                <circle cx="4.5" cy="12" r="1" fill="currentColor"/>
+                <circle cx="4.5" cy="17" r="1" fill="currentColor"/>
+            </svg>
+        </span>
+        <span class="mobile-bottom-nav-label">{{ t('nav_operations') }}</span>
+    </a>
     <a
         href="{{ url_for('vat_calculator') }}"
         class="mobile-bottom-nav-item{% if request.endpoint == 'vat_calculator' %} active{% endif %}"
