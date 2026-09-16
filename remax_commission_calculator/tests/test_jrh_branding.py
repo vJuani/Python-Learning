@@ -27,6 +27,29 @@ class JrhBrandingTests(unittest.TestCase):
         self.assertTrue(rel.endswith(".png") or rel.endswith(".svg"))
         self.assertNotIn(".webp", rel)
 
+    def test_official_themed_raster_wins_over_legacy_and_svg(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / "jrh-bot-hero.svg").write_text("<svg></svg>", encoding="utf-8")
+            (folder / "jrh-bot-hero.png").write_bytes(b"legacy")
+            (folder / "jrh-ia-hero-light.png").write_bytes(b"official-light")
+            (folder / "jrh-ia-hero-dark.png").write_bytes(b"official-dark")
+            (folder / "jrh-ia-launcher-light.png").write_bytes(b"launcher")
+            with patch("modules.jrh_branding.jrh_ai_dir", return_value=folder):
+                self.assertEqual(
+                    resolve_jrh_mascot_rel("hero", "light"),
+                    f"{JRH_AI_REL_DIR}/jrh-ia-hero-light.png",
+                )
+                self.assertEqual(
+                    resolve_jrh_mascot_rel("hero", "dark"),
+                    f"{JRH_AI_REL_DIR}/jrh-ia-hero-dark.png",
+                )
+                self.assertEqual(
+                    resolve_jrh_mascot_rel("floating", "light"),
+                    f"{JRH_AI_REL_DIR}/jrh-ia-launcher-light.png",
+                )
+                self.assertNotIn(".svg", resolve_jrh_mascot_rel("hero"))
+
     def test_single_master_raster_is_reused(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)

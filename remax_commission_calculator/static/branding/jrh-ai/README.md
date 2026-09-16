@@ -1,24 +1,17 @@
 # JRH AI mascot assets
 
-Official transparent PNG/WebP only. Do not generate another robot,
-do not use emoji, and do not crop the mascot from UI screenshots.
+Official transparent PNG only. Do not generate another robot.
 
-Drop files here. Templates resolve the first existing file with
-`url_for('static', ...)` and the project's normal file-mtime version.
+Resolver order (`modules/jrh_branding.py`):
 
-Supported names:
+1. `jrh-ia-{hero|avatar|launcher}-{light|dark}.png`
+2. Legacy `jrh-bot-{hero|avatar|floating}.png`
+3. SVG placeholders (`jrh-bot-*.svg`) — last-resort fallback only
 
-- `jrh-bot-hero.png` / `.webp`
-- `jrh-bot-avatar.png` / `.webp`
-- `jrh-bot-floating.png` / `.webp`
+`floating` maps to `launcher`.
 
-A single master is enough. Any of these is reused for hero, avatar
-and floating until the other sizes exist:
+Extract from:
 
-- `jrh-bot.png` / `.webp`
-- `jrh-bot-hero.png` / `.webp`
+`static/images/Imagen de Codex 15 sept 2026, 05_02_35 p.m..png`
 
-Filenames must stay lowercase for Linux/Railway.
-
-SVG placeholders remain only as a last-resort fallback so the UI
-never shows a broken image icon.
+with `scripts/extract_jrh_ia_assets.py`.

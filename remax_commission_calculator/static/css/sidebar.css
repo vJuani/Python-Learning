@@ -8,7 +8,7 @@
     --jrh-sidebar-active: var(--rail-active-bg);
     --jrh-sidebar-accent: var(--rail-active-border);
     --jrh-sidebar-collapsed: 4.5rem;
-    --jrh-sidebar-expanded: 16.5rem;
+    --jrh-sidebar-expanded: 17rem;
     --jrh-sidebar-ease: 200ms ease;
 }
 
@@ -41,9 +41,11 @@
         overflow-x: hidden;
         overflow-y: auto;
         width: 100%;
+        min-width: 0;
         max-width: 100%;
-        z-index: 2;
+        z-index: auto;
         align-items: stretch;
+        position: sticky;
     }
 
     html[data-rail="collapsed"] body.has-app-rail .app-rail.jrh-sidebar .app-rail-nav,
@@ -66,10 +68,17 @@
     html[data-sidebar="pinned"] body.has-app-rail .app-rail.jrh-sidebar,
     html[data-sidebar] body.has-app-rail .app-rail.jrh-sidebar.is-hover-open {
         width: 100%;
+        min-width: 0;
         max-width: 100%;
         overflow-x: hidden;
         padding-left: 0.85rem;
         padding-right: 0.85rem;
+        align-items: stretch;
+    }
+
+    html[data-rail="collapsed"] body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) {
+        padding-left: 0.6rem;
+        padding-right: 0.6rem;
         align-items: stretch;
     }
 
@@ -111,9 +120,11 @@
 
     .jrh-sidebar__logo--full {
         display: none;
-        height: 2.1rem;
+        height: auto;
         width: auto;
         max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
         object-fit: contain;
         object-position: left center;
         background: transparent;

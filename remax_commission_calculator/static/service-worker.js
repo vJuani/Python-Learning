@@ -1,5 +1,5 @@
 /* JRH One PWA service worker. Caches static assets only. Never caches private data. */
-const CACHE_NAME = "jrh-one-static-v5";
+const CACHE_NAME = "jrh-one-static-v6";
 const STATIC_PREFIXES = [
   "/static/css/",
   "/static/js/",

@@ -1,14 +1,35 @@
 {% set jrh_mascot_name = variant or 'hero' %}
-{% set jrh_mascot_src = jrh_mascot[jrh_mascot_name] if jrh_mascot is defined and jrh_mascot[jrh_mascot_name] else '' %}
+{% set jrh_mascot_light = '' %}
+{% set jrh_mascot_dark = '' %}
+{% if jrh_mascot is defined %}
+    {% set jrh_mascot_light = jrh_mascot[jrh_mascot_name ~ '_light'] or jrh_mascot[jrh_mascot_name] or '' %}
+    {% set jrh_mascot_dark = jrh_mascot[jrh_mascot_name ~ '_dark'] or jrh_mascot_light %}
+{% endif %}
 {% set jrh_mascot_decorative = decorative|default(false) %}
-{% if jrh_mascot_src %}
+{% if jrh_mascot_light %}
 <img
-    class="jrh-bot-{{ jrh_mascot_name }}"
-    src="{{ jrh_mascot_src }}"
+    class="jrh-bot-{{ jrh_mascot_name }} jrh-mascot--on-light"
+    src="{{ jrh_mascot_light }}"
     alt="{% if jrh_mascot_decorative %}{% else %}JRH AI{% endif %}"
     width="{{ width or 320 }}"
     height="{{ height or 420 }}"
     decoding="async"
+    data-jrh-mascot="{{ jrh_mascot_name }}"
+    data-jrh-mascot-theme="light"
     onerror="this.hidden=true;this.removeAttribute('src');"
 >
+{% if jrh_mascot_dark %}
+<img
+    class="jrh-bot-{{ jrh_mascot_name }} jrh-mascot--on-dark"
+    src="{{ jrh_mascot_dark }}"
+    alt=""
+    width="{{ width or 320 }}"
+    height="{{ height or 420 }}"
+    decoding="async"
+    aria-hidden="true"
+    data-jrh-mascot="{{ jrh_mascot_name }}"
+    data-jrh-mascot-theme="dark"
+    onerror="this.hidden=true;this.removeAttribute('src');"
+>
+{% endif %}
 {% endif %}

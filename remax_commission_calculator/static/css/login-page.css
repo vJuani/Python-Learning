@@ -74,7 +74,7 @@ body.is-login-page .flash-messages {
     width: min(76rem, calc(100% - 4rem));
     min-height: 100vh;
     margin: 0 auto;
-    padding: clamp(2rem, 6vh, 3.5rem) 0;
+    padding: clamp(1.5rem, 5vh, 3rem) 0;
 }
 
 /* ── Marketing column ────────────────────────────────────── */
@@ -90,10 +90,22 @@ body.is-login-page .flash-messages {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 1.35rem;
+    gap: 1.15rem;
     width: 100%;
     max-width: 34rem;
-    margin: 0;
+    margin: 0 auto;
+    padding: 0;
+}
+
+.login-marketing__brand,
+.login-marketing__headline,
+.login-marketing__description,
+.login-features,
+.login-quote {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
 }
 
 .login-marketing__brand {
@@ -101,14 +113,16 @@ body.is-login-page .flash-messages {
     align-items: center;
     justify-content: flex-start;
     width: 100%;
-    margin: 0;
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 .login-marketing__logo {
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    width: min(17.5rem, 100%);
+    width: 100%;
+    max-width: 100%;
     height: auto;
     margin: 0;
 }
@@ -222,7 +236,7 @@ body.is-login-page .flash-messages {
 
 .login-card {
     width: min(25rem, 100%);
-    padding: 1.75rem 1.75rem 1.35rem;
+    padding: 1.5rem 1.65rem 1.2rem;
     border: 1px solid #edf0f5;
     border-radius: 1.35rem;
     background: #ffffff;
@@ -236,7 +250,7 @@ body.is-login-page .flash-messages {
     justify-content: center;
     align-items: center;
     width: 100%;
-    margin: 0 auto 1.1rem;
+    margin: 0 auto 0.85rem;
     overflow: visible;
 }
 
@@ -249,7 +263,7 @@ body.is-login-page .flash-messages {
 
 .login-card__header {
     text-align: center;
-    margin-bottom: 0.95rem;
+    margin-bottom: 0.75rem;
 }
 
 .login-card__header h2 {
@@ -268,7 +282,18 @@ body.is-login-page .flash-messages {
 
 .login-form {
     display: grid;
-    gap: 0.8rem;
+    gap: 0.7rem;
+}
+
+.login-google,
+.login-divider {
+    display: none;
+    margin: 0;
+    padding: 0;
+    height: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: 0;
 }
 
 .login-field label {
