@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 
+{% block body_class %}is-acm-page {% endblock %}
+
+{% block mobile_topbar_title %}{{ t('acm_title') }}{% endblock %}
+
 {% block title %}{{ t('acm_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
@@ -30,7 +34,7 @@
         <div class="acm-v5-placeholder">{{ t('property_no_synced_photos') }}</div>
         {% endif %}
         {% if acm_photos %}
-        <button type="button" class="acm-v5-gallery-btn" data-acm-gallery-open>{{ t('acm_see_all_photos') }}</button>
+        <button type="button" class="acm-v5-gallery-btn" data-acm-gallery-open>{{ t('acm_view_fullscreen') }}</button>
         {% endif %}
     </div>
     <div class="acm-v5-target__copy">

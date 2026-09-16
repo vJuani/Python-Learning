@@ -6,7 +6,7 @@
         class="nav-link nav-notifications-link{% if notifications_active %} active{% endif %}"
         aria-label="{{ t('nav_notifications') }}"
     >
-        🔔
+        {% include "_jrh_bell.html" %}
         {% if unread_notifications %}
         <span class="badge badge-pending">{{ unread_notifications }}</span>
         {% endif %}
@@ -18,7 +18,7 @@
             class="nav-link nav-bell-link nav-dropdown-toggle{% if bell_active %} active{% endif %}"
             aria-label="{{ t('pending_center_title') }}"
         >
-            🔔
+            {% include "_jrh_bell.html" %}
             {% if pending_badge_count %}
             <span class="badge badge-pending">{{ pending_badge_count }}</span>
             {% endif %}

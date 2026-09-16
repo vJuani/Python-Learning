@@ -2,7 +2,7 @@
 <html lang="{{ current_language }}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="application-name" content="JRH One">
     <meta name="apple-mobile-web-app-title" content="JRH One">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -245,13 +245,8 @@
 
             <nav id="main-nav" class="main-nav header-zone header-zone-center" aria-label="{{ t('nav_aria') }}">
                 <div class="mobile-drawer-brand hide-desktop">
-                    {% with brand_slot='navbar', logo_extra_class='mobile-drawer-brand-logo' %}
-                    {% include "_brand_logo.html" %}
-                    {% endwith %}
-                    <div class="mobile-drawer-brand-text">
-                        <strong>{{ brand_name }}</strong>
-                        <span>{{ t('app_slogan') }}</span>
-                    </div>
+                    <p class="mobile-drawer-title">{{ t('nav_more') }}</p>
+                    <button type="button" class="m-drawer-close" data-mobile-nav-close aria-label="{{ t('nav_close') }}">×</button>
                 </div>
 
                 <div class="main-nav-links">
@@ -347,7 +342,7 @@
                     class="nav-link nav-notifications-link nav-notifications-link--mobile-header"
                     aria-label="{{ t('nav_notifications') }}"
                 >
-                    🔔
+                    {% include "_jrh_bell.html" %}
                     {% if unread_notifications %}
                     <span class="badge badge-pending">{{ unread_notifications }}</span>
                     {% endif %}

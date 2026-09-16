@@ -45,6 +45,11 @@
         {% endfor %}
     </ul>
     {% else %}
+    <div class="agenda-block__empty-mobile hide-desktop">
+        <p>{{ t('agenda_dashboard_empty') }}</p>
+        <a href="{{ url_for('agenda_new') }}">{{ t('agenda_empty_today_cta') }}</a>
+    </div>
+    <div class="hide-mobile">
     {% set empty_title = t('agenda_dashboard_empty') %}
     {% set empty_description = t('dashboard_empty_tasks_hint') %}
     {% set empty_primary_href = url_for('agenda_new') %}
@@ -52,6 +57,7 @@
     {% set empty_ia_href = url_for('jrh_ask') %}
     {% set empty_ia_label = t('dashboard_schedule_with_ia') %}
     {% include "components/empty_state.html" %}
+    </div>
     {% endif %}
 </section>
 {% endif %}

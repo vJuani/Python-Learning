@@ -140,7 +140,7 @@
             </div>
             <form method="post" action="{{ url_for('billing_ai_prepare') }}" class="billing-ai-chat__form" data-jrh-interpret>
                 <textarea name="prompt" rows="2" placeholder="{{ t('billing_ai_input_placeholder') }}" required></textarea>
-                <button type="button" class="jrh-hero__mic" data-jrh-voice aria-label="{{ t('jrh_voice_talk') }}">🎙</button>
+                <button type="button" class="jrh-hero__mic" data-jrh-voice aria-label="{{ t('jrh_voice_talk') }}">{% include "_jrh_mic.html" %}</button>
                 <button type="submit" class="billing-ai-btn billing-ai-btn--primary">{{ t('billing_ai_send') }}</button>
                 <p class="jrh-hero__unsupported" data-jrh-voice-unsupported hidden>{{ t('jrh_voice_unsupported') }}</p>
             </form>

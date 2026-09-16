@@ -2,6 +2,8 @@
 
 {% block body_class %}is-contacts-page {% endblock %}
 
+{% block mobile_topbar_title %}{{ t('contacts_title') }}{% endblock %}
+
 {% block title %}{{ t('contacts_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
@@ -12,7 +14,14 @@
             <h1>{{ t('contacts_title') }}</h1>
         </div>
         {% if can_manage %}
-        <div class="contacts-hero__actions">
+        <details class="contacts-hero__add hide-desktop">
+            <summary class="contacts-hero__add-btn" aria-label="{{ t('contacts_new') }}">+</summary>
+            <div class="contacts-hero__add-menu">
+                <a href="{{ url_for('contacts_new') }}">{{ t('contacts_new') }}</a>
+                <a href="{{ url_for('contacts_import') }}" data-import-entry>{{ t('contacts_import') }}</a>
+            </div>
+        </details>
+        <div class="contacts-hero__actions hide-mobile">
             <a class="btn btn-secondary" href="{{ url_for('contacts_import') }}" data-import-entry>{{ t('contacts_import') }}</a>
             <a class="btn btn-primary" href="{{ url_for('contacts_new') }}">+ {{ t('contacts_new') }}</a>
         </div>
@@ -38,17 +47,29 @@
             ('all', t('contacts_filter_all')),
             ('active', t('contacts_filter_active')),
             ('leads', t('contacts_filter_leads')),
-            ('no_next', t('contacts_filter_no_next')),
             ('buyers', t('contacts_filter_buyers')),
-            ('sellers', t('contacts_filter_sellers')),
-            ('owners', t('contacts_filter_owners')),
-            ('stale', t('contacts_filter_stale')),
         ] %}
         <a
             class="contacts-filter{% if contact_filter == key %} is-active{% endif %}"
             href="{{ url_for('contacts_index', filter=key, q=search) }}"
         >{{ label }}</a>
         {% endfor %}
+        <details class="contacts-filters-more">
+            <summary>{{ t('contacts_filters') }}</summary>
+            <div class="contacts-filters-more__panel">
+                {% for key, label in [
+                    ('sellers', t('contacts_filter_sellers')),
+                    ('owners', t('contacts_filter_owners')),
+                    ('no_next', t('contacts_filter_no_next')),
+                    ('stale', t('contacts_filter_stale')),
+                ] %}
+                <a
+                    class="contacts-filter{% if contact_filter == key %} is-active{% endif %}"
+                    href="{{ url_for('contacts_index', filter=key, q=search) }}"
+                >{{ label }}</a>
+                {% endfor %}
+            </div>
+        </details>
     </nav>
 
     {% if contacts %}
@@ -63,16 +84,16 @@
                 </p>
                 {% if contact.phone %}<p>{{ contact.phone }}</p>{% endif %}
                 {% if contact.search_line or contact.budget_label %}
-                <p>
+                <p class="contacts-card__extra">
                     <span>{{ t('contacts_looking_for') }}</span>
                     {% if contact.search_line %}{{ contact.search_line }}{% endif %}
                 </p>
                 {% endif %}
                 {% if contact.budget_label %}
-                <p>{{ t('contacts_until') }} {{ contact.budget_label }}</p>
+                <p class="contacts-card__extra">{{ t('contacts_until') }} {{ contact.budget_label }}</p>
                 {% endif %}
                 {% if contact.last_interaction_label %}
-                <p class="contacts-card__last">
+                <p class="contacts-card__last contacts-card__extra">
                     <span>{{ t('contacts_last_interaction') }}</span>
                     {{ contact.last_interaction_label }}
                 </p>
@@ -90,7 +111,7 @@
                 {% endif %}
                 {% if can_manage %}
                 <a class="agenda-chip" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('contacts_schedule') }}</a>
-                <a class="agenda-chip" href="{{ url_for('productivity_home') }}#prod-log">{{ t('contacts_new_activity') }}</a>
+                <a class="agenda-chip contacts-card__extra" href="{{ url_for('productivity_home') }}#prod-log">{{ t('contacts_new_activity') }}</a>
                 {% endif %}
                 <a class="agenda-chip" href="{{ url_for('contacts_detail', contact_id=contact.id) }}">{{ t('contacts_view') }}</a>
             </div>

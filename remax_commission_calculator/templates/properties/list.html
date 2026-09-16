@@ -246,6 +246,7 @@
                     <a href="{{ url_for('properties_list', q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if not properties_panel.filters.listing_purpose %}is-active{% endif %}">{{ t('all') }}</a>
                     <a href="{{ url_for('properties_list', listing_purpose='sale', q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if properties_panel.filters.listing_purpose == 'sale' %}is-active{% endif %}">{{ t('listing_purpose_sale') }}</a>
                     <a href="{{ url_for('properties_list', listing_purpose='rental', q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, sort=properties_panel.filters.sort) }}" class="{% if properties_panel.filters.listing_purpose == 'rental' %}is-active{% endif %}">{{ t('listing_purpose_rental') }}</a>
+                    <button type="button" class="m-chip" data-open-property-filters>{{ t('properties_more_filters') }}</button>
                 </nav>
 
                 {% if properties_panel.rows %}
@@ -341,31 +342,31 @@
 
                 <div class="property-mobile-list hide-desktop">
                     {% for row in properties_panel.rows %}
-                    <article class="property-mobile-card">
-                        <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__media">
+                    <a class="property-mobile-card" href="{{ url_for('properties_detail', property_id=row.id) }}">
+                        <span class="property-mobile-card__media">
                             {% with src=row.cover_url, modifier='property-media-placeholder--card' %}
                             {% include "properties/_cover.html" %}
                             {% endwith %}
-                        </a>
-                        <div class="property-mobile-card__body">
-                            <p class="property-mobile-card__price money">
+                        </span>
+                        <span class="property-mobile-card__body">
+                            <span class="property-mobile-card__price money">
                                 {% if row.listing_price is not none %}
                                 {{ row.listing_price|listing_money(row.listing_currency) }}
                                 {% else %}
                                 —
                                 {% endif %}
-                            </p>
-                            <a href="{{ url_for('properties_detail', property_id=row.id) }}" class="property-mobile-card__title">{{ row.address }}{% if row.neighborhood %} · {{ row.neighborhood }}{% endif %}</a>
-                            <div class="property-mobile-card__meta">
+                            </span>
+                            <span class="property-mobile-card__title">{{ row.address }}{% if row.neighborhood %} · {{ row.neighborhood }}{% endif %}</span>
+                            <span class="property-mobile-card__meta">
                                 {% if row.fact_parts %}<span>{{ row.fact_parts|join(' · ') }}</span>{% endif %}
                                 {% if row.area_label %}<span>{{ row.area_label }}</span>{% endif %}
-                            </div>
-                            <div class="property-mobile-card__badges">
+                            </span>
+                            <span class="property-mobile-card__badges">
                                 {% if row.purpose_label %}<span class="m-chip">{{ row.purpose_label }}</span>{% endif %}
                                 <span class="entity-card__badge entity-card__badge--{{ row.display_status.tone }}">{{ row.display_status.label }}</span>
-                            </div>
-                        </div>
-                    </article>
+                            </span>
+                        </span>
+                    </a>
                     {% endfor %}
                 </div>
 

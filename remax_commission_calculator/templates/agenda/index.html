@@ -65,12 +65,20 @@
         {% endif %}
     </section>
 
+    {% set m_agenda_view = request.args.get('view', 'today') %}
     {% if agenda.week_strip %}
+    <nav class="m-agenda-tabs hide-desktop" aria-label="{{ t('agenda_title') }}">
+        <a href="{{ url_for('agenda_index') }}" class="{% if m_agenda_view != 'week' and m_agenda_view != 'calendar' %}is-active{% endif %}">{{ t('agenda_tab_today') }}</a>
+        <a href="{{ url_for('agenda_index', view='week') }}" class="{% if m_agenda_view == 'week' %}is-active{% endif %}">{{ t('agenda_tab_week') }}</a>
+        <a href="{{ url_for('agenda_index', view='calendar') }}" class="{% if m_agenda_view == 'calendar' %}is-active{% endif %}">{{ t('agenda_tab_calendar') }}</a>
+    </nav>
     <header class="m-agenda-head hide-desktop">
-        <h1 class="m-agenda-month">{{ agenda.week_heading }}</h1>
-        <a class="m-agenda-today" href="{{ url_for('agenda_index') }}">{{ t('agenda_filter_today') }}</a>
+        <h1 class="m-agenda-month">{{ agenda.today_heading or agenda.week_heading }}</h1>
+        {% if today_count >= 2 %}
+        <a class="m-agenda-route" href="{{ url_for('agenda_route', date=agenda.due_date or none) }}">{{ t('route_open_today') }}</a>
+        {% endif %}
     </header>
-    <nav class="m-agenda-week hide-desktop" aria-label="{{ t('agenda_title') }}">
+    <nav class="m-agenda-week hide-desktop{% if m_agenda_view != 'week' %} is-hidden-view{% endif %}" aria-label="{{ t('agenda_tab_week') }}">
         {% for day in agenda.week_strip %}
         <a href="{{ url_for('agenda_index', date=day.iso) }}" class="{% if day.is_selected %}is-selected{% endif %}">
             {{ day.dow }}
@@ -78,6 +86,12 @@
         </a>
         {% endfor %}
     </nav>
+    <form method="get" action="{{ url_for('agenda_index') }}" class="m-agenda-calendar hide-desktop{% if m_agenda_view != 'calendar' %} is-hidden-view{% endif %}">
+        <input type="hidden" name="view" value="calendar">
+        <label class="sr-only" for="m-agenda-date">{{ t('agenda_tab_calendar') }}</label>
+        <input id="m-agenda-date" type="date" name="date" value="{{ agenda.due_date or '' }}">
+        <button type="submit" class="btn btn-secondary">{{ t('agenda_search_action') }}</button>
+    </form>
     {% endif %}
 
     {% set calendar = calendar or {"state": "unconfigured"} %}

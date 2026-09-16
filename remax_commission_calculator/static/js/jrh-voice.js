@@ -41,6 +41,9 @@
             }
             return null;
         }
+        if (button) {
+            button.classList.add("is-ready");
+        }
 
         var recognition = new Speech();
         recognition.lang = document.documentElement.lang || "es-AR";
@@ -54,6 +57,7 @@
                 );
                 if (button) {
                     button.classList.add("is-listening");
+                    button.classList.remove("is-ready");
                 }
                 recognition.start();
             } catch (error) {
@@ -83,6 +87,7 @@
         recognition.addEventListener("end", function () {
             if (button) {
                 button.classList.remove("is-listening");
+                button.classList.add("is-ready");
             }
         });
 

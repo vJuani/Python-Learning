@@ -1,6 +1,9 @@
 {% set chip_actions = actions if actions is defined else (jrh_chip_actions if jrh_chip_actions is defined else (home.quick_actions if home is defined else [])) %}
+{% set visible_limit = chip_limit if chip_limit is defined else none %}
+{% set visible_chips = chip_actions[:visible_limit] if visible_limit else chip_actions %}
+{% set extra_chips = chip_actions[visible_limit:] if visible_limit else [] %}
 <div class="{{ chip_class|default('jrh-studio__actions') }}" role="group" aria-label="{{ t('jrh_quick_title') }}">
-    {% for action in chip_actions %}
+    {% for action in visible_chips %}
     <button
         type="button"
         class="{{ chip_item_class|default('jrh-studio__chip') }}"
@@ -10,4 +13,21 @@
         {{ t(action.label_key) }}
     </button>
     {% endfor %}
+    {% if extra_chips %}
+    <details class="jrh-chip-more">
+        <summary class="{{ chip_item_class|default('jrh-studio__chip') }} jrh-chip-more__toggle">{{ t('jrh_quick_more') }}</summary>
+        <div class="jrh-chip-more__panel">
+            {% for action in extra_chips %}
+            <button
+                type="button"
+                class="{{ chip_item_class|default('jrh-studio__chip') }}"
+                {% if action.acm %}data-jrh-acm{% endif %}
+                data-jrh-example="{{ t(action.example_key) }}"
+            >
+                {{ t(action.label_key) }}
+            </button>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
 </div>

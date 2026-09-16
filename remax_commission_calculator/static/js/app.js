@@ -112,6 +112,16 @@ document.addEventListener("DOMContentLoaded", function () {
     var sidebar = document.getElementById("app-sidebar");
     var filtersToggle = document.getElementById("filters-toggle");
     var mobileMq = window.matchMedia("(max-width: 768px)");
+    var moreButtons = document.querySelectorAll("[data-mobile-nav-more]");
+
+    function syncMoreActive(isOpen) {
+        moreButtons.forEach(function (btn) {
+            btn.classList.toggle("active", isOpen);
+            btn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        });
+        document.documentElement.classList.toggle("m-nav-open", isOpen);
+        document.body.classList.toggle("m-nav-open", isOpen);
+    }
 
     function setNavToggleOpen(isOpen) {
         if (!toggle || !nav) {
@@ -133,6 +143,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (labelNode) {
             labelNode.textContent = label;
         }
+        syncMoreActive(isOpen);
     }
 
     function closeNav() {
@@ -571,13 +582,29 @@ document.addEventListener("DOMContentLoaded", function () {
 
     document.querySelectorAll("[data-autocomplete]").forEach(initAutocomplete);
 
-    var mobileNavMore = document.querySelector("[data-mobile-nav-more]");
-    if (mobileNavMore && toggle) {
-        mobileNavMore.addEventListener("click", function () {
-            setNavToggleOpen(true);
-            window.scrollTo({ top: 0, behavior: "smooth" });
+    document.querySelectorAll("[data-mobile-nav-close]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            setNavToggleOpen(false);
         });
-    }
+    });
+
+    moreButtons.forEach(function (mobileNavMore) {
+        mobileNavMore.addEventListener("click", function () {
+            if (!nav) {
+                return;
+            }
+            setNavToggleOpen(!nav.classList.contains("is-open"));
+        });
+    });
+
+    document.querySelectorAll("[data-open-property-filters]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            var details = document.querySelector(".properties-toolbar__more");
+            if (details) {
+                details.open = true;
+            }
+        });
+    });
 
     document.querySelectorAll(".settings-mobile-row").forEach(function (row) {
         row.addEventListener("click", function (event) {

@@ -2,6 +2,8 @@
 
 {% block body_class %}is-jrh-ask-page{% if is_mobile %} is-mobile{% endif %} {% endblock %}
 
+{% block mobile_topbar_title %}{{ t('jrh_ask_title') }}{% endblock %}
+
 {% block title %}{{ t('jrh_ask_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
@@ -56,7 +58,7 @@
                         class="jrh-studio__mic"
                         data-jrh-voice
                         aria-label="{{ t('jrh_voice_talk') }}"
-                    >🎙</button>
+                    >{% include "_jrh_mic.html" %}</button>
                     <button type="submit" class="jrh-studio__ask" data-jrh-type-submit>{{ t('jrh_ask_submit') }}</button>
                 </div>
                 <p

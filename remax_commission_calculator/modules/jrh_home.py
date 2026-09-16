@@ -150,16 +150,44 @@ def build_agent_home(
     )
     pending = summarize_pending_actions(pending_actions, language=language)
 
-    if agenda.get("overdue_count"):
+    pending_total = pending.get("total") or 0
+    today_count = agenda.get("today_count") or 0
+    if agenda.get("overdue_count") and not pending_total and not today_count:
         subtitle_key = "jrh_home_sub_overdue"
-    elif agenda.get("today_count"):
-        subtitle_key = "jrh_home_sub_today"
+        subtitle = _t(subtitle_key, language)
+    elif pending_total and not today_count:
+        subtitle_key = "jrh_home_sub_pending_clear"
+        subtitle = _t(subtitle_key, language, pending=pending_total)
+    elif pending_total and today_count:
+        subtitle_key = "jrh_home_sub_pending_today"
+        subtitle = _t(subtitle_key, language, pending=pending_total, today=today_count)
+    elif today_count:
+        subtitle_key = "jrh_home_sub_today_count"
+        subtitle = _t(subtitle_key, language, today=today_count)
     else:
         subtitle_key = "jrh_home_sub_clear"
+        subtitle = _t(subtitle_key, language)
+
+    quick_actions = []
+    priority = ("search", "agenda", "acm")
+    for action in build_jrh_chip_actions(
+        can_acm=True,
+        can_productivity=True,
+        can_marketing=True,
+    ):
+        item = dict(action)
+        if item.get("key") == "agenda":
+            item["label_key"] = "jrh_quick_schedule"
+        quick_actions.append(item)
+    quick_actions.sort(
+        key=lambda action: priority.index(action["key"])
+        if action.get("key") in priority
+        else 99
+    )
 
     return {
         "greeting": greeting_for_user(user, now_local=now_local, language=language),
-        "subtitle": _t(subtitle_key, language),
+        "subtitle": subtitle,
         "subtitle_key": subtitle_key,
         "today": {
             "visits": visit_count,
@@ -183,11 +211,7 @@ def build_agent_home(
             can_manage=True,
         ),
         "arca": arca_chip_for(organization_id, user),
-        "quick_actions": build_jrh_chip_actions(
-            can_acm=True,
-            can_productivity=True,
-            can_marketing=True,
-        ),
+        "quick_actions": quick_actions,
     }
 
 
