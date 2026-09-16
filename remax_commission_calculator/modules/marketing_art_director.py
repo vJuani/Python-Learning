@@ -90,8 +90,8 @@ def _fallback_direction(fmt, index, used, facts, request):
     )
     show_photo = request.get("with_agent_photo") is not False and request.get("with_agent") is not False
     brief = build_visual_brief(fmt, direction, show_agent_photo=show_photo)
-    headline = default_headline(language, facts)
-    kicker = default_kicker(language)
+    headline = default_headline(language, facts, direction)
+    kicker = default_kicker(language, facts)
     return {
         "visual_direction": direction,
         "creative_brief": brief["composition"],
@@ -101,7 +101,7 @@ def _fallback_direction(fmt, index, used, facts, request):
         "headline": headline,
         "kicker": kicker,
         "short_hook": kicker,
-        "cta": default_cta(language),
+        "cta": default_cta(language, facts, direction),
         "language": language,
         "copy_density": request.get("copy_density") or COPY_DENSITY,
         "text_theme": "light" if brief["theme"] == "dark" else "dark",
@@ -154,16 +154,12 @@ def plan_item(context, request, *, fmt, index, used_directions):
         fallback["headline"] = default_headline(
             language, (context or {}).get("facts") or {}
         )
-        kicker = _safe_kicker(
-            parsed.get("kicker") or parsed.get("headline"),
-            (context or {}).get("facts") or {},
-            language,
-        )
-        if kicker:
-            fallback["kicker"] = kicker
-            fallback["short_hook"] = kicker
+        fallback["kicker"] = default_kicker(language, (context or {}).get("facts") or {})
+        fallback["short_hook"] = fallback["kicker"]
         if parsed.get("cta") and not forbidden_language_hits(parsed.get("cta"), language):
-            fallback["cta"] = str(parsed.get("cta"))[:20]
+            raw_cta = " ".join(str(parsed.get("cta") or "").split())
+            if raw_cta and not INVENTED_CLAIM_RE.search(raw_cta):
+                fallback["cta"] = raw_cta[:28]
         if parsed.get("creative_brief"):
             fallback["creative_brief"] = str(parsed["creative_brief"])[:280]
         return fallback

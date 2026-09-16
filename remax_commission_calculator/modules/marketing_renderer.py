@@ -736,18 +736,24 @@ def _address_block(draw, facts, copy, *, xy, width, max_width, light=False):
         or ""
     ).upper()
     if headline:
-        title_font = font(_u(width, 50), bold=True)
+        title_font = font(_u(width, 48), bold=True)
         for line in _wrap(draw, headline, title_font, max_width)[:2]:
             draw.text((x, y), line, font=title_font, fill=title_fill)
-            y += _u(width, 56)
-    street = copy.get("street") or facts.get("title") or ""
-    if street:
-        draw.text((x, y + 2), street, font=font(_u(width, 28), bold=True), fill=title_fill)
-        y += _u(width, 36)
+            y += _u(width, 54)
     zone = copy.get("zone") or facts.get("zone_line") or facts.get("locality") or ""
     if zone:
-        draw.text((x, y + 2), zone, font=font(_u(width, 18)), fill=mute)
+        draw.text((x, y + 2), zone, font=font(_u(width, 28), bold=True), fill=title_fill)
+        y += _u(width, 36)
+    street = copy.get("street") or facts.get("title") or ""
+    if street and street.casefold() not in zone.casefold():
+        draw.text((x, y + 2), street, font=font(_u(width, 20)), fill=mute)
         y += _u(width, 28)
+    bajada = copy.get("subheadline") or facts.get("benefit_line") or ""
+    if bajada:
+        bajada_font = font(_u(width, 18))
+        for line in _wrap(draw, bajada, bajada_font, max_width)[:2]:
+            draw.text((x, y + 2), line, font=bajada_font, fill=mute)
+            y += _u(width, 24)
     return y
 
 
@@ -815,7 +821,10 @@ def render_modern_listing(size, photos, facts, copy, agent, options, style, *, f
     contact_h = _u(width, 132) if show_agent else _u(width, 58)
     feat_h = _u(width, 54) if options.get("show_features", True) and (facts.get("chips") or copy.get("attributes")) else 0
     price_h = _u(width, 58) if options.get("show_price", True) and facts.get("price_label") else 0
-    content_h = _u(width, 16) + _u(width, 118) + _u(width, 64) + price_h + feat_h + contact_h + legal_h
+    bajada_h = _u(width, 28) if (copy.get("subheadline") or facts.get("benefit_line")) else 0
+    content_h = (
+        _u(width, 16) + _u(width, 118) + _u(width, 72) + bajada_h + price_h + feat_h + contact_h + legal_h
+    )
     photo_top = _u(width, 88)
     photo_h = max(_u(width, 320), height - photo_top - content_h)
     compose_photo_grid(
@@ -837,6 +846,9 @@ def render_modern_listing(size, photos, facts, copy, agent, options, style, *, f
         max_width=width - pad * 2 - reserve,
         light=colors["theme"] == "blue",
     )
+    if options.get("show_price", True):
+        _price(draw, facts, options, xy=(pad, y), width=width, size=56, fill=colors["ink"])
+        y += price_h
     if options.get("show_features", True):
         _feature_icons(
             draw,
@@ -848,9 +860,6 @@ def render_modern_listing(size, photos, facts, copy, agent, options, style, *, f
             mute=colors["mute"],
         )
         y += feat_h
-    if options.get("show_price", True):
-        _price(draw, facts, options, xy=(pad, y), width=width, size=56, fill=colors["ink"])
-        y += price_h
     _cta_pill(
         draw,
         (pad, y + 2),

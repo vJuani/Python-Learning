@@ -1148,10 +1148,12 @@ class MarketingIaTests(unittest.TestCase):
             context.get("agent"),
             language="es",
         )
-        self.assertEqual(copy["headline"], "DEPARTAMENTO EN VENTA")
+        self.assertEqual(copy["headline"], "2 AMBIENTES EN VENTA EN VICTORIA")
         self.assertIn("Santamarina", copy["street"])
         self.assertIn("Victoria", copy["zone"])
-        self.assertEqual(copy["cta"], "Contáctanos")
+        self.assertEqual(copy["cta"], "Coordinemos una visita.")
+        self.assertTrue(copy.get("subheadline"))
+        self.assertNotIn("oportunidad única", (copy.get("subheadline") or "").lower())
         self.assertEqual(copy["agent_whatsapp"], "+54 9 11 3170 4333")
         self.assertEqual(copy["agent_instagram"], "@josebarreiro")
         self.assertIn("Mauro Marvisi", copy["legal_footer"])
@@ -1389,7 +1391,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         options = spanish["assets"][0].get("options") or {}
         self.assertEqual(options.get("language"), "es")
-        self.assertEqual((spanish["assets"][0].get("copy_snapshot") or {}).get("cta"), "Contáctanos")
+        self.assertEqual((spanish["assets"][0].get("copy_snapshot") or {}).get("cta"), "Coordinemos una visita.")
         english = start_marketing_batch(
             self.org,
             self._user(self.agent_user_id),
@@ -1401,7 +1403,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         en_options = english["assets"][0].get("options") or {}
         self.assertEqual(en_options.get("language"), "en")
-        self.assertEqual((english["assets"][0].get("copy_snapshot") or {}).get("cta"), "Inquire Now")
+        self.assertEqual((english["assets"][0].get("copy_snapshot") or {}).get("cta"), "Let's book a visit.")
 
     def test_49_creative_uses_organization_brand_not_jrh(self):
         self.assertTrue(is_system_brand_text("JRH One"))
@@ -1441,7 +1443,7 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(facts["brand_name"], "RE/MAX Data House")
         self.assertEqual(facts["office_name"], "RE/MAX Data House")
         self.assertTrue(facts["show_wordmark"])
-        self.assertEqual(facts["operation_title"], "DEPARTAMENTO EN VENTA")
+        self.assertEqual(facts["operation_title"], "2 AMBIENTES EN VENTA EN VICTORIA")
         self.assertEqual(facts["zone_line"], "Victoria, PBA")
         self.assertEqual(facts["legal_broker_name"], "Mauro Marvisi")
         self.assertIn("CUCICBA", facts["legal_footer_line"])
@@ -1599,6 +1601,65 @@ class MarketingIaTests(unittest.TestCase):
         sample = thumbs.resize((16, 6))
         colors = {(pixel[0] // 20, pixel[1] // 20, pixel[2] // 20) for pixel in sample.getdata()}
         self.assertGreaterEqual(len(colors), 4)
+
+    def test_52_commercial_copy_adapts_sale_rent_and_type(self):
+        from modules.marketing_language import (
+            commercial_cta,
+            listing_benefit_line,
+            operation_headline,
+            operation_kicker,
+        )
+
+        sale_apt = {
+            "property_type": "apartment",
+            "type_label": "Departamento",
+            "purpose": "sale",
+            "rooms": 2,
+            "covered_m2": 42,
+            "locality": "Victoria",
+        }
+        rent_apt = dict(sale_apt, purpose="rental")
+        studio = dict(sale_apt, rooms=1)
+        house = {"property_type": "house", "type_label": "Casa", "purpose": "sale", "locality": "San Isidro"}
+        self.assertEqual(operation_headline("es", sale_apt), "2 AMBIENTES EN VENTA EN VICTORIA")
+        self.assertEqual(operation_headline("es", rent_apt), "2 AMBIENTES EN ALQUILER EN VICTORIA")
+        self.assertEqual(operation_headline("es", studio), "MONOAMBIENTE EN VENTA EN VICTORIA")
+        self.assertEqual(operation_headline("es", house), "CASA EN VENTA EN SAN ISIDRO")
+        self.assertEqual(
+            operation_headline("es", {"property_type": "ph", "purpose": "sale", "rooms": 3, "locality": "Olivos"}),
+            "PH EN VENTA EN OLIVOS",
+        )
+        self.assertEqual(
+            operation_headline("es", {"property_type": "apartment", "purpose": "sale", "rooms": 3, "locality": "San Isidro"}),
+            "3 AMBIENTES EN VENTA EN SAN ISIDRO",
+        )
+        self.assertEqual(operation_kicker("es", sale_apt), "EN VENTA")
+        self.assertEqual(operation_kicker("es", rent_apt), "EN ALQUILER")
+        self.assertEqual(commercial_cta("es", sale_apt, style="commercial"), "Consultame para visitarlo.")
+        self.assertEqual(commercial_cta("es", rent_apt, style="modern"), "Consultame disponibilidad.")
+        self.assertNotEqual(
+            listing_benefit_line("es", sale_apt, style="commercial"),
+            listing_benefit_line("es", rent_apt, style="commercial"),
+        )
+        self.assertIn("vivir o invertir", listing_benefit_line("es", sale_apt, style="commercial").lower())
+        self.assertIn("próxima etapa", listing_benefit_line("es", rent_apt, style="commercial").lower())
+        for line in (
+            listing_benefit_line("es", sale_apt, style="premium"),
+            listing_benefit_line("es", rent_apt, style="modern"),
+            listing_benefit_line("es", studio, style="aspirational"),
+        ):
+            folded = line.lower()
+            self.assertNotIn("oportunidad única", folded)
+            self.assertNotIn("hogar de tus sueños", folded)
+            self.assertNotIn("imperdible", folded)
+            self.assertNotIn("precio irrepetible", folded)
+        context = build_property_marketing_context(self._property())
+        self.assertEqual(context["facts"]["kicker"], "EN VENTA")
+        self.assertTrue(context["facts"]["benefit_line"])
+        planned = summarize_listing_copy(context["facts"], context.get("agent"), language="es")
+        self.assertEqual(planned["headline"], "2 AMBIENTES EN VENTA EN VICTORIA")
+        self.assertIn("Victoria", planned["zone"])
+        self.assertEqual(planned["cta"], "Coordinemos una visita.")
 
 
 def _quality_png():

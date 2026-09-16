@@ -191,7 +191,7 @@ def build_marketing_image_prompt(
     if forbidden_language_hits(headline, language) or is_location_headline(headline, facts):
         headline = default_headline(language, facts, chosen_style)
     if forbidden_language_hits(cta_text, language):
-        cta_text = default_cta(language)
+        cta_text = default_cta(language, facts)
     show_price = include_price if include_price is not None else options.get("show_price", True)
     if (facts.get("price_policy") or {}).get("private"):
         show_price = False
@@ -200,8 +200,9 @@ def build_marketing_image_prompt(
         facts,
         agent if want_agent or include_agent else None,
         headline=headline,
-        cta=cta_text or default_cta(language),
+        cta=cta_text or default_cta(language, facts, chosen_style),
         language=language,
+        style=chosen_style,
     )
     photo_count = len(photos)
     secondary = (
@@ -464,7 +465,7 @@ def generate_validated_marketing_image(
         if repair_reasons and "wrong_language" in repair_reasons:
             art = dict(art)
             art["headline"] = default_headline(language, (context or {}).get("facts") or {}, chosen_style)
-            cta = default_cta(language)
+            cta = default_cta(language, (context or {}).get("facts") or {})
         last_prompt = build_marketing_image_prompt(
             context,
             fmt,

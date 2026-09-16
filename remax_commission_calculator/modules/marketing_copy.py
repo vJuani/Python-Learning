@@ -85,37 +85,52 @@ def _zone_line(facts):
     return marketing_zone_line(facts)
 
 
-def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="es"):
+def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="es", style=None):
     from modules.marketing_language import (
+        HYPE_COPY_RE,
         default_agent_role,
         default_cta,
         default_headline,
         default_kicker,
+        listing_benefit_line,
         marketing_label,
     )
 
     facts = facts or {}
     language = language or "es"
     street = autofit_text(facts.get("title") or "", max_chars=28, max_lines=1)
-    zone = autofit_text(_zone_line(facts), max_chars=32, max_lines=1)
-    fallback_headline = default_headline(language, facts)
+    zone = autofit_text(_zone_line(facts), max_chars=36, max_lines=1)
+    chosen_headline = " ".join(str(headline or "").split()) or default_headline(
+        language, facts, style
+    )
+    if HYPE_COPY_RE.search(chosen_headline):
+        chosen_headline = default_headline(language, facts, style)
     hook = autofit_text(
-        fallback_headline or marketing_label("available", language),
-        max_chars=32,
+        chosen_headline or marketing_label("available", language),
+        max_chars=42,
         max_lines=2,
     )
     kicker = autofit_text(
-        facts.get("kicker") or default_kicker(language),
-        max_chars=28,
+        facts.get("kicker") or default_kicker(language, facts),
+        max_chars=18,
         max_lines=1,
     )
+    benefit = " ".join(
+        str(listing_benefit_line(language, facts, style=style) or facts.get("benefit_line") or "").split()
+    )
+    if HYPE_COPY_RE.search(benefit):
+        benefit = ""
+    bajada = autofit_text(benefit, max_chars=44, max_lines=2)
     chips = [str(item).strip() for item in (facts.get("chips") or []) if str(item).strip()][:4]
     agent = agent or {}
     name = autofit_text(agent.get("name") or "", max_chars=24, max_lines=2)
     title = autofit_text(agent.get("title") or default_agent_role(language), max_chars=22, max_lines=1)
     whatsapp = {"text": " ".join(str(agent.get("whatsapp") or "").split())}
     instagram = {"text": " ".join(str(agent.get("instagram") or "").split())}
-    cta_fit = autofit_text(cta or default_cta(language), max_chars=18, max_lines=1)
+    chosen_cta = " ".join(str(cta or "").split()) or default_cta(language, facts, style)
+    if HYPE_COPY_RE.search(chosen_cta):
+        chosen_cta = default_cta(language, facts, style)
+    cta_fit = autofit_text(chosen_cta, max_chars=36, max_lines=1)
     broker = " ".join(
         part
         for part in (
@@ -137,11 +152,12 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
         "headline": hook["text"].replace("\n", " "),
         "headline_lines": hook["lines"],
         "kicker": kicker["text"],
+        "subheadline": bajada["text"].replace("\n", " "),
         "street": street["text"],
         "zone": zone["text"],
         "attributes": chips,
         "price": facts.get("price_label") or "",
-        "cta": cta_fit["text"] or default_cta(language),
+        "cta": cta_fit["text"] or default_cta(language, facts, style),
         "agent_name": name["text"].replace("\n", " "),
         "agent_title": title["text"],
         "agent_whatsapp": whatsapp["text"],

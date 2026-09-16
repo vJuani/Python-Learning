@@ -66,8 +66,9 @@ def stamp_branding_overlay(
         facts,
         agent,
         headline=(art or {}).get("headline") or default_headline(language, facts, chosen),
-        cta=options.get("cta") or (art or {}).get("cta") or default_cta(language),
+        cta=options.get("cta") or (art or {}).get("cta") or default_cta(language, facts, chosen),
         language=language,
+        style=chosen,
     )
     overlay_agent = None
     show_photo = False

@@ -14,13 +14,17 @@ MARKETING_COPY = {
     "es": {
         "default_headline_sale": "En venta",
         "default_headline_investment": "Inversión disponible",
-        "cta": "Contáctanos",
+        "cta": "Consultame",
+        "cta_sale": "Consultame",
+        "cta_rent": "Consultame disponibilidad",
         "cta_short": "Consultame",
         "for_sale": "en venta",
         "for_rent": "en alquiler",
+        "kicker_sale": "EN VENTA",
+        "kicker_rent": "EN ALQUILER",
         "agent_role": "Agente inmobiliario",
         "available": "Disponible",
-        "kicker": "Tu próximo hogar está acá",
+        "kicker": "EN VENTA",
         "headline_editorial": "Tu próximo hogar está acá",
         "headline_commercial": "Disponible ahora",
         "headline_luxury": "Exclusiva",
@@ -28,16 +32,95 @@ MARKETING_COPY = {
     "en": {
         "default_headline_sale": "For Sale",
         "default_headline_investment": "Investment Opportunity",
-        "cta": "Inquire Now",
-        "cta_short": "Inquire",
+        "cta": "Message me",
+        "cta_sale": "Message me",
+        "cta_rent": "Ask availability",
+        "cta_short": "Message me",
         "for_sale": "for sale",
         "for_rent": "for rent",
+        "kicker_sale": "FOR SALE",
+        "kicker_rent": "FOR RENT",
         "agent_role": "Real Estate Agent",
         "available": "Available",
-        "kicker": "Your next home is here",
+        "kicker": "FOR SALE",
         "headline_editorial": "Your next home is here",
         "headline_commercial": "Available now",
         "headline_luxury": "Exclusive",
+    },
+}
+
+TYPE_ALIASES = {
+    "departamento": "apartment",
+    "apartment": "apartment",
+    "casa": "house",
+    "house": "house",
+    "ph": "ph",
+    "terreno": "land",
+    "land": "land",
+    "local": "commercial",
+    "commercial": "commercial",
+    "oficina": "office",
+    "office": "office",
+}
+
+HYPE_COPY_RE = re.compile(
+    r"oportunidad [uú]nica|no te lo pod[eé]s perder|hogar de tus sue[nñ]os|"
+    r"inversi[oó]n (imperdible|[uú]nica)|lujo extremo|imperdible|"
+    r"la mejor (propiedad|casa|depto)|precio irrepetible",
+    re.I,
+)
+
+COPY_STYLE_ALIASES = {
+    "premium": "premium",
+    "light": "premium",
+    "light_premium": "premium",
+    "elegant": "premium",
+    "elegante": "premium",
+    "editorial": "premium",
+    "editorial_premium": "premium",
+    "luxury": "premium",
+    "minimal": "premium",
+    "modern": "modern",
+    "moderno": "modern",
+    "blue": "modern",
+    "blue_premium": "modern",
+    "commercial": "commercial",
+    "moderno_comercial": "commercial",
+    "modern_commercial": "commercial",
+    "price_led": "commercial",
+    "aspirational": "aspirational",
+    "aspiracional": "aspirational",
+    "dynamic": "aspirational",
+    "exclusive": "aspirational",
+}
+
+SALE_CTA = {
+    "es": {
+        "premium": "Coordinemos una visita.",
+        "modern": "Escribime para más información.",
+        "commercial": "Consultame para visitarlo.",
+        "aspirational": "No dudes en contactarme.",
+    },
+    "en": {
+        "premium": "Let's book a visit.",
+        "modern": "Message me for details.",
+        "commercial": "Message me to visit.",
+        "aspirational": "Happy to help you visit.",
+    },
+}
+
+RENT_CTA = {
+    "es": {
+        "premium": "Escribime para coordinar una visita.",
+        "modern": "Consultame disponibilidad.",
+        "commercial": "Consultame disponibilidad.",
+        "aspirational": "Pedime más información por WhatsApp.",
+    },
+    "en": {
+        "premium": "Message me to visit.",
+        "modern": "Ask availability.",
+        "commercial": "Ask availability.",
+        "aspirational": "Message me on WhatsApp.",
     },
 }
 
@@ -133,25 +216,186 @@ def resolve_creative_language(*, locale=None, request_text="", organization_lang
     return normalize_language(organization_language or DEFAULT_LANGUAGE)
 
 
+def _is_rental(facts):
+    return str((facts or {}).get("purpose") or "").lower() in {"rental", "temporary_rental"}
+
+
+def _rooms_count(facts):
+    raw = (facts or {}).get("rooms")
+    if raw in (None, ""):
+        return None
+    try:
+        number = int(float(raw))
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _area_value(facts):
+    facts = facts or {}
+    raw = facts.get("covered_m2")
+    if raw in (None, ""):
+        raw = facts.get("total_m2")
+    if raw in (None, ""):
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def listing_type_key(facts):
+    facts = facts or {}
+    raw = str(facts.get("property_type") or "").strip().lower()
+    if raw in TYPE_ALIASES:
+        return TYPE_ALIASES[raw]
+    label = str(facts.get("type_label") or "").strip().casefold()
+    return TYPE_ALIASES.get(label)
+
+
+def normalize_copy_style(style=None):
+    key = str(style or "").strip().lower()
+    return COPY_STYLE_ALIASES.get(key, "premium")
+
+
+def _headline_zone(facts):
+    return " ".join(str((facts or {}).get("locality") or "").split())
+
+
+def _headline_subject(language, facts):
+    kind = listing_type_key(facts)
+    rooms = _rooms_count(facts)
+    type_label = " ".join(str((facts or {}).get("type_label") or "").split())
+    if language == "es":
+        if kind == "house":
+            return "Casa"
+        if kind == "ph":
+            return "PH"
+        if kind == "land":
+            return "Terreno"
+        if kind == "commercial":
+            return "Local"
+        if kind == "office":
+            return "Oficina"
+        if rooms == 1:
+            return "Monoambiente"
+        if rooms:
+            return f"{rooms} ambientes"
+        return type_label or ("Departamento" if kind == "apartment" else "")
+    if kind == "house":
+        return "House"
+    if kind == "ph":
+        return "PH"
+    if kind == "land":
+        return "Land"
+    if kind == "commercial":
+        return "Storefront"
+    if kind == "office":
+        return "Office"
+    if rooms == 1:
+        return "Studio"
+    if rooms:
+        return f"{rooms}-room apartment"
+    return type_label or ("Apartment" if kind == "apartment" else "")
+
+
 def operation_headline(language="es", facts=None, style=None):
-    """Commercial title: DEPARTAMENTO EN VENTA. Never the locality."""
+    """Commercial title: 2 AMBIENTES EN VENTA EN VICTORIA."""
+    del style
     pack = copy_pack(language)
     facts = facts or {}
-    type_label = " ".join(str(facts.get("type_label") or "").split())
-    purpose = str(facts.get("purpose") or "").lower()
-    rental = purpose in {"rental", "temporary_rental"}
+    rental = _is_rental(facts)
     suffix = pack["for_rent"] if rental else pack["for_sale"]
-    if type_label:
-        return f"{type_label} {suffix}".upper()
-    return suffix.upper()
+    subject = _headline_subject(language, facts)
+    zone = _headline_zone(facts)
+    if subject and zone:
+        connector = "en" if language == "es" else "in"
+        return f"{subject} {suffix} {connector} {zone}".upper()
+    if subject:
+        return f"{subject} {suffix}".upper()
+    return (pack["kicker_rent"] if rental else pack["kicker_sale"]).upper()
 
 
 def default_headline(language="es", facts=None, style=None):
     return operation_headline(language, facts, style)
 
 
-def default_kicker(language="es"):
+def operation_kicker(language="es", facts=None):
+    pack = copy_pack(language)
+    return pack["kicker_rent"] if _is_rental(facts) else pack["kicker_sale"]
+
+
+def default_kicker(language="es", facts=None):
+    if facts:
+        return operation_kicker(language, facts)
     return copy_pack(language)["kicker"]
+
+
+def commercial_cta(language="es", facts=None, style=None):
+    language = normalize_language(language)
+    flavor = normalize_copy_style(style)
+    pool = RENT_CTA if _is_rental(facts) else SALE_CTA
+    pack = pool.get(language) or pool["es"]
+    return pack.get(flavor) or pack["premium"]
+
+
+def listing_benefit_line(language="es", facts=None, style=None):
+    """One grounded bajada. No invented amenities or hype."""
+    facts = facts or {}
+    flavor = normalize_copy_style(style)
+    rental = _is_rental(facts)
+    rooms = _rooms_count(facts)
+    area = _area_value(facts)
+    has_place = bool(
+        str(facts.get("locality") or facts.get("zone_line") or "").strip()
+    )
+    has_layout = bool(rooms and area)
+    if language == "es":
+        if rental:
+            if flavor == "aspirational" and has_place:
+                line = "Buena opción para quienes buscan comodidad y ubicación."
+            elif flavor == "commercial":
+                line = "Listo para tu próxima etapa."
+            elif has_layout:
+                line = "Espacios funcionales y bien aprovechados."
+            else:
+                line = "Una opción práctica para el día a día."
+        elif flavor == "modern":
+            line = "Una opción práctica para el día a día."
+        elif flavor == "commercial":
+            line = "Ideal para vivir o invertir."
+        elif flavor == "aspirational" and has_place:
+            line = "Buena opción para quienes buscan comodidad y ubicación."
+        elif has_layout:
+            line = "Ambientes cómodos y bien distribuidos."
+        elif has_place:
+            line = "Buena opción para quienes buscan comodidad y ubicación."
+        else:
+            line = "Ideal para vivir o invertir."
+    else:
+        if rental:
+            if flavor == "commercial":
+                line = "Ready for your next chapter."
+            elif has_place:
+                line = "Comfortable and well located for everyday living."
+            else:
+                line = "A practical place for everyday living."
+        elif flavor == "modern":
+            line = "A practical option for everyday living."
+        elif flavor == "commercial":
+            line = "A solid place to live or invest."
+        elif flavor == "aspirational" and has_place:
+            line = "Comfort and a location that works day to day."
+        elif has_layout:
+            line = "Comfortable rooms with a practical layout."
+        elif has_place:
+            line = "Well located for everyday living."
+        else:
+            line = "A solid place to live or invest."
+    line = " ".join(str(line).split())
+    if HYPE_COPY_RE.search(line):
+        return ""
+    return line
 
 
 def marketing_zone_line(facts):
@@ -172,6 +416,31 @@ def is_location_headline(text, facts=None):
     folded = " ".join(str(text or "").lower().split())
     if not folded:
         return False
+    commercial = (
+        "venta" in folded
+        or "alquiler" in folded
+        or "sale" in folded
+        or "rent" in folded
+    )
+    typed = any(
+        token in folded
+        for token in (
+            "ambiente",
+            "monoambiente",
+            "departamento",
+            "casa",
+            "ph",
+            "oficina",
+            "local",
+            "terreno",
+            "apartment",
+            "studio",
+            "house",
+            "office",
+        )
+    )
+    if commercial and typed:
+        return False
     if folded.startswith("en ") or folded.startswith("in "):
         rest = folded.split(" ", 1)[1]
         if rest in {"venta", "alquiler", "sale", "rent"}:
@@ -181,8 +450,8 @@ def is_location_headline(text, facts=None):
     return bool(locality and locality in folded and len(folded.split()) <= 3)
 
 
-def default_cta(language="es"):
-    return copy_pack(language)["cta"]
+def default_cta(language="es", facts=None, style=None):
+    return commercial_cta(language, facts, style=style)
 
 
 def default_agent_role(language="es"):
