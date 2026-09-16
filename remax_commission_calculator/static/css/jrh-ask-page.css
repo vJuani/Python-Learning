@@ -151,6 +151,18 @@ body.is-jrh-ask-page .app-main-inner {
     font-weight: 800;
 }
 
+.jrh-studio__ask-icon {
+    display: none;
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.jrh-studio__empty-hint {
+    margin: 0.35rem 0 0;
+    color: var(--text-muted, #667085);
+    font-size: 0.9rem;
+}
+
 .jrh-studio__status,
 .jrh-studio__unsupported,
 .jrh-studio__processing {

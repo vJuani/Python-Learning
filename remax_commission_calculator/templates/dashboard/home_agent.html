@@ -21,6 +21,8 @@
 {% block content %}
 {% set home = home or {} %}
 {% set today = home.today or {} %}
+{% include "dashboard/_m_home_agent.html" %}
+<div class="hide-mobile">
 <div class="home-v2">
     <div class="home-v2__main">
         <header class="home-v2__hello">
@@ -230,6 +232,7 @@
             </a>
         </section>
     </aside>
+</div>
 </div>
 {% with
     mkt_property_id=None,

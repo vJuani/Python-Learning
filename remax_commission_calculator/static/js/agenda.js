@@ -7,10 +7,20 @@
         );
         var homeReview = document.querySelector("[data-jrh-voice-review]");
         var isHome = Boolean(form && form.hasAttribute("data-jrh-interpret"));
+        var overlay = document.getElementById("m-voice");
+        var cancel = overlay && overlay.querySelector("[data-voice-cancel]");
         if (!window.JRH || !window.JRH.transcribeVoice) {
             return;
         }
-        window.JRH.transcribeVoice({
+        function setVoiceOpen(isOpen) {
+            if (!overlay) {
+                return;
+            }
+            overlay.hidden = !isOpen;
+            document.body.classList.toggle("m-voice-open", isOpen);
+            document.documentElement.classList.toggle("m-voice-open", isOpen);
+        }
+        var session = window.JRH.transcribeVoice({
             button: button,
             form: form,
             input: input,
@@ -20,7 +30,20 @@
             transcript: document.querySelector("[data-jrh-transcript]"),
             rerecord: document.querySelector("[data-jrh-rerecord]"),
             autoSubmit: !isHome,
+            onState: function (name) {
+                setVoiceOpen(name === "listening" || name === "transcribing");
+            },
         });
+        if (cancel && session && session.recognition) {
+            cancel.addEventListener("click", function () {
+                try {
+                    session.recognition.stop();
+                } catch (error) {
+                    /* ignore */
+                }
+                setVoiceOpen(false);
+            });
+        }
     }
 
     document.querySelectorAll("[data-agenda-voice], [data-jrh-voice]").forEach(bindVoice);

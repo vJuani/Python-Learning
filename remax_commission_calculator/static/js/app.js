@@ -19,6 +19,21 @@ document.addEventListener("DOMContentLoaded", function () {
         } catch (error) {
             /* ignore */
         }
+        syncAppearanceLabels(theme);
+    }
+
+    window.__jrhApplyTheme = applyTheme;
+
+    function syncAppearanceLabels(theme) {
+        var isDark = theme === "dark";
+        document.querySelectorAll(".m-appearance-value").forEach(function (node) {
+            node.textContent = isDark
+                ? (node.getAttribute("data-label-dark") || "Dark")
+                : (node.getAttribute("data-label-light") || "Light");
+        });
+        document.querySelectorAll("[data-set-theme]").forEach(function (btn) {
+            btn.classList.toggle("is-active", btn.getAttribute("data-set-theme") === theme);
+        });
     }
 
     if (themeToggles.length) {
@@ -33,6 +48,8 @@ document.addEventListener("DOMContentLoaded", function () {
             ? "dark"
             : "light";
         applyTheme(currentTheme);
+    } else {
+        applyTheme(root.getAttribute("data-theme") === "dark" ? "dark" : "light");
     }
 
     var railToggles = document.querySelectorAll(".rail-toggle");
@@ -113,6 +130,12 @@ document.addEventListener("DOMContentLoaded", function () {
     var filtersToggle = document.getElementById("filters-toggle");
     var mobileMq = window.matchMedia("(max-width: 768px)");
     var moreButtons = document.querySelectorAll("[data-mobile-nav-more]");
+    var morePanel = document.getElementById("mobile-more");
+    var sheetBackdrop = document.querySelector("[data-m-sheet-backdrop]");
+
+    function isMobileNav() {
+        return mobileMq.matches;
+    }
 
     function syncMoreActive(isOpen) {
         moreButtons.forEach(function (btn) {
@@ -121,6 +144,73 @@ document.addEventListener("DOMContentLoaded", function () {
         });
         document.documentElement.classList.toggle("m-nav-open", isOpen);
         document.body.classList.toggle("m-nav-open", isOpen);
+        document.documentElement.classList.toggle("m-more-open", isOpen);
+        document.body.classList.toggle("m-more-open", isOpen);
+    }
+
+    function closeAllSheets() {
+        setPropertyFiltersOpen(false);
+        document.querySelectorAll(".m-sheet").forEach(function (sheet) {
+            sheet.hidden = true;
+            sheet.classList.remove("is-open");
+        });
+        document.documentElement.classList.remove("m-sheet-open");
+        document.body.classList.remove("m-sheet-open");
+        if (sheetBackdrop) {
+            sheetBackdrop.hidden = true;
+        }
+    }
+
+    function openNamedSheet(name) {
+        var sheet = document.getElementById("m-sheet-" + name);
+        if (!sheet) {
+            return;
+        }
+        document.querySelectorAll(".m-sheet").forEach(function (node) {
+            node.hidden = true;
+            node.classList.remove("is-open");
+        });
+        setPropertyFiltersOpen(false);
+        sheet.hidden = false;
+        sheet.classList.add("is-open");
+        document.documentElement.classList.add("m-sheet-open");
+        document.body.classList.add("m-sheet-open");
+        if (sheetBackdrop) {
+            sheetBackdrop.hidden = false;
+        }
+    }
+
+    function setPropertyFiltersOpen(isOpen) {
+        var details = document.querySelector("[data-filter-sheet], .properties-toolbar__more");
+        document.documentElement.classList.toggle("m-sheet-open", !!isOpen);
+        document.body.classList.toggle("m-sheet-open", !!isOpen);
+        if (details) {
+            details.open = !!isOpen;
+            details.classList.toggle("is-sheet-open", !!isOpen);
+        }
+        if (sheetBackdrop) {
+            sheetBackdrop.hidden = !isOpen;
+        }
+    }
+
+    function setMoreOpen(isOpen) {
+        if (isMobileNav() && morePanel) {
+            morePanel.hidden = !isOpen;
+            morePanel.classList.toggle("is-open", isOpen);
+            syncMoreActive(isOpen);
+            if (isOpen) {
+                closeAllSheets();
+                if (nav) {
+                    nav.classList.remove("is-open");
+                }
+            }
+            return;
+        }
+        if (morePanel) {
+            morePanel.hidden = true;
+            morePanel.classList.remove("is-open");
+        }
+        setNavToggleOpen(isOpen);
     }
 
     function setNavToggleOpen(isOpen) {
@@ -143,10 +233,17 @@ document.addEventListener("DOMContentLoaded", function () {
         if (labelNode) {
             labelNode.textContent = label;
         }
-        syncMoreActive(isOpen);
     }
 
     function closeNav() {
+        if (isMobileNav()) {
+            setMoreOpen(false);
+            closeAllSheets();
+            if (nav) {
+                nav.classList.remove("is-open");
+            }
+            return;
+        }
         setNavToggleOpen(false);
     }
 
@@ -202,10 +299,27 @@ document.addEventListener("DOMContentLoaded", function () {
 
     syncFiltersToggle();
 
+    function syncMobileShell() {
+        syncFiltersToggle();
+        if (!isMobileNav()) {
+            if (morePanel) {
+                morePanel.hidden = true;
+                morePanel.classList.remove("is-open");
+            }
+            document.documentElement.classList.remove("m-more-open");
+            document.body.classList.remove("m-more-open");
+            setPropertyFiltersOpen(false);
+            moreButtons.forEach(function (btn) {
+                btn.classList.remove("active");
+                btn.setAttribute("aria-expanded", "false");
+            });
+        }
+    }
+
     if (typeof mobileMq.addEventListener === "function") {
-        mobileMq.addEventListener("change", syncFiltersToggle);
+        mobileMq.addEventListener("change", syncMobileShell);
     } else if (typeof mobileMq.addListener === "function") {
-        mobileMq.addListener(syncFiltersToggle);
+        mobileMq.addListener(syncMobileShell);
     }
 
     if (filtersToggle && shell) {
@@ -254,6 +368,7 @@ document.addEventListener("DOMContentLoaded", function () {
             dropdown.open = false;
         });
         closeNav();
+        closeAllSheets();
         setFiltersOpen(false);
     });
 
@@ -584,27 +699,65 @@ document.addEventListener("DOMContentLoaded", function () {
 
     document.querySelectorAll("[data-mobile-nav-close]").forEach(function (btn) {
         btn.addEventListener("click", function () {
-            setNavToggleOpen(false);
+            closeNav();
         });
     });
 
     moreButtons.forEach(function (mobileNavMore) {
         mobileNavMore.addEventListener("click", function () {
-            if (!nav) {
-                return;
-            }
-            setNavToggleOpen(!nav.classList.contains("is-open"));
+            var isOpen = morePanel
+                ? morePanel.classList.contains("is-open")
+                : !!(nav && nav.classList.contains("is-open"));
+            setMoreOpen(!isOpen);
         });
     });
 
     document.querySelectorAll("[data-open-property-filters]").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-            var details = document.querySelector(".properties-toolbar__more");
-            if (details) {
-                details.open = true;
-            }
+        btn.addEventListener("click", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.querySelectorAll(".m-sheet").forEach(function (sheet) {
+                sheet.hidden = true;
+                sheet.classList.remove("is-open");
+            });
+            setMoreOpen(false);
+            setPropertyFiltersOpen(true);
         });
     });
+
+    document.querySelectorAll("[data-close-property-filters]").forEach(function (btn) {
+        btn.addEventListener("click", function (event) {
+            event.preventDefault();
+            setPropertyFiltersOpen(false);
+        });
+    });
+
+    document.querySelectorAll("[data-open-sheet]").forEach(function (btn) {
+        btn.addEventListener("click", function (event) {
+            event.preventDefault();
+            openNamedSheet(btn.getAttribute("data-open-sheet"));
+        });
+    });
+
+    document.querySelectorAll("[data-close-sheet]").forEach(function (btn) {
+        btn.addEventListener("click", function (event) {
+            event.preventDefault();
+            closeAllSheets();
+        });
+    });
+
+    document.querySelectorAll("[data-set-theme]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            var theme = btn.getAttribute("data-set-theme") === "dark" ? "dark" : "light";
+            applyTheme(theme);
+        });
+    });
+
+    if (sheetBackdrop) {
+        sheetBackdrop.addEventListener("click", function () {
+            closeAllSheets();
+        });
+    }
 
     document.querySelectorAll(".settings-mobile-row").forEach(function (row) {
         row.addEventListener("click", function (event) {
@@ -693,4 +846,27 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     }
+
+    function syncMobileKeyboard() {
+        if (!window.visualViewport || !isMobileNav()) {
+            document.documentElement.style.setProperty("--m-keyboard", "0px");
+            document.body.classList.remove("m-keyboard-open");
+            document.documentElement.classList.remove("m-keyboard-open");
+            return;
+        }
+        var inset = Math.max(
+            0,
+            window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop
+        );
+        document.documentElement.style.setProperty("--m-keyboard", inset + "px");
+        document.body.classList.toggle("m-keyboard-open", inset > 80);
+        document.documentElement.classList.toggle("m-keyboard-open", inset > 80);
+    }
+
+    syncMobileKeyboard();
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", syncMobileKeyboard);
+        window.visualViewport.addEventListener("scroll", syncMobileKeyboard);
+    }
+    window.addEventListener("resize", syncMobileKeyboard);
 });

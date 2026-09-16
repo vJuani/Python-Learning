@@ -1,0 +1,131 @@
+{# Dedicated mobile "Más" screen. Not a modal or drawer. #}
+{% if current_user or guest_access %}
+{% set more_first = (current_user.first_name or '').strip() if current_user else '' %}
+{% set more_last = (current_user.last_name or '').strip() if current_user else '' %}
+{% set more_name = (more_first ~ ' ' ~ more_last).strip() or (current_user.username if current_user else t('role_guest')) %}
+{% set more_parts = more_name.split() %}
+<section
+    id="mobile-more"
+    class="m-more"
+    hidden
+    aria-label="{{ t('nav_more') }}"
+>
+    <header class="m-hello">
+        <h1 class="m-more__title">{{ t('nav_more') }}</h1>
+        <p>{{ t('m_more_sub') }}</p>
+    </header>
+
+    <nav class="m-section" aria-label="{{ t('m_more_modules') }}">
+        <p class="m-kicker">{{ t('m_more_modules') }}</p>
+        <div class="m-tile-grid">
+            <a class="m-tile" href="{{ url_for('operations_list') }}">
+                {% with icon='ops' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_operations') }}</span>
+            </a>
+            {% if is_agent() or is_admin() %}
+            <a class="m-tile" href="{{ url_for('billing_list') }}">
+                {% with icon='billing' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_billing') }}</span>
+            </a>
+            {% endif %}
+            <a class="m-tile" href="{{ url_for('reports_index') }}">
+                {% with icon='reports' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_reports') }}</span>
+            </a>
+            {% if is_agent() %}
+            <a class="m-tile" href="{{ url_for('marketing_new') }}">
+                {% with icon='marketing' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_marketing_create') }}</span>
+            </a>
+            <a class="m-tile" href="{{ url_for('jrh_ask') }}">
+                {% with icon='jrh' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_jrh_ia') }}</span>
+            </a>
+            {% elif is_admin() %}
+            <a class="m-tile" href="{{ url_for('cash_list') }}">
+                {% with icon='cash' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_cash') }}</span>
+            </a>
+            <a class="m-tile" href="{{ url_for('agents_list') }}">
+                {% with icon='agents' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_agents') }}</span>
+            </a>
+            {% endif %}
+            {% if can_manage_users() %}
+            <a class="m-tile" href="{{ url_for('organization_settings') }}">
+                {% with icon='settings' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_group_settings') }}</span>
+            </a>
+            {% elif is_agent() %}
+            <a class="m-tile" href="{{ url_for('settings_integrations') }}">
+                {% with icon='settings' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_group_settings') }}</span>
+            </a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <section class="m-section" aria-label="{{ t('mobile_more_prefs') }}">
+        <p class="m-kicker">{{ t('mobile_more_prefs') }}</p>
+        <div class="m-rows">
+            <button type="button" class="m-row" data-open-sheet="language">
+                <span>{{ t('language') }}</span>
+                <strong>{{ current_language|upper }}</strong>
+            </button>
+            <button type="button" class="m-row" data-open-sheet="appearance">
+                <span>{{ t('nav_appearance') }}</span>
+                <strong
+                    class="m-appearance-value"
+                    data-label-dark="{{ t('m_theme_value_dark') }}"
+                    data-label-light="{{ t('m_theme_value_light') }}"
+                >{{ t('m_theme_value_dark') }}</strong>
+            </button>
+            {% if is_admin() or is_agent() %}
+            <a class="m-row" href="{{ url_for('settings_integrations') }}">
+                <span>{{ t('settings_integrations_title') }}</span>
+            </a>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="m-section" aria-label="{{ t('mobile_more_account') }}">
+        <p class="m-kicker">{{ t('mobile_more_account') }}</p>
+        {% if current_user and is_agent() %}
+        <a class="m-account" href="{{ url_for('my_wallet') }}">
+            <span class="m-account__avatar">{{ more_parts[0][0:1]|upper }}{% if more_parts|length > 1 %}{{ more_parts[1][0:1]|upper }}{% endif %}</span>
+            <span class="m-account__text">
+                <strong>{{ more_name }}</strong>
+                {% if organization_display_name %}<span>{{ organization_display_name }}</span>{% endif %}
+            </span>
+        </a>
+        {% elif current_user %}
+        <a class="m-account" href="{{ url_for('organization_settings') if can_manage_users() else url_for('dashboard') }}">
+            <span class="m-account__avatar">{{ more_parts[0][0:1]|upper }}{% if more_parts|length > 1 %}{{ more_parts[1][0:1]|upper }}{% endif %}</span>
+            <span class="m-account__text">
+                <strong>{{ more_name }}</strong>
+                {% if organization_display_name %}<span>{{ organization_display_name }}</span>{% endif %}
+            </span>
+        </a>
+        {% else %}
+        <div class="m-account">
+            <span class="m-account__avatar">G</span>
+            <span class="m-account__text">
+                <strong>{{ t('role_guest') }}</strong>
+                <span>{{ t('guest_read_only') }}</span>
+            </span>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="m-section" aria-label="{{ t('m_more_support') }}">
+        <p class="m-kicker">{{ t('m_more_support') }}</p>
+        <div class="m-rows">
+            <a class="m-row" href="{{ url_for('privacy') }}">{{ t('m_more_help') }}</a>
+            <a class="m-row" href="{{ url_for('terms') }}">{{ t('m_more_about') }}</a>
+            <p class="m-row m-row--static">{{ t('m_more_version', version='1.0') }}</p>
+        </div>
+    </section>
+
+    <a href="{{ url_for('logout') }}" class="m-more__logout">{{ t('logout') }}</a>
+</section>
+{% endif %}

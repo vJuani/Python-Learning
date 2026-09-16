@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 
+{% block body_class %}is-notifications-page {% endblock %}
+
+{% block mobile_topbar_title %}{{ t('notifications_title') }}{% endblock %}
+
 {% block title %}{{ t('notifications_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
@@ -69,7 +73,12 @@
         {% endfor %}
     </div>
     {% else %}
-    <p>{{ t('notifications_empty') }}</p>
+    <div class="m-notify-empty hide-desktop">
+        <span class="m-notify-empty__icon" aria-hidden="true">{% include "_jrh_bell.html" %}</span>
+        <p>{{ t('m_notifications_caught_up') }}</p>
+        <p>{{ t('notifications_empty') }}</p>
+    </div>
+    <p class="hide-mobile">{{ t('notifications_empty') }}</p>
     {% endif %}
 </section>
 {% endblock %}

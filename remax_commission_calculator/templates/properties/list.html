@@ -130,9 +130,13 @@
                             {% endfor %}
                         </select>
                     </label>
-                    <details class="properties-toolbar__more">
+                    <details class="properties-toolbar__more" data-filter-sheet>
                         <summary class="properties-btn properties-btn--ghost">{{ t('properties_more_filters') }}</summary>
                         <div class="properties-toolbar__more-panel">
+                            <div class="m-sheet-head hide-desktop">
+                                <h2>{{ t('filters_open') }}</h2>
+                                <button type="button" class="m-sheet-close" data-close-property-filters aria-label="{{ t('nav_close') }}">×</button>
+                            </div>
                             <label>
                                 <span>{{ t('jurisdiction') }}</span>
                                 <select name="jurisdiction">
@@ -181,6 +185,13 @@
                                     {% endfor %}
                                 </select>
                             </label>
+                            <div class="m-sheet-actions hide-desktop">
+                                <a
+                                    class="m-sheet-actions__clear"
+                                    href="{{ url_for('properties_list', q=properties_panel.filters.q, type=properties_panel.filters.type, status=properties_panel.filters.status, agent_id=properties_panel.filters.agent_id, listing_purpose=properties_panel.filters.listing_purpose, sort=properties_panel.filters.sort) }}"
+                                >{{ t('clear_filters') }}</a>
+                                <button type="submit" class="m-sheet-actions__apply">{{ t('apply_filters') }}</button>
+                            </div>
                         </div>
                     </details>
                     <button type="submit" class="properties-btn properties-btn--ghost">{{ t('filter') }}</button>

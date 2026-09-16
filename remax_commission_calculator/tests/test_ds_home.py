@@ -57,6 +57,9 @@ class DesignSystemHomeTests(unittest.TestCase):
         self.assertIn("ds-home__aside", body)
         self.assertIn("home-mobile-quick", body)
         self.assertIn("home-mobile-greeting", body)
+        self.assertIn("home-mobile-kpis__head", body)
+        self.assertNotIn("mobile-fab--center", body)
+        self.assertIn('id="mobile-more"', body)
         self.assertNotIn("jrh-hero", body)
 
     def test_agent_home_is_unchanged(self):

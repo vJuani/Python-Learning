@@ -31,7 +31,8 @@
             <div class="jrh-studio__intro">
             <p class="jrh-studio__kicker">{{ t('jrh_ia_label') }}</p>
             <h1 class="jrh-studio__title">{{ t('jrh_ask_title') }}</h1>
-            <p class="jrh-studio__lead">{{ t('jrh_ask_subtitle') }}</p>
+            <p class="jrh-studio__lead hide-mobile">{{ t('jrh_ask_subtitle') }}</p>
+            <p class="jrh-studio__lead m-jrh-lead hide-desktop">{{ t('m_jrh_sub') }}</p>
             <ul class="jrh-studio__badges">
                 <li>{{ t('jrh_ask_badge_data') }}</li>
                 <li>{{ t('jrh_ask_badge_live') }}</li>
@@ -48,7 +49,7 @@
                         type="text"
                         name="prompt"
                         data-jrh-ask-input
-                        placeholder="{{ t('jrh_ask_ph_acm') }}"
+                        placeholder="{{ t('m_jrh_composer_ph') }}"
                         value="{{ (jrh_ask.data.source_prompt if jrh_ask and jrh_ask.data else (jrh_result.prompt if jrh_result else '')) }}"
                         autocomplete="off"
                         required
@@ -59,7 +60,12 @@
                         data-jrh-voice
                         aria-label="{{ t('jrh_voice_talk') }}"
                     >{% include "_jrh_mic.html" %}</button>
-                    <button type="submit" class="jrh-studio__ask" data-jrh-type-submit>{{ t('jrh_ask_submit') }}</button>
+                    <button type="submit" class="jrh-studio__ask" data-jrh-type-submit aria-label="{{ t('jrh_ask_send') }}">
+                        <span class="jrh-studio__ask-label">{{ t('jrh_ask_submit') }}</span>
+                        <svg class="jrh-studio__ask-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M4 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
                 </div>
                 <p
                     class="jrh-studio__status"
@@ -80,7 +86,9 @@
                     </div>
                 </div>
             </form>
+            {% with chip_class='jrh-studio__actions', chip_item_class='jrh-studio__chip', chip_limit=4 %}
             {% include "dashboard/_jrh_quick_chips.html" %}
+            {% endwith %}
             </div>
         </div>
         <div class="jrh-studio__mascot-wrap">
@@ -103,7 +111,15 @@
             {% include "dashboard/_jrh_ask_result.html" %}
             {% include "dashboard/_jrh_result.html" %}
             {% if not jrh_ask and not jrh_result %}
-            <p class="jrh-studio__empty">{{ t('jrh_ask_empty') }}</p>
+            <div class="jrh-studio__empty">
+                <div class="jrh-studio__empty-bot hide-desktop">
+                    {% with variant='avatar', width=72, height=72, decorative=true %}
+                    {% include "dashboard/_jrh_mascot.html" %}
+                    {% endwith %}
+                </div>
+                <p class="jrh-studio__empty-title">{{ t('m_jrh_help_me') }}</p>
+                <p class="jrh-studio__empty-hint">{{ t('m_jrh_empty_help') }}</p>
+            </div>
             {% endif %}
         </section>
         <aside>

@@ -89,6 +89,7 @@
                 button.classList.remove("is-listening");
                 button.classList.add("is-ready");
             }
+            setState("idle");
         });
 
         recognition.addEventListener("result", function (event) {

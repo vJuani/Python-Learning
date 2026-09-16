@@ -1,0 +1,131 @@
+{# Agent Home — mobile-only architecture. Desktop stays in home_agent.html. #}
+{% set first = (current_user.first_name or '').strip() or current_user.username %}
+{% set today = home.today or {} %}
+{% set next_task = (home.upcoming or [none])[0] %}
+{% set pending_total = today.pending or 0 %}
+{% set visit_count = today.tasks or today.visits or 0 %}
+<div class="m-home hide-desktop">
+    <header class="m-hello">
+        <h1>{{ t('dashboard_mobile_greeting', name=first) }}</h1>
+        <p>{{ t('m_home_agent_sub') }}</p>
+    </header>
+
+    <section class="m-card m-today" aria-label="{{ t('m_today_label') }}">
+        <p class="m-kicker">{{ t('m_today_label') }}</p>
+        {% if visit_count %}
+        <p class="m-today__stats">{{ t('m_today_summary', visits=visit_count, pending=pending_total) }}</p>
+        {% if next_task %}
+        <p class="m-today__next-label">{{ t('m_today_next') }}</p>
+        <p class="m-today__next">
+            {{ next_task.due_time_label }}
+            {% if next_task.display_title or next_task.title %}
+            · {{ next_task.display_title or next_task.title }}
+            {% endif %}
+        </p>
+        {% endif %}
+        <a class="m-today__link" href="{{ url_for('agenda_index') }}">{{ t('m_today_view_day') }} →</a>
+        {% else %}
+        <p class="m-today__stats">{{ t('m_today_no_visits') }}</p>
+        {% if pending_total %}
+        <p class="m-today__next">{{ t('m_today_pending_need', count=pending_total) }}</p>
+        <a class="m-today__link" href="{{ url_for('pendings_center') }}">{{ t('m_today_view_pending') }} →</a>
+        {% else %}
+        <a class="m-today__link" href="{{ url_for('agenda_index') }}">{{ t('m_today_view_day') }} →</a>
+        {% endif %}
+        {% endif %}
+    </section>
+
+    <section class="m-card m-jrh-card" aria-label="{{ t('jrh_ia_label') }}">
+        <div class="m-jrh-card__head">
+            <div>
+                <p class="m-kicker">{{ t('jrh_ia_label') }}</p>
+                <h2>{{ t('jrh_hero_question') }}</h2>
+            </div>
+            <div class="m-jrh-card__bot">
+                {% with variant='avatar', width=56, height=56, decorative=true %}
+                {% include "dashboard/_jrh_mascot.html" %}
+                {% endwith %}
+            </div>
+        </div>
+        <form
+            class="m-composer"
+            method="post"
+            action="{{ url_for('jrh_interpret') }}"
+            data-jrh-interpret
+            data-agenda-interpret
+        >
+            <label class="sr-only" for="m-jrh-prompt">{{ t('jrh_hero_placeholder') }}</label>
+            <input
+                id="m-jrh-prompt"
+                type="text"
+                name="prompt"
+                class="m-composer__input"
+                placeholder="{{ t('m_jrh_composer_ph') }}"
+                autocomplete="off"
+                required
+            >
+            <button type="button" class="m-composer__mic" data-jrh-voice data-agenda-voice aria-label="{{ t('jrh_voice_talk') }}">
+                {% include "_jrh_mic.html" %}
+            </button>
+            <button type="submit" class="m-composer__send" data-jrh-type-submit aria-label="{{ t('jrh_ask_send') }}">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M4 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </form>
+        {% with chip_class='m-chip-row', chip_item_class='m-chip', actions=home.quick_actions, chip_limit=3 %}
+        {% include "dashboard/_jrh_quick_chips.html" %}
+        {% endwith %}
+        <p class="m-composer__status" data-jrh-voice-status data-agenda-voice-status data-listening="{{ t('jrh_voice_listening') }}" data-transcribing="{{ t('jrh_voice_transcribing') }}" data-heard="{{ t('jrh_voice_heard') }}" hidden></p>
+        <p class="jrh-hero__unsupported" data-jrh-voice-unsupported hidden>{{ t('jrh_voice_unsupported') }}</p>
+    </section>
+
+    <section class="m-section" aria-label="{{ t('m_quick_title') }}">
+        <div class="m-section__head">
+            <h2>{{ t('m_quick_title') }}</h2>
+            <button type="button" class="m-section__all" data-mobile-nav-more>{{ t('m_view_all') }}</button>
+        </div>
+        <div class="m-tile-grid">
+            <a class="m-tile" href="{{ url_for('properties_list') }}">
+                {% with icon='properties' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_properties') }}</span>
+            </a>
+            <a class="m-tile" href="{{ url_for('agenda_index') }}">
+                {% with icon='agenda' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('agenda_title') }}</span>
+            </a>
+            <a class="m-tile" href="{{ url_for('contacts_index') }}">
+                {% with icon='contacts' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('contacts_title') }}</span>
+            </a>
+            <a class="m-tile" href="{{ url_for('billing_list') }}">
+                {% with icon='billing' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_billing') }}</span>
+            </a>
+        </div>
+    </section>
+
+    {% if pending_summary is defined and pending_summary %}
+    <section class="m-section" aria-label="{{ t('dashboard_for_you_title') }}">
+        <div class="m-section__head">
+            <h2>{{ t('dashboard_for_you_title') }}</h2>
+            <a href="{{ url_for('pendings_center') }}">{{ t('m_view_all') }}</a>
+        </div>
+        {% if pending_summary.top %}
+        <div class="m-list">
+            {% for action in pending_summary.top[:3] %}
+            <a class="m-list__row" href="{{ url_for(action.endpoint, **action.endpoint_args) }}">
+                <strong>{{ action.title }}</strong>
+                <span>
+                    {% if action.amount %}{{ action.amount|money(action.currency) }} · {% endif %}
+                    {{ action.subtitle or '' }}
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="m-empty">{{ t('pending_empty_title') }}</p>
+        {% endif %}
+    </section>
+    {% endif %}
+</div>

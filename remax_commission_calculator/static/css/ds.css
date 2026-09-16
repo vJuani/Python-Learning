@@ -465,9 +465,23 @@ body.is-dashboard-page .app-main-inner {
     }
 
     .ds-home,
+    .home-panel.ds-home,
     .ds-home__layout,
     .ds-metrics {
-        grid-template-columns: 1fr;
+        display: flex;
+        flex-direction: column;
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .ds-home > *,
+    .home-panel.ds-home > * {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        grid-column: auto;
     }
 
     .ds-page-header__title {

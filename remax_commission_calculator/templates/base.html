@@ -353,9 +353,13 @@
                 {% set rail_last = (current_user.last_name or '').strip() %}
                 {% set header_name = (rail_first ~ ' ' ~ rail_last).strip() or current_user.username %}
                 {% set header_parts = header_name.split() %}
-                <button type="button" class="m-topbar-avatar hide-desktop" data-mobile-nav-more aria-label="{{ t('nav_more') }}">
+                <a
+                    class="m-topbar-avatar hide-desktop"
+                    href="{% if is_agent() %}{{ url_for('my_wallet') }}{% elif can_manage_users() %}{{ url_for('organization_settings') }}{% else %}{{ url_for('dashboard') }}{% endif %}"
+                    aria-label="{{ header_name }}"
+                >
                     {{ header_parts[0][0:1]|upper }}{% if header_parts|length > 1 %}{{ header_parts[1][0:1]|upper }}{% endif %}
-                </button>
+                </a>
                 {% endif %}
 
                 <div class="header-tools header-tools-desktop">
@@ -620,6 +624,8 @@
     {% endif %}
 
     {% include "_mobile_bottom_nav.html" %}
+    {% include "_mobile_more.html" %}
+    {% include "_m_sheets.html" %}
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>

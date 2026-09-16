@@ -1,0 +1,37 @@
+<div class="m-sheet-backdrop" data-m-sheet-backdrop hidden></div>
+
+<div id="m-sheet-language" class="m-sheet" hidden>
+    <div class="m-sheet__panel" role="dialog" aria-labelledby="m-sheet-language-title">
+        <header class="m-sheet__head">
+            <h2 id="m-sheet-language-title">{{ t('language') }}</h2>
+            <button type="button" class="m-sheet-close" data-close-sheet aria-label="{{ t('nav_close') }}">×</button>
+        </header>
+        <div class="m-sheet__options" role="radiogroup" aria-label="{{ t('language') }}">
+            <a class="m-sheet__option{% if current_language == 'es' %} is-active{% endif %}" href="{{ url_for('set_language', language='es') }}">Español</a>
+            <a class="m-sheet__option{% if current_language == 'en' %} is-active{% endif %}" href="{{ url_for('set_language', language='en') }}">English</a>
+        </div>
+    </div>
+</div>
+
+<div id="m-sheet-appearance" class="m-sheet" hidden>
+    <div class="m-sheet__panel" role="dialog" aria-labelledby="m-sheet-appearance-title">
+        <header class="m-sheet__head">
+            <h2 id="m-sheet-appearance-title">{{ t('nav_appearance') }}</h2>
+            <button type="button" class="m-sheet-close" data-close-sheet aria-label="{{ t('nav_close') }}">×</button>
+        </header>
+        <div class="m-sheet__options" role="radiogroup" aria-label="{{ t('nav_appearance') }}">
+            <button type="button" class="m-sheet__option" data-set-theme="light">{{ t('theme_toggle_light') }}</button>
+            <button type="button" class="m-sheet__option" data-set-theme="dark">{{ t('theme_dark_label') }}</button>
+        </div>
+        <button type="button" class="m-sheet__apply" data-close-sheet>{{ t('save') }}</button>
+    </div>
+</div>
+
+<div id="m-voice" class="m-voice" hidden>
+    <div class="m-voice__panel">
+        <span class="m-voice__mic" aria-hidden="true">{% include "_jrh_mic.html" %}</span>
+        <p class="m-voice__title">{{ t('jrh_voice_listening') }}</p>
+        <p class="m-voice__hint">{{ t('m_voice_hint') }}</p>
+        <button type="button" class="m-voice__cancel" data-voice-cancel>{{ t('m_voice_cancel') }}</button>
+    </div>
+</div>

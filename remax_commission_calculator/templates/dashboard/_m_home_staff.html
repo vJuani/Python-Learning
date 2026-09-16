@@ -1,0 +1,114 @@
+{# Staff Home — mobile-only architecture. Desktop stays in dashboard.html. #}
+{% set dash_first = (current_user.first_name or '').strip() or current_user.username %}
+<div class="m-home hide-desktop">
+    <header class="m-hello">
+        <h1>{{ t('dashboard_mobile_greeting', name=dash_first) }}</h1>
+        <p>{{ t('m_home_staff_sub') }}</p>
+    </header>
+
+    <section class="m-section" aria-label="{{ t('dashboard_period_this_month') }}">
+        <div class="m-section__head">
+            <h2>{{ t('dashboard_period_this_month') }}</h2>
+        </div>
+        <div class="m-kpi-grid">
+            <article class="m-kpi">
+                <span>{{ t('m_kpi_commissions') }}</span>
+                <strong class="money">{{ home_panel.kpis.commission_month|money }}</strong>
+                {% if home_panel.kpis.commission_change is not none %}
+                <small>↑ {{ home_panel.kpis.commission_change }}%</small>
+                {% endif %}
+            </article>
+            <article class="m-kpi">
+                <span>{{ t('m_kpi_operations') }}</span>
+                <strong>{{ home_panel.kpis.operations_active }} {{ t('m_kpi_active') }}</strong>
+                {% if home_panel.kpis.operations_today %}
+                <small>↑ {{ home_panel.kpis.operations_today }}</small>
+                {% endif %}
+            </article>
+            <article class="m-kpi">
+                <span>{{ t('m_kpi_invoices') }}</span>
+                <strong>{{ home_panel.kpis.pending_invoices_count }} {{ t('m_kpi_pending') }}</strong>
+            </article>
+            <article class="m-kpi">
+                <span>{{ t('m_kpi_properties') }}</span>
+                <strong>{{ home_panel.kpis.properties_active }} {{ t('m_kpi_active') }}</strong>
+                {% if home_panel.kpis.properties_recent %}
+                <small>↑ {{ home_panel.kpis.properties_recent }}</small>
+                {% endif %}
+            </article>
+        </div>
+    </section>
+
+    <section class="m-section" aria-label="{{ t('m_quick_title') }}">
+        <div class="m-section__head">
+            <h2>{{ t('m_quick_title') }}</h2>
+            <button type="button" class="m-section__all" data-mobile-nav-more>{{ t('m_view_all') }}</button>
+        </div>
+        <div class="m-tile-grid">
+            <a class="m-tile" href="{{ url_for('operations_list') }}">
+                {% with icon='ops' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_operations') }}</span>
+            </a>
+            <a class="m-tile" href="{{ url_for('billing_list') }}">
+                {% with icon='billing' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_billing') }}</span>
+            </a>
+            <a class="m-tile" href="{{ url_for('reports_index') }}">
+                {% with icon='reports' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_reports') }}</span>
+            </a>
+            <a class="m-tile" href="{{ url_for('properties_list') }}">
+                {% with icon='properties' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_properties') }}</span>
+            </a>
+            {% if can_manage_users() %}
+            <a class="m-tile" href="{{ url_for('cash_list') }}">
+                {% with icon='cash' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_cash') }}</span>
+            </a>
+            <a class="m-tile" href="{{ url_for('agents_list') }}">
+                {% with icon='agents' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_agents') }}</span>
+            </a>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="m-section" aria-label="{{ t('m_recent_ops') }}">
+        <div class="m-section__head">
+            <h2>{{ t('m_recent_ops') }}</h2>
+            <a href="{{ url_for('operations_list') }}">{{ t('m_view_all') }}</a>
+        </div>
+        {% if home_panel.active_operations %}
+        <div class="m-list">
+            {% for operation in home_panel.active_operations[:3] %}
+            {% set op_href = url_for('operations_detail', operation_id=operation.db_id) if operation.db_id else url_for('operations_list') %}
+            <a class="m-list__row" href="{{ op_href }}">
+                <strong>{{ operation.id }}</strong>
+                <span>{{ operation.property }}</span>
+                <span class="m-list__meta">{{ operation.stage_label }} · {{ operation.updated_label }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="m-empty">{{ t('empty_operations_hint') }}</p>
+        {% endif %}
+    </section>
+
+    {% if pending_summary is defined and pending_summary and pending_summary.top %}
+    <section class="m-section" aria-label="{{ t('m_alerts') }}">
+        <div class="m-section__head">
+            <h2>{{ t('m_alerts') }}</h2>
+            <a href="{{ url_for('pendings_center') }}">{{ t('m_view_all') }}</a>
+        </div>
+        <div class="m-list">
+            {% for action in pending_summary.top[:3] %}
+            <a class="m-list__row" href="{{ url_for(action.endpoint, **action.endpoint_args) }}">
+                <strong>{{ action.title }}</strong>
+                <span>{{ action.subtitle or '' }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</div>
