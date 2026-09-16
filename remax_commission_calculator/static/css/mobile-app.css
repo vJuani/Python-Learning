@@ -382,7 +382,7 @@
 
     .m-jrh-card__head {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
         gap: 12px;
         margin-bottom: 14px;
@@ -397,21 +397,26 @@
 
     .m-jrh-card__bot {
         flex: 0 0 auto;
-        width: 44px;
-        height: 44px;
+        width: 64px;
+        height: 96px;
         overflow: visible;
         background: transparent;
+        pointer-events: none;
     }
 
     .m-jrh-card__bot img,
     .m-jrh-card__bot svg,
+    .m-jrh-card .jrh-bot-hero,
     .m-jrh-card .jrh-bot-avatar {
-        width: 44px;
-        height: 44px;
+        width: 64px;
+        height: 96px;
+        max-width: 64px;
+        max-height: 96px;
         object-fit: contain;
-        object-position: center;
+        object-position: center bottom;
         background: transparent;
         transform: none;
+        filter: drop-shadow(0 8px 14px color-mix(in srgb, var(--color-text) 14%, transparent));
     }
 
     .m-composer {
@@ -2121,11 +2126,11 @@
 
     body.is-jrh-ask-page .jrh-studio__empty-bot {
         display: flex;
-        align-items: center;
+        align-items: flex-end;
         justify-content: center;
-        width: 52px;
-        height: 52px;
-        margin: 6px 0 2px;
+        width: 88px;
+        height: 112px;
+        margin: 8px 0 4px;
         border-radius: 0;
         overflow: visible;
         background: transparent;
@@ -2137,16 +2142,17 @@
 
     body.is-jrh-ask-page .jrh-studio__empty-bot img,
     body.is-jrh-ask-page .jrh-studio__empty-bot svg,
+    body.is-jrh-ask-page .jrh-studio__empty-bot .jrh-bot-hero,
     body.is-jrh-ask-page .jrh-studio__empty-bot .jrh-bot-avatar {
-        width: 52px !important;
-        height: 52px !important;
-        max-width: 52px;
-        max-height: 52px;
+        width: auto !important;
+        height: 112px !important;
+        max-width: 88px;
+        max-height: 112px;
         object-fit: contain !important;
-        object-position: center;
+        object-position: center bottom;
         transform: none;
         background: transparent !important;
-        filter: none;
+        filter: drop-shadow(0 10px 16px color-mix(in srgb, var(--color-text) 16%, transparent));
         animation: none;
         border-radius: 0;
     }
