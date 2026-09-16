@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import re
+from collections import deque
 from functools import lru_cache
 from pathlib import Path
 
@@ -26,6 +28,9 @@ INK = (17, 28, 51)
 MUTED = (91, 107, 124)
 GOLD = (196, 164, 92)
 LINE = (226, 228, 222)
+WA_GREEN = (37, 211, 102)
+IG_PINK = (193, 53, 132)
+IG_DOT = (255, 255, 255)
 
 FORMAT_SIZES = {
     "story": (1080, 1920),
@@ -96,7 +101,7 @@ def _as_rgba(image):
     return image.convert("RGBA")
 
 
-def fit_cover(image, width, height):
+def fit_cover(image, width, height, *, focus=(0.5, 0.42)):
     src_w, src_h = image.size
     if src_w <= 0 or src_h <= 0:
         return image.resize((width, height), Image.Resampling.LANCZOS)
@@ -105,8 +110,12 @@ def fit_cover(image, width, height):
         (max(1, int(src_w * scale)), max(1, int(src_h * scale))),
         Image.Resampling.LANCZOS,
     )
-    left = max(0, (resized.width - width) // 2)
-    top = max(0, (resized.height - height) // 2)
+    fx = 0.5 if focus is None else max(0.0, min(1.0, float(focus[0])))
+    fy = 0.5 if focus is None else max(0.0, min(1.0, float(focus[1])))
+    left = int(resized.width * fx - width / 2)
+    top = int(resized.height * fy - height / 2)
+    left = max(0, min(left, resized.width - width))
+    top = max(0, min(top, resized.height - height))
     return resized.crop((left, top, left + width, top + height))
 
 
@@ -232,6 +241,187 @@ def paste_circle(canvas, image, xy, diameter):
     canvas.paste(fitted, xy, fitted)
 
 
+def paste_cover_rounded(canvas, image, xy, size, *, radius=16, focus=(0.5, 0.40)):
+    if image is None:
+        return
+    fitted = fit_cover(image.convert("RGB"), size[0], size[1], focus=focus).convert("RGBA")
+    fitted.putalpha(_rounded_mask(size[0], size[1], radius))
+    canvas.paste(fitted, xy, fitted)
+
+
+def _luma(color):
+    red, green, blue = color[:3]
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def _trim_alpha(image, pad=2):
+    alpha = image.split()[-1] if image.mode in {"RGBA", "LA"} else None
+    bbox = alpha.getbbox() if alpha is not None else image.getbbox()
+    if not bbox:
+        return image
+    left, top, right, bottom = bbox
+    left = max(0, left - pad)
+    top = max(0, top - pad)
+    right = min(image.width, right + pad)
+    bottom = min(image.height, bottom + pad)
+    return image.crop((left, top, right, bottom))
+
+
+def prepare_agent_cutout(image):
+    """Keep a clean person cutout. Drop black or edge-connected studio plates."""
+    if image is None:
+        return None
+    rgba = _as_rgba(image)
+    alpha = rgba.getchannel("A")
+    total = rgba.size[0] * rgba.size[1]
+    if total <= 0:
+        return None
+    transparent = sum(alpha.histogram()[:200])
+    if transparent > total * 0.08:
+        return _trim_alpha(rgba)
+    pixels = rgba.load()
+    width, height = rgba.size
+    edge = []
+    step_x = max(1, width // 24)
+    step_y = max(1, height // 24)
+    for x in range(0, width, step_x):
+        edge.append(pixels[x, 0][:3])
+        edge.append(pixels[x, height - 1][:3])
+    for y in range(0, height, step_y):
+        edge.append(pixels[0, y][:3])
+        edge.append(pixels[width - 1, y][:3])
+    if not edge:
+        return _trim_alpha(rgba)
+    dark_ratio = sum(1 for color in edge if _luma(color) < 42) / len(edge)
+    avg = tuple(sum(color[i] for color in edge) // len(edge) for i in range(3))
+    uniform = all(abs(color[i] - avg[i]) < 28 for color in edge for i in range(3))
+    if dark_ratio < 0.5 and not uniform:
+        return _trim_alpha(rgba)
+
+    marked = bytearray(width * height)
+    queue = deque()
+
+    def is_background(x, y):
+        red, green, blue, _alpha = pixels[x, y]
+        if dark_ratio >= 0.5:
+            return _luma((red, green, blue)) < 58 and max(red, green, blue) < 78
+        return (
+            abs(red - avg[0]) + abs(green - avg[1]) + abs(blue - avg[2]) < 54
+        )
+
+    def push(x, y):
+        if x < 0 or y < 0 or x >= width or y >= height:
+            return
+        index = y * width + x
+        if marked[index] or not is_background(x, y):
+            return
+        marked[index] = 1
+        queue.append((x, y))
+
+    for x in range(width):
+        push(x, 0)
+        push(x, height - 1)
+    for y in range(height):
+        push(0, y)
+        push(width - 1, y)
+    while queue:
+        x, y = queue.popleft()
+        push(x - 1, y)
+        push(x + 1, y)
+        push(x, y - 1)
+        push(x, y + 1)
+
+    kept = total - marked.count(1)
+    if kept < total * 0.08:
+        return _trim_alpha(rgba)
+    for y in range(height):
+        row = y * width
+        for x in range(width):
+            if marked[row + x]:
+                pixels[x, y] = (0, 0, 0, 0)
+    return _trim_alpha(rgba)
+
+
+def paste_agent_cutout(canvas, image, xy, *, height):
+    if image is None or height <= 1:
+        return False
+    cutout = prepare_agent_cutout(image)
+    if cutout is None:
+        return False
+    scale = height / float(cutout.height or 1)
+    size = (max(1, int(cutout.width * scale)), max(1, int(height)))
+    fitted = cutout.resize(size, Image.Resampling.LANCZOS)
+    canvas.paste(fitted, xy, fitted)
+    return True
+
+
+def compose_photo_grid(canvas, photos, *, box, radius=16, gap=10, fmt=None):
+    """Hero + equal secondary cells. Cover-crop with a slight interior bias."""
+    photos = [item for item in (photos or []) if item is not None]
+    if not photos:
+        return
+    left, top, width, height = box
+    extras = photos[1:3]
+    if not extras:
+        paste_cover_rounded(
+            canvas,
+            photos[0],
+            (left, top),
+            (width, height),
+            radius=radius,
+            focus=(0.5, 0.38),
+        )
+        return
+    stack_ratio = height / float(width or 1)
+    split = fmt == "post" or stack_ratio < 0.82
+    if split:
+        hero_w = int(width * 0.64)
+        side_w = width - hero_w - gap
+        side_h = (height - gap * (len(extras) - 1)) // len(extras)
+        paste_cover_rounded(
+            canvas,
+            photos[0],
+            (left, top),
+            (hero_w, height),
+            radius=radius,
+            focus=(0.5, 0.38),
+        )
+        for index, photo in enumerate(extras):
+            paste_cover_rounded(
+                canvas,
+                photo,
+                (left + hero_w + gap, top + index * (side_h + gap)),
+                (side_w, side_h),
+                radius=max(8, radius - 4),
+                focus=(0.5, 0.40),
+            )
+        return
+    thumb_w = (width - gap * (len(extras) - 1)) // len(extras)
+    thumb_h = min(int(thumb_w * 0.66), int(height * 0.34))
+    hero_h = max(int(width * 0.42), height - thumb_h - gap)
+    if hero_h + gap + thumb_h > height:
+        thumb_h = max(120, height - gap - int(width * 0.42))
+        hero_h = height - thumb_h - gap
+    paste_cover_rounded(
+        canvas,
+        photos[0],
+        (left, top),
+        (width, hero_h),
+        radius=radius,
+        focus=(0.5, 0.38),
+    )
+    thumb_top = top + hero_h + gap
+    for index, photo in enumerate(extras):
+        paste_cover_rounded(
+            canvas,
+            photo,
+            (left + index * (thumb_w + gap), thumb_top),
+            (thumb_w, thumb_h),
+            radius=max(8, radius - 4),
+            focus=(0.5, 0.40),
+        )
+
+
 def _u(width, value):
     return max(1, int(value * width / 1080))
 
@@ -325,23 +515,129 @@ def _header(canvas, facts, *, accent, invert=False, kicker="", fill=None, mute=N
         draw.text((width - pad - tw, _u(width, 42)), label, font=used, fill=mute)
 
 
-def _feature_icons(draw, chips, xy, *, width, color=ELECTRIC, text_fill=INK):
+def _parse_chip(chip):
+    text = str(chip or "").strip()
+    match = re.match(r"^(\d+(?:[.,]\d+)?)\s*(.*)$", text)
+    if not match:
+        return "", text
+    return match.group(1), match.group(2).strip()
+
+
+def _chip_kind(chip, index):
+    text = str(chip or "").lower()
+    if "m²" in text or "m2" in text or "metro" in text:
+        return "area"
+    if "baño" in text or "bath" in text:
+        return "bath"
+    if "dorm" in text or "hab" in text or "bed" in text:
+        return "bed"
+    if "amb" in text or "room" in text or "ambience" in text:
+        return "rooms"
+    return ("rooms", "bed", "bath", "area")[min(index, 3)]
+
+
+def _icon_rooms(draw, box, color):
+    x0, y0, x1, y1 = box
+    draw.rounded_rectangle((x0 + 2, y0 + 4, x1 - 2, y1 - 2), 3, outline=color, width=2)
+    mid_x = (x0 + x1) // 2
+    mid_y = (y0 + y1) // 2 + 1
+    draw.line((mid_x, y0 + 4, mid_x, y1 - 2), fill=color, width=2)
+    draw.line((x0 + 2, mid_y, x1 - 2, mid_y), fill=color, width=2)
+
+
+def _icon_bed(draw, box, color):
+    x0, y0, x1, y1 = box
+    draw.line((x0 + 2, y1 - 3, x1 - 2, y1 - 3), fill=color, width=2)
+    draw.rounded_rectangle((x0 + 2, y0 + 11, x1 - 2, y1 - 6), 3, outline=color, width=2)
+    draw.arc((x0 + 3, y0 + 3, x0 + (x1 - x0) * 0.55, y0 + 16), 200, 360, fill=color, width=2)
+
+
+def _icon_bath(draw, box, color):
+    x0, y0, x1, y1 = box
+    draw.arc((x0 + 3, y0 + 8, x1 - 3, y1 - 1), 0, 180, fill=color, width=2)
+    draw.line((x0 + 3, y0 + (y1 - y0) // 2 + 2, x1 - 3, y0 + (y1 - y0) // 2 + 2), fill=color, width=2)
+    draw.line((x1 - 7, y0 + 3, x1 - 7, y0 + 10), fill=color, width=2)
+    draw.ellipse((x1 - 11, y0 + 2, x1 - 3, y0 + 8), outline=color, width=2)
+
+
+def _icon_area(draw, box, color):
+    x0, y0, x1, y1 = box
+    draw.rectangle((x0 + 3, y0 + 3, x1 - 3, y1 - 3), outline=color, width=2)
+    tick = max(3, (x1 - x0) // 5)
+    draw.line((x0 + 3, y0 + 3, x0 + 3 + tick, y0 + 3), fill=color, width=2)
+    draw.line((x0 + 3, y0 + 3, x0 + 3, y0 + 3 + tick), fill=color, width=2)
+    draw.line((x1 - 3 - tick, y1 - 3, x1 - 3, y1 - 3), fill=color, width=2)
+    draw.line((x1 - 3, y1 - 3 - tick, x1 - 3, y1 - 3), fill=color, width=2)
+
+
+FEATURE_ICON_PAINTERS = {
+    "rooms": _icon_rooms,
+    "bed": _icon_bed,
+    "bath": _icon_bath,
+    "area": _icon_area,
+}
+
+
+def _icon_whatsapp(draw, xy, size):
+    x, y = xy
+    draw.ellipse((x, y, x + size, y + size), fill=WA_GREEN)
+    pad = max(2, size // 6)
+    draw.arc((x + pad, y + pad, x + size - pad, y + size - pad + 1), 200, 40, fill=WHITE, width=max(2, size // 10))
+    draw.polygon(
+        (
+            (x + size * 0.28, y + size * 0.70),
+            (x + size * 0.18, y + size * 0.88),
+            (x + size * 0.46, y + size * 0.74),
+        ),
+        fill=WA_GREEN,
+    )
+    draw.line(
+        (x + size * 0.30, y + size * 0.36, x + size * 0.42, y + size * 0.62),
+        fill=WHITE,
+        width=max(2, size // 10),
+    )
+
+
+def _icon_instagram(draw, xy, size):
+    x, y = xy
+    draw.rounded_rectangle((x, y, x + size, y + size), max(4, size // 4), fill=IG_PINK)
+    cx = x + size / 2
+    cy = y + size / 2
+    r = size * 0.22
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=WHITE, width=max(2, size // 10))
+    dot = max(2, size // 8)
+    draw.ellipse((x + size * 0.68, y + size * 0.18, x + size * 0.68 + dot, y + size * 0.18 + dot), fill=WHITE)
+
+
+def _feature_icons(draw, chips, xy, *, width, color=ELECTRIC, text_fill=INK, mute=MUTED):
     if not chips:
         return
     x, y = xy
-    gap = _u(width, 28)
-    icon = _u(width, 22)
-    used = font(_u(width, 22))
-    for chip in chips[:4]:
-        _draw_icon(draw, (x, y + 2), color, icon)
-        draw.text((x + icon + 8, y), chip, font=used, fill=text_fill)
-        x += icon + 8 + _text_width(draw, chip, used) + gap
+    icon = _u(width, 28)
+    number_font = font(_u(width, 24), bold=True)
+    label_font = font(_u(width, 13))
+    gap = _u(width, 22)
+    for index, chip in enumerate(chips[:4]):
+        kind = _chip_kind(chip, index)
+        number, label = _parse_chip(chip)
+        painter = FEATURE_ICON_PAINTERS.get(kind, _icon_area)
+        painter(draw, (x, y, x + icon, y + icon), color)
+        text_x = x + icon + 8
+        if number:
+            draw.text((text_x, y - 2), number, font=number_font, fill=text_fill)
+            draw.text((text_x, y + _u(width, 22)), label or chip, font=label_font, fill=mute)
+            text_w = max(
+                _text_width(draw, number, number_font),
+                _text_width(draw, label or chip, label_font),
+            )
+        else:
+            draw.text((text_x, y + 4), chip, font=label_font, fill=text_fill)
+            text_w = _text_width(draw, chip, label_font)
+        x += icon + 8 + text_w + gap
 
 
 def _draw_icon(draw, xy, color, size):
-    x, y = xy
-    draw.rounded_rectangle((x, y, x + size, y + size), 6, outline=color, width=2)
-    draw.line((x + 4, y + size * 0.55, x + size - 4, y + size * 0.55), fill=color, width=2)
+    _icon_area(draw, (xy[0], xy[1], xy[0] + size, xy[1] + size), color)
 
 
 def _visible_agent_contacts(agent):
@@ -349,15 +645,17 @@ def _visible_agent_contacts(agent):
     agent = agent or {}
     whatsapp = " ".join(str(agent.get("whatsapp") or "").split())
     instagram = " ".join(str(agent.get("instagram") or "").split())
-    lines = []
+    if instagram and not instagram.startswith("@"):
+        instagram = f"@{instagram.lstrip('@')}"
+    contacts = []
     if whatsapp:
-        lines.append(whatsapp)
+        contacts.append({"channel": "whatsapp", "label": whatsapp})
     if instagram:
-        lines.append(instagram)
-    return lines
+        contacts.append({"channel": "instagram", "label": instagram})
+    return contacts
 
 
-def _cta_pill(draw, xy, text, *, width, accent=ELECTRIC, min_w=None):
+def _cta_pill(draw, xy, text, *, width, accent=ELECTRIC, min_w=None, filled=True, text_fill=WHITE):
     if not text:
         return
     used = font(_u(width, 20), bold=True)
@@ -367,6 +665,10 @@ def _cta_pill(draw, xy, text, *, width, accent=ELECTRIC, min_w=None):
     pill_w = max(min_w or 0, tw + pad_x * 2)
     x, y = xy
     h = _u(width, 50)
+    if filled:
+        draw.rounded_rectangle((x, y, x + pill_w, y + h), h // 2, fill=accent)
+        draw.text((x + (pill_w - tw) // 2, y + _u(width, 13)), label, font=used, fill=text_fill)
+        return
     draw.rounded_rectangle((x, y, x + pill_w, y + h), h // 2, outline=accent, width=2)
     draw.text((x + (pill_w - tw) // 2, y + _u(width, 13)), label, font=used, fill=accent)
 
@@ -376,33 +678,35 @@ def _agent_block(canvas, agent, *, xy, width, show_photo=True, circular=False, s
         return
     x, y = xy
     photo = load_agent_photo(agent.get("photo_path")) if show_photo else None
-    photo_h = size if circular else int(size * 1.18)
+    photo_h = int(size * 1.28)
     draw = ImageDraw.Draw(canvas)
     name = agent.get("name") or ""
     title = agent.get("title") or ""
     contacts = _visible_agent_contacts(agent)
     name_font = font(_u(width, 22), bold=True)
     title_font = font(_u(width, 14))
-    contact_font = font(_u(width, 13))
+    contact_font = font(_u(width, 14))
+    icon = _u(width, 20)
     text_w = 0
     for line, used in (
         (name, name_font),
         (title, title_font),
-        *[(item, contact_font) for item in contacts],
+        *[(item["label"], contact_font) for item in contacts],
     ):
         if line:
-            text_w = max(text_w, _text_width(draw, line, used))
+            extra = icon + 8 if used is contact_font else 0
+            text_w = max(text_w, _text_width(draw, line, used) + extra)
     if photo is not None:
         if circular:
             paste_circle(canvas, photo, (x, y), size)
         else:
-            paste_rounded(canvas, photo, (x, y), (size, photo_h), radius=_u(width, 22))
+            paste_agent_cutout(canvas, photo, (x, y), height=photo_h)
         if text_beside:
-            text_x = x - text_w - _u(width, 18)
-            text_y = y + _u(width, 10)
+            text_x = x - text_w - _u(width, 16)
+            text_y = y + _u(width, 18)
         else:
             text_x = x
-            text_y = y + photo_h + _u(width, 16)
+            text_y = y + photo_h + _u(width, 12)
     else:
         text_x = x
         text_y = y
@@ -413,8 +717,12 @@ def _agent_block(canvas, agent, *, xy, width, show_photo=True, circular=False, s
         draw.text((text_x, text_y), title, font=title_font, fill=mute)
         text_y += _u(width, 22)
     for contact in contacts:
-        draw.text((text_x, text_y), contact, font=contact_font, fill=mute)
-        text_y += _u(width, 20)
+        if contact["channel"] == "whatsapp":
+            _icon_whatsapp(draw, (text_x, text_y + 1), icon)
+        else:
+            _icon_instagram(draw, (text_x, text_y + 1), icon)
+        draw.text((text_x + icon + 8, text_y), contact["label"], font=contact_font, fill=ink)
+        text_y += _u(width, 24)
 
 
 def _address_block(draw, facts, copy, *, xy, width, max_width, light=False):
@@ -428,18 +736,18 @@ def _address_block(draw, facts, copy, *, xy, width, max_width, light=False):
         or ""
     ).upper()
     if headline:
-        title_font = font(_u(width, 46), bold=True)
+        title_font = font(_u(width, 50), bold=True)
         for line in _wrap(draw, headline, title_font, max_width)[:2]:
             draw.text((x, y), line, font=title_font, fill=title_fill)
-            y += _u(width, 52)
+            y += _u(width, 56)
     street = copy.get("street") or facts.get("title") or ""
     if street:
-        draw.text((x, y + 2), street, font=font(_u(width, 30), bold=True), fill=title_fill)
-        y += _u(width, 40)
+        draw.text((x, y + 2), street, font=font(_u(width, 28), bold=True), fill=title_fill)
+        y += _u(width, 36)
     zone = copy.get("zone") or facts.get("zone_line") or facts.get("locality") or ""
     if zone:
-        draw.text((x, y + 2), zone, font=font(_u(width, 20)), fill=mute)
-        y += _u(width, 34)
+        draw.text((x, y + 2), zone, font=font(_u(width, 18)), fill=mute)
+        y += _u(width, 28)
     return y
 
 
@@ -471,13 +779,23 @@ def _price(draw, facts, options, *, xy, width, fill=NAVY, size=72):
 
 
 def render_editorial(size, photos, facts, copy, agent, options, style):
-    """Large hero, two thumbs, commercial title below the photo."""
+    """Modern listing flyer: hero-led photo grid, cutout agent, contact icons."""
+    return render_modern_listing(size, photos, facts, copy or {}, agent, options or {}, style)
+
+
+def render_modern_listing(size, photos, facts, copy, agent, options, style, *, fallback_hero=None):
     width, height = size
     colors = theme_palette(style)
     canvas = Image.new("RGBA", size, (*colors["field"], 255))
     draw = ImageDraw.Draw(canvas)
     accent = colors["accent"]
     pad = _u(width, 40)
+    facts = facts or {}
+    copy = copy or {}
+    options = options or {}
+    photos = [item for item in (photos or []) if item is not None]
+    if not photos and fallback_hero is not None:
+        photos = [fallback_hero]
     _header(
         canvas,
         facts,
@@ -486,68 +804,72 @@ def render_editorial(size, photos, facts, copy, agent, options, style):
         fill=colors["ink"],
         mute=colors["mute"],
     )
-    hero_top = _u(width, 104)
-    hero_h = int(height * 0.44)
-    if photos:
-        paste_rounded(
-            canvas,
-            photos[0],
-            (pad, hero_top),
-            (width - pad * 2, hero_h),
-            radius=_u(width, 28),
-        )
-    y = hero_top + hero_h + _u(width, 22)
-    thumbs_h = _u(width, 168)
-    remaining = photos[1:3]
-    if remaining:
-        gap = _u(width, 14)
-        thumb_w = (width - pad * 2 - gap) // max(1, len(remaining))
-        for index, photo in enumerate(remaining):
-            paste_rounded(
-                canvas,
-                photo,
-                (pad + index * (thumb_w + gap), y),
-                (thumb_w, thumbs_h),
-                radius=_u(width, 18),
-            )
-        y += thumbs_h + _u(width, 24)
+    show_agent = bool(options.get("include_agent") and agent)
+    show_photo = bool(show_agent and options.get("show_agent_photo", True) and (agent or {}).get("photo_path"))
+    fmt = "story"
+    if size == FORMAT_SIZES.get("post"):
+        fmt = "post"
+    elif size == FORMAT_SIZES.get("flyer"):
+        fmt = "flyer"
+    legal_h = _u(width, 46)
+    contact_h = _u(width, 132) if show_agent else _u(width, 58)
+    feat_h = _u(width, 54) if options.get("show_features", True) and (facts.get("chips") or copy.get("attributes")) else 0
+    price_h = _u(width, 58) if options.get("show_price", True) and facts.get("price_label") else 0
+    content_h = _u(width, 16) + _u(width, 118) + _u(width, 64) + price_h + feat_h + contact_h + legal_h
+    photo_top = _u(width, 88)
+    photo_h = max(_u(width, 320), height - photo_top - content_h)
+    compose_photo_grid(
+        canvas,
+        photos,
+        box=(pad, photo_top, width - pad * 2, photo_h),
+        radius=_u(width, 16),
+        gap=_u(width, 10),
+        fmt=fmt,
+    )
+    y = photo_top + photo_h + _u(width, 16)
+    reserve = _u(width, 220) if show_photo else 0
     y = _address_block(
         draw,
         facts,
         copy,
         xy=(pad, y),
         width=width,
-        max_width=width - pad * 2,
+        max_width=width - pad * 2 - reserve,
         light=colors["theme"] == "blue",
     )
     if options.get("show_features", True):
         _feature_icons(
             draw,
-            facts.get("chips") or [],
-            (pad, y + 6),
+            facts.get("chips") or copy.get("attributes") or [],
+            (pad, y + 2),
             width=width,
             color=accent,
             text_fill=colors["ink"],
+            mute=colors["mute"],
         )
-        y += _u(width, 52)
-    _price(draw, facts, options, xy=(pad, y + 4), width=width, size=70, fill=colors["ink"])
-    y += _u(width, 92)
+        y += feat_h
+    if options.get("show_price", True):
+        _price(draw, facts, options, xy=(pad, y), width=width, size=56, fill=colors["ink"])
+        y += price_h
     _cta_pill(
         draw,
-        (pad, min(y, height - _u(width, 240))),
+        (pad, y + 2),
         copy.get("cta") or "Contáctanos",
         width=width,
         accent=accent,
         min_w=_u(width, 220),
+        filled=True,
+        text_fill=WHITE,
     )
-    if options.get("include_agent") and agent:
+    if show_agent:
+        cutout_w = _u(width, 150)
         _agent_block(
             canvas,
             agent,
-            xy=(width - pad - _u(width, 128), height - _u(width, 248)),
+            xy=(width - pad - cutout_w, height - legal_h - _u(width, 200)),
             width=width,
-            show_photo=options.get("show_agent_photo", True),
-            size=_u(width, 128),
+            show_photo=show_photo,
+            size=cutout_w,
             text_beside=True,
             ink=colors["ink"],
             mute=colors["mute"],

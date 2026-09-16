@@ -1545,6 +1545,61 @@ class MarketingIaTests(unittest.TestCase):
         self.assertNotIn("logo", sent)
         self.assertNotIn("agent", sent)
 
+    def test_51_overlay_rebuilds_modern_listing_from_real_photos(self):
+        from modules.marketing_overlay import OVERLAY_LAYOUT
+        from modules.marketing_renderer import IG_PINK, WA_GREEN, prepare_agent_cutout
+
+        plate = Image.new("RGBA", (360, 480), (0, 0, 0, 255))
+        draw = ImageDraw.Draw(plate)
+        draw.ellipse((110, 40, 250, 190), fill=(210, 160, 130, 255))
+        draw.rounded_rectangle((90, 200, 270, 460), 50, fill=(20, 80, 190, 255))
+        cut = prepare_agent_cutout(plate)
+        self.assertEqual(cut.getpixel((8, 8))[3], 0)
+        self.assertGreater(cut.getpixel((cut.width // 2, 80))[3], 200)
+
+        context = build_property_marketing_context(self._property())
+        blank = Image.new("RGB", FORMAT_SIZES["story"], (120, 80, 80))
+        buffer = io.BytesIO()
+        blank.save(buffer, format="PNG")
+        stamped = stamp_branding_overlay(
+            buffer.getvalue(),
+            context=context,
+            fmt="story",
+            options={
+                "include_agent": True,
+                "show_agent_photo": True,
+                "show_price": True,
+                "show_features": True,
+            },
+            style="light",
+            language="es",
+        )
+        self.assertEqual(stamped["layout"], OVERLAY_LAYOUT)
+        self.assertGreaterEqual(stamped["listing_photos"], 2)
+        image = Image.open(io.BytesIO(stamped["png_bytes"])).convert("RGB")
+        self.assertEqual(image.size, FORMAT_SIZES["story"])
+        self.assertNotEqual(image.getpixel((80, 1700)), (120, 80, 80))
+        green = sum(
+            1
+            for pixel in image.getdata()
+            if abs(pixel[0] - WA_GREEN[0]) < 28
+            and abs(pixel[1] - WA_GREEN[1]) < 28
+            and abs(pixel[2] - WA_GREEN[2]) < 28
+        )
+        pink = sum(
+            1
+            for pixel in image.getdata()
+            if abs(pixel[0] - IG_PINK[0]) < 36
+            and abs(pixel[1] - IG_PINK[1]) < 36
+            and abs(pixel[2] - IG_PINK[2]) < 36
+        )
+        self.assertGreater(green, 20)
+        self.assertGreater(pink, 20)
+        thumbs = image.crop((40, 1110, 1040, 1430))
+        sample = thumbs.resize((16, 6))
+        colors = {(pixel[0] // 20, pixel[1] // 20, pixel[2] // 20) for pixel in sample.getdata()}
+        self.assertGreaterEqual(len(colors), 4)
+
 
 def _quality_png():
     buffer = __import__("io").BytesIO()
