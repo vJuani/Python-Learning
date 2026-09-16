@@ -6,6 +6,8 @@
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--space-4);
+    width: 100%;
+    min-width: 0;
 }
 
 .home-panel__header {
@@ -129,7 +131,7 @@
 .home-panel__layout {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(18rem, 0.95fr);
     gap: inherit;
     align-items: start;
 }
@@ -141,7 +143,7 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     font-weight: 600;
-    border-bottom: 1px solid #edf0f5;
+    border-bottom: 1px solid var(--border-soft, #edf0f5);
 }
 
 .home-table td {
@@ -150,7 +152,7 @@
 }
 
 .home-table tbody tr:hover {
-    background: #fafbfc;
+    background: var(--interactive-bg, #fafbfc);
 }
 
 .home-kpi-card {

@@ -50,6 +50,7 @@
     align-items: center;
     padding: 20px 16px 18px;
     border-radius: 24px;
+    overflow: hidden;
     background:
         radial-gradient(circle at 92% 18%, color-mix(in srgb, var(--color-info) 16%, transparent), transparent 28%),
         linear-gradient(180deg, var(--color-brand-soft), var(--color-surface) 72%);
@@ -64,6 +65,9 @@
 
 .jrh-hero__mascot {
     justify-self: end;
+    align-self: center;
+    padding: 0.2rem 0.15rem 0;
+    min-width: 0;
     background: transparent;
 }
 
@@ -73,7 +77,9 @@
     width: auto;
     max-width: 120px;
     max-height: 120px;
+    margin: 0 auto;
     object-fit: contain;
+    object-position: center bottom;
     background: transparent;
     filter: drop-shadow(0 8px 14px var(--ia-soft));
     animation: jrhFloat 5s ease-in-out infinite;
@@ -81,7 +87,7 @@
 
 .jrh-hero__ask {
     height: 40px;
-    padding: 0 0.95rem;
+    padding: 0 0.9rem;
     border: 0;
     border-radius: 999px;
     background: var(--color-brand);
@@ -116,7 +122,7 @@
 
 .jrh-hero__chip {
     border: 1px solid var(--color-border);
-    padding: 6px 12px;
+    padding: 6px 11px;
     border-radius: 999px;
     background: var(--color-surface-secondary);
     color: var(--color-text-muted);
@@ -438,29 +444,42 @@
 
 @media (min-width: 768px) {
     .home-v2 {
-        max-width: 52rem;
+        max-width: none;
         padding-bottom: 3rem;
     }
 
     .jrh-hero {
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) minmax(9rem, 11.5rem);
         align-items: center;
+        gap: 1rem 1.5rem;
+        padding: 1.35rem 1.5rem 1.35rem 1.5rem;
+    }
+
+    .jrh-hero__mascot {
+        justify-self: center;
+        padding: 0.45rem 0.55rem 0.2rem;
     }
 
     .jrh-hero__mascot img,
     .jrh-hero .jrh-bot-hero {
-        max-width: 180px;
-        max-height: 200px;
+        max-width: 156px;
+        max-height: 176px;
     }
 }
 
 @media (min-width: 1025px) {
     .home-v2 {
-        max-width: 1120px;
+        max-width: none;
+        width: 100%;
         display: grid;
-        grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.85fr);
-        gap: 24px;
+        grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 0.72fr);
+        gap: 1.5rem;
         align-items: start;
+    }
+
+    .jrh-hero {
+        grid-template-columns: minmax(0, 1fr) minmax(9rem, 11rem);
+        padding: 1.4rem 1.5rem;
     }
 
     .home-v2__side {
