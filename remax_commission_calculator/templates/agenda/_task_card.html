@@ -10,10 +10,16 @@
         {%- endif %}"
 >
     <div class="agenda-card__time">
+        {% if can_manage and task.status == 'pending' and not is_google and task.task_type in ('follow_up', 'documentation', 'valuation', 'reminder', 'other') %}
+        <form method="post" action="{{ url_for('agenda_complete', task_id=task.id) }}" class="agenda-card__check">
+            <input type="hidden" name="next" value="{{ back_to }}">
+            <button type="submit" class="agenda-check" aria-label="{{ t('agent_task_action_complete') }}"></button>
+        </form>
+        {% endif %}
         <span class="agenda-card__hour">{{ task.due_time_label }}</span>
         <span class="agenda-card__type">
             {% if is_google %}
-            {{ t('agenda_calendar_source') }}
+            <span class="ds-status">{{ t('agenda_calendar_source') }}</span>
             {% else %}
             {{ task.type_label }}
             {% endif %}
@@ -34,7 +40,13 @@
         {% endif %}
 
         {% if task.contact_name %}
-        <p class="agenda-card__person">{{ task.contact_name }}</p>
+        <p class="agenda-card__person">
+            {% if task.contact_id %}
+            <a href="{{ url_for('contacts_detail', contact_id=task.contact_id) }}">{{ task.contact_name }}</a>
+            {% else %}
+            {{ task.contact_name }}
+            {% endif %}
+        </p>
         {% elif task.title and task.relation_label %}
         <p class="agenda-card__person">{{ task.title }}</p>
         {% elif task.description and task.task_type == 'call' %}
@@ -49,6 +61,9 @@
         <p class="agenda-badge agenda-badge--soon">{{ task.soon_label }}</p>
         {% elif task.attendance_status == 'confirmed' %}
         <p class="agenda-badge agenda-badge--ok">{{ t('agenda_signal_confirmed') }}</p>
+        {% endif %}
+        {% if task.reminder_label and not is_google %}
+        <p class="agenda-card__reminder">{{ task.reminder_label }}</p>
         {% endif %}
 
         {% if not is_google and calendar_connected %}
@@ -107,6 +122,11 @@
                 {{ t('matches_view_listing') }}
             </a>
             {% endif %}
+            {% if task.contact_id %}
+            <a class="agenda-chip" href="{{ url_for('contacts_detail', contact_id=task.contact_id) }}">
+                {{ t('agenda_action_view_contact') }}
+            </a>
+            {% endif %}
             {% if task.needs_attendance %}
             <form method="post" action="{{ url_for('agenda_confirm_attendance', task_id=task.id) }}" class="agenda-chip-form">
                 <input type="hidden" name="next" value="{{ back_to }}">
@@ -129,6 +149,14 @@
                 <a href="{{ url_for('agenda_edit', task_id=task.id, next=back_to) }}" class="btn btn-small btn-secondary">
                     {{ t('agent_task_action_edit') }}
                 </a>
+                <form method="post" action="{{ url_for('agenda_reschedule', task_id=task.id) }}" class="agenda-reschedule">
+                    <input type="hidden" name="next" value="{{ back_to }}">
+                    <label class="visually-hidden" for="reschedule-date-{{ task.id }}">{{ t('agent_task_field_date') }}</label>
+                    <input id="reschedule-date-{{ task.id }}" type="date" name="due_date" value="{{ task.due_date_value }}" required>
+                    <label class="visually-hidden" for="reschedule-time-{{ task.id }}">{{ t('agent_task_field_time') }}</label>
+                    <input id="reschedule-time-{{ task.id }}" type="time" name="due_time" value="{{ task.due_time_value }}" required>
+                    <button type="submit" class="btn btn-small btn-secondary">{{ t('agenda_reschedule') }}</button>
+                </form>
                 <form
                     method="post"
                     action="{{ url_for('agenda_cancel', task_id=task.id) }}"

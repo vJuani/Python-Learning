@@ -4,6 +4,10 @@
 
 {% block body_class %}is-agenda-page {% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agenda-page.css') }}">
+{% endblock %}
+
 {% block mobile_topbar_title %}{{ t('agenda_title') }}{% endblock %}
 
 {% block extra_js %}
@@ -14,7 +18,11 @@
 {% block content %}
 {% set show_agent_name = not can_manage %}
 {% set today_count = agenda.today_count or 0 %}
-{% set is_day_home = agenda.filter == 'upcoming' and not agenda.search and not agenda.due_date %}
+{% set visit_count = agenda.visit_count or 0 %}
+{% set work_count = agenda.work_count or 0 %}
+{% set agenda_view = agenda_view|default('today') %}
+{% set agenda_origin = agenda_origin|default('') %}
+{% set is_day_home = agenda_view == 'today' and agenda.filter == 'upcoming' and not agenda.search and not agenda.due_date %}
 {% set ns = namespace(today=none, overdue=none, upcoming=[], rest=[]) %}
 {% for section in agenda.sections %}
     {% if section.key == 'today' %}
@@ -28,34 +36,13 @@
     {% endif %}
 {% endfor %}
 
-<div class="agenda-home">
-    <section class="agenda-hero">
-        <div class="agenda-hero__copy">
-            <p class="agenda-hero__kicker">{{ t('agenda_title') }}</p>
-            <p class="agenda-hero__hello">{{ agenda_greeting }}</p>
-            <p class="agenda-hero__tagline">{{ t('agenda_home_tagline') }}</p>
-            <p class="agenda-hero__status">
-                {% if today_count == 1 %}
-                {{ t('agenda_today_status_one') }}
-                {% elif today_count %}
-                {{ t('agenda_today_status', count=today_count) }}
-                {% else %}
-                {{ t('agenda_today_status_zero') }}
-                {% endif %}
-            </p>
-            {% if can_manage %}
-            <p class="agenda-hero__route">
-                <a class="btn btn-secondary" href="{{ url_for('agenda_route', date=agenda.due_date or none) }}">{{ t('route_open_today') }}</a>
-            </p>
-            {% endif %}
-            {% if is_admin() %}
-            <form method="post" action="{{ url_for('settings_agenda_reminders') }}" class="agenda-hero__route">
-                <input type="hidden" name="action" value="probe">
-                <button type="submit" class="btn btn-secondary">{{ t('agenda_reminder_probe_button') }}</button>
-            </form>
-            {% endif %}
-        </div>
+<div class="agenda-home agenda-home--v2">
+    {% set page_header_eyebrow = t('agenda_title') %}
+    {% set page_header_title = agenda_greeting %}
+    {% set page_header_description = t('agenda_home_tagline') %}
+    {% set page_header_actions %}
         {% if can_manage %}
+        <a class="btn btn-secondary" href="{{ url_for('agenda_compose') }}">{{ t('dashboard_schedule_with_ia') }}</a>
         <details class="agenda-new-menu hide-mobile">
             <summary class="btn btn-primary">+ {{ t('agenda_new_action') }}</summary>
             <div class="agenda-new-menu__panel">
@@ -63,7 +50,32 @@
             </div>
         </details>
         {% endif %}
-    </section>
+    {% endset %}
+    {% include "components/page_header.html" %}
+
+    <p class="agenda-home__date">{{ agenda.today_heading }}</p>
+    <p class="agenda-home__summary">
+        {% if today_count %}
+        {{ t('agenda_day_summary', events=today_count, visits=visit_count, tasks=work_count) }}
+        {% else %}
+        {{ t('agenda_today_status_zero') }}
+        {% endif %}
+    </p>
+
+    {% if can_manage %}
+    <p class="agenda-hero__route">
+        <a class="btn btn-secondary" href="{{ url_for('agenda_route', date=agenda.due_date or none) }}">{{ t('route_open_today') }}</a>
+    </p>
+    {% endif %}
+
+    <nav class="agenda-views" aria-label="{{ t('agenda_title') }}">
+        {% for option in agenda_views %}
+        <a
+            href="{{ url_for('agenda_index', view=option, filter='upcoming' if option != 'tasks' else agenda.filter, agent_id=selected_agent_id, origin=agenda_origin) }}"
+            class="agenda-views__tab{% if agenda_view == option %} is-active{% endif %}"
+        >{{ t('agenda_view_' ~ option) }}</a>
+        {% endfor %}
+    </nav>
 
     {% set m_agenda_view = request.args.get('view', 'today') %}
     {% if agenda.week_strip %}
@@ -136,7 +148,7 @@
     {% endif %}
 
     {% if can_manage %}
-    <form method="post" action="{{ url_for('agenda_compose') }}" class="agenda-ia" id="agenda-ia-form" data-agenda-interpret>
+    <form method="post" action="{{ url_for('agenda_compose') }}" class="agenda-ia ds-ai-card" id="agenda-ia-form" data-agenda-interpret data-ds-ai>
         <span class="agenda-ia__label">{{ t('agenda_ia_label') }}</span>
         <div class="agenda-ia__row">
             <input
@@ -146,6 +158,7 @@
                 placeholder="{{ t('agenda_ia_placeholder') }}"
                 autocomplete="off"
                 aria-label="{{ t('agenda_ia_placeholder') }}"
+                data-jrh-ask-input
             >
             <button type="button" class="agenda-ia__mic" data-agenda-voice aria-label="{{ t('agenda_ia_voice') }}">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -156,28 +169,46 @@
             <button type="submit" class="sr-only">{{ t('agenda_ia_submit') }}</button>
         </div>
         <p class="agenda-ia__hint">{{ t('agenda_ia_example') }}</p>
+        <div class="ds-ai-card__chips">
+            <button type="button" class="ds-ai-chip" data-jrh-example="{{ t('agenda_ia_chip_visit') }}">{{ t('agenda_ia_chip_visit_label') }}</button>
+            <button type="button" class="ds-ai-chip" data-jrh-example="{{ t('agenda_ia_chip_call') }}">{{ t('agenda_ia_chip_call_label') }}</button>
+            <button type="button" class="ds-ai-chip" data-jrh-example="{{ t('agenda_ia_chip_tasks') }}">{{ t('agenda_ia_chip_tasks_label') }}</button>
+            <a class="ds-ai-chip" href="{{ url_for('agenda_capture') }}">{{ t('agenda_fab_whatsapp') }}</a>
+        </div>
         <p class="agenda-ia__status" data-agenda-voice-status data-listening="{{ t('agenda_ia_listening') }}" data-transcribing="{{ t('jrh_voice_transcribing') }}"></p>
         <p class="agenda-ia__hint" data-jrh-voice-unsupported hidden>{{ t('jrh_voice_unsupported') }}</p>
     </form>
     {% endif %}
 
-    <details class="agenda-tools"{% if agenda.search or agenda.due_date or agenda.filter != 'upcoming' %} open{% endif %}>
+    <details class="agenda-tools"{% if agenda.search or agenda.due_date or agenda.filter != 'upcoming' or agenda.task_type or agenda_origin %} open{% endif %}>
         <summary class="agenda-tools__toggle">{{ t('agenda_filters_toggle') }}</summary>
-        <nav class="agenda-filters" aria-label="{{ t('agenda_title') }}">
+        <nav class="agenda-filters" aria-label="{{ t('agenda_filters_toggle') }}">
             {% for option in agenda_filters %}
             <a
-                href="{{ url_for('agenda_index', filter=option, agent_id=selected_agent_id) }}"
+                href="{{ url_for('agenda_index', filter=option, view=agenda_view, agent_id=selected_agent_id, origin=agenda_origin) }}"
                 class="agenda-filter{% if agenda.filter == option %} is-active{% endif %}"
             >{{ t('agenda_filter_' ~ option) }}</a>
             {% endfor %}
         </nav>
-        <form method="get" action="{{ url_for('agenda_index') }}" class="agenda-search">
+        <form method="get" action="{{ url_for('agenda_index') }}" class="agenda-search ds-filters">
             <input type="hidden" name="filter" value="{{ agenda.filter }}">
+            <input type="hidden" name="view" value="{{ agenda_view }}">
             <input type="search" name="q" value="{{ agenda.search }}" placeholder="{{ t('agenda_search_placeholder') }}">
             <input type="date" name="date" value="{{ agenda.due_date }}">
+            <select name="type" aria-label="{{ t('agent_task_field_type') }}">
+                <option value="">{{ t('agenda_filter_all_types') }}</option>
+                {% for option in task_types %}
+                <option value="{{ option }}" {% if agenda.task_type == option %}selected{% endif %}>{{ t('agent_task_type_' ~ option) }}</option>
+                {% endfor %}
+            </select>
+            <select name="origin" aria-label="{{ t('agenda_origin_all') }}">
+                <option value="">{{ t('agenda_origin_all') }}</option>
+                <option value="jrh" {% if agenda_origin == 'jrh' %}selected{% endif %}>{{ t('agenda_origin_jrh') }}</option>
+                <option value="google" {% if agenda_origin == 'google' %}selected{% endif %}>{{ t('agenda_origin_google') }}</option>
+            </select>
             {% if agents %}
-            <select name="agent_id">
-                <option value="">{{ t('agenda_filter_all_agents') }}</option>
+            <select name="agent_id" aria-label="{{ t('agenda_filter_all_agents') }}">
+                <option value="">{{ t('agenda_scope_team') }}</option>
                 {% for agent in agents %}
                 <option value="{{ agent.id }}" {% if selected_agent_id == agent.id %}selected{% endif %}>{{ agent.name }}</option>
                 {% endfor %}
@@ -187,11 +218,14 @@
         </form>
     </details>
 
-    {% if can_manage and is_day_home and (agenda.overdue_count or agenda.missing_followup_count) %}
-    <aside class="agenda-recommend">
-        <p class="agenda-recommend__kicker">{{ t('agenda_recommend_title') }}</p>
+    {% if can_manage and is_day_home and (agenda.overdue_count or agenda.missing_followup_count or agenda.next_task) %}
+    <aside class="agenda-recommend ds-attention">
+        <p class="agenda-recommend__kicker">{{ t('agenda_suggest_title') }}</p>
+        {% if agenda.next_task and agenda.next_task.starts_soon %}
+        <p>{{ agenda.next_task.soon_label }} · {{ agenda.next_task.display_title or agenda.next_task.title }}</p>
+        {% endif %}
         {% if agenda.overdue_count %}
-        <a href="{{ url_for('agenda_index', filter='overdue') }}">
+        <a href="{{ url_for('agenda_index', filter='overdue', view='tasks') }}">
             {{ t('agenda_recommend_overdue', count=agenda.overdue_count) }}
         </a>
         {% endif %}
@@ -206,60 +240,113 @@
     </aside>
     {% endif %}
 
-    {% if is_day_home %}
-        {% if ns.today %}
-        <section class="agenda-section agenda-section--today">
-            <header class="agenda-section__head">
-                <h3>{{ agenda.today_heading }}</h3>
-            </header>
-            <div class="agenda-list">
-                {% for task in ns.today.tasks %}
-                {% include "agenda/_task_card.html" with context %}
-                {% endfor %}
-            </div>
-        </section>
-        {% else %}
-        <section class="agenda-section agenda-section--today">
-            <header class="agenda-section__head">
-                <h3>{{ agenda.today_heading }}</h3>
-            </header>
-            <p class="agenda-empty-today">{{ t('agenda_empty_today') }}</p>
-        </section>
-        {% endif %}
-
+    {% if agenda_view == 'calendar' %}
+        {% include "agenda/_calendar.html" %}
+    {% elif agenda_view == 'tasks' %}
+        {% include "agenda/_tasks_board.html" %}
+    {% elif agenda_view == 'upcoming' %}
         {% if ns.upcoming %}
-        <section class="agenda-upcoming">
-            <header class="agenda-section__head">
-                <h3>{{ t('agenda_upcoming_title') }}</h3>
-            </header>
-            <div class="agenda-upcoming__rows">
+        <div class="agenda-layout">
+            <div class="agenda-layout__main">
                 {% for section in ns.upcoming %}
-                <details class="agenda-upcoming__row">
-                    <summary>
-                        <span>{{ section.label }}</span>
-                        <strong>{{ section.tasks|length }}</strong>
-                    </summary>
+                <section class="ds-card agenda-section">
+                    <header class="ds-card__header">
+                        <h2 class="ds-card__title">{{ section.label }}</h2>
+                    </header>
                     <div class="agenda-list">
                         {% for task in section.tasks %}
                         {% include "agenda/_task_card.html" with context %}
                         {% endfor %}
                     </div>
-                </details>
+                </section>
                 {% endfor %}
             </div>
-        </section>
+        </div>
+        {% else %}
+        {% set empty_title = t('agenda_empty_title') %}
+        {% set empty_description = t('agenda_empty_upcoming_hint') if can_manage else t('agenda_empty_hint_staff') %}
+        {% set empty_primary_href = url_for('agenda_new') if can_manage else none %}
+        {% set empty_primary_label = t('agenda_new_action') %}
+        {% set empty_ia_href = url_for('agenda_compose') if can_manage else none %}
+        {% set empty_ia_label = t('dashboard_schedule_with_ia') %}
+        {% include "components/empty_state.html" %}
         {% endif %}
+    {% elif is_day_home or agenda_view == 'today' %}
+        <div class="agenda-layout">
+            <div class="agenda-layout__main">
+                {% if ns.overdue %}
+                <section class="ds-card agenda-section agenda-section--overdue">
+                    <header class="ds-card__header">
+                        <h2 class="ds-card__title">{{ ns.overdue.label }}</h2>
+                    </header>
+                    <div class="agenda-list">
+                        {% for task in ns.overdue.tasks %}
+                        {% include "agenda/_task_card.html" with context %}
+                        {% endfor %}
+                    </div>
+                </section>
+                {% endif %}
+
+                <section class="ds-card agenda-section agenda-section--today">
+                    <header class="ds-card__header">
+                        <h2 class="ds-card__title">{{ agenda.today_heading }}</h2>
+                    </header>
+                    {% if ns.today %}
+                    <div class="agenda-list">
+                        {% for task in ns.today.tasks %}
+                        {% include "agenda/_task_card.html" with context %}
+                        {% endfor %}
+                    </div>
+                    {% elif ns.overdue %}
+                    <p class="agenda-empty-today">{{ t('agenda_empty_today') }}</p>
+                    {% else %}
+                    {% set empty_title = t('agenda_empty_today_title') %}
+                    {% set empty_description = t('agenda_empty_today_hint') %}
+                    {% set empty_primary_href = url_for('agenda_new') if can_manage else none %}
+                    {% set empty_primary_label = t('agenda_new_action') %}
+                    {% set empty_ia_href = url_for('agenda_compose') if can_manage else none %}
+                    {% set empty_ia_label = t('dashboard_schedule_with_ia') %}
+                    {% include "components/empty_state.html" %}
+                    {% endif %}
+                </section>
+            </div>
+            <aside class="agenda-layout__side">
+                {% if ns.upcoming %}
+                <section class="ds-card">
+                    <header class="ds-card__header">
+                        <h2 class="ds-card__title">{{ t('agenda_upcoming_title') }}</h2>
+                        <a class="ds-card__link" href="{{ url_for('agenda_index', view='upcoming') }}">{{ t('agenda_view_upcoming') }}</a>
+                    </header>
+                    <div class="agenda-upcoming__rows">
+                        {% for section in ns.upcoming %}
+                        <details class="agenda-upcoming__row"{% if loop.first %} open{% endif %}>
+                            <summary>
+                                <span>{{ section.label }}</span>
+                                <strong>{{ section.tasks|length }}</strong>
+                            </summary>
+                            <div class="agenda-list">
+                                {% for task in section.tasks %}
+                                {% include "agenda/_task_card.html" with context %}
+                                {% endfor %}
+                            </div>
+                        </details>
+                        {% endfor %}
+                    </div>
+                </section>
+                {% endif %}
+            </aside>
+        </div>
     {% elif agenda.sections %}
         {% for section in agenda.sections %}
-        <section class="agenda-section">
-            <header class="agenda-section__head">
-                <h3>
+        <section class="ds-card agenda-section">
+            <header class="ds-card__header">
+                <h2 class="ds-card__title">
                     {% if section.key == 'today' %}
                     {{ agenda.today_heading }}
                     {% else %}
                     {{ section.label }}
                     {% endif %}
-                </h3>
+                </h2>
             </header>
             <div class="agenda-list">
                 {% for task in section.tasks %}
@@ -270,10 +357,13 @@
         {% endfor %}
     {% else %}
         <section class="agenda-empty">
-            <p class="agenda-empty__title">{{ t('agenda_empty_title') }}</p>
-            <p class="agenda-empty__hint">
-                {% if can_manage %}{{ t('agenda_empty_hint') }}{% else %}{{ t('agenda_empty_hint_staff') }}{% endif %}
-            </p>
+            {% set empty_title = t('agenda_empty_title') %}
+            {% set empty_description = t('agenda_empty_hint') if can_manage else t('agenda_empty_hint_staff') %}
+            {% set empty_primary_href = url_for('agenda_new') if can_manage else none %}
+            {% set empty_primary_label = t('agenda_new_action') %}
+            {% set empty_ia_href = url_for('agenda_compose') if can_manage else none %}
+            {% set empty_ia_label = t('dashboard_schedule_with_ia') %}
+            {% include "components/empty_state.html" %}
         </section>
     {% endif %}
 

@@ -11,6 +11,10 @@
     line-height: 0;
 }
 
+.login-marketing__logo.brand-logo-slot {
+    justify-content: flex-start;
+}
+
 .brand-logo {
     display: none;
     width: auto;
@@ -78,14 +82,41 @@ html[data-theme="dark"] body.is-home-v2 .jrh-sidebar .brand-logo-slot .brand-log
     display: none;
 }
 
+.jrh-sidebar__logo--icon.brand-logo-slot {
+    display: inline-flex;
+}
+
+html[data-sidebar="pinned"] .jrh-sidebar__logo--icon.brand-logo-slot,
+.app-rail.jrh-sidebar.is-hover-open .jrh-sidebar__logo--icon.brand-logo-slot {
+    display: none;
+}
+
+.jrh-sidebar__logo--full.brand-logo-slot {
+    display: none;
+}
+
+html[data-sidebar="pinned"] .jrh-sidebar__logo--full.brand-logo-slot,
+.app-rail.jrh-sidebar.is-hover-open .jrh-sidebar__logo--full.brand-logo-slot {
+    display: inline-flex;
+    justify-content: flex-start;
+    min-width: 0;
+    max-width: 100%;
+}
+
 .jrh-sidebar__logo--icon .brand-logo,
 .footer-brand-icon .brand-logo {
     max-height: 2rem;
 }
 
+.jrh-sidebar .brand-logo-slot,
+.jrh-sidebar .brand-logo {
+    background: transparent;
+}
+
 .jrh-sidebar__logo--full .brand-logo {
     max-height: 1.85rem;
-    max-width: 9.5rem;
+    max-width: min(11.5rem, 100%);
+    width: auto;
     object-position: left center;
 }
 
@@ -114,8 +145,11 @@ html[data-theme="dark"] body.is-home-v2 .jrh-sidebar .brand-logo-slot .brand-log
 
 .login-marketing__logo .brand-logo {
     max-height: none;
-    width: min(17.5rem, 100%);
+    max-width: min(17.5rem, 100%);
+    width: auto;
     height: auto;
+    margin: 0;
+    object-position: left center;
 }
 
 .auth-brand-panel-logo .brand-logo {
@@ -127,6 +161,25 @@ html[data-theme="dark"] body.is-home-v2 .jrh-sidebar .brand-logo-slot .brand-log
 
 .footer-brand-icon .brand-logo {
     max-height: 1.75rem;
+}
+
+/* Mascot light/dark rasters. Loaded last so page CSS cannot show both. */
+img.jrh-mascot--on-dark.jrh-bot-hero,
+img.jrh-mascot--on-dark.jrh-bot-avatar,
+img.jrh-mascot--on-dark.jrh-bot-floating {
+    display: none;
+}
+
+html[data-theme="dark"] img.jrh-mascot--on-light.jrh-bot-hero,
+html[data-theme="dark"] img.jrh-mascot--on-light.jrh-bot-avatar,
+html[data-theme="dark"] img.jrh-mascot--on-light.jrh-bot-floating {
+    display: none;
+}
+
+html[data-theme="dark"] img.jrh-mascot--on-dark.jrh-bot-hero,
+html[data-theme="dark"] img.jrh-mascot--on-dark.jrh-bot-avatar,
+html[data-theme="dark"] img.jrh-mascot--on-dark.jrh-bot-floating {
+    display: block;
 }
 
 .site-brand-logo--lockup .brand-logo,

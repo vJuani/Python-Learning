@@ -87,6 +87,15 @@ AGENDA_FILTERS = (
     FILTER_COMPLETED,
 )
 
+AGENDA_VIEWS = ("today", "upcoming", "calendar", "tasks")
+TASK_LIKE_TYPES = (
+    "follow_up",
+    "documentation",
+    "valuation",
+    "reminder",
+    "other",
+)
+
 # A task is announced as "starting soon" this many minutes ahead. The
 # reminder is computed at render time, so there is no scheduler.
 SOON_THRESHOLD_MINUTES = 60
@@ -888,11 +897,108 @@ def decorate_task(task, *, tz, now, language="es"):
             if is_overdue
             else None
         ),
+        "reminder_label": (
+            translate(
+                "agenda_reminder_in",
+                language,
+                minutes=int(task["reminder_minutes"]),
+            )
+            if task.get("reminder_minutes")
+            else None
+        ),
         "section": _section_for(local_due, today, now_local),
         "section_date_label": (
             local_due.strftime("%A %d") if local_due else ""
         ),
     }
+
+
+def _agenda_presentation(tasks, *, today):
+    pending = [
+        task
+        for task in tasks
+        if task.get("status") == STATUS_PENDING
+    ]
+    today_tasks = [
+        task for task in pending if task.get("section") == SECTION_TODAY
+    ]
+    next_task = None
+    upcoming_pending = [
+        task
+        for task in pending
+        if task.get("minutes_until") is not None and task["minutes_until"] >= 0
+    ]
+    if upcoming_pending:
+        next_task = min(
+            upcoming_pending,
+            key=lambda item: item.get("minutes_until") if item.get("minutes_until") is not None else 10**9,
+        )
+    return {
+        "visit_count": sum(1 for task in today_tasks if task.get("task_type") == "visit"),
+        "call_count": sum(1 for task in today_tasks if task.get("task_type") == "call"),
+        "meeting_count": sum(1 for task in today_tasks if task.get("task_type") == "meeting"),
+        "work_count": sum(
+            1 for task in today_tasks if task.get("task_type") in TASK_LIKE_TYPES
+        ),
+        "today_pending": today_tasks,
+        "next_task": next_task,
+        "calendar_cells": _month_cells(tasks, today),
+        "week_cells": _week_cells(tasks, today),
+    }
+
+
+def _tasks_by_date(tasks):
+    grouped = {}
+    for task in tasks:
+        key = task.get("due_date_value")
+        if not key:
+            continue
+        grouped.setdefault(key, []).append(task)
+    return grouped
+
+
+def _month_cells(tasks, today):
+    from datetime import timedelta
+
+    by_date = _tasks_by_date(tasks)
+    start = today.replace(day=1)
+    first = start - timedelta(days=start.weekday())
+    cells = []
+    for offset in range(42):
+        day = first + timedelta(days=offset)
+        iso = day.isoformat()
+        cells.append(
+            {
+                "iso": iso,
+                "day": day.day,
+                "in_month": day.month == today.month,
+                "is_today": day == today,
+                "count": len(by_date.get(iso, [])),
+                "tasks": by_date.get(iso, []),
+            }
+        )
+    return cells
+
+
+def _week_cells(tasks, today):
+    from datetime import timedelta
+
+    by_date = _tasks_by_date(tasks)
+    monday = today - timedelta(days=today.weekday())
+    cells = []
+    for offset in range(7):
+        day = monday + timedelta(days=offset)
+        iso = day.isoformat()
+        cells.append(
+            {
+                "iso": iso,
+                "day": day.day,
+                "weekday": day.strftime("%a"),
+                "is_today": day == today,
+                "tasks": by_date.get(iso, []),
+            }
+        )
+    return cells
 
 
 def build_agenda_view(
@@ -1023,6 +1129,7 @@ def build_agenda_view(
         "week_heading": _agenda_week_heading(today, due_date=due_date, language=language),
         "timezone_name": str(tz),
         "now_local": now_local,
+        **_agenda_presentation(tasks, today=today),
         **_missing_followup_fields(
             organization_id,
             agent_id=agent_id,
@@ -1128,6 +1235,14 @@ def merge_external_tasks(
     agenda["overdue_count"] = sum(
         1 for task in tasks if task["is_overdue"]
     )
+    today_value = agenda.get("today_value")
+    if today_value:
+        agenda.update(
+            _agenda_presentation(
+                tasks,
+                today=date.fromisoformat(str(today_value)),
+            )
+        )
 
     return agenda
 
@@ -1465,6 +1580,7 @@ def _missing_followup_fields(organization_id, *, agent_id, language, now):
 
 __all__ = [
     "AGENDA_FILTERS",
+    "AGENDA_VIEWS",
     "AGENDA_SECTIONS",
     "AgentTaskError",
     "DURATION_CHOICES",

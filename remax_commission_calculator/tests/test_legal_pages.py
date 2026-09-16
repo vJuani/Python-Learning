@@ -61,6 +61,10 @@ class LegalPagesTests(unittest.TestCase):
         body = client.get("/login").get_data(as_text=True)
         self.assertIn('href="/terms"', body)
         self.assertIn('href="/privacy"', body)
+        self.assertNotIn("login-google", body)
+        self.assertNotIn("login-divider", body)
+        self.assertNotIn("Continuar con Google", body)
+        self.assertIn("login-brand-content", body)
 
     def test_logged_in_agent_can_still_read_them(self):
         client = app.test_client()

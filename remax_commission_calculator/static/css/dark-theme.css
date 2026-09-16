@@ -35,6 +35,11 @@
     border-right-color: var(--rail-border);
 }
 
+[data-theme="dark"] body.has-app-rail .app-rail.jrh-sidebar {
+    background: var(--jrh-sidebar-navy);
+    border-right: 0;
+}
+
 [data-theme="dark"] body.has-app-rail .app-rail-top,
 [data-theme="dark"] body.has-app-rail .app-rail-footer {
     border-color: var(--rail-border);
@@ -420,12 +425,6 @@
 [data-theme="dark"] body.is-login-page .login-card__header p,
 [data-theme="dark"] body.is-login-page .login-field label {
     color: var(--text-muted);
-}
-
-[data-theme="dark"] body.is-login-page .login-google {
-    background: var(--surface);
-    border-color: var(--border-soft);
-    color: var(--text);
 }
 
 [data-theme="dark"] body.is-login-page .login-marketing__headline,

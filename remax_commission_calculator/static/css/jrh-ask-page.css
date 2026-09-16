@@ -1,17 +1,19 @@
 /* Dedicated Preguntale a JRH studio. Loaded only on /jrh. */
 
 body.is-jrh-ask-page {
-    background: #f5f8fd;
+    background: var(--bg, #f5f8fd);
 }
 
 body.is-jrh-ask-page .app-main-inner {
-    max-width: 72rem;
+    max-width: none;
 }
 
 .jrh-studio {
     display: grid;
     gap: 1.25rem;
     padding-bottom: 5rem;
+    min-width: 0;
+    width: 100%;
 }
 
 .jrh-studio__hero {
@@ -20,18 +22,21 @@ body.is-jrh-ask-page .app-main-inner {
     align-items: center;
     padding: 1.25rem 1.35rem 1.4rem;
     border-radius: 20px;
+    overflow: hidden;
     background:
-        radial-gradient(circle at 88% 12%, rgba(13, 71, 255, 0.08), transparent 36%),
-        #fff;
+        radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--color-brand) 12%, transparent), transparent 36%),
+        var(--surface, #fff);
     border: 1px solid var(--border-soft, #e4eaf2);
     box-shadow: 0 10px 30px rgba(10, 22, 51, 0.05);
 }
 
 @media (min-width: 900px) {
     .jrh-studio__hero {
-        grid-template-columns: minmax(0, 1.65fr) minmax(16rem, 0.9fr);
-        padding: 1.5rem 1.75rem;
-        min-height: 22rem;
+        grid-template-columns: minmax(0, 1.2fr) minmax(17rem, 0.75fr);
+        align-items: center;
+        gap: 1.75rem 2rem;
+        padding: 1.75rem 2rem 1.85rem;
+        min-height: 0;
     }
 }
 
@@ -50,9 +55,9 @@ body.is-jrh-ask-page .app-main-inner {
 
 .jrh-studio__title {
     margin: 0 0 0.45rem;
-    font-size: clamp(1.7rem, 3vw, 2.35rem);
+    font-size: clamp(1.55rem, 2.6vw, 2.15rem);
     letter-spacing: -0.04em;
-    color: var(--jrh-navy, #0a1633);
+    color: var(--text-primary, var(--jrh-navy, #0a1633));
 }
 
 .jrh-studio__lead {
@@ -74,8 +79,8 @@ body.is-jrh-ask-page .app-main-inner {
 .jrh-studio__badges li {
     padding: 0.35rem 0.7rem;
     border-radius: 999px;
-    background: rgba(13, 71, 255, 0.08);
-    color: var(--jrh-navy, #0a1633);
+    background: var(--color-brand-soft, rgba(13, 71, 255, 0.08));
+    color: var(--text-primary, var(--jrh-navy, #0a1633));
     font-size: 0.78rem;
     font-weight: 700;
 }
@@ -89,16 +94,16 @@ body.is-jrh-ask-page .app-main-inner {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    min-height: 3.6rem;
+    min-height: 3.35rem;
     padding: 0.35rem 0.4rem 0.35rem 1rem;
     border-radius: 16px;
-    background: #f7f9fd;
-    border: 1px solid var(--border, #d5dde8);
+    background: var(--input-bg, #f7f9fd);
+    border: 1px solid var(--input-border, var(--border, #d5dde8));
 }
 
 .jrh-studio__field:focus-within {
-    border-color: var(--accent, var(--accent));
-    box-shadow: 0 0 0 3px rgba(13, 71, 255, 0.12);
+    border-color: var(--color-brand, var(--accent));
+    box-shadow: var(--shadow-focus, 0 0 0 3px color-mix(in srgb, var(--color-brand) 18%, transparent));
 }
 
 .jrh-studio__input {
@@ -131,7 +136,7 @@ body.is-jrh-ask-page .app-main-inner {
 }
 
 .jrh-studio__mic.is-listening {
-    background: rgba(13, 71, 255, 0.12);
+    background: var(--color-brand-soft, rgba(13, 71, 255, 0.12));
 }
 
 .jrh-studio__ask {
@@ -174,8 +179,8 @@ body.is-jrh-ask-page .app-main-inner {
     display: flex;
     align-items: center;
     gap: 0.55rem;
-    min-width: 11rem;
-    padding: 0.75rem 0.85rem;
+    min-width: 0;
+    padding: 0.7rem 0.8rem;
     border: 1px solid var(--color-border, var(--border-soft, #DCE4DF));
     border-radius: 14px;
     background: var(--color-surface, #fff);
@@ -199,37 +204,41 @@ body.is-jrh-ask-page .app-main-inner {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 12rem;
+    min-height: 0;
+    width: 100%;
+    padding: 0.75rem 0.65rem 0.35rem;
     background: transparent;
 }
 
 .jrh-studio__glow {
     position: absolute;
-    width: 16rem;
-    height: 16rem;
+    width: 13rem;
+    height: 13rem;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(13, 71, 255, 0.16), transparent 68%);
+    background: radial-gradient(circle, color-mix(in srgb, var(--color-brand) 22%, transparent), transparent 68%);
     animation: jrhGlow 5.5s ease-in-out infinite;
     pointer-events: none;
 }
 
 .jrh-studio__mascot {
     position: relative;
-    width: min(22rem, 100%);
+    width: min(16.5rem, 100%);
     height: auto;
     background: transparent;
 }
 
 .jrh-studio__mascot img,
-.jrh-bot-hero {
+.jrh-studio .jrh-bot-hero {
     display: block;
     width: auto;
     max-width: 100%;
-    max-height: min(400px, 46vh);
+    max-height: min(17.5rem, 34vh);
     height: auto;
+    margin: 0 auto;
     object-fit: contain;
+    object-position: center bottom;
     background: transparent;
-    filter: drop-shadow(0 12px 20px rgba(13, 71, 255, 0.18));
+    filter: drop-shadow(0 12px 20px color-mix(in srgb, var(--color-brand) 22%, transparent));
     animation: jrhFloat 5s ease-in-out infinite;
 }
 
@@ -244,10 +253,10 @@ body.is-jrh-ask-page .app-main-inner {
     position: relative;
     z-index: 1;
     max-width: 18rem;
-    margin: -0.5rem 0 0;
+    margin: 0.85rem 0 0;
     padding: 0.85rem 1rem;
     border-radius: 16px;
-    background: #fff;
+    background: var(--surface, #fff);
     border: 1px solid var(--border-soft, #e4eaf2);
     box-shadow: 0 8px 20px rgba(10, 22, 51, 0.06);
 }
@@ -265,14 +274,14 @@ body.is-jrh-ask-page .app-main-inner {
     margin-top: 0.55rem;
     font-size: 0.75rem;
     font-weight: 700;
-    color: #059669;
+    color: var(--color-brand, #059669);
 }
 
 .jrh-studio__online i {
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 50%;
-    background: #059669;
+    background: var(--color-brand, #059669);
 }
 
 .jrh-studio__layout {
@@ -291,7 +300,7 @@ body.is-jrh-ask-page .app-main-inner {
 .jrh-studio__side-card {
     padding: 1rem 1.1rem;
     border-radius: 18px;
-    background: #fff;
+    background: var(--surface, #fff);
     border: 1px solid var(--border-soft, #e4eaf2);
 }
 
@@ -353,8 +362,8 @@ body.is-jrh-ask-page .app-main-inner {
 .jrh-chat__bubble {
     padding: 0.8rem 0.95rem;
     border-radius: 16px;
-    background: #f7f9fd;
-    color: var(--text, #0a1633);
+    background: var(--color-surface-secondary, #f7f9fd);
+    color: var(--text-primary, var(--text, #0a1633));
 }
 
 .jrh-chat__row.is-user .jrh-chat__bubble {
@@ -452,11 +461,11 @@ body.is-jrh-ask-page .app-main-inner {
     z-index: 30;
     display: flex;
     align-items: center;
-    gap: 0.7rem;
-    max-width: 16rem;
-    padding: 0.65rem 0.85rem 0.65rem 0.65rem;
-    border-radius: 18px;
-    background: #fff;
+    gap: 0.65rem;
+    max-width: 17rem;
+    padding: 0.45rem 0.95rem 0.45rem 0.45rem;
+    border-radius: 1.1rem;
+    background: var(--surface, #fff);
     border: 1px solid var(--border-soft, #e4eaf2);
     box-shadow: 0 12px 30px rgba(10, 22, 51, 0.12);
     color: inherit;
@@ -464,22 +473,29 @@ body.is-jrh-ask-page .app-main-inner {
 }
 
 .jrh-float img,
-.jrh-bot-floating {
-    width: 2.6rem;
-    height: 2.6rem;
+.jrh-float .jrh-bot-floating {
+    width: 2.85rem;
+    height: 2.85rem;
+    flex-shrink: 0;
     object-fit: contain;
     background: transparent;
-    filter: drop-shadow(0 4px 8px rgba(13, 71, 255, 0.16));
+    filter: drop-shadow(0 4px 8px color-mix(in srgb, var(--color-brand) 22%, transparent));
 }
 
 .jrh-float strong,
 .jrh-float span {
     display: block;
+    line-height: 1.2;
+}
+
+.jrh-float strong {
+    font-size: 0.82rem;
+    color: var(--text-primary);
 }
 
 .jrh-float span {
-    font-size: 0.75rem;
-    color: #059669;
+    font-size: 0.72rem;
+    color: var(--color-brand, #059669);
 }
 
 body.is-jrh-ask-page .jrh-float,
@@ -535,7 +551,7 @@ body.is-jrh-ask-page .jrh-float {
     }
 
     .jrh-studio__mascot img,
-    .jrh-bot-hero {
+    .jrh-studio .jrh-bot-hero {
         max-height: 120px;
     }
 
@@ -582,28 +598,35 @@ body.is-jrh-ask-page.is-jrh-thinking .jrh-studio__glow,
 @media (prefers-reduced-motion: reduce) {
     .jrh-studio__mascot,
     .jrh-studio__mascot img,
-    .jrh-bot-hero,
+    .jrh-studio .jrh-bot-hero,
     .jrh-studio__glow,
     .jrh-float img,
-    .jrh-bot-floating {
+    .jrh-float .jrh-bot-floating {
         animation: none !important;
     }
 }
 
 [data-theme="dark"] body.is-jrh-ask-page,
 [data-theme="dark"].is-jrh-ask-page {
-    background: #0b1224;
+    background: var(--bg);
 }
 
-[data-theme="dark"] .jrh-studio__hero,
 [data-theme="dark"] .jrh-studio__thread,
 [data-theme="dark"] .jrh-studio__side-card,
 [data-theme="dark"] .jrh-studio__bubble,
 [data-theme="dark"] .jrh-studio__chip,
 [data-theme="dark"] .jrh-chat__cards li,
 [data-theme="dark"] .jrh-float {
-    background: #121b33;
-    border-color: #243154;
+    background: var(--surface);
+    border-color: var(--border-soft);
+    box-shadow: none;
+}
+
+[data-theme="dark"] .jrh-studio__hero {
+    background:
+        radial-gradient(circle at 88% 12%, var(--ia-soft), transparent 36%),
+        var(--surface);
+    border-color: var(--border-soft);
     box-shadow: none;
 }
 
@@ -611,31 +634,31 @@ body.is-jrh-ask-page.is-jrh-thinking .jrh-studio__glow,
 [data-theme="dark"] .jrh-studio__chip,
 [data-theme="dark"] .jrh-studio__bubble,
 [data-theme="dark"] .jrh-chat__bubble {
-    color: #e8eefc;
+    color: var(--text-primary);
 }
 
 [data-theme="dark"] .jrh-studio__field {
-    background: #0d1528;
-    border-color: #243154;
+    background: var(--input-bg);
+    border-color: var(--input-border);
 }
 
 [data-theme="dark"] .jrh-studio__input {
-    color: #e8eefc;
+    color: var(--input-text);
 }
 
 [data-theme="dark"] .jrh-chat__bubble {
-    background: #0d1528;
+    background: var(--color-surface-secondary, var(--input-bg));
 }
 
 [data-theme="dark"] .jrh-studio__mascot img,
-[data-theme="dark"] .jrh-bot-hero,
+[data-theme="dark"] .jrh-studio .jrh-bot-hero,
 [data-theme="dark"] .jrh-chat__avatar img,
 [data-theme="dark"] .jrh-float img,
-[data-theme="dark"] .jrh-bot-floating {
+[data-theme="dark"] .jrh-float .jrh-bot-floating {
     background: transparent;
     filter: drop-shadow(0 8px 16px rgba(124, 92, 255, 0.28));
 }
 
 [data-theme="dark"] .jrh-studio__glow {
-    background: radial-gradient(circle, rgba(124, 92, 255, 0.16), transparent 68%);
+    background: radial-gradient(circle, var(--ia-soft), transparent 68%);
 }

@@ -376,15 +376,6 @@
         border-color: var(--purple-primary);
     }
 
-    body.is-login-page .login-google {
-        min-height: 48px;
-        border-radius: 999px;
-        width: 100%;
-        background: var(--color-surface);
-        color: var(--color-text);
-        border: 1px solid var(--color-border);
-    }
-
     body.is-login-page .login-auth-toolbar {
         display: flex;
         justify-content: flex-end;

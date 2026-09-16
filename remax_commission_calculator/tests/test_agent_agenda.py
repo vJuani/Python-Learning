@@ -310,7 +310,13 @@ class AgentAgendaTests(unittest.TestCase):
         )
 
     def test_06_today_task_appears_in_dashboard_summary(self):
-        task = self._create(title="Llamar a Martín López")
+        tz = organization_timezone(self.org_a)
+        today = now_utc().astimezone(tz).date().isoformat()
+        task = self._create(
+            title="Llamar a Martín López",
+            due_date=today,
+            due_time="09:00",
+        )
 
         summary = build_agenda_summary(self.org_a, self.agent_a)
 
@@ -318,6 +324,12 @@ class AgentAgendaTests(unittest.TestCase):
         self.assertIn(
             task["id"],
             [item["id"] for item in summary["tasks"]],
+        )
+        complete_task(
+            self.org_a,
+            task["id"],
+            agent_id=self.agent_a,
+            actor_user_id=self.agent_user,
         )
 
     def test_07_overdue_task_is_flagged(self):

@@ -5,17 +5,23 @@
 | {{ t('app_title') }}
 {% endblock %}
 
-{% block content %}
-<section class="page-header">
-    <div class="page-header-text">
-        <h2>{% if task %}{{ t('agenda_edit_task') }}{% else %}{{ t('agenda_new_event') }}{% endif %}</h2>
-    </div>
-    <div class="page-actions">
-        <a href="{{ agenda_next or url_for('agenda_index') }}" class="btn btn-secondary">{{ t('agenda_title') }}</a>
-    </div>
-</section>
+{% block body_class %}is-agenda-page {% endblock %}
 
-<section class="panel agenda-form-panel">
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agenda-page.css') }}">
+{% endblock %}
+
+{% block content %}
+{% set page_header_eyebrow = t('agenda_title') %}
+{% set page_header_title = t('agenda_edit_task') if task else t('agenda_new_event') %}
+{% set hint_types = ('visit', 'call', 'meeting', 'reminder', 'follow_up', 'other') %}
+{% set page_header_description = t('agenda_form_hint_' ~ form_values.task_type) if form_values.task_type in hint_types else none %}
+{% set page_header_actions %}
+    <a href="{{ agenda_next or url_for('agenda_index') }}" class="btn btn-secondary">{{ t('agenda_title') }}</a>
+{% endset %}
+{% include "components/page_header.html" %}
+
+<section class="panel agenda-form-panel ds-card">
     {% if form_values.ai_suggestion %}
     <p class="agenda-suggestion">
         <span>{{ t('agenda_ai_suggestion') }}</span>

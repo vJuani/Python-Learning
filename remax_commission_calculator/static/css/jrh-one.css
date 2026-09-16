@@ -640,10 +640,10 @@ textarea.form-input:focus {
     z-index: 30;
     display: flex;
     align-items: center;
-    gap: 0.7rem;
-    max-width: 16rem;
-    padding: 0.65rem 0.85rem 0.65rem 0.65rem;
-    border-radius: 18px;
+    gap: 0.65rem;
+    max-width: 17rem;
+    padding: 0.45rem 0.95rem 0.45rem 0.45rem;
+    border-radius: 1.1rem;
     background: var(--surface, #fff);
     border: 1px solid var(--border-soft, #e4eaf2);
     box-shadow: 0 12px 30px rgba(10, 22, 51, 0.12);
@@ -651,10 +651,23 @@ textarea.form-input:focus {
     text-decoration: none;
 }
 
+.jrh-mascot--on-dark {
+    display: none;
+}
+
+html[data-theme="dark"] .jrh-mascot--on-light {
+    display: none;
+}
+
+html[data-theme="dark"] .jrh-mascot--on-dark {
+    display: block;
+}
+
 .jrh-float img,
 .jrh-float .jrh-bot-floating {
-    width: 2.6rem;
-    height: 2.6rem;
+    width: 2.85rem;
+    height: 2.85rem;
+    flex-shrink: 0;
     object-fit: contain;
     background: transparent;
 }
@@ -662,11 +675,17 @@ textarea.form-input:focus {
 .jrh-float strong,
 .jrh-float span {
     display: block;
+    line-height: 1.2;
+}
+
+.jrh-float strong {
+    font-size: 0.82rem;
+    color: var(--text-primary);
 }
 
 .jrh-float span {
-    font-size: 0.75rem;
-    color: #059669;
+    font-size: 0.72rem;
+    color: var(--color-brand, #059669);
 }
 
 body.is-jrh-ask-page .jrh-float,
