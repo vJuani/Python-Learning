@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Eval Marketing IA | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-eval.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="mkt-eval">
+    <header class="mkt-composer__head">
+        <div>
+            <p class="mkt-kicker">Interno · admin</p>
+            <h1>Evaluación de calidad Marketing IA</h1>
+            <p class="field-help">Genera copy real por formato/style/tone. No toca el composer de producción ni guarda assets de usuario.</p>
+        </div>
+        <a class="mkt-close" href="{{ url_for('marketing_new') }}">Composer</a>
+    </header>
+
+    <section class="mkt-eval__cases" aria-label="Batería de prueba">
+        <h2>Test set</h2>
+        <ul>
+            {% for case in view.cases %}
+            <li>
+                <strong>{{ case.label }}</strong>
+                <span>{{ case.origin }}</span>
+                {% if case.matches %}
+                <small>{{ case.matches|length }} match{{ 'es' if case.matches|length != 1 else '' }}</small>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        <p class="field-help">No se disparan todas las combinaciones. Elegí un caso, una propiedad y generá a mano.</p>
+    </section>
+
+    <form class="mkt-eval__form" method="post" action="{{ url_for('marketing_eval_generate') }}">
+        <label>
+            <span>Propiedad real</span>
+            <select name="property_id">
+                <option value="">— Sin propiedad (libre / marca personal) —</option>
+                {% for property in view.properties %}
+                <option value="{{ property.id }}" {% if request.args.get('property_id')|int == property.id %}selected{% endif %}>
+                    {{ property.address or property.formatted_address or property.id }}
+                    {% if property.listing_purpose %} · {{ property.listing_purpose }}{% endif %}
+                    {% if property.property_type %} · {{ property.property_type }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Formato</span>
+            <select name="format">
+                {% for item in view.formats %}
+                <option value="{{ item }}">{{ item }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Style</span>
+            <select name="style">
+                {% for item in view.styles %}
+                <option value="{{ item }}">{{ item }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Tone</span>
+            <select name="tone">
+                {% for item in view.tones %}
+                <option value="{{ item }}">{{ item }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Origen</span>
+            <select name="origin">
+                {% for item in view.origins %}
+                <option value="{{ item }}">{{ item }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Caso</span>
+            <select name="case_slug">
+                <option value="">—</option>
+                {% for case in view.cases %}
+                <option value="{{ case.slug }}">{{ case.label }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="mkt-eval__notes">
+            <span>Notas</span>
+            <textarea name="notes" rows="3" placeholder="Ángulo, restricciones, marca personal, brief libre…"></textarea>
+        </label>
+        <div class="mkt-eval__actions">
+            <button type="submit" class="btn btn-primary">Generar contenido</button>
+            <button type="submit" class="btn btn-secondary" formaction="{{ url_for('marketing_eval_variants') }}">Generar 3 variantes</button>
+        </div>
+    </form>
+
+    {% if view.variants %}
+    <section class="mkt-eval__variants">
+        <h2>Variantes</h2>
+        <div class="mkt-eval__grid">
+            {% for run in view.variants %}
+            <article class="mkt-eval__card">
+                <p class="mkt-kicker">{{ run.variant_label or run.style }} · {{ run.tone }}</p>
+                <pre>{{ run.rendered_text }}</pre>
+                <a href="{{ url_for('marketing_eval', run_id=run.id, group_id=run.group_id) }}">Abrir</a>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if view.selected %}
+    {% set run = view.selected %}
+    <article class="mkt-eval__result" id="eval-run">
+        <header>
+            <h2>Generación #{{ run.id }}</h2>
+            <p>{{ run.property_label }} · {{ run.format }} · {{ run.style }} · {{ run.tone }}{% if run.variant_label %} · {{ run.variant_label }}{% endif %}</p>
+        </header>
+        <dl class="mkt-qa-audit">
+            <div><dt>prompt_version</dt><dd>{{ run.prompt_version }}</dd></div>
+            <div><dt>modelo</dt><dd>{{ run.model }}</dd></div>
+            <div><dt>provider</dt><dd>{{ run.provider }}</dd></div>
+            <div><dt>tokens in/out</dt><dd>{{ run.tokens_input or '—' }} / {{ run.tokens_output or '—' }}</dd></div>
+            <div><dt>duración</dt><dd>{{ run.duration_ms }} ms</dd></div>
+            <div><dt>origen</dt><dd>{{ run.origin }}</dd></div>
+            {% if run.error %}
+            <div><dt>error</dt><dd>{{ run.error }}</dd></div>
+            {% endif %}
+        </dl>
+        <h3>Creative brief</h3>
+        <p>{{ run.creative_brief }}</p>
+        <h3>Input resumido</h3>
+        <pre>{{ run.input_summary | tojson(indent=2) }}</pre>
+        <h3>Output estructurado</h3>
+        <pre>{{ run.output | tojson(indent=2) }}</pre>
+        <h3>Texto renderizado</h3>
+        <pre class="mkt-eval__render">{{ run.rendered_text }}</pre>
+
+        <form class="mkt-eval__score" method="post" action="{{ url_for('marketing_eval_score', run_id=run.id) }}">
+            <h3>Score manual</h3>
+            <div class="mkt-eval__score-options">
+                {% for key, label in view.scores %}
+                <label>
+                    <input type="radio" name="score" value="{{ key }}" {% if run.score == key %}checked{% endif %} required>
+                    {{ label }}
+                </label>
+                {% endfor %}
+            </div>
+            <fieldset>
+                <legend>Problemas</legend>
+                {% for key, label in view.issues %}
+                <label>
+                    <input type="checkbox" name="issues" value="{{ key }}" {% if key in (run.issues or []) %}checked{% endif %}>
+                    {{ label }}
+                </label>
+                {% endfor %}
+            </fieldset>
+            <button type="submit" class="btn btn-primary">Guardar score</button>
+        </form>
+    </article>
+    {% endif %}
+
+    {% if view.compare %}
+    <section class="mkt-eval__compare">
+        <h2>Comparar A vs B</h2>
+        <div class="mkt-eval__grid">
+            {% for side, run in [('A', view.compare.a), ('B', view.compare.b)] %}
+            <article class="mkt-eval__card">
+                <p class="mkt-kicker">{{ side }} · #{{ run.id }} · {{ run.model }} · {{ run.prompt_version }}</p>
+                <p>{{ run.format }} / {{ run.style }} / {{ run.tone }}</p>
+                <pre>{{ run.rendered_text }}</pre>
+                <p class="field-help">{{ run.score or 'sin score' }} · {{ run.duration_ms }} ms</p>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="mkt-eval__history">
+        <h2>Historial</h2>
+        <form class="mkt-eval__compare-form" method="get" action="{{ url_for('marketing_eval') }}">
+            <label>A <input type="number" name="a" value="{{ request.args.get('a', '') }}"></label>
+            <label>B <input type="number" name="b" value="{{ request.args.get('b', '') }}"></label>
+            <button type="submit" class="btn btn-secondary">Comparar</button>
+        </form>
+        <table class="mkt-eval__table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Propiedad</th>
+                    <th>Formato</th>
+                    <th>Style</th>
+                    <th>Tone</th>
+                    <th>Score</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in view.runs %}
+                <tr>
+                    <td>{{ run.id }}</td>
+                    <td>{{ run.property_label }}</td>
+                    <td>{{ run.format }}</td>
+                    <td>{{ run.style }}</td>
+                    <td>{{ run.tone }}</td>
+                    <td>{{ run.score or '—' }}</td>
+                    <td><a href="{{ url_for('marketing_eval', run_id=run.id) }}">ver</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</section>
+{% endblock %}

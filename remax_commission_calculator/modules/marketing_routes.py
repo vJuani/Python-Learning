@@ -15,6 +15,12 @@ from flask import (
 from modules.auth import get_current_user, is_admin, is_agent, is_guest_session
 from modules.marketing_context import MarketingError
 from modules.marketing_qa import resolve_qa_file, run_raw_story_qa
+from modules.marketing_eval import (
+    prepare_eval_view,
+    run_eval_generation,
+    run_eval_variants,
+)
+from modules.database.marketing_eval_repository import score_eval_run
 from modules.marketing_service import (
     asset_download_name,
     cleanup_expired_marketing_assets,
@@ -51,6 +57,14 @@ def register_marketing_routes(app, helpers):
         if is_admin(user) or is_agent(user):
             return user
         return None
+
+    def _eval_admin():
+        if is_guest_session():
+            return None
+        user = get_current_user()
+        if user is None or not is_admin(user):
+            return None
+        return user
 
     def _handle(error, fallback_endpoint="marketing_new"):
         if error.status_code == 403:
@@ -320,6 +334,87 @@ def register_marketing_routes(app, helpers):
     @app.route("/marketing/assets/<int:asset_id>/download.pdf")
     def marketing_download_pdf(asset_id):
         return _send_asset(asset_id, kind="pdf", as_attachment=True)
+
+    @app.route("/marketing/eval", methods=["GET"])
+    def marketing_eval():
+        user = _eval_admin()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            view = prepare_eval_view(
+                organization_id,
+                user,
+                run_id=request.args.get("run_id", type=int),
+                group_id=(request.args.get("group_id") or "").strip() or None,
+                compare_a=request.args.get("a", type=int),
+                compare_b=request.args.get("b", type=int),
+                case_slug=(request.args.get("case") or "").strip() or None,
+            )
+        except MarketingError as error:
+            return _handle(error, "marketing_eval")
+        return render_template("marketing/eval.html", view=view)
+
+    @app.route("/marketing/eval/generate", methods=["POST"])
+    def marketing_eval_generate():
+        user = _eval_admin()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            run = run_eval_generation(
+                organization_id,
+                user,
+                property_id=request.form.get("property_id", type=int),
+                fmt=request.form.get("format"),
+                style=request.form.get("style"),
+                tone=request.form.get("tone"),
+                notes=(request.form.get("notes") or "").strip(),
+                origin=request.form.get("origin") or "listing",
+                case_slug=(request.form.get("case_slug") or "").strip() or None,
+            )
+        except MarketingError as error:
+            return _handle(error, "marketing_eval")
+        return redirect(url_for("marketing_eval", run_id=run["id"]))
+
+    @app.route("/marketing/eval/variants", methods=["POST"])
+    def marketing_eval_variants():
+        user = _eval_admin()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            bundle = run_eval_variants(
+                organization_id,
+                user,
+                property_id=request.form.get("property_id", type=int),
+                fmt=request.form.get("format"),
+                notes=(request.form.get("notes") or "").strip(),
+                origin=request.form.get("origin") or "listing",
+                case_slug=(request.form.get("case_slug") or "").strip() or None,
+            )
+        except MarketingError as error:
+            return _handle(error, "marketing_eval")
+        first = bundle["runs"][0]["id"] if bundle["runs"] else None
+        return redirect(url_for("marketing_eval", run_id=first, group_id=bundle["group_id"]))
+
+    @app.route("/marketing/eval/runs/<int:run_id>/score", methods=["POST"])
+    def marketing_eval_score(run_id):
+        user = _eval_admin()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            score_eval_run(
+                run_id,
+                organization_id,
+                score=(request.form.get("score") or "").strip(),
+                issues=request.form.getlist("issues"),
+            )
+        except ValueError:
+            flash_i18n("marketing_eval_score_invalid", "error")
+            return redirect(url_for("marketing_eval", run_id=run_id))
+        return redirect(url_for("marketing_eval", run_id=run_id))
 
     @app.route("/marketing/qa/raw-story", methods=["GET", "POST"])
     def marketing_qa_raw_story():

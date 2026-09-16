@@ -227,6 +227,7 @@ def request_structured_json(
     image_bytes_len=0,
     image_content_type=None,
     log_prefix="cash_ai",
+    return_meta=False,
 ):
     """
     Single OpenAI chat/completions JSON call shared by every
@@ -373,7 +374,18 @@ def request_structured_json(
         sorted(parsed.keys()) if isinstance(parsed, dict) else None,
     )
 
-    return parsed
+    if not return_meta:
+        return parsed
+
+    usage = body.get("usage") if isinstance(body, dict) else {}
+    usage = usage if isinstance(usage, dict) else {}
+    return {
+        "data": parsed,
+        "model": (body.get("model") if isinstance(body, dict) else None) or model,
+        "tokens_input": usage.get("prompt_tokens"),
+        "tokens_output": usage.get("completion_tokens"),
+        "request_id": request_id,
+    }
 
 
 def _openai_extract(

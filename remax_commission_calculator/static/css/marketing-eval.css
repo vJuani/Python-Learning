@@ -1,0 +1,156 @@
+.mkt-eval {
+    width: 100%;
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: 0.4rem 0 3rem;
+    display: grid;
+    gap: 1.5rem;
+}
+
+.mkt-eval h2,
+.mkt-eval h3 {
+    margin: 0 0 0.6rem;
+}
+
+.mkt-eval__cases ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.5rem;
+}
+
+.mkt-eval__cases li {
+    border: 1px solid var(--border-soft, #e4eaf2);
+    border-radius: 0.75rem;
+    padding: 0.45rem 0.7rem;
+    background: var(--surface, #fff);
+    display: grid;
+    gap: 0.1rem;
+}
+
+.mkt-eval__form,
+.mkt-eval__score,
+.mkt-eval__result,
+.mkt-eval__history,
+.mkt-eval__variants,
+.mkt-eval__compare,
+.mkt-eval__cases {
+    border: 1px solid var(--border-soft, #e4eaf2);
+    border-radius: 1rem;
+    padding: 1rem 1.1rem;
+    background: var(--surface, #fff);
+}
+
+.mkt-eval__form {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem 1rem;
+}
+
+.mkt-eval__form label,
+.mkt-eval__compare-form label {
+    display: grid;
+    gap: 0.3rem;
+    font-size: 0.82rem;
+    font-weight: 650;
+}
+
+.mkt-eval__form select,
+.mkt-eval__form textarea,
+.mkt-eval__compare-form input {
+    min-height: 2.4rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--input-border, #d5dde8);
+    border-radius: 0.6rem;
+    font: inherit;
+    background: var(--input-bg, #fff);
+    color: inherit;
+}
+
+.mkt-eval__notes,
+.mkt-eval__actions {
+    grid-column: 1 / -1;
+}
+
+.mkt-eval__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.mkt-eval__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.mkt-eval__card,
+.mkt-eval__result pre,
+.mkt-eval__card pre {
+    background: var(--color-surface-secondary, #f7f9fd);
+    border-radius: 0.8rem;
+    padding: 0.75rem;
+}
+
+.mkt-eval pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.86rem;
+}
+
+.mkt-eval__render {
+    font-size: 1rem;
+    line-height: 1.45;
+}
+
+.mkt-eval__score-options,
+.mkt-eval__score fieldset {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem 1rem;
+    border: 0;
+    padding: 0;
+    margin: 0 0 0.8rem;
+}
+
+.mkt-eval__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+}
+
+.mkt-eval__table th,
+.mkt-eval__table td {
+    text-align: left;
+    padding: 0.4rem 0.35rem;
+    border-bottom: 1px solid var(--border-soft, #e4eaf2);
+}
+
+.mkt-eval__compare-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: end;
+    margin-bottom: 0.8rem;
+}
+
+@media (max-width: 900px) {
+    .mkt-eval__form,
+    .mkt-eval__grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+[data-theme="dark"] .mkt-eval__form,
+[data-theme="dark"] .mkt-eval__score,
+[data-theme="dark"] .mkt-eval__result,
+[data-theme="dark"] .mkt-eval__history,
+[data-theme="dark"] .mkt-eval__variants,
+[data-theme="dark"] .mkt-eval__compare,
+[data-theme="dark"] .mkt-eval__cases,
+[data-theme="dark"] .mkt-eval__cases li {
+    background: var(--surface);
+    border-color: var(--border-soft);
+}
