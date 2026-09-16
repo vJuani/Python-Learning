@@ -422,12 +422,6 @@
     color: var(--text-muted);
 }
 
-[data-theme="dark"] body.is-login-page .login-google {
-    background: var(--surface);
-    border-color: var(--border-soft);
-    color: var(--text);
-}
-
 [data-theme="dark"] .app-rail-promo {
     background: linear-gradient(180deg, var(--card-muted) 0%, var(--surface) 100%);
     border-color: var(--border-soft);

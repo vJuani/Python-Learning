@@ -201,7 +201,10 @@
 
 .pending-block__item a {
     display: grid;
-    gap: 2px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 12px;
+    row-gap: 2px;
+    align-items: start;
     padding: 9px 12px;
     border-left: 3px solid var(--text-muted, #98a2c0);
     border-radius: 8px;
@@ -223,8 +226,22 @@
 }
 
 .pending-block__item-title {
+    grid-column: 1;
     font-size: 0.88rem;
     font-weight: 600;
+}
+
+.pending-block__item-meta {
+    grid-column: 1;
+}
+
+.pending-block__item-amount {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    text-align: right;
+    font-weight: 650;
+    white-space: nowrap;
 }
 
 .pending-block__item-meta,

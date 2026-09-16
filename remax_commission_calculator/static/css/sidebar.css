@@ -59,6 +59,11 @@
     }
 
     body.has-app-rail .app-rail.jrh-sidebar.is-hover-open {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100vh;
+        z-index: 120;
         box-shadow: 16px 0 32px rgba(3, 8, 18, 0.28);
     }
 

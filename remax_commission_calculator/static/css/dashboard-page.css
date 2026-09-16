@@ -2,9 +2,10 @@
  * JRH One — Home / agent dashboard (desktop mockup)
  */
 
-.home-panel {
+.home-panel.ds-home {
     display: grid;
-    gap: 1.25rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-4);
 }
 
 .home-panel__header {
@@ -126,9 +127,10 @@
 }
 
 .home-panel__layout {
+    grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(17rem, 20rem);
-    gap: 1rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: inherit;
     align-items: start;
 }
 
@@ -166,10 +168,18 @@
     object-fit: contain;
 }
 
-.home-panel__main,
-.home-panel__aside {
+.home-panel__main {
+    grid-column: 1 / 4;
     display: grid;
-    gap: 1.25rem;
+    gap: var(--space-4);
+    min-width: 0;
+}
+
+.home-panel__aside {
+    grid-column: 4;
+    display: grid;
+    gap: var(--space-4);
+    min-width: 0;
 }
 
 .home-panel__split {
@@ -568,8 +578,14 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .home-panel.ds-home,
     .home-panel__layout {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .home-panel__main,
+    .home-panel__aside {
+        grid-column: 1 / -1;
     }
 
     .home-panel__split {

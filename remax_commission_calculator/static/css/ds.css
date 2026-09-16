@@ -2,20 +2,36 @@
 
 .ds-home {
     display: grid;
-    gap: var(--space-5);
-}
-
-.ds-home__layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(17rem, 20rem);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--space-4);
     align-items: start;
 }
 
-.ds-home__main,
-.ds-home__aside {
+.ds-home > .ds-page-header,
+.ds-home > .ds-metrics {
+    grid-column: 1 / -1;
+}
+
+.ds-home__layout {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: inherit;
+    align-items: start;
+}
+
+.ds-home__main {
+    grid-column: 1 / 4;
     display: grid;
     gap: var(--space-4);
+    min-width: 0;
+}
+
+.ds-home__aside {
+    grid-column: 4;
+    display: grid;
+    gap: var(--space-4);
+    min-width: 0;
 }
 
 .ds-table-cards {
@@ -79,7 +95,7 @@
 .ds-metrics {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: var(--space-4);
+    gap: inherit;
 }
 
 .ds-metric-card {
@@ -360,16 +376,25 @@ body.is-dashboard-page .app-main-inner {
 }
 
 @media (max-width: 1200px) {
+    .ds-home,
+    .ds-home__layout,
     .ds-metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .ds-home__layout {
-        grid-template-columns: 1fr;
+    .ds-home__main,
+    .ds-home__aside {
+        grid-column: 1 / -1;
     }
 }
 
 @media (max-width: 768px) {
+    .ds-home,
+    .ds-home__layout,
+    .ds-metrics {
+        grid-template-columns: 1fr;
+    }
+
     .ds-page-header__title {
         font-size: 1.25rem;
     }
