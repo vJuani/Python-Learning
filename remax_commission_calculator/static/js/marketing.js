@@ -184,5 +184,18 @@
   document.querySelectorAll("[data-mkt-chips]").forEach(setupChips);
   document.querySelectorAll("[data-mkt-prompt]").forEach(setupPromptGuard);
   document.querySelectorAll("[data-mkt-batch]").forEach(pollBatch);
+    document.querySelectorAll("form[data-mkt-origin]").forEach(function (form) {
+      var property = form.querySelector("[data-mkt-property-field]");
+      if (!property) return;
+      function sync() {
+        var selected = form.querySelector("input[name='origin']:checked");
+        var isProperty = selected && selected.value === "property";
+        property.hidden = !isProperty;
+        var select = property.querySelector("select");
+        if (select) select.required = isProperty;
+      }
+      form.addEventListener("change", sync);
+      sync();
+    });
   setupCreateDialog();
 })();

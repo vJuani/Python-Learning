@@ -69,6 +69,137 @@ ASSET_COLUMNS = (
     ("expires_at", "TEXT"),
 )
 
+GENERATIONS_SQL = """
+CREATE TABLE IF NOT EXISTS marketing_generations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    created_by_user_id INTEGER,
+    agent_id INTEGER,
+    property_id INTEGER,
+    parent_generation_id INTEGER,
+    content_type TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    objective TEXT,
+    style TEXT,
+    tone TEXT,
+    format TEXT,
+    prompt_input TEXT,
+    generated_copy TEXT,
+    generated_data TEXT,
+    provider TEXT,
+    model_name TEXT,
+    error_message TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    estimated_cost REAL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    completed_at TEXT,
+
+    FOREIGN KEY (organization_id)
+        REFERENCES organizations(id) ON DELETE RESTRICT,
+    FOREIGN KEY (created_by_user_id)
+        REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (agent_id)
+        REFERENCES agents(id) ON DELETE SET NULL,
+    FOREIGN KEY (property_id)
+        REFERENCES properties(id) ON DELETE SET NULL,
+
+    CHECK (content_type IN ('post', 'story', 'carousel', 'copy', 'whatsapp')),
+    CHECK (origin IN ('property', 'personal_brand', 'office', 'free')),
+    CHECK (status IN ('draft', 'processing', 'completed', 'failed', 'discarded'))
+)
+"""
+
+GENERATION_INDEXES = (
+    """
+    CREATE INDEX IF NOT EXISTS idx_mkt_gen_org_created
+    ON marketing_generations (organization_id, created_at)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_mkt_gen_org_author
+    ON marketing_generations (organization_id, created_by_user_id, created_at)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_mkt_gen_org_type
+    ON marketing_generations (organization_id, content_type, created_at)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_mkt_gen_org_agent
+    ON marketing_generations (organization_id, agent_id, created_at)
+    """,
+)
+
+
+def _ensure_generations(cursor, *, postgres):
+    sql = GENERATIONS_SQL
+    if postgres:
+        sql = (
+            sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+            .replace("organization_id INTEGER NOT NULL", "organization_id BIGINT NOT NULL")
+            .replace("created_by_user_id INTEGER,", "created_by_user_id BIGINT,")
+            .replace("agent_id INTEGER,", "agent_id BIGINT,")
+            .replace("property_id INTEGER,", "property_id BIGINT,")
+            .replace("parent_generation_id INTEGER,", "parent_generation_id BIGINT,")
+        )
+    cursor.execute(sql)
+    _ensure_whatsapp_content_type(cursor, postgres=postgres)
+    for statement in GENERATION_INDEXES:
+        cursor.execute(statement)
+
+
+def _ensure_whatsapp_content_type(cursor, *, postgres):
+    if postgres:
+        cursor.execute(
+            """
+            ALTER TABLE marketing_generations
+            DROP CONSTRAINT IF EXISTS marketing_generations_content_type_check
+            """
+        )
+        cursor.execute(
+            """
+            ALTER TABLE marketing_generations
+            ADD CONSTRAINT marketing_generations_content_type_check
+            CHECK (content_type IN ('post', 'story', 'carousel', 'copy', 'whatsapp'))
+            """
+        )
+        return
+    row = cursor.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='marketing_generations'"
+    ).fetchone()
+    sql = (row[0] or "") if row else ""
+    if "whatsapp" in sql:
+        return
+    for name in (
+        "idx_mkt_gen_org_created",
+        "idx_mkt_gen_org_author",
+        "idx_mkt_gen_org_type",
+        "idx_mkt_gen_org_agent",
+    ):
+        cursor.execute(f"DROP INDEX IF EXISTS {name}")
+    cursor.execute("ALTER TABLE marketing_generations RENAME TO marketing_generations_old")
+    cursor.execute(GENERATIONS_SQL)
+    cursor.execute(
+        """
+        INSERT INTO marketing_generations (
+            id, organization_id, created_by_user_id, agent_id, property_id,
+            parent_generation_id, content_type, origin, status, objective,
+            style, tone, format, prompt_input, generated_copy, generated_data,
+            provider, model_name, error_message, input_tokens, output_tokens,
+            estimated_cost, created_at, updated_at, completed_at
+        )
+        SELECT
+            id, organization_id, created_by_user_id, agent_id, property_id,
+            parent_generation_id, content_type, origin, status, objective,
+            style, tone, format, prompt_input, generated_copy, generated_data,
+            provider, model_name, error_message, input_tokens, output_tokens,
+            estimated_cost, created_at, updated_at, completed_at
+        FROM marketing_generations_old
+        """
+    )
+    cursor.execute("DROP TABLE marketing_generations_old")
+
 
 def _column_exists(cursor, table_name, column_name):
     rows = cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
@@ -116,6 +247,7 @@ def migrate_marketing_sqlite():
             WHERE idempotency_key IS NOT NULL AND TRIM(idempotency_key) != ''
             """
         )
+        _ensure_generations(cursor, postgres=False)
         connection.commit()
     except Exception:
         connection.rollback()
@@ -162,6 +294,7 @@ def migrate_marketing_postgres(cursor):
     )
     for statement in INDEXES:
         cursor.execute(statement.replace("TRIM(", "BTRIM("))
+    _ensure_generations(cursor, postgres=True)
 
 
 def migrate_marketing():

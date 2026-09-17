@@ -11,6 +11,7 @@ import base64
 import json
 import logging
 import os
+import socket
 import urllib.error
 import urllib.request
 
@@ -219,6 +220,37 @@ def _sanitize_openai_error_body(raw_text):
     return text.replace("sk-", "sk-***")
 
 
+def _is_timeout_error(error):
+    if isinstance(error, (TimeoutError, socket.timeout)):
+        return True
+    reason = getattr(error, "reason", None)
+    if isinstance(reason, (TimeoutError, socket.timeout)):
+        return True
+    name = type(error).__name__.lower()
+    if "timeout" in name:
+        return True
+    message = str(error).lower()
+    return "timed out" in message or "timeout" in message
+
+
+def _usage_from_body(body):
+    usage = body.get("usage") if isinstance(body, dict) else None
+    if not isinstance(usage, dict):
+        return {"input_tokens": 0, "output_tokens": 0}
+    try:
+        input_tokens = int(usage.get("prompt_tokens") or 0)
+    except (TypeError, ValueError):
+        input_tokens = 0
+    try:
+        output_tokens = int(usage.get("completion_tokens") or 0)
+    except (TypeError, ValueError):
+        output_tokens = 0
+    return {
+        "input_tokens": max(0, input_tokens),
+        "output_tokens": max(0, output_tokens),
+    }
+
+
 def request_structured_json(
     *,
     instructions,
@@ -227,6 +259,8 @@ def request_structured_json(
     image_bytes_len=0,
     image_content_type=None,
     log_prefix="cash_ai",
+    return_usage=False,
+    timeout=90,
 ):
     """
     Single OpenAI chat/completions JSON call shared by every
@@ -291,7 +325,7 @@ def request_structured_json(
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=90) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             raw_body = response.read().decode("utf-8")
             request_id = response.headers.get(
                 "x-request-id"
@@ -326,8 +360,9 @@ def request_structured_json(
             type(error).__name__,
             str(error)[:200],
         )
+        code = "openai_timeout" if _is_timeout_error(error) else "openai_request_failed"
         raise CashAiProviderError(
-            "openai_request_failed",
+            code,
             stage="provider_request_failed",
             details={
                 "error_type": type(error).__name__,
@@ -347,6 +382,7 @@ def request_structured_json(
         body = json.loads(raw_body)
         content = body["choices"][0]["message"]["content"]
         parsed = json.loads(content)
+        usage = _usage_from_body(body)
     except (KeyError, IndexError, TypeError, ValueError) as error:
         logger.error(
             "%s stage=provider_response_parsed_failed "
@@ -367,12 +403,16 @@ def request_structured_json(
 
     logger.info(
         "%s stage=provider_response_parsed "
-        "request_id=%s keys=%s",
+        "request_id=%s keys=%s input_tokens=%s output_tokens=%s",
         log_prefix,
         request_id,
         sorted(parsed.keys()) if isinstance(parsed, dict) else None,
+        usage.get("input_tokens"),
+        usage.get("output_tokens"),
     )
 
+    if return_usage:
+        return parsed, usage
     return parsed
 
 

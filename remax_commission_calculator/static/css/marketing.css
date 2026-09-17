@@ -379,3 +379,111 @@ body.is-creative-page .jrh-float {
     }
     .mkt-asset__preview { max-width: 22rem; margin: 0 auto; }
 }
+
+.mkt-hub {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 16px;
+    padding: 0;
+    margin: 0 0 24px;
+    list-style: none;
+}
+.mkt-hub__card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 112px;
+    padding: 18px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--color-border, #dce4df);
+    background: var(--color-surface, #fff);
+    color: var(--color-text, #152021);
+    text-decoration: none;
+}
+.mkt-hub__card strong {
+    font-size: 1.05rem;
+}
+.mkt-hub__card span,
+.mkt-hub__card small {
+    color: var(--color-text-muted, #596561);
+    font-size: 0.92rem;
+}
+.mkt-create {
+    display: grid;
+    gap: 16px;
+    max-width: 40rem;
+}
+.mkt-create fieldset {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 12px 0;
+    border: 0;
+    border-bottom: 1px solid var(--color-border, #dce4df);
+}
+.mkt-create legend {
+    font-weight: 800;
+    padding: 0;
+}
+.mkt-create label {
+    display: grid;
+    gap: 6px;
+}
+.mkt-filters {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin: 0 0 16px;
+}
+.mkt-filters a {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border, #dce4df);
+    color: var(--color-text, #152021);
+    text-decoration: none;
+    font-weight: 650;
+}
+.mkt-filters a.is-active {
+    background: var(--color-brand, #156a4a);
+    border-color: var(--color-brand, #156a4a);
+    color: #fff;
+}
+.mkt-gen-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+}
+.mkt-gen-list a {
+    display: grid;
+    gap: 4px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid var(--color-border, #dce4df);
+    background: var(--color-surface, #fff);
+    color: inherit;
+    text-decoration: none;
+}
+.mkt-gen-meta {
+    display: grid;
+    gap: 12px;
+    margin: 0 0 20px;
+}
+.mkt-gen-meta div {
+    display: grid;
+    gap: 2px;
+}
+.mkt-gen-meta dt {
+    color: var(--color-text-muted, #596561);
+    font-size: 0.8rem;
+}
+.mkt-gen-copy pre {
+    white-space: pre-wrap;
+    padding: 16px;
+    border-radius: 16px;
+    background: var(--color-surface-secondary, #eef2ee);
+    color: var(--color-text, #152021);
+}

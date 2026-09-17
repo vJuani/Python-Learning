@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-marketing-ia-page{% endblock %}
+
+{% block title %}{{ t('marketing_ia_templates') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="mkt-kicker"><a href="{{ url_for('marketing_home') }}">{{ t('marketing_ia_title') }}</a></p>
+        <h2>{{ t('marketing_ia_templates') }}</h2>
+        <p class="field-help">{{ t('marketing_ia_templates_soon') }}</p>
+    </div>
+</section>
+
+<ul class="mkt-hub">
+    <li class="mkt-hub__card"><strong>{{ t('marketing_ia_type_post') }}</strong><span>{{ t('marketing_ia_templates_soon') }}</span></li>
+    <li class="mkt-hub__card"><strong>{{ t('marketing_ia_type_story') }}</strong><span>{{ t('marketing_ia_templates_soon') }}</span></li>
+    <li class="mkt-hub__card"><strong>{{ t('marketing_ia_type_carousel') }}</strong><span>{{ t('marketing_ia_templates_soon') }}</span></li>
+    <li class="mkt-hub__card"><strong>{{ t('marketing_ia_type_copy') }}</strong><span>{{ t('marketing_ia_templates_soon') }}</span></li>
+    <li class="mkt-hub__card"><strong>{{ t('marketing_ia_type_whatsapp') }}</strong><span>{{ t('marketing_ia_templates_soon') }}</span></li>
+</ul>
+{% endblock %}

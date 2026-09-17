@@ -33,11 +33,13 @@
                 {% with icon='reports' %}{% include "_m_icon.html" %}{% endwith %}
                 <span>{{ t('nav_reports') }}</span>
             </a>
-            {% if is_agent() %}
-            <a class="m-tile" href="{{ url_for('marketing_new') }}">
+            {% if is_agent() or is_admin() %}
+            <a class="m-tile" href="{{ url_for('marketing_home') }}">
                 {% with icon='marketing' %}{% include "_m_icon.html" %}{% endwith %}
-                <span>{{ t('nav_marketing_create') }}</span>
+                <span>{{ t('marketing_ia_title') }}</span>
             </a>
+            {% endif %}
+            {% if is_agent() %}
             <a class="m-tile" href="{{ url_for('jrh_ask') }}">
                 {% with icon='jrh' %}{% include "_m_icon.html" %}{% endwith %}
                 <span>{{ t('nav_jrh_ia') }}</span>

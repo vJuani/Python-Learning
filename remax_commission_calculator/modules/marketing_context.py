@@ -17,8 +17,10 @@ from modules.marketing_language import default_kicker, marketing_zone_line, oper
 from modules.property_detail_view import (
     compact_property_location,
     compact_property_title,
+    maintenance_line,
     parse_external_metadata,
 )
+from modules.property_features import FEATURE_KEYS
 from modules.property_inventory import decorate_property_for_display
 from modules.property_media_access import can_access_property_media
 from modules.database.property_media_repository import list_property_media
@@ -52,6 +54,33 @@ STYLES = ("elegant", "modern", "minimal")
 TONES = ("professional", "commercial", "warm")
 TEMPLATES = ("editorial", "visual", "minimal")
 PHOTO_LIMIT = 5
+
+AMENITY_LABELS = {
+    "es": {
+        "balcony": "balcón",
+        "terrace": "terraza",
+        "garden": "jardín",
+        "pool": "pileta",
+        "grill": "parrilla",
+        "laundry": "lavadero",
+        "storage": "baulera",
+        "elevator": "ascensor",
+        "security": "seguridad",
+        "furnished": "amoblado",
+    },
+    "en": {
+        "balcony": "balcony",
+        "terrace": "terrace",
+        "garden": "garden",
+        "pool": "pool",
+        "grill": "grill",
+        "laundry": "laundry",
+        "storage": "storage",
+        "elevator": "elevator",
+        "security": "security",
+        "furnished": "furnished",
+    },
+}
 
 
 class MarketingError(Exception):
@@ -131,6 +160,75 @@ def _chips(display, language):
             number = f"{value:.2f}"
         chips.append(f"{number} m²")
     return chips[:4]
+
+
+def _as_number(value):
+    if value in (None, ""):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number <= 0:
+        return None
+    return int(number) if number == int(number) else number
+
+
+def _amenity_facts(display, language):
+    features = display.get("features") if isinstance(display.get("features"), dict) else {}
+    labels = AMENITY_LABELS.get("en" if str(language).lower().startswith("en") else "es")
+    amenities = []
+    flags = {}
+    for key in FEATURE_KEYS:
+        if features.get(key):
+            flags[key] = True
+            amenities.append(labels.get(key, key))
+    garden = bool(features.get("garden"))
+    flags["patio"] = garden
+    flags["balcony"] = bool(features.get("balcony"))
+    flags["terrace"] = bool(features.get("terrace"))
+    flags["pool"] = bool(features.get("pool"))
+    flags["grill"] = bool(features.get("grill"))
+    flags["security"] = bool(features.get("security"))
+    flags["elevator"] = bool(features.get("elevator"))
+    return amenities, {key: value for key, value in flags.items() if value}
+
+
+def _listing_detail_facts(display):
+    meta = parse_external_metadata(display)
+    dimensions = meta.get("dimensions") if isinstance(meta.get("dimensions"), dict) else {}
+    covered = _as_number(display.get("covered_m2")) or _as_number(dimensions.get("covered"))
+    total = _as_number(display.get("total_m2")) or _as_number(dimensions.get("total_built"))
+    uncovered = _as_number(dimensions.get("uncovered"))
+    if uncovered is None and covered is not None and total is not None and total > covered:
+        uncovered = _as_number(total - covered)
+    floor = str(meta.get("floor") or "").strip() or None
+    orientation = str(meta.get("orientation") or "").strip() or None
+    condition = str(meta.get("property_condition") or "").strip() or None
+    year_build = meta.get("year_build")
+    try:
+        year_build = int(year_build)
+    except (TypeError, ValueError):
+        year_build = None
+    age = None
+    if year_build and 1800 <= year_build <= 2100:
+        from datetime import datetime
+
+        age = datetime.utcnow().year - year_build
+        if age < 0 or age > 200:
+            age = None
+    expenses = maintenance_line(display, language="es")
+    return {
+        "covered_m2": covered,
+        "total_m2": total,
+        "uncovered_m2": uncovered,
+        "floor": floor,
+        "orientation": orientation,
+        "condition": condition,
+        "age": age,
+        "year_build": year_build,
+        "expenses": expenses,
+    }
 
 
 def _price_policy(meta, display):
@@ -288,16 +386,23 @@ def build_property_marketing_context(
         or display.get("jurisdiction")
         or ""
     )
+    details = _listing_detail_facts(display)
+    amenities, amenity_flags = _amenity_facts(display, language)
+    description = (display.get("description") or "").strip() or None
+    if description and len(description) > 900:
+        description = description[:900].rstrip()
     facts = {
         "property_id": display.get("id"),
         "organization_id": display.get("organization_id"),
         "agent_id": display.get("agent_id"),
         "title": compact_property_title(display),
         "location_line": compact_property_location(display),
-        "locality": locality,
+        "neighborhood": display.get("neighborhood") or None,
+        "locality": display.get("locality") or locality or None,
         "jurisdiction": display.get("jurisdiction"),
         "purpose": purpose,
         "purpose_label": _purpose_label(purpose, language),
+        "operation_type": purpose,
         "type_label": type_label,
         "price_label": price_label,
         "listing_price": display.get("listing_price"),
@@ -305,10 +410,19 @@ def build_property_marketing_context(
         "rooms": display.get("rooms"),
         "bedrooms": display.get("bedrooms"),
         "bathrooms": display.get("bathrooms"),
-        "covered_m2": display.get("covered_m2"),
-        "total_m2": display.get("total_m2"),
+        "garages": display.get("parking_spaces"),
+        "parking_spaces": display.get("parking_spaces"),
+        "covered_m2": details["covered_m2"] if details["covered_m2"] is not None else display.get("covered_m2"),
+        "total_m2": details["total_m2"] if details["total_m2"] is not None else display.get("total_m2"),
+        "uncovered_m2": details["uncovered_m2"],
+        "floor": details["floor"],
+        "orientation": details["orientation"],
+        "age": details["age"],
+        "condition": details["condition"],
+        "expenses": details["expenses"],
+        "amenities": amenities,
         "chips": _chips(display, language),
-        "description": (display.get("description") or "").strip() or None,
+        "description": description,
         "price_policy": price_policy,
         "brand_name": branding["brand_name"],
         "office_name": branding["office_name"],
@@ -349,6 +463,8 @@ def build_property_marketing_context(
         "used_demo_fallback": branding["used_demo_fallback"],
         "publishable": branding["publishable"],
     }
+    if amenity_flags:
+        facts["amenity_flags"] = amenity_flags
     for key in list(facts):
         if key.lower() in FORBIDDEN_FACT_KEYS:
             facts.pop(key, None)

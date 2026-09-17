@@ -80,7 +80,7 @@ class AppNavTests(unittest.TestCase):
         self.assertNotIn("acm_list", keys)
         self.assertNotIn("productivity_home", keys)
         self.assertIn("jrh_ask", keys)
-        self.assertIn("marketing_new", keys)
+        self.assertIn("marketing_home", keys)
         self.assertEqual(nav["role"], "admin")
 
     def test_agent_sees_crm_agenda_not_cash(self):
@@ -189,7 +189,7 @@ class AppNavTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn('href="/contacts"', body)
         self.assertIn('href="/jrh"', body)
-        self.assertIn('href="/marketing/new"', body)
+        self.assertIn('href="/marketing"', body)
         self.assertNotIn('href="/cash"', body)
         self.assertNotIn('href="/users"', body)
         self.assertIn('aria-label="', body)

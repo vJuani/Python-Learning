@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-marketing-ia-page{% endblock %}
+
+{% block title %}{{ t('marketing_ia_brand_kit') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="mkt-kicker"><a href="{{ url_for('marketing_home') }}">{{ t('marketing_ia_title') }}</a></p>
+        <h2>{{ t('marketing_ia_brand_kit') }}</h2>
+        <p class="field-help">{{ t('settings_marketing_brand_help') }}</p>
+    </div>
+    {% if can_manage_users() %}
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('organization_settings') }}">{{ t('settings_marketing_brand_title') }}</a>
+    </div>
+    {% endif %}
+</section>
+
+<dl class="mkt-gen-meta">
+    <div>
+        <dt>{{ t('settings_marketing_brand_name') }}</dt>
+        <dd>{{ settings.marketing_brand_name or '—' }}</dd>
+    </div>
+    <div>
+        <dt>{{ t('settings_marketing_phone') }}</dt>
+        <dd>{{ settings.marketing_phone or '—' }}</dd>
+    </div>
+    <div>
+        <dt>{{ t('settings_marketing_email') }}</dt>
+        <dd>{{ settings.marketing_email or '—' }}</dd>
+    </div>
+</dl>
+{% endblock %}

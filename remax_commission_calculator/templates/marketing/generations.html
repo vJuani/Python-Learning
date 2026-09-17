@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-marketing-ia-page{% endblock %}
+
+{% block title %}{{ t('marketing_ia_creations') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="mkt-kicker"><a href="{{ url_for('marketing_home') }}">{{ t('marketing_ia_title') }}</a></p>
+        <h2>{{ t('marketing_ia_creations') }}</h2>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-primary" href="{{ url_for('marketing_create') }}">{{ t('marketing_ia_create') }}</a>
+    </div>
+</section>
+
+<nav class="mkt-filters" aria-label="{{ t('marketing_ia_filter') }}">
+    <a class="{% if active_type == 'all' %}is-active{% endif %}" href="{{ url_for('marketing_generations') }}">{{ t('marketing_ia_all') }}</a>
+    <a class="{% if active_type == 'post' %}is-active{% endif %}" href="{{ url_for('marketing_generations', type='post') }}">{{ t('marketing_ia_type_post') }}</a>
+    <a class="{% if active_type == 'story' %}is-active{% endif %}" href="{{ url_for('marketing_generations', type='story') }}">{{ t('marketing_ia_type_story') }}</a>
+    <a class="{% if active_type == 'carousel' %}is-active{% endif %}" href="{{ url_for('marketing_generations', type='carousel') }}">{{ t('marketing_ia_type_carousel') }}</a>
+    <a class="{% if active_type == 'copy' %}is-active{% endif %}" href="{{ url_for('marketing_generations', type='copy') }}">{{ t('marketing_ia_type_copy') }}</a>
+    <a class="{% if active_type == 'whatsapp' %}is-active{% endif %}" href="{{ url_for('marketing_generations', type='whatsapp') }}">{{ t('marketing_ia_type_whatsapp') }}</a>
+</nav>
+
+{% if items %}
+<ul class="mkt-gen-list">
+    {% for item in items %}
+    <li>
+        <a href="{{ url_for('marketing_generation_detail', generation_id=item.id) }}">
+            <strong>{{ t('marketing_ia_type_' ~ item.content_type) }}</strong>
+            <span>{{ t('marketing_ia_status_' ~ item.status) }}</span>
+            <span>{{ item.property_address or t('marketing_ia_origin_' ~ item.origin) }}</span>
+            <span>{{ item.created_at }}</span>
+            <span>{{ item.creator_name or t('marketing_ia_creator') }}</span>
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="field-help">{{ t('marketing_empty') }}</p>
+{% endif %}
+{% endblock %}

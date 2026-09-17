@@ -138,6 +138,19 @@ If `JRH_AI_PROVIDER` is omitted:
 
 Do not leave production on an implicit mock. Add `JRH_AI_PROVIDER=openai` in Railway Variables. Do not commit API keys.
 
+### Marketing IA (text copy)
+
+| Variable | Local / tests | Production (Railway) |
+|----------|----------------|----------------------|
+| `MARKETING_AI_PROVIDER` | `mock` | `openai` |
+| `MARKETING_AI_MODEL` | unused with mock | `gpt-4o-mini` (optional upgrade: `gpt-4o`) |
+| `MARKETING_AI_TEMPERATURE` | unused with mock | `0.8` |
+| `OPENAI_API_KEY` | unset | the same Railway secret already used by Cash AI / JRH AI |
+
+Text only. Does not generate images or video. Uses its own OpenAI client (`modules/marketing_ai_client.py`), not Cash AI. Model comes only from `MARKETING_AI_MODEL` (default `gpt-4o-mini`). It does **not** inherit `JRH_AI_MODEL`.
+
+Falls back to `mock` when `MARKETING_AI_PROVIDER` is unset and there is no API key.
+
 The assistant interprets intent, then existing services resolve real records. It never writes money or issues invoices by itself.
 
 Receipt images are stored under `PRIVATE_UPLOAD_ROOT/organizations/<org>/cash/receipts/` on the volume.

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-marketing-ia-page{% endblock %}
+
+{% block title %}{{ t('marketing_ia_create') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/marketing.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="mkt-kicker"><a href="{{ url_for('marketing_home') }}">{{ t('marketing_ia_title') }}</a></p>
+        <h2>{{ t('marketing_ia_create') }}</h2>
+        <p class="field-help">{{ t('marketing_ia_mock_note') }}</p>
+    </div>
+</section>
+
+<form class="mkt-create" method="post" action="{{ url_for('marketing_create') }}" data-mkt-origin>
+    <fieldset>
+        <legend>{{ t('marketing_ia_type') }}</legend>
+        {% for key in view.content_types %}
+        <label>
+            <input type="radio" name="content_type" value="{{ key }}" {% if loop.first %}checked{% endif %} required>
+            <span>{{ t('marketing_ia_type_' ~ key) }}</span>
+        </label>
+        {% endfor %}
+    </fieldset>
+
+    <fieldset>
+        <legend>{{ t('marketing_ia_origin') }}</legend>
+        {% for key in view.origins %}
+        <label>
+            <input type="radio" name="origin" value="{{ key }}" {% if key == 'property' %}checked{% endif %} required>
+            <span>{{ t('marketing_ia_origin_' ~ key) }}</span>
+        </label>
+        {% endfor %}
+    </fieldset>
+
+    <label data-mkt-property-field>
+        <span>{{ t('marketing_choose_property') }}</span>
+        <select name="property_id">
+            <option value="">{{ t('marketing_choose_property') }}</option>
+            {% for item in view.properties %}
+            <option value="{{ item.id }}">{{ item.address }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        <span>{{ t('marketing_ia_objective') }}</span>
+        <select name="objective">
+            <option value="">{{ t('marketing_ia_optional') }}</option>
+            {% for key in view.objectives %}
+            <option value="{{ key }}">{{ t('marketing_ia_objective_' ~ key) }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        <span>{{ t('marketing_ia_style') }}</span>
+        <select name="style">
+            <option value="">{{ t('marketing_ia_optional') }}</option>
+            {% for key in view.styles %}
+            <option value="{{ key }}">{{ t('marketing_ia_style_' ~ key) }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        <span>{{ t('marketing_ia_tone') }}</span>
+        <select name="tone">
+            <option value="">{{ t('marketing_ia_optional') }}</option>
+            {% for key in view.tones %}
+            <option value="{{ key }}">{{ t('marketing_ia_tone_' ~ key) }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        <span>{{ t('marketing_ia_prompt') }}</span>
+        <textarea name="prompt_input" rows="3" placeholder="{{ t('marketing_ia_prompt_ph') }}"></textarea>
+    </label>
+
+    <button type="submit" class="btn btn-primary">{{ t('marketing_ia_generate') }}</button>
+</form>
+{% endblock %}

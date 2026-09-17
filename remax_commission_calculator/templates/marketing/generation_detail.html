@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-marketing-ia-page{% endblock %}
+
+{% block title %}{{ t('marketing_ia_type_' ~ generation.content_type) }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/marketing.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="mkt-kicker"><a href="{{ url_for('marketing_generations') }}">{{ t('marketing_ia_creations') }}</a></p>
+        <h2>{{ t('marketing_ia_type_' ~ generation.content_type) }}</h2>
+        <p class="field-help">{{ t('marketing_ia_status_' ~ generation.status) }} · {{ generation.created_at }}</p>
+    </div>
+</section>
+
+<dl class="mkt-gen-meta">
+    <div><dt>{{ t('marketing_ia_origin') }}</dt><dd>{{ t('marketing_ia_origin_' ~ generation.origin) }}</dd></div>
+    {% if generation.property_address %}
+    <div><dt>{{ t('property') }}</dt><dd>{{ generation.property_address }}</dd></div>
+    {% endif %}
+    <div><dt>{{ t('marketing_ia_creator') }}</dt><dd>{{ generation.creator_name or '—' }}</dd></div>
+    {% if generation.objective %}
+    <div><dt>{{ t('marketing_ia_objective') }}</dt><dd>{{ t('marketing_ia_objective_' ~ generation.objective) }}</dd></div>
+    {% endif %}
+    {% if generation.style %}
+    <div><dt>{{ t('marketing_ia_style') }}</dt><dd>{{ t('marketing_ia_style_' ~ generation.style) }}</dd></div>
+    {% endif %}
+    {% if generation.tone %}
+    <div><dt>{{ t('marketing_ia_tone') }}</dt><dd>{{ t('marketing_ia_tone_' ~ generation.tone) }}</dd></div>
+    {% endif %}
+</dl>
+
+{% set data = generation.generated_data or {} %}
+{% if generation.status == 'completed' and data %}
+<section class="mkt-gen-copy">
+    <h3>{{ t('marketing_ia_copy_result') }}</h3>
+    {% if generation.content_type == 'post' %}
+    <dl class="mkt-gen-meta">
+        <div><dt>{{ t('marketing_ia_headline') }}</dt><dd>{{ data.headline }}</dd></div>
+        <div><dt>{{ t('marketing_ia_caption') }}</dt><dd>{{ data.caption }}</dd></div>
+        <div><dt>{{ t('marketing_ia_cta') }}</dt><dd>{{ data.cta }}</dd></div>
+        {% if data.hashtags %}
+        <div><dt>{{ t('marketing_ia_hashtags') }}</dt><dd>{{ data.hashtags|join(' ') }}</dd></div>
+        {% endif %}
+    </dl>
+    {% elif generation.content_type == 'story' and data.frames %}
+    <ol>
+        {% for frame in data.frames %}
+        <li>
+            <strong>{{ frame.headline }}</strong>
+            <p>{{ frame.body }}</p>
+            {% if frame.cta %}<p>{{ t('marketing_ia_cta') }}: {{ frame.cta }}</p>{% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+    {% elif generation.content_type == 'carousel' %}
+    {% if data.hook %}<p><strong>{{ t('marketing_ia_hook') }}:</strong> {{ data.hook }}</p>{% endif %}
+    {% if data.slides %}
+    <ol>
+        {% for slide in data.slides %}
+        <li><strong>{{ slide.title }}</strong> — {{ slide.body }}</li>
+        {% endfor %}
+    </ol>
+    {% endif %}
+    {% if data.final_cta %}<p><strong>{{ t('marketing_ia_cta') }}:</strong> {{ data.final_cta }}</p>{% endif %}
+    {% elif generation.content_type == 'whatsapp' %}
+    <dl class="mkt-gen-meta">
+        <div><dt>{{ t('marketing_ia_message') }}</dt><dd>{{ data.message }}</dd></div>
+        <div><dt>{{ t('marketing_ia_cta') }}</dt><dd>{{ data.cta }}</dd></div>
+    </dl>
+    {% elif data.headline or data.body %}
+    <dl class="mkt-gen-meta">
+        {% if data.headline %}<div><dt>{{ t('marketing_ia_headline') }}</dt><dd>{{ data.headline }}</dd></div>{% endif %}
+        {% if data.body %}<div><dt>{{ t('marketing_ia_body') }}</dt><dd>{{ data.body }}</dd></div>{% endif %}
+        {% if data.cta %}<div><dt>{{ t('marketing_ia_cta') }}</dt><dd>{{ data.cta }}</dd></div>{% endif %}
+    </dl>
+    {% elif generation.generated_copy %}
+    <pre>{{ generation.generated_copy }}</pre>
+    {% endif %}
+</section>
+{% elif generation.generated_copy %}
+<section class="mkt-gen-copy">
+    <h3>{{ t('marketing_ia_copy_result') }}</h3>
+    <pre>{{ generation.generated_copy }}</pre>
+</section>
+{% endif %}
+
+{% if generation.error_message %}
+<p class="mkt-warn">{{ generation.error_message }}</p>
+{% endif %}
+
+<div class="page-actions">
+    <form method="post" action="{{ url_for('marketing_generation_regenerate', generation_id=generation.id) }}">
+        <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_regenerate') }}</button>
+    </form>
+    {% if generation.status != 'discarded' %}
+    <form method="post" action="{{ url_for('marketing_generation_discard', generation_id=generation.id) }}">
+        <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_discard') }}</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

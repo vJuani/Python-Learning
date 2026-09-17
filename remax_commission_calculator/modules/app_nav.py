@@ -180,12 +180,12 @@ NAV_GROUPS = (
     },
     {
         "key": "marketing",
-        "label_key": "nav_marketing_create",
+        "label_key": "marketing_ia_title",
         "icon": "marketing",
         "roles": (ROLE_ADMIN, ROLE_AGENT),
         "item": {
             "key": "marketing",
-            "endpoint": "marketing_new",
+            "endpoint": "marketing_home",
             "active_prefixes": ("marketing_",),
         },
     },
@@ -346,7 +346,7 @@ OMITTED_ITEMS = (
     },
     {
         "label": "Historia / Post / Flyer",
-        "reason": "Marketing is contextual; only marketing_new exists",
+        "reason": "Marketing hub lives at /marketing; composer remains /marketing/new",
     },
 )
 

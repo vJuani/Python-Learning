@@ -18,6 +18,7 @@ os.environ["PRIVATE_UPLOAD_ROOT"] = str(_PRIVATE_ROOT)
 os.environ["DATABASE_PATH"] = str(Path(_TEST_TMP.name) / "test_marketing_ia.db")
 os.environ.pop("DATABASE_URL", None)
 os.environ["JRH_AI_PROVIDER"] = "mock"
+os.environ["MARKETING_AI_PROVIDER"] = "mock"
 os.environ.pop("OPENAI_API_KEY", None)
 
 from modules.agent_branding import get_agent_presentation_asset
@@ -544,7 +545,11 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(denied.status_code, 403)
         with client.session_transaction() as sess:
             sess["user_id"] = self.agent_user_id
-        ok = client.get("/marketing", follow_redirects=True)
+        hub = client.get("/marketing")
+        self.assertEqual(hub.status_code, 200)
+        self.assertIn("Crear contenido".encode("utf-8"), hub.data)
+        self.assertIn("Mis creaciones".encode("utf-8"), hub.data)
+        ok = client.get("/marketing/new", follow_redirects=True)
         self.assertEqual(ok.status_code, 200)
         self.assertIn("JRH IA".encode("utf-8"), ok.data)
         self.assertIn("Tipo de pieza".encode("utf-8"), ok.data)

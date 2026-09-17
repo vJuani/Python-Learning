@@ -1,4 +1,4 @@
-"""Marketing IA HTTP routes. Logic lives in marketing_service."""
+"""Marketing IA HTTP routes. Composer logic in marketing_service; V1 ledger in marketing_generation_service."""
 
 from __future__ import annotations
 
@@ -30,6 +30,15 @@ from modules.marketing_service import (
     start_marketing_batch,
     vary_marketing_asset,
 )
+from modules.marketing_generation_service import (
+    create_and_run_generation,
+    create_form_context,
+    discard_generation,
+    list_generation_views,
+    regenerate_generation,
+    require_generation,
+)
+from modules.database.organization_settings_repository import get_organization_settings
 from modules.database.marketing_repository import get_marketing_asset
 from modules.i18n import normalize_language
 
@@ -71,9 +80,114 @@ def register_marketing_routes(app, helpers):
         user = _marketing_user()
         if user is None:
             return _forbidden()
+        require_user_organization()
+        return render_template("marketing/hub.html")
+
+    @app.route("/marketing/create", methods=["GET", "POST"])
+    def marketing_create():
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
         organization_id = require_user_organization()
-        cleanup_expired_marketing_assets(organization_id)
-        return redirect(url_for("marketing_new"))
+        language = get_current_language()
+        if request.method == "POST":
+            try:
+                generation = create_and_run_generation(
+                    organization_id,
+                    user,
+                    content_type=request.form.get("content_type"),
+                    origin=request.form.get("origin"),
+                    property_id=request.form.get("property_id", type=int),
+                    objective=request.form.get("objective"),
+                    style=request.form.get("style"),
+                    tone=request.form.get("tone"),
+                    format=request.form.get("format"),
+                    prompt_input=request.form.get("prompt_input"),
+                    language=language,
+                )
+            except MarketingError as error:
+                return _handle(error, fallback_endpoint="marketing_create")
+            return redirect(url_for("marketing_generation_detail", generation_id=generation["id"]))
+        view = create_form_context(organization_id, user, language=language)
+        return render_template("marketing/create.html", view=view)
+
+    @app.route("/marketing/generations")
+    def marketing_generations():
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        language = get_current_language()
+        content_type = (request.args.get("type") or "").strip().lower() or None
+        items = list_generation_views(
+            organization_id,
+            user,
+            content_type=content_type,
+            language=language,
+        )
+        return render_template(
+            "marketing/generations.html",
+            items=items,
+            active_type=content_type or "all",
+        )
+
+    @app.route("/marketing/generations/<int:generation_id>")
+    def marketing_generation_detail(generation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            generation = require_generation(organization_id, user, generation_id)
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_generations")
+        return render_template("marketing/generation_detail.html", generation=generation)
+
+    @app.route("/marketing/generations/<int:generation_id>/regenerate", methods=["POST"])
+    def marketing_generation_regenerate(generation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            generation = regenerate_generation(
+                organization_id,
+                user,
+                generation_id,
+                language=get_current_language(),
+            )
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_generations")
+        return redirect(url_for("marketing_generation_detail", generation_id=generation["id"]))
+
+    @app.route("/marketing/generations/<int:generation_id>/discard", methods=["POST"])
+    def marketing_generation_discard(generation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            discard_generation(organization_id, user, generation_id)
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_generations")
+        return redirect(url_for("marketing_generations"))
+
+    @app.route("/marketing/templates")
+    def marketing_templates():
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        require_user_organization()
+        return render_template("marketing/templates.html")
+
+    @app.route("/marketing/brand-kit")
+    def marketing_brand_kit():
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        settings = get_organization_settings(organization_id) or {}
+        return render_template("marketing/brand_kit.html", settings=settings)
 
     @app.route("/marketing/new", methods=["GET"])
     def marketing_new():

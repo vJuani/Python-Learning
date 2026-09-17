@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-marketing-ia-page{% endblock %}
+
+{% block title %}{{ t('marketing_ia_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/marketing.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <p class="mkt-kicker">{{ t('nav_marketing') }}</p>
+        <h2>{{ t('marketing_ia_title') }}</h2>
+        <p class="field-help">{{ t('marketing_ia_sub') }}</p>
+    </div>
+</section>
+
+<nav class="mkt-hub" aria-label="{{ t('marketing_ia_title') }}">
+    <a class="mkt-hub__card" href="{{ url_for('marketing_create') }}">
+        <strong>{{ t('marketing_ia_create') }}</strong>
+        <span>{{ t('marketing_ia_create_help') }}</span>
+    </a>
+    <a class="mkt-hub__card" href="{{ url_for('marketing_generations') }}">
+        <strong>{{ t('marketing_ia_creations') }}</strong>
+        <span>{{ t('marketing_ia_creations_help') }}</span>
+    </a>
+    <a class="mkt-hub__card" href="{{ url_for('marketing_templates') }}">
+        <strong>{{ t('marketing_ia_templates') }}</strong>
+        <span>{{ t('marketing_ia_templates_help') }}</span>
+    </a>
+    <a class="mkt-hub__card" href="{{ url_for('marketing_brand_kit') }}">
+        <strong>{{ t('marketing_ia_brand_kit') }}</strong>
+        <span>{{ t('marketing_ia_brand_kit_help') }}</span>
+    </a>
+</nav>
+{% endblock %}
