@@ -37,6 +37,16 @@ LEGACY_TEMPLATES = frozenset({"legacy", "editorial", "modern-editorial-v1"})
 MODERN_FORMATS = frozenset({"flyer", "post"})
 RENDERER_USED = "pillow_modern_renderer"
 LAYOUT_VERSION = "modern_premium_v1"
+CARD = (255, 255, 255)
+CARD_LINE = (220, 222, 216)
+BANDS = {
+    "header": 0.05,
+    "hero": 0.36,
+    "gallery": 0.14,
+    "features": 0.08,
+    "price_contact": 0.24,
+    "cta_footer": 0.13,
+}
 
 
 def explicit_layout_choice(options=None):
@@ -66,16 +76,38 @@ def _clip(text, limit):
     return clipped or value[:limit]
 
 
+def _layout_bands(height):
+    header = int(height * BANDS["header"])
+    hero = int(height * BANDS["hero"])
+    gallery = int(height * BANDS["gallery"])
+    features = int(height * BANDS["features"])
+    price_contact = int(height * BANDS["price_contact"])
+    used = header + hero + gallery + features + price_contact
+    return {
+        "header": header,
+        "hero": hero,
+        "gallery": gallery,
+        "features": features,
+        "price_contact": price_contact,
+        "cta_footer": max(1, height - used),
+        "hero_top": header,
+        "gallery_top": header + hero,
+        "features_top": header + hero + gallery,
+        "price_top": header + hero + gallery + features,
+        "cta_top": header + hero + gallery + features + price_contact,
+    }
+
+
 def _hero_shade(width, height):
     shade = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     pixels = shade.load()
-    band = max(1, int(width * 0.56))
+    band = max(1, int(width * 0.48))
     for x in range(band):
-        fade = 1.0 - (x / float(band)) ** 1.05
-        alpha = int(188 * fade)
+        fade = 1.0 - (x / float(band)) ** 1.35
+        alpha = int(172 * fade)
         for y in range(height):
             pixels[x, y] = (8, 12, 22, alpha)
-    return shade.filter(ImageFilter.GaussianBlur(radius=0.6))
+    return shade.filter(ImageFilter.GaussianBlur(radius=1.2))
 
 
 def _icon_wa(draw, xy, size):
@@ -142,34 +174,31 @@ def _icon_area(draw, box, color):
 FEATURE_ICONS = (_icon_sofa, _icon_bed, _icon_bath, _icon_area)
 
 
-def _draw_header(canvas, facts, *, language):
+def _draw_header(canvas, facts, *, language, band):
     width, _height = canvas.size
     draw = ImageDraw.Draw(canvas)
-    pad = _u(width, 44)
-    placed = _paste_logo(
-        canvas,
-        _office_logo(facts),
-        box=(_u(width, 52), _u(width, 52)),
-        xy=(pad, _u(width, 18)),
-    )
+    pad = _u(width, 40)
+    logo = _u(width, 40)
+    top = max(8, (band["header"] - logo) // 2)
+    placed = _paste_logo(canvas, _office_logo(facts), box=(logo, logo), xy=(pad, top))
     brand = facts.get("wordmark_text") or _office_brand(facts)
-    text_x = pad + (placed[0] + _u(width, 12) if placed else 0)
+    text_x = pad + (placed[0] + _u(width, 10) if placed else 0)
     if brand:
-        draw.text((text_x, _u(width, 28)), brand, font=font(_u(width, 22), bold=True), fill=INK)
+        draw.text((text_x, top + 8), brand, font=font(_u(width, 20), bold=True), fill=INK)
     tagline = marketing_label("tagline", language)
     if tagline:
-        used = font(_u(width, 13), bold=True)
+        used = font(_u(width, 12), bold=True)
         tw = _text_width(draw, tagline, used)
-        draw.text((width - pad - tw, _u(width, 34)), tagline, font=used, fill=MUTED)
+        draw.text((width - pad - tw, top + 12), tagline, font=used, fill=MUTED)
 
 
-def _draw_hero(canvas, photos, facts, copy, *, language, fallback=None):
-    width, height = canvas.size
-    pad = _u(width, 44)
-    top = _u(width, 88)
-    hero_h = int(height * 0.42)
+def _draw_hero(canvas, photos, facts, copy, *, language, band, fallback=None):
+    width, _height = canvas.size
+    pad = _u(width, 40)
+    top = band["hero_top"]
+    hero_h = band["hero"] - _u(width, 8)
     box = (width - pad * 2, hero_h)
-    radius = _u(width, 22)
+    radius = _u(width, 20)
     hero = photos[0] if photos else fallback
     if hero is not None:
         paste_cover_rounded(canvas, hero, (pad, top), box, radius=radius, focus=(0.5, 0.36))
@@ -179,157 +208,187 @@ def _draw_hero(canvas, photos, facts, copy, *, language, fallback=None):
     shade.putalpha(Image.composite(shade.split()[-1], Image.new("L", box, 0), mask))
     canvas.paste(shade, (pad, top), shade)
     draw = ImageDraw.Draw(canvas)
-    x = pad + _u(width, 36)
-    y = top + _u(width, 36)
-    max_w = int(box[0] * 0.52)
+    x = pad + _u(width, 32)
+    y = top + _u(width, 28)
+    max_w = int(box[0] * 0.56)
     badge = default_kicker(language, facts)
     if badge:
-        used = font(_u(width, 16), bold=True)
+        used = font(_u(width, 18), bold=True)
         tw = _text_width(draw, badge, used)
-        bh = _u(width, 36)
-        draw.rounded_rectangle((x, y, x + tw + _u(width, 28), y + bh), bh // 2, fill=WHITE)
-        draw.text((x + _u(width, 14), y + _u(width, 8)), badge, font=used, fill=INK)
-        y += bh + _u(width, 22)
-    title_font = font(_u(width, 44), bold=True)
+        bh = _u(width, 40)
+        draw.rounded_rectangle((x, y, x + tw + _u(width, 32), y + bh), bh // 2, fill=WHITE)
+        draw.text((x + _u(width, 16), y + _u(width, 8)), badge, font=used, fill=INK)
+        y += bh + _u(width, 18)
+    title_font = font(_u(width, 58), bold=True)
     for line in hero_stack_lines(language, facts):
         for wrapped in _wrap(draw, line, title_font, max_w)[:1]:
             draw.text((x, y), wrapped, font=title_font, fill=WHITE)
-            y += _u(width, 50)
-    bajada = _clip(copy.get("subheadline") or facts.get("benefit_line") or "", 70)
+            y += _u(width, 62)
+    bajada = _clip(copy.get("subheadline") or facts.get("benefit_line") or "", 62)
     if bajada:
-        body = font(_u(width, 18))
-        y += _u(width, 8)
+        body = font(_u(width, 20))
+        y += _u(width, 6)
         for line in _wrap(draw, bajada, body, max_w)[:2]:
             draw.text((x, y), line, font=body, fill=(230, 234, 240))
-            y += _u(width, 26)
+            y += _u(width, 28)
     street = _clip(copy.get("street") or facts.get("title") or "", 32)
     zone = _clip(copy.get("zone") or facts.get("zone_line") or "", 36)
-    y += _u(width, 16)
+    y += _u(width, 14)
+    pin = 18
     pin_y = y + 2
-    draw.ellipse((x, pin_y, x + 14, pin_y + 14), outline=WHITE, width=2)
-    draw.polygon([(x + 7, pin_y + 20), (x + 2, pin_y + 12), (x + 12, pin_y + 12)], outline=WHITE)
-    loc_font = font(_u(width, 18), bold=True)
+    draw.ellipse((x, pin_y, x + pin, pin_y + pin), outline=WHITE, width=2)
+    draw.polygon([(x + 9, pin_y + 26), (x + 2, pin_y + 16), (x + 16, pin_y + 16)], outline=WHITE)
     if street:
-        draw.text((x + 24, y), street, font=loc_font, fill=WHITE)
-        y += _u(width, 26)
+        draw.text((x + 28, y), street, font=font(_u(width, 22), bold=True), fill=WHITE)
+        y += _u(width, 30)
     if zone:
-        draw.text((x + 24, y), zone, font=font(_u(width, 16)), fill=(210, 216, 224))
-    return top + hero_h
+        draw.text((x + 28, y), zone, font=font(_u(width, 18)), fill=(210, 216, 224))
+    return band["gallery_top"]
 
 
-def _draw_thumbs(canvas, photos, *, top):
-    width, _height = canvas.size
+def _draw_thumbs(canvas, photos, *, band):
     extras = photos[1:4]
     if not extras:
-        return top
-    pad = _u(width, 44)
-    gap = _u(width, 14)
-    thumb_h = int(canvas.size[1] * 0.145)
+        return band["features_top"]
+    width, _height = canvas.size
+    pad = _u(width, 40)
+    gap = _u(width, 12)
+    inset = _u(width, 10)
+    thumb_h = band["gallery"] - inset
     cell = (width - pad * 2 - gap * (len(extras) - 1)) // len(extras)
-    radius = _u(width, 16)
+    radius = _u(width, 14)
+    top = band["gallery_top"] + 2
     for index, photo in enumerate(extras):
         paste_cover_rounded(
             canvas,
             photo,
-            (pad + index * (cell + gap), top + _u(width, 16)),
+            (pad + index * (cell + gap), top),
             (cell, thumb_h),
             radius=radius,
             focus=(0.5, 0.40),
         )
-    return top + _u(width, 16) + thumb_h
+    return band["features_top"]
 
 
-def _draw_features(draw, chips, *, xy, width):
+def _draw_features(draw, chips, *, band, width):
     if not chips:
         return
-    x, y = xy
-    icon = _u(width, 30)
-    number_font = font(_u(width, 22), bold=True)
-    label_font = font(_u(width, 13))
-    slot = _u(width, 168)
-    for index, chip in enumerate(chips[:4]):
+    pad = _u(width, 40)
+    x = pad
+    y = band["features_top"] + _u(width, 8)
+    h = band["features"] - _u(width, 16)
+    inner_w = width - pad * 2
+    draw.rounded_rectangle((x, y, x + inner_w, y + h), _u(width, 16), fill=CARD, outline=CARD_LINE, width=1)
+    icon = _u(width, 32)
+    number_font = font(_u(width, 24), bold=True)
+    label_font = font(_u(width, 14))
+    items = chips[:4]
+    slot = inner_w // max(1, len(items))
+    for index, chip in enumerate(items):
         number, label = _parse_chip(chip)
         painter = FEATURE_ICONS[min(index, 3)]
-        fx = x + index * slot
-        painter(draw, (fx, y, fx + icon, y + icon), MUTED)
+        fx = x + index * slot + _u(width, 18)
+        fy = y + (h - icon) // 2
+        painter(draw, (fx, fy, fx + icon, fy + icon), MUTED)
         if number:
-            draw.text((fx + icon + 8, y - 2), number, font=number_font, fill=INK)
-            draw.text((fx + icon + 8, y + _u(width, 22)), label or chip, font=label_font, fill=MUTED)
+            draw.text((fx + icon + 10, fy - 2), number, font=number_font, fill=INK)
+            draw.text((fx + icon + 10, fy + _u(width, 24)), label or chip, font=label_font, fill=MUTED)
         else:
-            draw.text((fx + icon + 8, y + 6), chip, font=label_font, fill=INK)
+            draw.text((fx + icon + 10, fy + 6), chip, font=label_font, fill=INK)
 
 
-def _draw_price_card(draw, price, *, xy, width):
-    if not price:
-        return 0
-    used = font(_u(width, 36), bold=True)
-    tw = _text_width(draw, price, used)
-    pad_x = _u(width, 28)
-    h = _u(width, 72)
-    x, y = xy
-    draw.rounded_rectangle((x, y, x + tw + pad_x * 2, y + h), h // 2, fill=NAVY)
-    draw.text((x + pad_x, y + _u(width, 16)), price, font=used, fill=WHITE)
-    return tw + pad_x * 2
+def _draw_price_benefit(draw, price, benefit, *, band, width):
+    pad = _u(width, 40)
+    y = band["price_top"] + _u(width, 8)
+    h = max(_u(width, 92), int(band["price_contact"] * 0.42))
+    used = font(_u(width, 48), bold=True)
+    price = price or ""
+    tw = _text_width(draw, price, used) if price else 0
+    pad_x = _u(width, 32)
+    card_w = tw + pad_x * 2 if price else 0
+    if price:
+        draw.rounded_rectangle((pad, y, pad + card_w, y + h), h // 2, fill=NAVY)
+        draw.text((pad + pad_x, y + (h - _u(width, 48)) // 2 - 2), price, font=used, fill=WHITE)
+    if benefit:
+        bx = pad + card_w + _u(width, 24) if card_w else pad
+        by = y + _u(width, 16)
+        bw = width - pad - bx
+        bh = h - _u(width, 32)
+        draw.rounded_rectangle((bx, by, bx + bw, by + bh), _u(width, 16), fill=CARD, outline=CARD_LINE, width=1)
+        body = font(_u(width, 22), bold=True)
+        text_y = by + _u(width, 18)
+        for line in _wrap(draw, benefit, body, bw - _u(width, 36))[:2]:
+            draw.text((bx + _u(width, 18), text_y), line, font=body, fill=INK)
+            text_y += _u(width, 28)
+    return y + h
 
 
 def _draw_cta(draw, *, xy, width, label, fill, icon="wa"):
     if not label:
         return 0
-    used = font(_u(width, 18), bold=True)
+    used = font(_u(width, 22), bold=True)
     tw = _text_width(draw, label, used)
-    icon_s = _u(width, 26)
-    pad_x = _u(width, 22)
-    h = _u(width, 56)
+    icon_s = _u(width, 32)
+    pad_x = _u(width, 26)
+    h = _u(width, 72)
     x, y = xy
-    pill_w = tw + pad_x * 2 + icon_s + 10
+    pill_w = tw + pad_x * 2 + icon_s + 14
     if fill:
         draw.rounded_rectangle((x, y, x + pill_w, y + h), h // 2, fill=fill)
         text_fill = WHITE
     else:
-        draw.rounded_rectangle((x, y, x + pill_w, y + h), h // 2, outline=(210, 214, 220), width=2)
+        draw.rounded_rectangle((x, y, x + pill_w, y + h), h // 2, fill=CARD, outline=(210, 214, 220), width=2)
         text_fill = INK
     if icon == "wa":
         _icon_wa(draw, (x + pad_x, y + (h - icon_s) // 2), icon_s)
     else:
         _icon_ig(draw, (x + pad_x, y + (h - icon_s) // 2), icon_s)
-    draw.text((x + pad_x + icon_s + 10, y + _u(width, 16)), label, font=used, fill=text_fill)
+    draw.text((x + pad_x + icon_s + 12, y + _u(width, 20)), label, font=used, fill=text_fill)
     return pill_w
 
 
-def _draw_agent(canvas, agent, *, width, height):
+def _draw_contact(canvas, agent, *, band, after_price):
     if not agent:
         return False
-    pad = _u(width, 44)
-    photo = load_agent_photo(agent.get("photo_path"))
-    cutout_h = _u(width, 340)
-    x = width - pad - _u(width, 190)
-    y = height - _u(width, 470)
-    pasted = False
-    if photo is not None:
-        pasted = paste_agent_cutout(canvas, photo, (x, y), height=cutout_h)
+    width, height = canvas.size
+    pad = _u(width, 40)
+    block_top = after_price + _u(width, 10)
+    block_h = band["cta_top"] - block_top - _u(width, 8)
+    if block_h < _u(width, 90):
+        block_h = _u(width, 110)
+    x1 = width - pad
+    x0 = pad
     draw = ImageDraw.Draw(canvas)
-    text_x = x - _u(width, 250)
-    text_y = y + _u(width, 70)
+    draw.rounded_rectangle((x0, block_top, x1, block_top + block_h), _u(width, 16), fill=CARD, outline=CARD_LINE, width=1)
+    cutout_h = min(_u(width, 228), max(_u(width, 160), block_h - _u(width, 12)))
+    photo_x = x1 - _u(width, 168)
+    photo_y = block_top + max(4, block_h - cutout_h)
+    pasted = False
+    photo = load_agent_photo(agent.get("photo_path"))
+    if photo is not None:
+        pasted = paste_agent_cutout(canvas, photo, (photo_x, photo_y), height=cutout_h)
+    text_x = x0 + _u(width, 24)
+    text_y = block_top + _u(width, 18)
     name = agent.get("name") or ""
     title = agent.get("title") or ""
     if name:
-        draw.text((text_x, text_y), name, font=font(_u(width, 20), bold=True), fill=INK)
-        text_y += _u(width, 26)
+        draw.text((text_x, text_y), name, font=font(_u(width, 24), bold=True), fill=INK)
+        text_y += _u(width, 32)
     if title:
-        draw.text((text_x, text_y), title, font=font(_u(width, 14)), fill=MUTED)
-        text_y += _u(width, 24)
-    icon = _u(width, 20)
+        draw.text((text_x, text_y), title, font=font(_u(width, 16)), fill=MUTED)
+        text_y += _u(width, 28)
+    icon = _u(width, 22)
     whatsapp = " ".join(str(agent.get("whatsapp") or "").split())
     instagram = " ".join(str(agent.get("instagram") or "").split())
     if instagram and not instagram.startswith("@"):
         instagram = f"@{instagram.lstrip('@')}"
     if whatsapp:
         _icon_wa(draw, (text_x, text_y), icon)
-        draw.text((text_x + icon + 8, text_y), whatsapp, font=font(_u(width, 14)), fill=INK)
-        text_y += _u(width, 24)
+        draw.text((text_x + icon + 10, text_y), whatsapp, font=font(_u(width, 16)), fill=INK)
+        text_y += _u(width, 28)
     if instagram:
         _icon_ig(draw, (text_x, text_y), icon)
-        draw.text((text_x + icon + 8, text_y), instagram, font=font(_u(width, 14)), fill=INK)
+        draw.text((text_x + icon + 10, text_y), instagram, font=font(_u(width, 16)), fill=INK)
     return pasted
 
 
@@ -348,47 +407,40 @@ def render_modern_premium(size, photos, facts, copy, agent, options, language="e
 
 
 def render_modern_premium_v1(size, photos, facts, copy, agent, options, language="es", *, fallback_hero=None):
-    """Final export layout: hero overlay, 3 thumbs, price pill, cutout agent. Not the old listing card."""
+    """Compact editorial flyer: hero, gallery, feature card, price, contact, CTAs."""
     width, height = size
     facts = facts or {}
     copy = copy or {}
     options = options or {}
     photos = [item for item in (photos or []) if item is not None]
+    band = _layout_bands(height)
     canvas = Image.new("RGBA", size, (*IVORY, 255))
     draw = ImageDraw.Draw(canvas)
-    _draw_header(canvas, facts, language=language)
-    hero_bottom = _draw_hero(
+    pad = _u(width, 40)
+    _draw_header(canvas, facts, language=language, band=band)
+    _draw_hero(
         canvas,
         photos,
         facts,
         copy,
         language=language,
+        band=band,
         fallback=fallback_hero,
     )
-    thumbs_bottom = _draw_thumbs(canvas, photos, top=hero_bottom)
-    y = thumbs_bottom + _u(width, 28)
-    pad = _u(width, 44)
+    _draw_thumbs(canvas, photos, band=band)
     chips = facts.get("chips") or copy.get("attributes") or []
     if options.get("show_features", True) and chips:
-        _draw_features(draw, chips, xy=(pad, y), width=width)
-        y += _u(width, 70)
+        _draw_features(draw, chips, band=band, width=width)
     price = facts.get("price_label") if options.get("show_price", True) else ""
-    price_w = _draw_price_card(draw, price, xy=(pad, y), width=width) if price else 0
-    benefit = _clip(copy.get("subheadline") or facts.get("benefit_line") or "", 42)
-    if benefit and price_w:
-        draw.text(
-            (pad + price_w + _u(width, 24), y + _u(width, 22)),
-            benefit,
-            font=font(_u(width, 18)),
-            fill=MUTED,
-        )
+    benefit = _clip(copy.get("subheadline") or facts.get("benefit_line") or "", 46)
+    after_price = _draw_price_benefit(draw, price, benefit, band=band, width=width)
     if options.get("include_agent") and agent:
-        _draw_agent(canvas, agent, width=width, height=height)
-    cta_y = height - _u(width, 140)
+        _draw_contact(canvas, agent, band=band, after_price=after_price)
+    cta_y = band["cta_top"] + _u(width, 8)
     cta = _clip(copy.get("cta") or "", 32)
     cta_x = pad
     if cta:
-        cta_x += _draw_cta(draw, xy=(pad, cta_y), width=width, label=cta, fill=WA_GREEN, icon="wa") + _u(width, 16)
+        cta_x += _draw_cta(draw, xy=(pad, cta_y), width=width, label=cta, fill=WA_GREEN, icon="wa") + _u(width, 14)
     instagram = " ".join(str((agent or {}).get("instagram") or "").split())
     if instagram:
         ig_label = marketing_label("cta_instagram", language)
@@ -400,8 +452,8 @@ def render_modern_premium_v1(size, photos, facts, copy, agent, options, language
             fill=None,
             icon="ig",
         )
-    footer_y = height - _u(width, 48)
-    draw.line((pad, footer_y - 12, width - pad, footer_y - 12), fill=(226, 228, 222), width=1)
+    footer_y = height - _u(width, 36)
+    draw.line((pad, footer_y - 10, width - pad, footer_y - 10), fill=CARD_LINE, width=1)
     legal = facts.get("legal_footer_line") or facts.get("broker_footer_text") or ""
     brand = facts.get("wordmark_text") or _office_brand(facts)
     website = " ".join(
