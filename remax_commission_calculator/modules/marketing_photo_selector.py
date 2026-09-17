@@ -8,7 +8,7 @@ def select_photos_for_item(photos, *, fmt, index, limit=None):
     if not items:
         return []
     if limit is None:
-        limit = 5 if fmt == "flyer" else (3 if fmt == "post" else 3)
+        limit = 5 if fmt == "flyer" else (4 if fmt == "post" else 3)
     cover = items[0]
     rest = items[1:]
     if not rest:

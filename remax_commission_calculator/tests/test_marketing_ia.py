@@ -1605,6 +1605,7 @@ class MarketingIaTests(unittest.TestCase):
     def test_52_commercial_copy_adapts_sale_rent_and_type(self):
         from modules.marketing_language import (
             commercial_cta,
+            hero_stack_lines,
             listing_benefit_line,
             operation_headline,
             operation_kicker,
@@ -1633,6 +1634,8 @@ class MarketingIaTests(unittest.TestCase):
             operation_headline("es", {"property_type": "apartment", "purpose": "sale", "rooms": 3, "locality": "San Isidro"}),
             "3 AMBIENTES EN VENTA EN SAN ISIDRO",
         )
+        self.assertEqual(hero_stack_lines("es", sale_apt), ["DEPARTAMENTO", "2 AMBIENTES", "EN VICTORIA"])
+        self.assertEqual(hero_stack_lines("es", house), ["CASA", "EN SAN ISIDRO"])
         self.assertEqual(operation_kicker("es", sale_apt), "EN VENTA")
         self.assertEqual(operation_kicker("es", rent_apt), "EN ALQUILER")
         self.assertEqual(commercial_cta("es", sale_apt, style="commercial"), "Consultame para visitarlo.")
@@ -1660,6 +1663,52 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(planned["headline"], "2 AMBIENTES EN VENTA EN VICTORIA")
         self.assertIn("Victoria", planned["zone"])
         self.assertEqual(planned["cta"], "Coordinemos una visita.")
+
+    def test_53_modern_premium_flyer_uses_reference_layout(self):
+        from modules.marketing_flyer_modern import MODERN_PREMIUM_LAYOUT
+        from modules.marketing_renderer import WA_GREEN
+
+        context = build_property_marketing_context(self._property())
+        blank = Image.new("RGB", FORMAT_SIZES["flyer"], (120, 80, 80))
+        buffer = io.BytesIO()
+        blank.save(buffer, format="PNG")
+        stamped = stamp_branding_overlay(
+            buffer.getvalue(),
+            context=context,
+            fmt="flyer",
+            options={
+                "include_agent": True,
+                "show_agent_photo": True,
+                "show_price": True,
+                "show_features": True,
+            },
+            style="light",
+            language="es",
+        )
+        self.assertEqual(stamped["layout"], MODERN_PREMIUM_LAYOUT)
+        self.assertGreaterEqual(stamped["listing_photos"], 3)
+        image = Image.open(io.BytesIO(stamped["png_bytes"])).convert("RGB")
+        self.assertEqual(image.size, FORMAT_SIZES["flyer"])
+        hero_left = image.crop((60, 140, 280, 420))
+        dark = sum(1 for pixel in hero_left.resize((20, 20)).getdata() if pixel[0] < 80 and pixel[2] < 90)
+        self.assertGreater(dark, 40)
+        green = sum(
+            1
+            for pixel in image.getdata()
+            if abs(pixel[0] - WA_GREEN[0]) < 28
+            and abs(pixel[1] - WA_GREEN[1]) < 28
+            and abs(pixel[2] - WA_GREEN[2]) < 28
+        )
+        self.assertGreater(green, 40)
+        legacy = stamp_branding_overlay(
+            buffer.getvalue(),
+            context=context,
+            fmt="flyer",
+            options={"template": "legacy", "include_agent": True, "show_agent_photo": True},
+            style="light",
+            language="es",
+        )
+        self.assertEqual(legacy["layout"], "modern-editorial-v1")
 
 
 def _quality_png():

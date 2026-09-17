@@ -9,6 +9,11 @@ from PIL import Image
 
 from modules.marketing_copy import summarize_listing_copy
 from modules.marketing_language import default_cta, default_headline
+from modules.marketing_flyer_modern import (
+    MODERN_PREMIUM_LAYOUT,
+    render_modern_premium,
+    uses_modern_premium,
+)
 from modules.marketing_renderer import (
     FORMAT_SIZES,
     _office_logo,
@@ -81,22 +86,36 @@ def stamp_branding_overlay(
             "instagram": planned.get("agent_instagram") or agent.get("instagram") or "",
             "photo_path": agent.get("photo_path") if show_photo else None,
         }
-    canvas = render_modern_listing(
-        size,
-        photos,
-        facts,
-        planned,
-        overlay_agent,
-        options,
-        chosen,
-        fallback_hero=fallback if not photos else None,
-    )
+    if uses_modern_premium(fmt, options):
+        canvas = render_modern_premium(
+            size,
+            photos,
+            facts,
+            planned,
+            overlay_agent,
+            options,
+            language=language,
+            fallback_hero=fallback if not photos else None,
+        )
+        layout = MODERN_PREMIUM_LAYOUT
+    else:
+        canvas = render_modern_listing(
+            size,
+            photos,
+            facts,
+            planned,
+            overlay_agent,
+            options,
+            chosen,
+            fallback_hero=fallback if not photos else None,
+        )
+        layout = OVERLAY_LAYOUT
     buffer = io.BytesIO()
     canvas.save(buffer, format="PNG", optimize=True)
     logo = _office_logo(facts)
     logger.info(
         "marketing_overlay stamped layout=%s logo=%s agent_photo=%s photos=%s style=%s",
-        OVERLAY_LAYOUT,
+        layout,
         bool(logo),
         show_photo,
         len(photos),
@@ -108,6 +127,6 @@ def stamp_branding_overlay(
         "logo_stamped": bool(logo),
         "post_process": OVERLAY_POST_PROCESS,
         "post_process_fn": OVERLAY_FN,
-        "layout": OVERLAY_LAYOUT,
+        "layout": layout,
         "listing_photos": len(photos),
     }

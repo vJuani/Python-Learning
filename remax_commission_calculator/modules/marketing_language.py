@@ -25,6 +25,8 @@ MARKETING_COPY = {
         "agent_role": "Agente inmobiliario",
         "available": "Disponible",
         "kicker": "EN VENTA",
+        "tagline": "CONFIANZA  ·  EXPERIENCIA  ·  RESULTADOS",
+        "cta_instagram": "Seguime en Instagram",
         "headline_editorial": "Tu próximo hogar está acá",
         "headline_commercial": "Disponible ahora",
         "headline_luxury": "Exclusiva",
@@ -43,6 +45,8 @@ MARKETING_COPY = {
         "agent_role": "Real Estate Agent",
         "available": "Available",
         "kicker": "FOR SALE",
+        "tagline": "TRUST  ·  EXPERIENCE  ·  RESULTS",
+        "cta_instagram": "Follow on Instagram",
         "headline_editorial": "Your next home is here",
         "headline_commercial": "Available now",
         "headline_luxury": "Exclusive",
@@ -318,6 +322,55 @@ def operation_headline(language="es", facts=None, style=None):
 
 def default_headline(language="es", facts=None, style=None):
     return operation_headline(language, facts, style)
+
+
+def hero_stack_lines(language="es", facts=None):
+    """Hero overlay lines. Type, rooms and zone on separate rows."""
+    facts = facts or {}
+    kind = listing_type_key(facts)
+    rooms = _rooms_count(facts)
+    zone = _headline_zone(facts)
+    type_label = " ".join(str(facts.get("type_label") or "").split())
+    lines = []
+    if language == "es":
+        if kind == "house":
+            lines.append("CASA")
+        elif kind == "ph":
+            lines.append("PH")
+        elif kind == "office":
+            lines.append("OFICINA")
+        elif kind == "commercial":
+            lines.append("LOCAL")
+        elif kind == "land":
+            lines.append("TERRENO")
+        elif rooms == 1:
+            lines.append("MONOAMBIENTE")
+        else:
+            lines.append((type_label or "Departamento").upper())
+            if rooms:
+                lines.append(f"{rooms} AMBIENTES")
+        if zone:
+            lines.append(f"EN {zone.upper()}")
+    else:
+        if kind == "house":
+            lines.append("HOUSE")
+        elif kind == "ph":
+            lines.append("PH")
+        elif kind == "office":
+            lines.append("OFFICE")
+        elif kind == "commercial":
+            lines.append("STOREFRONT")
+        elif kind == "land":
+            lines.append("LAND")
+        elif rooms == 1:
+            lines.append("STUDIO")
+        else:
+            lines.append((type_label or "Apartment").upper())
+            if rooms:
+                lines.append(f"{rooms} ROOMS")
+        if zone:
+            lines.append(f"IN {zone.upper()}")
+    return [line for line in lines if line][:4]
 
 
 def operation_kicker(language="es", facts=None):
