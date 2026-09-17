@@ -102,7 +102,7 @@ SALE_CTA = {
     "es": {
         "premium": "Coordinemos una visita.",
         "modern": "Escribime para más información.",
-        "commercial": "Consultame para visitarlo.",
+        "commercial": "Consultame para visitarla.",
         "aspirational": "No dudes en contactarme.",
     },
     "en": {
@@ -321,56 +321,89 @@ def operation_headline(language="es", facts=None, style=None):
 
 
 def default_headline(language="es", facts=None, style=None):
-    return operation_headline(language, facts, style)
+    return sellable_headline(language, facts, style)
 
 
-def hero_stack_lines(language="es", facts=None):
-    """Hero overlay lines. Type, rooms and zone on separate rows."""
+def _amenity_blob(facts):
+    values = [str(item).casefold() for item in (facts or {}).get("amenities") or []]
+    if (facts or {}).get("patio"):
+        values.append("patio")
+    return " ".join(values)
+
+
+def _has_garden(facts):
+    blob = _amenity_blob(facts)
+    return any(token in blob for token in ("jard", "garden", "patio", "parque"))
+
+
+def sellable_headline(language="es", facts=None, style=None):
+    """Short commercial headline from listing facts. Title case, not all-caps."""
     facts = facts or {}
     kind = listing_type_key(facts)
     rooms = _rooms_count(facts)
     zone = _headline_zone(facts)
-    type_label = " ".join(str(facts.get("type_label") or "").split())
-    lines = []
+    subject = _headline_subject(language, facts)
+    garden = _has_garden(facts)
     if language == "es":
-        if kind == "house":
-            lines.append("CASA")
+        if kind == "house" and garden:
+            title = "Casa con jardín"
+        elif kind == "house":
+            title = "Casa moderna"
         elif kind == "ph":
-            lines.append("PH")
-        elif kind == "office":
-            lines.append("OFICINA")
-        elif kind == "commercial":
-            lines.append("LOCAL")
-        elif kind == "land":
-            lines.append("TERRENO")
+            title = "PH con diseño"
+        elif rooms and rooms >= 4:
+            title = f"{rooms} ambientes"
         elif rooms == 1:
-            lines.append("MONOAMBIENTE")
+            title = "Monoambiente"
+        elif subject:
+            title = subject
         else:
-            lines.append((type_label or "Departamento").upper())
-            if rooms:
-                lines.append(f"{rooms} AMBIENTES")
+            title = "Tu próximo hogar"
         if zone:
-            lines.append(f"EN {zone.upper()}")
+            return f"{title} en {zone}"
+        return title
+    if kind == "house" and garden:
+        title = "House with garden"
+    elif kind == "house":
+        title = "Modern house"
+    elif rooms and rooms >= 4:
+        title = f"{rooms}-room home"
+    elif subject:
+        title = subject
     else:
-        if kind == "house":
-            lines.append("HOUSE")
-        elif kind == "ph":
-            lines.append("PH")
-        elif kind == "office":
-            lines.append("OFFICE")
-        elif kind == "commercial":
-            lines.append("STOREFRONT")
-        elif kind == "land":
-            lines.append("LAND")
-        elif rooms == 1:
-            lines.append("STUDIO")
-        else:
-            lines.append((type_label or "Apartment").upper())
-            if rooms:
-                lines.append(f"{rooms} ROOMS")
-        if zone:
-            lines.append(f"IN {zone.upper()}")
-    return [line for line in lines if line][:4]
+        title = "Your next home"
+    if zone:
+        return f"{title} in {zone}"
+    return title
+
+
+def sellable_headline_lines(language="es", facts=None, style=None):
+    headline = sellable_headline(language, facts, style)
+    connector = " en " if language == "es" else " in "
+    if connector in headline:
+        left, right = headline.rsplit(connector, 1)
+        if left and right:
+            return [left, f"{connector.strip()} {right}"]
+    words = headline.split()
+    if len(words) <= 3:
+        return [headline]
+    return [" ".join(words[:-2]), " ".join(words[-2:])]
+
+
+def is_placeholder_copy(text):
+    folded = " ".join(str(text or "").casefold().split())
+    if not folded:
+        return True
+    if "copy de prueba" in folded or folded in {"prueba", "test copy", "lorem ipsum"}:
+        return True
+    if folded in {"disponible ahora", "available now", "en venta", "for sale"}:
+        return True
+    return False
+
+
+def hero_stack_lines(language="es", facts=None):
+    """Hero overlay lines: sellable title case, two rows max."""
+    return sellable_headline_lines(language, facts)[:3]
 
 
 def operation_kicker(language="es", facts=None):
@@ -393,58 +426,36 @@ def commercial_cta(language="es", facts=None, style=None):
 
 
 def listing_benefit_line(language="es", facts=None, style=None):
-    """One grounded bajada. No invented amenities or hype."""
+    """One grounded bajada with commercial intent."""
     facts = facts or {}
-    flavor = normalize_copy_style(style)
     rental = _is_rental(facts)
     rooms = _rooms_count(facts)
-    area = _area_value(facts)
-    has_place = bool(
-        str(facts.get("locality") or facts.get("zone_line") or "").strip()
-    )
-    has_layout = bool(rooms and area)
+    garden = _has_garden(facts)
+    zone = _headline_zone(facts)
     if language == "es":
-        if rental:
-            if flavor == "aspirational" and has_place:
-                line = "Buena opción para quienes buscan comodidad y ubicación."
-            elif flavor == "commercial":
-                line = "Listo para tu próxima etapa."
-            elif has_layout:
-                line = "Espacios funcionales y bien aprovechados."
-            else:
-                line = "Una opción práctica para el día a día."
-        elif flavor == "modern":
-            line = "Una opción práctica para el día a día."
-        elif flavor == "commercial":
-            line = "Ideal para vivir o invertir."
-        elif flavor == "aspirational" and has_place:
-            line = "Buena opción para quienes buscan comodidad y ubicación."
-        elif has_layout:
-            line = "Ambientes cómodos y bien distribuidos."
-        elif has_place:
-            line = "Buena opción para quienes buscan comodidad y ubicación."
+        if garden and rooms:
+            line = "Espacio, jardín y una distribución pensada para vivir."
+        elif garden:
+            line = "Ideal para disfrutar al aire libre, en familia."
+        elif rooms and rooms >= 4:
+            line = "Ambientes amplios, luz y comodidad para el día a día."
+        elif rental:
+            line = "Lista para tu próxima etapa. Consultá disponibilidad."
+        elif zone:
+            line = f"Diseño, confort y una ubicación privilegiada en {zone}."
         else:
-            line = "Ideal para vivir o invertir."
+            line = "Espacios amplios, diseño y confort en una ubicación privilegiada."
     else:
-        if rental:
-            if flavor == "commercial":
-                line = "Ready for your next chapter."
-            elif has_place:
-                line = "Comfortable and well located for everyday living."
-            else:
-                line = "A practical place for everyday living."
-        elif flavor == "modern":
-            line = "A practical option for everyday living."
-        elif flavor == "commercial":
-            line = "A solid place to live or invest."
-        elif flavor == "aspirational" and has_place:
-            line = "Comfort and a location that works day to day."
-        elif has_layout:
-            line = "Comfortable rooms with a practical layout."
-        elif has_place:
-            line = "Well located for everyday living."
+        if garden:
+            line = "Outdoor space and a layout made for everyday living."
+        elif rooms and rooms >= 4:
+            line = "Generous rooms, light and comfort day to day."
+        elif rental:
+            line = "Ready for your next chapter. Ask availability."
+        elif zone:
+            line = f"Design, comfort and a strong location in {zone}."
         else:
-            line = "A solid place to live or invest."
+            line = "Space, light and comfort in a privileged location."
     line = " ".join(str(line).split())
     if HYPE_COPY_RE.search(line):
         return ""

@@ -14,6 +14,7 @@ CONTEXT_KEYS = (
     "tone",
     "cta",
     "hero_photo_id",
+    "layout_template",
 )
 CHANNEL_TO_TYPE = {
     "instagram_post": "post",
@@ -36,8 +37,18 @@ GENERATION_STYLE = {
     "dynamic": ("dynamic", "commercial"),
     "corporate": ("corporate", "formal"),
 }
-DEFAULT_CTA_SALE = "Consultame para visitarlo"
+DEFAULT_CTA_SALE = "Consultame para visitarla"
 DEFAULT_CTA_RENT = "Consultame disponibilidad"
+TEMPLATE_BY_STYLE = {
+    "commercial": "modern_commercial_v2",
+    "modern": "modern_commercial_v2",
+    "dynamic": "social_punch_v2",
+    "premium": "premium_editorial_v2",
+    "elegant": "premium_editorial_v2",
+    "minimal": "premium_editorial_v2",
+    "corporate": "premium_editorial_v2",
+}
+DEFAULT_LAYOUT_TEMPLATE = "modern_commercial_v2"
 SKIP_CLARIFY_ACTIONS = frozenset(
     {"chat", "generate_visual", "edit_existing_generation"}
 )
@@ -57,6 +68,8 @@ _STYLE_ALIASES = (
     ("premium", "premium"),
     ("comercial", "commercial"),
     ("commercial", "commercial"),
+    ("punch", "dynamic"),
+    ("impacto", "dynamic"),
     ("minimalista", "minimal"),
     ("minimal", "minimal"),
     ("moderno", "modern"),
@@ -109,6 +122,7 @@ def empty_context():
         "tone": None,
         "cta": None,
         "hero_photo_id": None,
+        "layout_template": None,
         "asked": [],
         "pending_decision": None,
         "pending_prompt": None,
@@ -179,6 +193,8 @@ def parse_decision_value(key, value):
             "modern": "modern",
             "moderno": "modern",
             "elegant": "elegant",
+            "dynamic": "dynamic",
+            "punch": "dynamic",
         }.get(text)
     if key == "hero_photo_id":
         if text in {"pick", "choose", "quiero_elegir"}:
@@ -372,6 +388,9 @@ def resolve_context(intent, conversation, prompt, listing=None, *, form_key=None
         context = _mark_asked(context, "channel")
     if latest.get("style") and latest.get("style") != "auto":
         context["style"] = latest["style"]
+        context["layout_template"] = TEMPLATE_BY_STYLE.get(
+            latest["style"], DEFAULT_LAYOUT_TEMPLATE
+        )
         context = _mark_asked(context, "style")
     if latest.get("include_agent") is not None:
         context["include_agent"] = latest["include_agent"]
@@ -386,14 +405,9 @@ def apply_intelligent_defaults(context, listing=None):
     if context.get("channel") in (None, "auto"):
         context["channel"] = "instagram_post"
     if context.get("style") in (None, "auto"):
-        if purpose == "rent":
-            context["style"] = "modern"
-            if not context.get("tone"):
-                context["tone"] = "close"
-        else:
-            context["style"] = "commercial"
-            if not context.get("tone"):
-                context["tone"] = "commercial"
+        context["style"] = "commercial"
+        if not context.get("tone"):
+            context["tone"] = "close" if purpose == "rent" else "commercial"
     if context.get("cta") in (None, "auto", "suggested"):
         context["cta"] = DEFAULT_CTA_RENT if purpose == "rent" else DEFAULT_CTA_SALE
     if context.get("include_agent") in (None, "auto"):
@@ -401,6 +415,9 @@ def apply_intelligent_defaults(context, listing=None):
         context["include_agent"] = bool(agent.get("name") or agent.get("has_photo"))
     if context.get("hero_photo_id") in (None, "auto", "pick"):
         context["hero_photo_id"] = "auto"
+    context["layout_template"] = TEMPLATE_BY_STYLE.get(
+        context.get("style"), DEFAULT_LAYOUT_TEMPLATE
+    )
     return context
 
 
@@ -464,30 +481,10 @@ def determine_missing_decisions(context, listing, intent):
     if not should_clarify(intent):
         return []
     missing = []
-    origin = (intent or {}).get("origin")
-    listing_visual = origin == "property" or bool((intent or {}).get("property_id"))
-    if listing_visual and _agent_usable(listing) and not _already_asked(context, "include_agent"):
-        if context.get("include_agent") is None:
-            missing.append("include_agent")
-    channel_known = _resolved(context.get("channel")) or _already_asked(context, "channel")
-    if not channel_known and not (intent or {}).get("channel_explicit"):
-        missing.append("channel")
-    if not _resolved(context.get("style")) and not _already_asked(context, "style"):
-        missing.append("style")
-    if listing_visual and (intent or {}).get("action") != "generate_whatsapp":
-        photos = (listing or {}).get("photos") or []
-        has_cover = bool((listing or {}).get("has_cover"))
-        if (
-            len(photos) >= HERO_PHOTO_MIN
-            and not has_cover
-            and not _already_asked(context, "hero_photo")
-            and context.get("hero_photo_id") is None
-        ):
-            missing.append("hero_photo")
-        elif context.get("hero_photo_id") == "pick":
-            missing.append("hero_photo")
     if context.get("cta") == "ask" and not _already_asked(context, "cta"):
         missing.append("cta")
+    if context.get("hero_photo_id") == "pick" and not _already_asked(context, "hero_photo"):
+        missing.append("hero_photo")
     return missing
 
 

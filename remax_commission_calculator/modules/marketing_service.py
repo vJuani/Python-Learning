@@ -655,7 +655,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
         if options.get("local_render"):
             options["legacy_compositor"] = False
             options["pipeline_provider"] = "pillow_modern_renderer"
-            options["pipeline_model"] = options.get("template_used") or "modern_premium_v1"
+            options["pipeline_model"] = options.get("template_used") or "modern_commercial_v2"
             options["pipeline_endpoint"] = None
             options.setdefault("pipeline_post_process", generated.get("post_process") or "branding_overlay")
             options.setdefault("pipeline_post_process_fn", generated.get("post_process_fn"))
@@ -845,6 +845,7 @@ def start_marketing_batch(
     request_text=None,
     copy_override=None,
     local_render=False,
+    layout_template=None,
 ):
     organization_id = require_organization_id(organization_id)
     cleanup_expired_marketing_assets(organization_id)
@@ -926,6 +927,9 @@ def start_marketing_batch(
         include_agent=parsed.get("with_agent") is not False,
     )
     options = _options_from_request(parsed, context)
+    if layout_template:
+        options["layout_template"] = layout_template
+        options["template"] = layout_template
     if reference:
         ref_opts = dict(reference.get("options") or {})
         if parsed.get("with_agent") is False:

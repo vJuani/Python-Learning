@@ -92,6 +92,7 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
         default_cta,
         default_headline,
         default_kicker,
+        is_placeholder_copy,
         listing_benefit_line,
         marketing_label,
     )
@@ -103,11 +104,11 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
     chosen_headline = " ".join(str(headline or "").split()) or default_headline(
         language, facts, style
     )
-    if HYPE_COPY_RE.search(chosen_headline):
+    if HYPE_COPY_RE.search(chosen_headline) or is_placeholder_copy(chosen_headline):
         chosen_headline = default_headline(language, facts, style)
     hook = autofit_text(
         chosen_headline or marketing_label("available", language),
-        max_chars=42,
+        max_chars=46,
         max_lines=2,
     )
     kicker = autofit_text(
@@ -322,7 +323,8 @@ def generate_marketing_copy(context, *, tone="professional", language="es"):
 
         parsed = request_structured_json(
             instructions=(
-                "Write short Argentine-Spanish real-estate marketing copy. "
+                "Write short Argentine-Spanish real-estate marketing copy that sells. "
+                "Strong headline (benefit + place, title case), one-line bajada, clear CTA. "
                 "Use ONLY the provided facts. Never invent views, amenities, "
                 "prices, areas or rooms. No hype. Return JSON: "
                 '{"headline","subheadline","description","cta","caption","hashtags":[]}.'

@@ -31,6 +31,7 @@ from modules.marketing_chat_decisions import (
     conversation_context,
     determine_missing_decisions,
     generation_style_tone,
+    listing_label,
     looks_like_decision_reply,
     parse_prompt_decisions,
     persistable_context,
@@ -80,6 +81,9 @@ OBJECTIVE_ALIASES = (
 )
 STYLE_ALIASES = (
     ("premium", "premium"),
+    ("punch", "dynamic"),
+    ("impacto", "dynamic"),
+    ("comercial", "commercial"),
     ("moderno", "modern"),
     ("modern", "modern"),
     ("minimal", "minimal"),
@@ -96,6 +100,10 @@ TONE_ALIASES = (
     ("exclusivo", "exclusive"),
 )
 TEMPLATE_ALIASES = (
+    ("modern commercial", "modern_commercial_v2"),
+    ("comercial moderno", "modern_commercial_v2"),
+    ("premium editorial", "premium_editorial_v2"),
+    ("social punch", "social_punch_v2"),
     ("modern premium", "modern_premium_v1"),
     ("moderno premium", "modern_premium_v1"),
     ("minimal", "minimal_v1"),
@@ -334,6 +342,22 @@ _ABBREVIATIONS = {
 }
 _MIN_PROPERTY_SCORE = 18
 _CLEAR_PROPERTY_GAP = 12
+_CLEAR_MARKETING_GAP = 16
+_EQUIV_MARKETING_GAP = 10
+_INACTIVE_COMMERCIAL = frozenset(
+    {
+        "sold",
+        "rented",
+        "reserved",
+        "unavailable",
+        "vendido",
+        "alquilado",
+        "reservado",
+        "no_disponible",
+        "inactive",
+        "archived",
+    }
+)
 LISTING_ACTIONS = VISUAL_ACTIONS | {"generate_visual", "generate_whatsapp"}
 
 
@@ -428,6 +452,92 @@ def _score_property_query(item, query):
     return score
 
 
+def _photo_count(item):
+    if not item:
+        return 0
+    raw = item.get("photo_count")
+    if raw not in (None, ""):
+        try:
+            return max(0, int(raw))
+        except (TypeError, ValueError):
+            pass
+    photos = item.get("photos")
+    if isinstance(photos, list):
+        return len(photos)
+    if item.get("has_photos") is False:
+        return 0
+    if item.get("has_photos") or item.get("has_cover") or item.get("cover_url"):
+        return 1
+    return 0
+
+
+def _has_listing_photos(item):
+    return _photo_count(item) > 0
+
+
+def _is_publishable_listing(item):
+    commercial = _fold(str((item or {}).get("commercial_status") or ""))
+    if commercial in _INACTIVE_COMMERCIAL:
+        return False
+    status = _fold(str((item or {}).get("status") or ""))
+    if status in {"archived", "inactive", "draft", "rejected"}:
+        return False
+    return True
+
+
+def _completeness_score(item):
+    item = item or {}
+    score = 0
+    if item.get("address") or item.get("title"):
+        score += 4
+    if item.get("locality") or item.get("neighborhood") or item.get("jurisdiction"):
+        score += 3
+    if item.get("rooms") not in (None, ""):
+        score += 3
+    price = item.get("listing_price")
+    if price not in (None, "", 0, "0"):
+        score += 4
+    if item.get("property_type") or item.get("type_label"):
+        score += 2
+    if item.get("description"):
+        score += 2
+    if item.get("bedrooms") not in (None, "") or item.get("bathrooms") not in (None, ""):
+        score += 2
+    return score
+
+
+def listing_marketing_score(item, query):
+    query_score = _score_property_query(item, query)
+    photos = _photo_count(item)
+    score = query_score
+    if photos:
+        score += 45 + min(photos, 10) * 2
+    else:
+        score -= 30
+    if _is_publishable_listing(item):
+        score += 14
+    else:
+        score -= 10
+    if query_score >= 80:
+        score += 10
+    elif query_score >= 70:
+        score += 4
+    return score + _completeness_score(item)
+
+
+def _equivalent_listings(left, right, query):
+    if _has_listing_photos(left) != _has_listing_photos(right):
+        return False
+    if _is_publishable_listing(left) != _is_publishable_listing(right):
+        return False
+    if abs(_photo_count(left) - _photo_count(right)) > 2:
+        return False
+    query_gap = abs(_score_property_query(left, query) - _score_property_query(right, query))
+    market_gap = abs(listing_marketing_score(left, query) - listing_marketing_score(right, query))
+    complete_gap = abs(_completeness_score(left) - _completeness_score(right))
+    return query_gap < 12 and market_gap < _EQUIV_MARKETING_GAP and complete_gap <= 4
+
+
 def _compact_property_choice(item):
     return {
         "id": item.get("id"),
@@ -440,6 +550,7 @@ def _compact_property_choice(item):
         "listing_price": item.get("listing_price"),
         "listing_currency": item.get("listing_currency"),
         "cover_url": item.get("cover_url"),
+        "photo_count": _photo_count(item),
         "property_type": item.get("property_type"),
     }
 
@@ -451,30 +562,58 @@ def resolve_property_from_prompt(prompt, properties):
         "status": "unset",
         "property": None,
         "matches": [],
+        "auto_picked": False,
     }
     if not query or not properties:
         return empty
     ranked = []
     for item in properties:
-        score = _score_property_query(item, query)
-        if score >= _MIN_PROPERTY_SCORE:
-            ranked.append((score, item))
-    ranked.sort(key=lambda pair: (pair[0], pair[1].get("id") or 0), reverse=True)
-    matches = [item for _score, item in ranked]
+        query_score = _score_property_query(item, query)
+        if query_score >= _MIN_PROPERTY_SCORE:
+            ranked.append((listing_marketing_score(item, query), query_score, item))
+    ranked.sort(
+        key=lambda pair: (
+            pair[0],
+            pair[1],
+            _photo_count(pair[2]),
+            pair[2].get("id") or 0,
+        ),
+        reverse=True,
+    )
+    matches = [item for _market, _query, item in ranked]
     if not matches:
         return {**empty, "status": "none", "query": query}
-    if len(matches) == 1 or (ranked[0][0] - ranked[1][0] >= _CLEAR_PROPERTY_GAP):
+    if len(matches) == 1:
         return {
             "query": query,
             "status": "resolved",
             "property": matches[0],
             "matches": matches[:8],
+            "auto_picked": False,
+        }
+    top_market, top_query, top = ranked[0]
+    next_market, next_query, nxt = ranked[1]
+    photo_split = _has_listing_photos(top) and not _has_listing_photos(nxt)
+    if photo_split or (
+        not _equivalent_listings(top, nxt, query)
+        and (
+            (top_market - next_market) >= _CLEAR_MARKETING_GAP
+            or (top_query - next_query) >= _CLEAR_PROPERTY_GAP
+        )
+    ):
+        return {
+            "query": query,
+            "status": "resolved",
+            "property": top,
+            "matches": matches[:8],
+            "auto_picked": True,
         }
     return {
         "query": query,
         "status": "ambiguous",
         "property": None,
         "matches": matches[:8],
+        "auto_picked": False,
     }
 
 
@@ -628,22 +767,49 @@ def interpret_prompt(
         content_type = content_type or "post"
 
     composer_property_id = property_id
+    query = extract_property_query(prompt)
     resolution = {
-        "query": extract_property_query(prompt),
+        "query": query,
         "status": "unset",
         "property": None,
         "matches": [],
+        "auto_picked": False,
     }
     matched = None
+    current_listing = None
+    if conversation and conversation.get("property_id") and properties:
+        current_listing = next(
+            (
+                item
+                for item in properties
+                if item.get("id") == conversation.get("property_id")
+            ),
+            None,
+        )
     if composer_property_id:
         resolution["status"] = "selected"
-    elif _should_search_property(folded, resolution["query"]):
-        resolution = resolve_property_from_prompt(prompt, properties)
-        if resolution.get("status") == "resolved":
-            matched = resolution.get("property")
-            property_id = (matched or {}).get("id")
-        elif resolution.get("status") in {"none", "ambiguous"}:
-            property_id = None
+    elif _should_search_property(folded, query):
+        if (
+            current_listing
+            and query
+            and _score_property_query(current_listing, query) >= _MIN_PROPERTY_SCORE
+        ):
+            resolution = {
+                "query": query,
+                "status": "inherited",
+                "property": current_listing,
+                "matches": [current_listing],
+                "auto_picked": False,
+            }
+            matched = current_listing
+            property_id = current_listing.get("id")
+        else:
+            resolution = resolve_property_from_prompt(prompt, properties)
+            if resolution.get("status") == "resolved":
+                matched = resolution.get("property")
+                property_id = (matched or {}).get("id")
+            elif resolution.get("status") in {"none", "ambiguous"}:
+                property_id = None
     explicit_listing_ref = bool(_PROPERTY_NOUN_RE.search(folded)) or any(
         token.isdigit() for token in _tokens(resolution.get("query") or "")
     )
@@ -726,6 +892,7 @@ def interpret_prompt(
         "matched_property": matched,
         "property_query": resolution.get("query"),
         "property_status": resolution.get("status") or "unset",
+        "property_auto_picked": bool(resolution.get("auto_picked")),
         "property_matches": [
             _compact_property_choice(item) for item in (resolution.get("matches") or [])
         ],
@@ -766,18 +933,30 @@ def _ack_key(intent, *, needs_property=False):
 def _picker_properties(organization_id, user):
     rows = get_properties(organization_id, agent_id=scoped_agent_id(user))
     try:
-        from modules.property_sync.media import get_property_media_url, list_covers_for_properties
+        from modules.property_sync.media import (
+            get_property_media_url,
+            list_property_media_for_properties,
+            pick_cover_media,
+        )
 
-        covers = list_covers_for_properties(
+        grouped = {}
+        for item in list_property_media_for_properties(
             organization_id,
             [row["id"] for row in rows if row.get("id")],
-        )
+        ):
+            grouped.setdefault(item["property_id"], []).append(item)
         for row in rows:
-            cover = covers.get(int(row["id"])) if row.get("id") else None
+            media = grouped.get(int(row["id"]), []) if row.get("id") else []
+            row["photo_count"] = len(media)
+            row["has_photos"] = bool(media)
+            cover = pick_cover_media(media)
             row["cover_url"] = get_property_media_url(cover, row.get("id"))
+            row["has_cover"] = bool(cover)
     except Exception:
         for row in rows:
             row.setdefault("cover_url", None)
+            row.setdefault("photo_count", 0)
+            row.setdefault("has_photos", False)
     return rows
 
 
@@ -1066,6 +1245,8 @@ def _run_visual_for_chat(
             include_price=True,
             local_render=True,
             copy_override=copy_override,
+            layout_template=intent.get("layout_template") or intent.get("format"),
+            cta=intent.get("cta"),
         )
         return {"ok": True, "stage": "complete", "error": None, "batch": batch}
     finally:
@@ -1191,6 +1372,8 @@ def _apply_context_to_intent(intent, context):
         intent["cta"] = context["cta"]
     if context.get("hero_photo_id"):
         intent["hero_photo_id"] = context["hero_photo_id"]
+    if context.get("layout_template"):
+        intent["layout_template"] = context["layout_template"]
     if intent.get("action") not in {"generate_visual", "edit_existing_generation", "chat"}:
         if context.get("channel") and context.get("channel") != "auto":
             intent["channel"] = context["channel"]
@@ -1502,6 +1685,7 @@ def send_chat_message(
         data["include_agent"] = context.get("include_agent") is not False
         data["channel"] = context.get("channel")
         data["creative_style"] = context.get("style")
+        data["layout_template"] = context.get("layout_template")
         generation = update_marketing_generation(
             generation["id"],
             organization_id,
@@ -1527,6 +1711,19 @@ def send_chat_message(
             "include_agent": data.get("include_agent"),
         }
         lead = _t(_ack_key(intent) or "marketing_ia_ack_visual", language)
+        if intent.get("property_auto_picked"):
+            label = listing_label(property_row, intent)
+            lead = (
+                _t(
+                    "marketing_ia_auto_picked",
+                    language,
+                    count=len(intent.get("property_matches") or []),
+                    query=display_query,
+                    address=label or display_query,
+                )
+                + "\n\n"
+                + lead
+            )
         add_marketing_message(
             conversation["id"],
             organization_id,

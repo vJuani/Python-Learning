@@ -31,8 +31,14 @@ from modules.marketing_renderer import (
 )
 
 MODERN_PREMIUM_V1 = "modern_premium_v1"
+MODERN_COMMERCIAL_V2 = "modern_commercial_v2"
+PREMIUM_EDITORIAL_V2 = "premium_editorial_v2"
+SOCIAL_PUNCH_V2 = "social_punch_v2"
 MODERN_PREMIUM_LAYOUT = MODERN_PREMIUM_V1
 MODERN_PREMIUM_ALIASES = frozenset({MODERN_PREMIUM_V1, "modern_premium"})
+V2_TEMPLATES = frozenset(
+    {MODERN_COMMERCIAL_V2, PREMIUM_EDITORIAL_V2, SOCIAL_PUNCH_V2}
+)
 LEGACY_TEMPLATES = frozenset({"legacy", "editorial", "modern-editorial-v1"})
 MODERN_FORMATS = frozenset({"flyer", "post"})
 RENDERER_USED = "pillow_modern_renderer"
@@ -55,12 +61,16 @@ def explicit_layout_choice(options=None):
 
 
 def resolve_layout_template(fmt, options=None):
-    """Flyer/post always resolve to modern_premium_v1 unless legacy is explicit."""
+    """Flyer/post default to modern_commercial_v2 unless a template is explicit."""
     template = explicit_layout_choice(options)
     if template in LEGACY_TEMPLATES:
         return template
-    if str(fmt or "") in MODERN_FORMATS or template in MODERN_PREMIUM_ALIASES:
+    if template in V2_TEMPLATES:
+        return template
+    if template in MODERN_PREMIUM_ALIASES:
         return MODERN_PREMIUM_V1
+    if str(fmt or "") in MODERN_FORMATS:
+        return MODERN_COMMERCIAL_V2
     return "modern-editorial-v1"
 
 

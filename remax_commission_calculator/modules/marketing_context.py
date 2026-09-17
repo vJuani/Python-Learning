@@ -453,6 +453,8 @@ def build_property_marketing_context(
             "covered_m2": display.get("covered_m2"),
             "total_m2": display.get("total_m2"),
             "locality": locality,
+            "amenities": amenities,
+            "patio": amenity_flags.get("patio"),
         }),
         "operation_title": operation_headline(language, {
             "type_label": type_label,

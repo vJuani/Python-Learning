@@ -15,10 +15,14 @@ from modules.marketing_flyer_modern import (
     MODERN_FORMATS,
     MODERN_PREMIUM_V1,
     RENDERER_USED as MODERN_PREMIUM_RENDERER,
-    explicit_layout_choice,
+    V2_TEMPLATES,
     render_modern_premium_v1,
     resolve_layout_template,
     uses_modern_premium,
+)
+from modules.marketing_flyer_commercial import (
+    RENDERER_USED as COMMERCIAL_V2_RENDERER,
+    render_layout_v2,
 )
 from modules.marketing_renderer import (
     FORMAT_SIZES,
@@ -96,11 +100,21 @@ def stamp_branding_overlay(
             "photo_path": agent.get("photo_path") if show_photo else None,
         }
     layout = resolve_layout_template(fmt, options)
-    legacy_requested = explicit_layout_choice(options) in LEGACY_TEMPLATES
-    use_modern = uses_modern_premium(fmt, options) or (
-        str(fmt) in MODERN_FORMATS and not legacy_requested
-    )
-    if use_modern:
+    if layout in V2_TEMPLATES:
+        canvas = render_layout_v2(
+            layout,
+            size,
+            photos,
+            facts,
+            planned,
+            overlay_agent,
+            {**options, "photo_rows": (context or {}).get("photos") or []},
+            language=language,
+            fallback_hero=fallback if not photos else None,
+        )
+        renderer_used = COMMERCIAL_V2_RENDERER
+        layout_version = layout
+    elif layout == MODERN_PREMIUM_V1 or uses_modern_premium(fmt, options):
         canvas = render_modern_premium_v1(
             size,
             photos,
