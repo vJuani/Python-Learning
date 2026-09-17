@@ -49,10 +49,12 @@
     prompt.addEventListener("input", resizePrompt);
   }
 
-  var openPicker = root.querySelector("[data-mkt-open-picker]");
-  if (openPicker && picker) {
-    openPicker.addEventListener("click", function () {
-      if (typeof picker.showModal === "function") picker.showModal();
+  var openPickers = root.querySelectorAll("[data-mkt-open-picker]");
+  if (picker) {
+    openPickers.forEach(function (button) {
+      button.addEventListener("click", function () {
+        if (typeof picker.showModal === "function") picker.showModal();
+      });
     });
   }
 

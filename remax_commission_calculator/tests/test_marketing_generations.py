@@ -45,7 +45,11 @@ from modules.marketing_ai import (
 from modules.marketing_ai_client import MarketingAIClientError, get_marketing_ai_model
 from modules.marketing_ai_prompts import build_copy_instructions
 from modules.marketing_context import MarketingError
-from modules.marketing_chat_service import interpret_prompt
+from modules.marketing_chat_service import (
+    extract_property_query,
+    interpret_prompt,
+    resolve_property_from_prompt,
+)
 from modules.marketing_generation_service import (
     build_generation_context,
     can_view_generation,
@@ -124,6 +128,23 @@ def _add_listing_photo(organization_id, property_id, name="cover.jpg"):
         position=0,
         is_cover=True,
         content_type="image/jpeg",
+    )
+
+
+def _add_agent_photo(organization_id, agent_id):
+    from modules.database.agents_repository import update_agent_profile_photo
+
+    relative = f"organizations/{organization_id}/agents/{agent_id}/photo.png"
+    path = _PRIVATE_ROOT / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (400, 520), (18, 72, 48)).save(path, "PNG")
+    update_agent_profile_photo(
+        agent_id,
+        organization_id,
+        profile_photo_key=relative.replace("\\", "/"),
+        profile_photo_mime="image/png",
+        profile_photo_width=400,
+        profile_photo_height=520,
     )
 
 
@@ -234,10 +255,17 @@ class MarketingGenerationsTests(unittest.TestCase):
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 ).fetchall()
             }
+            columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(marketing_conversations)"
+                ).fetchall()
+            }
         finally:
             connection.close()
         self.assertIn("marketing_conversations", names)
         self.assertIn("marketing_messages", names)
+        self.assertIn("context_json", columns)
 
     def test_mock_provider_does_not_call_real_api(self):
         result = generate_content(
@@ -419,6 +447,8 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(story["content_type"], "story")
         self.assertEqual(story["action"], "generate_story_image")
         self.assertEqual(story["parent_generation_id"], 99)
+        self.assertEqual(story.get("channel"), "instagram_story")
+        self.assertTrue(story.get("channel_explicit"))
 
     def test_interpret_prompt_chat_vs_visual(self):
         properties = [{"id": 11, "address": "Italia 220", "locality": "Palermo"}]
@@ -534,13 +564,11 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertIn("Cambiale el título", thread.get_data(as_text=True))
         from modules.database.marketing_conversations_repository import (
             last_generation_id_for_conversation,
-            list_marketing_conversations,
         )
         from modules.database.marketing_generations_repository import get_marketing_generation
 
-        conversations = list_marketing_conversations(self.org, user_id=self.agent_user_id)
-        self.assertEqual(len(conversations), 1)
-        last_id = last_generation_id_for_conversation(conversations[0]["id"], self.org)
+        conversation_id = int(location.rstrip("/").split("/")[-1])
+        last_id = last_generation_id_for_conversation(conversation_id, self.org)
         child = get_marketing_generation(last_id, self.org)
         self.assertIsNotNone(child["parent_generation_id"])
         other = self._login(self.other_user_id, ROLE_AGENT, agent_id=self.other_agent_id)
@@ -557,6 +585,18 @@ class MarketingGenerationsTests(unittest.TestCase):
         )
         self.assertEqual(created.status_code, 302)
         location = created.headers["Location"]
+        asked = client.get(location).get_data(as_text=True)
+        self.assertIn("estilo", asked.lower())
+        self.assertNotIn("Copy de prueba", asked)
+        client.post(
+            location,
+            data={
+                "prompt": "Premium",
+                "decision_key": "style",
+                "decision_value": "premium",
+            },
+            follow_redirects=False,
+        )
         page = client.get(location)
         body = page.get_data(as_text=True)
         self.assertIn("Perfecto, armé una primera versión.", body)
@@ -567,11 +607,10 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertNotIn("No pude generar la imagen.", body)
         from modules.database.marketing_conversations_repository import (
             last_generation_id_for_conversation,
-            list_marketing_conversations,
+            get_marketing_conversation,
         )
 
-        conversations = list_marketing_conversations(self.org, user_id=self.agent_user_id)
-        conversation_id = conversations[0]["id"]
+        conversation_id = int(location.rstrip("/").split("/")[-1])
         first_id = last_generation_id_for_conversation(conversation_id, self.org)
         first = get_marketing_generation(first_id, self.org)
         data = first.get("generated_data") or {}
@@ -595,13 +634,124 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(second_id, first_id)
         second = get_marketing_generation(second_id, self.org)
         self.assertEqual((second.get("generated_data") or {}).get("visual_status"), "completed")
+        conversation = get_marketing_conversation(conversation_id, self.org)
+        self.assertEqual(conversation["property_id"], self.italia_id)
+
+    def test_resolve_property_from_natural_language(self):
+        unique = [
+            {
+                "id": 11,
+                "address": "Av. Italia 1234",
+                "locality": "Palermo",
+                "neighborhood": "Palermo",
+                "jurisdiction": "CABA",
+                "title": "Propiedad Italia",
+                "description": "Departamento en Palermo.",
+            }
+        ]
+        self.assertEqual(extract_property_query("creame una publicación de la propiedad de italia"), "italia")
+        self.assertEqual(extract_property_query("Haceme una publicación de Italia con mis datos"), "italia")
+        self.assertIsNone(extract_property_query("Haceme otra publicación"))
+        self.assertIsNone(extract_property_query("Ahora haceme una historia"))
+        resolved = resolve_property_from_prompt("la propiedad de Italia", unique)
+        self.assertEqual(resolved["status"], "resolved")
+        self.assertEqual(resolved["property"]["id"], 11)
+        exact = interpret_prompt("Haceme una publicidad de Don Bosco 477", properties=[
+            {"id": 7, "address": "Don Bosco 477", "locality": "Victoria"}
+        ])
+        self.assertEqual(exact["property_id"], 7)
+        self.assertEqual(exact["property_status"], "resolved")
+        partial = interpret_prompt(
+            "armame una pieza de la de Santamarina",
+            properties=[{"id": 9, "address": "Santamarina 1335", "neighborhood": "Victoria"}],
+        )
+        self.assertEqual(partial["property_id"], 9)
+        many = [
+            {"id": 21, "address": "Italia 123", "locality": "Victoria", "rooms": 2, "listing_price": 100000, "listing_currency": "USD"},
+            {"id": 22, "address": "Italia 456", "locality": "San Isidro", "rooms": 3, "listing_price": 180000, "listing_currency": "USD"},
+        ]
+        ambiguous = interpret_prompt("creame una publicación de la propiedad de Italia", properties=many)
+        self.assertIsNone(ambiguous["property_id"])
+        self.assertEqual(ambiguous["property_status"], "ambiguous")
+        self.assertEqual(len(ambiguous["property_matches"]), 2)
+        missing = interpret_prompt(
+            "creame una publicación de la propiedad de Italia",
+            properties=[{"id": 3, "address": "Libertador 1000", "locality": "Buenos Aires"}],
+        )
+        self.assertIsNone(missing["property_id"])
+        self.assertEqual(missing["property_status"], "none")
+        other_agent = interpret_prompt(
+            "creame una publicación de la propiedad de Italia",
+            properties=[{"id": 44, "address": "Cabildo 200", "agent_id": 99}],
+        )
+        self.assertEqual(other_agent["property_status"], "none")
+        self.assertIsNone(other_agent["property_id"])
+
+    def test_http_chat_ambiguous_and_missing_property(self):
+        from modules.database import add_property
+        from modules.database.marketing_conversations_repository import get_marketing_conversation, list_marketing_conversations
+        from modules.database.marketing_generations_repository import list_marketing_generations
+
+        add_property(
+            "Belgrano 100",
+            "CABA",
+            self.org,
+            agent_id=self.agent_id,
+            neighborhood="Belgrano",
+            locality="Belgrano",
+            created_by_user_id=self.admin_id,
+        )
+        add_property(
+            "Belgrano 200",
+            "CABA",
+            self.org,
+            agent_id=self.agent_id,
+            neighborhood="Belgrano",
+            locality="Belgrano",
+            created_by_user_id=self.admin_id,
+        )
+        client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
+        before = len(list_marketing_generations(self.org))
+        created = client.post(
+            "/marketing/chat",
+            data={"prompt": "creame una publicación de la propiedad de Belgrano"},
+            follow_redirects=False,
+        )
+        self.assertEqual(created.status_code, 302)
+        body = client.get(created.headers["Location"]).get_data(as_text=True)
+        self.assertIn("varias propiedades relacionadas con Belgrano", body)
+        self.assertIn("Belgrano 100", body)
+        self.assertIn("Belgrano 200", body)
+        self.assertNotIn("Copy de prueba", body)
+        self.assertEqual(len(list_marketing_generations(self.org)), before)
+        other = self._login(self.other_user_id, ROLE_AGENT, agent_id=self.other_agent_id)
+        missing = other.post(
+            "/marketing/chat",
+            data={"prompt": "creame una publicación de la propiedad de italia"},
+            follow_redirects=False,
+        )
+        missing_body = other.get(missing.headers["Location"]).get_data(as_text=True)
+        self.assertIn("No encontré una propiedad llamada Italia", missing_body)
+        self.assertIn("Buscar propiedad", missing_body)
+        self.assertNotIn("Copy de prueba", missing_body)
+        conversations = list_marketing_conversations(self.org, user_id=self.other_user_id)
+        conversation = get_marketing_conversation(conversations[0]["id"], self.org)
+        self.assertIsNone(conversation.get("property_id"))
+        foreign = self._login(self.foreign_admin_id, ROLE_ADMIN, organization_id=self.other_org)
+        self.assertEqual(
+            foreign.post(
+                "/marketing/chat",
+                data={"prompt": "creame una publicación de la propiedad de italia"},
+            ).status_code,
+            403,
+        )
 
     def test_http_chat_visual_missing_photos_is_specific(self):
         client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
         created = client.post(
             "/marketing/chat",
             data={
-                "prompt": "Haceme una publicación de Sin Fotos 100",
+                "prompt": "Haceme una publicación premium de Sin Fotos 100, con mis datos",
                 "property_id": str(self.bare_id),
             },
             follow_redirects=False,
@@ -987,6 +1137,198 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertNotIn("#", result["message"])
         self.assertNotIn("caption", result)
         self.assertNotIn("hashtags", result)
+
+
+    def test_smart_question_layer_rules(self):
+        from modules.marketing_chat_decisions import (
+            apply_intelligent_defaults,
+            determine_missing_decisions,
+            parse_prompt_decisions,
+            resolve_context,
+        )
+
+        listing = {
+            "address": "Italia 220",
+            "purpose": "sale",
+            "agent": {"name": "Ana Gen", "has_photo": True, "whatsapp": "123"},
+            "photos": [{"id": 1, "is_cover": True}],
+            "has_cover": True,
+        }
+        intent = {
+            "action": "generate_post_image",
+            "origin": "property",
+            "property_id": 11,
+            "channel_explicit": True,
+            "channel": "instagram_post",
+            "property_status": "resolved",
+        }
+        context = resolve_context(intent, None, "Haceme una publicación de Italia", listing)
+        self.assertIn("include_agent", determine_missing_decisions(context, listing, intent))
+        specified = parse_prompt_decisions("Haceme una publicación de Italia con mis datos")
+        self.assertTrue(specified["include_agent"])
+        context = resolve_context(
+            {**intent, "include_agent": True, "creative_style": None},
+            None,
+            "Haceme una publicación de Italia con mis datos",
+            listing,
+        )
+        missing = determine_missing_decisions(context, listing, intent)
+        self.assertNotIn("include_agent", missing)
+        self.assertIn("style", missing)
+        full = resolve_context(
+            {
+                **intent,
+                "include_agent": True,
+                "style": "premium",
+                "creative_style": "premium",
+                "channel_explicit": True,
+            },
+            None,
+            "Haceme una publicación premium para Instagram de Italia, con mi foto y mis datos.",
+            listing,
+        )
+        self.assertEqual(determine_missing_decisions(full, listing, intent), [])
+        auto = apply_intelligent_defaults({"style": "auto", "channel": "auto", "include_agent": "auto"}, listing)
+        self.assertEqual(auto["style"], "commercial")
+        self.assertEqual(auto["channel"], "instagram_post")
+        self.assertTrue(auto["include_agent"])
+        switched = resolve_context(
+            {
+                "action": "generate_story_image",
+                "origin": "property",
+                "property_id": 11,
+                "channel": "instagram_story",
+                "channel_explicit": True,
+                "content_type": "story",
+            },
+            {
+                "property_id": 11,
+                "context": {
+                    "include_agent": False,
+                    "channel": "instagram_post",
+                    "style": "commercial",
+                    "asked": ["include_agent", "style", "channel"],
+                },
+            },
+            "Ahora haceme una historia",
+            listing,
+        )
+        self.assertEqual(switched["channel"], "instagram_story")
+        self.assertFalse(switched["include_agent"])
+        self.assertEqual(switched["style"], "commercial")
+
+    def test_http_chat_smart_questions(self):
+        from modules.database.marketing_conversations_repository import (
+            get_marketing_conversation,
+            last_generation_id_for_conversation,
+        )
+        from modules.database.marketing_generations_repository import (
+            get_marketing_generation,
+            list_marketing_generations,
+        )
+
+        _add_agent_photo(self.org, self.agent_id)
+        client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
+        before = len(list_marketing_generations(self.org))
+        created = client.post(
+            "/marketing/chat",
+            data={"prompt": "Haceme una publicación de Italia"},
+            follow_redirects=False,
+        )
+        location = created.headers["Location"]
+        body = client.get(location).get_data(as_text=True)
+        self.assertIn("tus datos y tu foto", body)
+        self.assertIn("Usar mis datos", body)
+        self.assertIn("Solo inmobiliaria", body)
+        self.assertNotIn("Copy de prueba", body)
+        self.assertEqual(len(list_marketing_generations(self.org)), before)
+
+        skipped = client.post(
+            "/marketing/chat",
+            data={"prompt": "Haceme una publicación de Italia con mis datos"},
+            follow_redirects=False,
+        )
+        skipped_body = client.get(skipped.headers["Location"]).get_data(as_text=True)
+        self.assertNotIn("tus datos y tu foto", skipped_body)
+        self.assertIn("estilo", skipped_body.lower())
+        self.assertNotIn("Copy de prueba", skipped_body)
+
+        direct = client.post(
+            "/marketing/chat",
+            data={
+                "prompt": "Haceme una publicación premium para Instagram de Italia, con mi foto y mis datos."
+            },
+            follow_redirects=False,
+        )
+        direct_loc = direct.headers["Location"]
+        direct_body = client.get(direct_loc).get_data(as_text=True)
+        self.assertIn("Perfecto, armé una primera versión.", direct_body)
+        self.assertIn("Copy de prueba", direct_body)
+        conversation_id = int(direct_loc.rstrip("/").split("/")[-1])
+        conversation = get_marketing_conversation(conversation_id, self.org)
+        self.assertEqual(conversation["property_id"], self.italia_id)
+        self.assertTrue((conversation.get("context") or {}).get("include_agent"))
+        self.assertEqual((conversation.get("context") or {}).get("style"), "premium")
+
+        office = client.post(
+            location,
+            data={
+                "prompt": "Solo inmobiliaria",
+                "decision_key": "include_agent",
+                "decision_value": "false",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(office.status_code, 302)
+        office_body = client.get(location).get_data(as_text=True)
+        self.assertIn("estilo", office_body.lower())
+        self.assertNotIn("Copy de prueba", office_body)
+        client.post(
+            location,
+            data={
+                "prompt": "Elegilo vos",
+                "decision_key": "style",
+                "decision_value": "auto",
+            },
+            follow_redirects=False,
+        )
+        generated = client.get(location).get_data(as_text=True)
+        self.assertIn("Copy de prueba", generated)
+        conversation = get_marketing_conversation(int(location.rstrip("/").split("/")[-1]), self.org)
+        context = conversation.get("context") or {}
+        self.assertEqual(conversation["property_id"], self.italia_id)
+        self.assertFalse(context.get("include_agent"))
+        self.assertEqual(context.get("style"), "commercial")
+        last_id = last_generation_id_for_conversation(conversation["id"], self.org)
+        generation = get_marketing_generation(last_id, self.org)
+        self.assertFalse((generation.get("generated_data") or {}).get("include_agent"))
+
+        story = client.post(
+            location,
+            data={"prompt": "Ahora haceme una historia"},
+            follow_redirects=False,
+        )
+        self.assertEqual(story.status_code, 302)
+        story_page = client.get(location).get_data(as_text=True)
+        self.assertNotIn("tus datos y tu foto", story_page.split("Ahora haceme una historia")[-1])
+        self.assertIn("Copy de prueba", story_page)
+        conversation = get_marketing_conversation(conversation["id"], self.org)
+        context = conversation.get("context") or {}
+        self.assertEqual(conversation["property_id"], self.italia_id)
+        self.assertFalse(context.get("include_agent"))
+        self.assertEqual(context.get("style"), "commercial")
+        self.assertEqual(context.get("channel"), "instagram_story")
+        story_id = last_generation_id_for_conversation(conversation["id"], self.org)
+        story_gen = get_marketing_generation(story_id, self.org)
+        self.assertEqual(story_gen["content_type"], "story")
+        again = client.post(
+            location,
+            data={"prompt": "Haceme otra publicación"},
+            follow_redirects=False,
+        )
+        again_body = client.get(location).get_data(as_text=True)
+        self.assertNotIn("¿Querés que la publicación salga con tus datos y tu foto?", again_body.split("Haceme otra publicación")[-1])
+        self.assertNotIn("¿Qué estilo querés?", again_body.split("Haceme otra publicación")[-1])
 
 
 if __name__ == "__main__":

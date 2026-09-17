@@ -60,6 +60,15 @@
                     {% with generation=message.generation %}
                     {% include "marketing/_chat_result.html" %}
                     {% endwith %}
+                    {% elif (message.metadata or {}).get('decision_options') %}
+                    {% if message.content %}<p>{{ message.content }}</p>{% endif %}
+                    {% include "marketing/_chat_decision_choices.html" %}
+                    {% elif (message.metadata or {}).get('property_choices') %}
+                    {% if message.content %}<p>{{ message.content }}</p>{% endif %}
+                    {% include "marketing/_chat_property_choices.html" %}
+                    {% elif (message.metadata or {}).get('open_picker') %}
+                    {% if message.content %}<p>{{ message.content }}</p>{% endif %}
+                    <button type="button" class="btn btn-secondary" data-mkt-open-picker>{{ t('marketing_ia_property_search') }}</button>
                     {% elif message.content %}
                     <p>{{ message.content }}</p>
                     {% endif %}

@@ -388,6 +388,100 @@ body.is-marketing-chat-page .mkt-chat {
     margin: 0 0 0.45rem;
 }
 
+.mkt-choices {
+    display: grid;
+    gap: 0.55rem;
+    margin: 0.7rem 0 0.2rem;
+}
+
+.mkt-choices__form {
+    margin: 0;
+}
+
+.mkt-choices__card {
+    display: grid;
+    grid-template-columns: 4.4rem minmax(0, 1fr);
+    gap: 0.7rem;
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--border-soft, #dce6df);
+    background: var(--surface, #fff);
+    border-radius: 14px;
+    padding: 0.45rem;
+    cursor: pointer;
+    color: inherit;
+}
+
+.mkt-choices__card img,
+.mkt-choices__ph {
+    width: 4.4rem;
+    height: 4.4rem;
+    border-radius: 10px;
+    object-fit: cover;
+    background: #dce6df;
+}
+
+.mkt-choices__copy {
+    display: grid;
+    align-content: center;
+    gap: 0.12rem;
+    min-width: 0;
+}
+
+.mkt-choices__copy strong,
+.mkt-choices__copy em,
+.mkt-choices__copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mkt-choices__copy strong {
+    font-size: 0.92rem;
+}
+
+.mkt-choices__copy small,
+.mkt-choices__copy em {
+    font-size: 0.78rem;
+    font-style: normal;
+    color: var(--muted, #5b6b7c);
+}
+
+.mkt-msg__bubble > [data-mkt-open-picker] {
+    margin-top: 0.65rem;
+}
+
+.mkt-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin: 0.75rem 0 0.15rem;
+}
+
+.mkt-picks__form {
+    margin: 0;
+}
+
+.mkt-picks__btn {
+    border: 1px solid var(--border-soft, #dce6df);
+    background: var(--surface, #fff);
+    color: var(--text, #122018);
+    border-radius: 999px;
+    padding: 0.48rem 0.9rem;
+    font-size: 0.88rem;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.mkt-picks__btn:hover {
+    border-color: color-mix(in srgb, var(--color-brand, #0e4f38) 45%, var(--border-soft, #dce6df));
+    background: color-mix(in srgb, var(--color-brand, #0e4f38) 8%, #fff);
+}
+
+.mkt-msg__bubble > p {
+    white-space: pre-line;
+}
+
 .mkt-warn {
     margin: 0;
     font-size: 0.88rem;

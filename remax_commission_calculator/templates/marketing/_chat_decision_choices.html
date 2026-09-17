@@ -1,0 +1,30 @@
+{% set options = (message.metadata or {}).get('decision_options') or [] %}
+{% set pending = (message.metadata or {}).get('pending_prompt') or '' %}
+{% set key = (message.metadata or {}).get('decision_key') or '' %}
+{% set as_cards = (message.metadata or {}).get('as_cards') %}
+<div class="{{ 'mkt-choices' if as_cards else 'mkt-picks' }}">
+    {% for item in options %}
+    <form method="post" action="{{ send_action }}" class="{{ 'mkt-choices__form' if as_cards else 'mkt-picks__form' }}">
+        {% if conversation %}
+        <input type="hidden" name="conversation_id" value="{{ conversation.id }}">
+        {% endif %}
+        <input type="hidden" name="prompt" value="{{ item.label }}">
+        <input type="hidden" name="decision_key" value="{{ key }}">
+        <input type="hidden" name="decision_value" value="{{ item.value }}">
+        {% if as_cards %}
+        <button type="submit" class="mkt-choices__card">
+            {% if item.cover_url %}
+            <img src="{{ item.cover_url }}" alt="">
+            {% else %}
+            <span class="mkt-choices__ph" aria-hidden="true"></span>
+            {% endif %}
+            <span class="mkt-choices__copy">
+                <strong>{{ item.label }}</strong>
+            </span>
+        </button>
+        {% else %}
+        <button type="submit" class="mkt-picks__btn">{{ item.label }}</button>
+        {% endif %}
+    </form>
+    {% endfor %}
+</div>

@@ -49,6 +49,7 @@ def _conversation_row(row):
         "created_at": row[5],
         "updated_at": row[6],
         "property_address": row[7] if len(row) > 7 else None,
+        "context": _parse_json(row[8]) if len(row) > 8 else {},
     }
 
 
@@ -69,7 +70,7 @@ def _message_row(row):
 
 CONVERSATION_SELECT = """
     SELECT c.id, c.organization_id, c.user_id, c.title, c.property_id,
-           c.created_at, c.updated_at, p.address
+           c.created_at, c.updated_at, p.address, c.context_json
     FROM marketing_conversations AS c
     LEFT JOIN properties AS p
         ON p.id = c.property_id
@@ -149,6 +150,7 @@ def update_marketing_conversation(
     *,
     title=None,
     property_id=None,
+    context=None,
     touch=True,
 ):
     organization_id = require_organization_id(organization_id)
@@ -160,6 +162,9 @@ def update_marketing_conversation(
     if property_id is not None:
         assignments.append("property_id = ?")
         params.append(property_id or None)
+    if context is not None:
+        assignments.append("context_json = ?")
+        params.append(_dump_json(context))
     if touch or assignments:
         assignments.append("updated_at = ?")
         params.append(_now_iso())

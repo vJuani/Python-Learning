@@ -24,6 +24,20 @@ from modules.database.properties_repository import get_properties, get_property_
 from modules.database.tenant import require_organization_id
 from modules.i18n import translate
 from modules.marketing_context import MarketingError, assert_marketing_access
+from modules.marketing_chat_decisions import (
+    action_from_channel,
+    apply_intelligent_defaults,
+    content_type_from_channel,
+    conversation_context,
+    determine_missing_decisions,
+    generation_style_tone,
+    looks_like_decision_reply,
+    parse_prompt_decisions,
+    persistable_context,
+    question_spec,
+    resolve_context,
+    should_clarify,
+)
 from modules.marketing_generation_service import (
     STYLES,
     TONES,
@@ -194,50 +208,311 @@ def require_conversation(organization_id, user, conversation_id):
     return conversation
 
 
-def match_property_from_prompt(prompt, properties):
-    text = _fold(prompt)
-    if not text:
+_PROPERTY_NOUN_RE = re.compile(
+    r"\b(?:la |el |las |los )?(?:propiedades|propiedad|departamentos|departamento|"
+    r"depto|dpto|casas|casa|ph|lotes|lote|locales|local|inmuebles|inmueble|"
+    r"listings|listing|duplex|oficinas|oficina)s?"
+    r"(?:\s+que\s+tengo)?"
+    r"(?:\s+(?:de\s+la|del|de|en|sobre|llamada|llamado))?"
+    r"\s+(?P<ref>.+)"
+)
+_QUERY_STOPWORDS = frozenset(
+    {
+        "haceme",
+        "creame",
+        "armame",
+        "generame",
+        "quiero",
+        "necesito",
+        "hacelo",
+        "convert",
+        "converti",
+        "una",
+        "un",
+        "unas",
+        "unos",
+        "la",
+        "el",
+        "las",
+        "los",
+        "de",
+        "del",
+        "en",
+        "para",
+        "por",
+        "con",
+        "que",
+        "tengo",
+        "esta",
+        "este",
+        "eso",
+        "esa",
+        "propiedad",
+        "propiedades",
+        "publicacion",
+        "publicaciones",
+        "publicidad",
+        "pieza",
+        "flyer",
+        "folleto",
+        "historia",
+        "historias",
+        "carrusel",
+        "carousel",
+        "reel",
+        "instagram",
+        "post",
+        "posts",
+        "imagen",
+        "copy",
+        "whatsapp",
+        "vender",
+        "venderlo",
+        "venderla",
+        "venta",
+        "alquilar",
+        "alquiler",
+        "premium",
+        "moderno",
+        "moderna",
+        "minimal",
+        "minimalista",
+        "elegante",
+        "comercial",
+        "datos",
+        "foto",
+        "fotos",
+        "mis",
+        "mi",
+        "tu",
+        "tus",
+        "su",
+        "sus",
+        "me",
+        "te",
+        "vos",
+        "solo",
+        "inmobiliaria",
+        "oficina",
+        "marca",
+        "otra",
+        "otro",
+        "otras",
+        "otros",
+        "ahora",
+        "luego",
+        "despues",
+        "después",
+        "tambien",
+        "también",
+        "version",
+        "versión",
+        "primera",
+        "version",
+        "llamada",
+        "llamado",
+        "depto",
+        "departamento",
+        "dpto",
+        "casa",
+        "ph",
+        "lote",
+        "local",
+        "inmueble",
+        "listing",
+    }
+)
+_ABBREVIATIONS = {
+    "av": "avenida",
+    "avda": "avenida",
+    "pje": "pasaje",
+    "sta": "santa",
+    "sto": "santo",
+    "dpto": "departamento",
+    "depto": "departamento",
+    "dto": "departamento",
+}
+_MIN_PROPERTY_SCORE = 18
+_CLEAR_PROPERTY_GAP = 12
+LISTING_ACTIONS = VISUAL_ACTIONS | {"generate_visual", "generate_whatsapp"}
+
+
+def _tokens(text):
+    return [part for part in re.split(r"[^\w]+", text or "") if part]
+
+
+def _expand_token(token):
+    return _ABBREVIATIONS.get(token, token)
+
+
+def _normalize_search(text):
+    folded = _fold(text)
+    parts = [_expand_token(token) for token in _tokens(folded)]
+    return " ".join(part for part in parts if part)
+
+
+def extract_property_query(prompt):
+    folded = _fold(prompt)
+    if not folded:
         return None
+    match = _PROPERTY_NOUN_RE.search(folded)
+    raw = match.group("ref") if match else folded
+    tokens = [
+        _expand_token(token)
+        for token in _tokens(raw)
+        if token not in _QUERY_STOPWORDS and len(token) >= 2
+    ]
+    query = " ".join(tokens).strip()
+    return query or None
+
+
+def _property_search_fields(item):
+    try:
+        from modules.property_detail_view import compact_property_title
+
+        title = compact_property_title(item) or ""
+    except Exception:
+        title = ""
+    return {
+        "address": _normalize_search(item.get("address") or ""),
+        "formatted": _normalize_search(item.get("formatted_address") or ""),
+        "title": _normalize_search(item.get("title") or title),
+        "compact": _normalize_search(title),
+        "locality": _normalize_search(item.get("locality") or ""),
+        "neighborhood": _normalize_search(item.get("neighborhood") or ""),
+        "jurisdiction": _normalize_search(
+            item.get("jurisdiction") or item.get("administrative_area") or ""
+        ),
+        "external_id": _normalize_search(item.get("external_id") or ""),
+        "description": _normalize_search((item.get("description") or "")[:400]),
+        "property_type": _normalize_search(item.get("property_type") or ""),
+    }
+
+
+def _score_property_query(item, query):
+    query = _normalize_search(query)
+    if not query:
+        return 0
+    fields = _property_search_fields(item)
+    haystack = " ".join(value for value in fields.values() if value)
+    query_tokens = [token for token in _tokens(query) if len(token) >= 2]
+    score = 0
+    address = fields["address"]
+    if query == address or query == fields["compact"]:
+        score += 100
+    elif address.startswith(query) or query in address or query in fields["formatted"]:
+        score += 80
+    elif fields["compact"] and query in fields["compact"]:
+        score += 75
+    elif fields["title"] and query in fields["title"]:
+        score += 70
+    if query in {fields["locality"], fields["neighborhood"], fields["jurisdiction"]} and query:
+        score += 55
+    elif query and (
+        query in fields["locality"]
+        or query in fields["neighborhood"]
+        or query in fields["jurisdiction"]
+    ):
+        score += 40
+    if fields["external_id"] and query == fields["external_id"]:
+        score += 90
+    if query_tokens and address and all(token in address for token in query_tokens):
+        score = max(score, 72)
+    token_hits = sum(1 for token in query_tokens if token in haystack)
+    score += token_hits * 10
+    digits = [token for token in query_tokens if token.isdigit()]
+    if digits and any(token in address for token in digits):
+        score += 18
+    if fields["description"] and query in fields["description"] and score < _MIN_PROPERTY_SCORE:
+        score += 16
+    return score
+
+
+def _compact_property_choice(item):
+    return {
+        "id": item.get("id"),
+        "address": item.get("address") or item.get("title") or "",
+        "locality": item.get("neighborhood")
+        or item.get("locality")
+        or item.get("jurisdiction")
+        or "",
+        "rooms": item.get("rooms"),
+        "listing_price": item.get("listing_price"),
+        "listing_currency": item.get("listing_currency"),
+        "cover_url": item.get("cover_url"),
+        "property_type": item.get("property_type"),
+    }
+
+
+def resolve_property_from_prompt(prompt, properties):
+    query = extract_property_query(prompt)
+    empty = {
+        "query": query,
+        "status": "unset",
+        "property": None,
+        "matches": [],
+    }
+    if not query or not properties:
+        return empty
     ranked = []
-    for item in properties or []:
-        address = _fold(item.get("address") or "")
-        locality = _fold(item.get("locality") or item.get("neighborhood") or "")
-        if not address:
-            continue
-        score = 0
-        if address in text or (len(address) >= 8 and address[:12] in text):
-            score += 8
-        tokens = [token for token in re.split(r"[^\w]+", address) if len(token) >= 3]
-        digits = [token for token in re.split(r"[^\w]+", address) if token.isdigit()]
-        score += sum(2 for token in tokens if token in text)
-        score += sum(3 for token in digits if token in text)
-        if locality and locality in text:
-            score += 1
-        if score >= 5:
+    for item in properties:
+        score = _score_property_query(item, query)
+        if score >= _MIN_PROPERTY_SCORE:
             ranked.append((score, item))
-    if not ranked:
-        token_hits = {}
-        for item in properties or []:
-            blob = " ".join(
-                [
-                    _fold(item.get("address") or ""),
-                    _fold(item.get("locality") or ""),
-                    _fold(item.get("neighborhood") or ""),
-                ]
-            )
-            for token in {part for part in re.split(r"[^\w]+", blob) if len(part) >= 4}:
-                if token in text:
-                    token_hits.setdefault(token, []).append(item)
-        unique = [
-            items[0]
-            for items in token_hits.values()
-            if len(items) == 1
-        ]
-        if len({item.get("id") for item in unique}) == 1:
-            return unique[0]
-        return None
-    ranked.sort(key=lambda pair: pair[0], reverse=True)
-    return ranked[0][1]
+    ranked.sort(key=lambda pair: (pair[0], pair[1].get("id") or 0), reverse=True)
+    matches = [item for _score, item in ranked]
+    if not matches:
+        return {**empty, "status": "none", "query": query}
+    if len(matches) == 1 or (ranked[0][0] - ranked[1][0] >= _CLEAR_PROPERTY_GAP):
+        return {
+            "query": query,
+            "status": "resolved",
+            "property": matches[0],
+            "matches": matches[:8],
+        }
+    return {
+        "query": query,
+        "status": "ambiguous",
+        "property": None,
+        "matches": matches[:8],
+    }
+
+
+def match_property_from_prompt(prompt, properties):
+    resolved = resolve_property_from_prompt(prompt, properties)
+    if resolved.get("status") == "resolved":
+        return resolved.get("property")
+    return None
+
+
+def _should_search_property(folded, query):
+    if not query:
+        return False
+    if _PROPERTY_NOUN_RE.search(folded):
+        return True
+    if any(token.isdigit() for token in _tokens(query)):
+        return True
+    if REVISION_RE.search(folded) and not CREATE_RE.search(folded) and not IMAGE_RE.search(folded):
+        return False
+    exclusive_chat = bool(
+        CHAT_RE.search(folded) and not CREATE_RE.search(folded) and not IMAGE_RE.search(folded)
+    )
+    if exclusive_chat:
+        return False
+    return bool(
+        CREATE_RE.search(folded)
+        or IMAGE_RE.search(folded)
+        or FORMAT_RE.search(folded)
+        or 1 <= len(_tokens(query)) <= 4
+    )
+
+
+def _wants_listing_property(action, origin):
+    if action in {"chat", "edit_existing_generation"}:
+        return False
+    if origin in {"personal_brand", "office"}:
+        return False
+    return action in LISTING_ACTIONS or origin == "property"
 
 
 def _action_from_type(content_type, requested_format):
@@ -315,6 +590,7 @@ def interpret_prompt(
     preferred_mode="auto",
 ):
     folded = _fold(prompt)
+    decisions = parse_prompt_decisions(prompt)
     content_type = None
     requested_format = None
     for needle, mapped, display in CONTENT_ALIASES:
@@ -351,13 +627,35 @@ def interpret_prompt(
         origin = "office"
         content_type = content_type or "post"
 
+    composer_property_id = property_id
+    resolution = {
+        "query": extract_property_query(prompt),
+        "status": "unset",
+        "property": None,
+        "matches": [],
+    }
     matched = None
-    if not property_id:
-        matched = match_property_from_prompt(prompt, properties)
-        if matched:
-            property_id = matched.get("id")
-    if property_id is None and conversation:
+    if composer_property_id:
+        resolution["status"] = "selected"
+    elif _should_search_property(folded, resolution["query"]):
+        resolution = resolve_property_from_prompt(prompt, properties)
+        if resolution.get("status") == "resolved":
+            matched = resolution.get("property")
+            property_id = (matched or {}).get("id")
+        elif resolution.get("status") in {"none", "ambiguous"}:
+            property_id = None
+    explicit_listing_ref = bool(_PROPERTY_NOUN_RE.search(folded)) or any(
+        token.isdigit() for token in _tokens(resolution.get("query") or "")
+    )
+    if (
+        not property_id
+        and conversation
+        and conversation.get("property_id")
+        and resolution.get("status") != "ambiguous"
+        and not (resolution.get("status") == "none" and explicit_listing_ref)
+    ):
         property_id = conversation.get("property_id")
+        resolution["status"] = "inherited"
 
     revising = bool(last_generation) and bool(
         REVISION_RE.search(folded) or content_type or len(folded) < 90
@@ -372,7 +670,12 @@ def interpret_prompt(
         objective = objective or last_generation.get("objective")
         origin = origin or last_generation.get("origin")
         template = template or last_generation.get("format")
-        property_id = property_id or last_generation.get("property_id")
+        if not property_id and resolution.get("status") != "ambiguous" and not (
+            resolution.get("status") == "none" and explicit_listing_ref
+        ):
+            property_id = last_generation.get("property_id")
+            if property_id and resolution.get("status") in {"unset", "none"}:
+                resolution["status"] = "inherited"
 
     if origin is None:
         if property_id:
@@ -387,7 +690,7 @@ def interpret_prompt(
         and (CREATE_RE.search(folded) or IMAGE_RE.search(folded) or FORMAT_RE.search(folded))
         else "copy"
     )
-    needs_property = origin == "property" and not property_id
+    needs_property = False
     parent_id = last_generation["id"] if revising and last_generation else None
     action = _resolve_action(
         folded,
@@ -400,9 +703,16 @@ def interpret_prompt(
         parent_id = last_generation["id"] if last_generation else parent_id
     if action == "chat":
         needs_property = False
-    elif action in VISUAL_ACTIONS or action == "generate_visual":
-        if origin == "property" and not property_id:
+    elif _wants_listing_property(action, origin) and not property_id:
+        if resolution.get("status") == "ambiguous":
+            needs_property = False
+        elif resolution.get("status") == "none":
+            needs_property = False
+        else:
             needs_property = True
+            origin = "property"
+    elif property_id:
+        origin = origin if origin in {"personal_brand", "office"} else "property"
     return {
         "action": action,
         "content_type": content_type,
@@ -414,11 +724,20 @@ def interpret_prompt(
         "requested_format": requested_format,
         "property_id": property_id,
         "matched_property": matched,
+        "property_query": resolution.get("query"),
+        "property_status": resolution.get("status") or "unset",
+        "property_matches": [
+            _compact_property_choice(item) for item in (resolution.get("matches") or [])
+        ],
         "revising": action == "edit_existing_generation" or (
             bool(parent_id) and action != "generate_visual"
         ),
         "parent_generation_id": parent_id,
         "needs_property": needs_property,
+        "include_agent": decisions.get("include_agent"),
+        "channel": decisions.get("channel"),
+        "channel_explicit": bool(decisions.get("channel_explicit")),
+        "creative_style": decisions.get("style"),
     }
 
 
@@ -719,7 +1038,7 @@ def _run_visual_for_chat(
     context = build_property_marketing_context(
         property_data,
         language=language,
-        include_agent=True,
+        include_agent=intent.get("include_agent") is not False,
     )
     photos = context.get("photos") or []
     agent = context.get("agent") or {}
@@ -743,7 +1062,7 @@ def _run_visual_for_chat(
             count=1,
             style=intent.get("style") or "premium",
             request_text=prompt,
-            include_agent=True,
+            include_agent=intent.get("include_agent") is not False,
             include_price=True,
             local_render=True,
             copy_override=copy_override,
@@ -825,6 +1144,80 @@ def _conversational_reply(prompt, *, language="es"):
         return _mock_chat_reply(prompt, language)
 
 
+def _listing_decision_facts(property_row, language):
+    if not property_row:
+        return {}
+    from modules.marketing_context import build_property_marketing_context
+
+    packed = build_property_marketing_context(
+        property_row,
+        language=language,
+        include_agent=True,
+    )
+    try:
+        from modules.property_sync.media import get_property_media_url
+    except Exception:
+        get_property_media_url = lambda item, _pid: None
+    photos = []
+    for index, item in enumerate(packed.get("photos") or [], start=1):
+        photos.append(
+            {
+                **item,
+                "url": get_property_media_url(item, property_row.get("id")),
+                "label": f"Foto {index}",
+            }
+        )
+    facts = packed.get("facts") or {}
+    return {
+        "property_id": property_row.get("id"),
+        "address": property_row.get("address") or facts.get("title"),
+        "purpose": facts.get("purpose")
+        or facts.get("operation_type")
+        or property_row.get("listing_purpose"),
+        "agent": packed.get("agent") or {},
+        "photos": photos,
+        "photo_count": len(photos),
+        "has_cover": any(item.get("is_cover") for item in photos),
+    }
+
+
+def _apply_context_to_intent(intent, context):
+    intent = dict(intent or {})
+    if context.get("include_agent") is not None:
+        intent["include_agent"] = context["include_agent"] is not False
+    if context.get("property_id"):
+        intent["property_id"] = context["property_id"]
+    if context.get("cta"):
+        intent["cta"] = context["cta"]
+    if context.get("hero_photo_id"):
+        intent["hero_photo_id"] = context["hero_photo_id"]
+    if intent.get("action") not in {"generate_visual", "edit_existing_generation", "chat"}:
+        if context.get("channel") and context.get("channel") != "auto":
+            intent["channel"] = context["channel"]
+            intent["content_type"] = content_type_from_channel(
+                context, intent.get("content_type") or "post"
+            )
+            if intent.get("content_type") == "story":
+                intent["requested_format"] = intent.get("requested_format") or "story"
+            intent["action"] = action_from_channel(context, intent.get("action"))
+        style, tone = generation_style_tone(context)
+        intent["style"] = style
+        intent["tone"] = context.get("tone") or tone
+    return intent
+
+
+def _persist_chat_context(conversation, organization_id, context, *, property_id=None):
+    payload = persistable_context(context)
+    updates = {"context": payload}
+    if property_id:
+        updates["property_id"] = property_id
+    return update_marketing_conversation(
+        conversation["id"],
+        organization_id,
+        **updates,
+    )
+
+
 def send_chat_message(
     organization_id,
     user,
@@ -835,6 +1228,8 @@ def send_chat_message(
     language="es",
     attachment_name=None,
     preferred_mode="auto",
+    decision_key=None,
+    decision_value=None,
 ):
     organization_id = require_organization_id(organization_id)
     prompt = (prompt or "").strip()
@@ -849,8 +1244,17 @@ def send_chat_message(
         last_id = last_generation_id_for_conversation(conversation["id"], organization_id)
         if last_id:
             last = get_marketing_generation(last_id, organization_id)
+    stored = conversation_context(conversation)
+    parsed_decisions = parse_prompt_decisions(prompt)
+    work_prompt = prompt
+    if decision_key:
+        work_prompt = stored.get("pending_prompt") or prompt
+    elif stored.get("pending_decision") and looks_like_decision_reply(
+        prompt, stored.get("pending_decision"), parsed_decisions
+    ):
+        work_prompt = stored.get("pending_prompt") or prompt
     intent = interpret_prompt(
-        prompt,
+        work_prompt,
         conversation=conversation,
         last_generation=last,
         property_id=property_id,
@@ -866,7 +1270,7 @@ def send_chat_message(
         conversation = create_marketing_conversation(
             organization_id,
             user_id=user.get("id"),
-            title=_conversation_title(prompt, property_row),
+            title=_conversation_title(work_prompt, property_row),
             property_id=intent.get("property_id"),
         )
     else:
@@ -874,14 +1278,23 @@ def send_chat_message(
         if intent.get("property_id") and intent["property_id"] != conversation.get("property_id"):
             updates["property_id"] = intent["property_id"]
         if not conversation.get("title"):
-            updates["title"] = _conversation_title(prompt, property_row)
+            updates["title"] = _conversation_title(work_prompt, property_row)
         if updates:
             conversation = update_marketing_conversation(
                 conversation["id"], organization_id, **updates
             )
-    user_meta = {"intent": {k: intent[k] for k in intent if k != "matched_property"}}
+    user_meta = {
+        "intent": {
+            k: intent[k]
+            for k in intent
+            if k not in {"matched_property", "property_matches"}
+        }
+    }
     if attachment_name:
         user_meta["attachment_name"] = attachment_name
+    if decision_key:
+        user_meta["decision_key"] = decision_key
+        user_meta["decision_value"] = decision_value
     add_marketing_message(
         conversation["id"],
         organization_id,
@@ -891,7 +1304,57 @@ def send_chat_message(
         metadata=user_meta,
     )
     generation = None
-    if intent.get("needs_property"):
+    listing = _listing_decision_facts(property_row, language)
+    context = resolve_context(
+        intent,
+        conversation,
+        prompt,
+        listing,
+        form_key=decision_key,
+        form_value=decision_value,
+    )
+    listing_blocked = _wants_listing_property(intent.get("action"), intent.get("origin"))
+    display_query = " ".join(
+        part.capitalize() if not part.isdigit() else part
+        for part in (intent.get("property_query") or "").split()
+    )
+    if intent.get("property_status") == "ambiguous" and listing_blocked:
+        add_marketing_message(
+            conversation["id"],
+            organization_id,
+            role="assistant",
+            message_type="text",
+            content=_t(
+                "marketing_ia_property_many",
+                language,
+                query=display_query,
+            ),
+            metadata={
+                "intent": user_meta["intent"],
+                "pending_prompt": work_prompt,
+                "property_query": intent.get("property_query"),
+                "property_choices": intent.get("property_matches") or [],
+            },
+        )
+    elif intent.get("property_status") == "none" and listing_blocked:
+        add_marketing_message(
+            conversation["id"],
+            organization_id,
+            role="assistant",
+            message_type="text",
+            content=_t(
+                "marketing_ia_property_none",
+                language,
+                query=display_query,
+            ),
+            metadata={
+                "intent": user_meta["intent"],
+                "pending_prompt": work_prompt,
+                "property_query": intent.get("property_query"),
+                "open_picker": True,
+            },
+        )
+    elif intent.get("needs_property"):
         add_marketing_message(
             conversation["id"],
             organization_id,
@@ -910,7 +1373,46 @@ def send_chat_message(
             content=reply,
             metadata={"intent": user_meta["intent"], "action": "chat"},
         )
+    elif should_clarify(intent) and determine_missing_decisions(context, listing, intent):
+        key = determine_missing_decisions(context, listing, intent)[0]
+        spec = question_spec(
+            key,
+            language=language,
+            listing=listing,
+            intent=intent,
+            context=context,
+        )
+        context["pending_decision"] = key
+        context["pending_prompt"] = context.get("_work_prompt") or work_prompt
+        conversation = _persist_chat_context(
+            conversation,
+            organization_id,
+            context,
+            property_id=intent.get("property_id"),
+        )
+        add_marketing_message(
+            conversation["id"],
+            organization_id,
+            role="assistant",
+            message_type="text",
+            content=spec.get("text") or "",
+            metadata={
+                "intent": user_meta["intent"],
+                "decision_key": key,
+                "decision_options": spec.get("options") or [],
+                "pending_prompt": context.get("pending_prompt"),
+                "as_cards": bool(spec.get("as_cards")),
+            },
+        )
     elif intent.get("action") == "generate_visual" and _has_usable_copy(last):
+        context = apply_intelligent_defaults(context, listing)
+        conversation = _persist_chat_context(
+            conversation,
+            organization_id,
+            context,
+            property_id=intent.get("property_id"),
+        )
+        intent = _apply_context_to_intent(intent, context)
         generation = last
         data = dict(generation.get("generated_data") or {})
         data["action"] = "generate_visual"
@@ -921,6 +1423,7 @@ def send_chat_message(
             or generation.get("content_type")
         )
         data["copy_status"] = data.get("copy_status") or "completed"
+        data["include_agent"] = intent.get("include_agent")
         generation = update_marketing_generation(
             generation["id"],
             organization_id,
@@ -930,7 +1433,7 @@ def send_chat_message(
             organization_id,
             user,
             intent,
-            prompt,
+            work_prompt,
             language,
             generation,
             last_generation=last,
@@ -954,11 +1457,28 @@ def send_chat_message(
             metadata=gen_meta,
         )
     else:
-        extra_notes = prompt
+        context = apply_intelligent_defaults(context, listing)
+        context["pending_decision"] = None
+        context["pending_prompt"] = None
+        conversation = _persist_chat_context(
+            conversation,
+            organization_id,
+            context,
+            property_id=intent.get("property_id"),
+        )
+        intent = _apply_context_to_intent(intent, context)
+        extra_notes = work_prompt
         if intent.get("requested_format") == "reel":
-            extra_notes = f"{prompt}\nFormato pedido: reel 9:16."
+            extra_notes = f"{work_prompt}\nFormato pedido: reel 9:16."
         elif intent.get("requested_format") == "flyer":
-            extra_notes = f"{prompt}\nFormato pedido: flyer."
+            extra_notes = f"{work_prompt}\nFormato pedido: flyer."
+        if context.get("cta"):
+            extra_notes = f"{extra_notes}\nCTA: {context['cta']}."
+        if context.get("include_agent") is False:
+            extra_notes = (
+                f"{extra_notes}\nUsar solo la marca de la inmobiliaria. "
+                "No incluir foto ni datos del agente."
+            )
         generation = create_and_run_generation(
             organization_id,
             user,
@@ -972,12 +1492,16 @@ def send_chat_message(
             prompt_input=extra_notes,
             language=language,
             parent_generation_id=intent.get("parent_generation_id"),
+            include_agent=False if context.get("include_agent") is False else True,
         )
         data = dict(generation.get("generated_data") or {})
         data["action"] = intent.get("action")
         data["requested_format"] = intent.get("requested_format") or intent["content_type"]
         data["copy_status"] = "completed" if generation.get("status") == "completed" else "failed"
         data["visual_status"] = "idle"
+        data["include_agent"] = context.get("include_agent") is not False
+        data["channel"] = context.get("channel")
+        data["creative_style"] = context.get("style")
         generation = update_marketing_generation(
             generation["id"],
             organization_id,
@@ -988,7 +1512,7 @@ def send_chat_message(
                 organization_id,
                 user,
                 intent,
-                prompt,
+                work_prompt,
                 language,
                 generation,
                 last_generation=last,
@@ -1000,6 +1524,7 @@ def send_chat_message(
             "visual_asset_id": (generation.get("generated_data") or {}).get("visual_asset_id"),
             "visual_asset_ids": (generation.get("generated_data") or {}).get("visual_asset_ids") or [],
             "visual_status": (generation.get("generated_data") or {}).get("visual_status"),
+            "include_agent": data.get("include_agent"),
         }
         lead = _t(_ack_key(intent) or "marketing_ia_ack_visual", language)
         add_marketing_message(
@@ -1049,12 +1574,15 @@ def regenerate_in_conversation(
     )
     source_action = source_data.get("action") or "generate_post_image"
     requested_format = source_data.get("requested_format") or source.get("content_type")
+    conversation = get_marketing_conversation(conversation_id, organization_id)
+    stored = conversation_context(conversation)
     intent = {
         "action": "generate_visual" if retry_visual_only else source_action,
         "content_type": source.get("content_type"),
         "requested_format": requested_format,
-        "property_id": source.get("property_id"),
+        "property_id": source.get("property_id") or stored.get("property_id"),
         "style": source.get("style"),
+        "include_agent": stored.get("include_agent"),
     }
     if retry_visual_only and copy_ok:
         generation = _apply_visual_to_generation(

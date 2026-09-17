@@ -134,6 +134,8 @@ def register_marketing_routes(app, helpers):
                     language=get_current_language(),
                     attachment_name=_attachment_name(),
                     preferred_mode=request.form.get("intent_mode") or "auto",
+                    decision_key=request.form.get("decision_key"),
+                    decision_value=request.form.get("decision_value"),
                 )
             except MarketingError as error:
                 return _handle(error, fallback_endpoint="marketing_home")
@@ -162,6 +164,8 @@ def register_marketing_routes(app, helpers):
                 language=get_current_language(),
                 attachment_name=_attachment_name(),
                 preferred_mode=request.form.get("intent_mode") or "auto",
+                decision_key=request.form.get("decision_key"),
+                decision_value=request.form.get("decision_value"),
             )
         except MarketingError as error:
             return _handle(error, fallback_endpoint="marketing_home")

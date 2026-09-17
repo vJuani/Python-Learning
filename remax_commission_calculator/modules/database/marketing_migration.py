@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS marketing_conversations (
     user_id INTEGER NOT NULL,
     title TEXT,
     property_id INTEGER,
+    context_json TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
 
@@ -229,8 +230,21 @@ def _ensure_conversations(cursor, *, postgres):
         messages_sql = _pg_int_sql(messages_sql)
     cursor.execute(conversations_sql)
     cursor.execute(messages_sql)
+    _ensure_conversation_context(cursor, postgres=postgres)
     for statement in CONVERSATION_INDEXES:
         cursor.execute(statement)
+
+
+def _ensure_conversation_context(cursor, *, postgres):
+    if postgres:
+        cursor.execute(
+            "ALTER TABLE marketing_conversations ADD COLUMN IF NOT EXISTS context_json TEXT"
+        )
+        return
+    if not _column_exists(cursor, "marketing_conversations", "context_json"):
+        cursor.execute(
+            "ALTER TABLE marketing_conversations ADD COLUMN context_json TEXT"
+        )
 
 
 def _ensure_whatsapp_content_type(cursor, *, postgres):

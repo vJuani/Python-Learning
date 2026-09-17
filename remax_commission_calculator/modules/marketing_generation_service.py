@@ -164,14 +164,16 @@ def _property_facts(property_data, language):
     return payload, _agent_facts_from_snapshot(packed.get("agent"))
 
 
-def build_generation_context(generation, *, language, property_data=None, user=None):
+def build_generation_context(generation, *, language, property_data=None, user=None, include_agent=True):
     organization_id = generation["organization_id"]
     brand_facts = _brand_facts(organization_id, language)
     property_facts = {}
     agent_facts = {}
     if property_data:
         property_facts, agent_facts = _property_facts(property_data, language)
-    if not agent_facts and user:
+    if include_agent is False:
+        agent_facts = {}
+    elif not agent_facts and user:
         from modules.agent_branding import get_agent_presentation_asset
 
         snapshot = get_agent_presentation_asset(
@@ -214,6 +216,7 @@ def create_and_run_generation(
     language="es",
     parent_generation_id=None,
     provider=None,
+    include_agent=True,
 ):
     organization_id = require_organization_id(organization_id)
     content_type = (content_type or "").strip().lower()
@@ -249,16 +252,18 @@ def create_and_run_generation(
         property_data=property_data,
         user=user,
         provider=provider,
+        include_agent=include_agent,
     )
 
 
-def run_generation(generation, *, language, property_data=None, user=None, provider=None):
+def run_generation(generation, *, language, property_data=None, user=None, provider=None, include_agent=True):
     organization_id = generation["organization_id"]
     context = build_generation_context(
         generation,
         language=language,
         property_data=property_data,
         user=user,
+        include_agent=include_agent,
     )
     try:
         result = generate_content(generation["content_type"], context, provider=provider)
