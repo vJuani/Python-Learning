@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 
@@ -27,6 +28,8 @@ from modules.marketing_generation_service import (
     regenerate_generation,
 )
 
+
+logger = logging.getLogger(__name__)
 
 CONTENT_ALIASES = (
     ("carrusel", "carousel", None),
@@ -82,10 +85,29 @@ TEMPLATE_ALIASES = (
 )
 REVISION_RE = re.compile(
     r"\b("
-    r"cambia|cambiale|regener|otra version|mas moderna|mas modern|"
+    r"cambia|cambiame|cambiale|regener|otra version|mas moderna|mas modern|"
     r"saca |sacale|usa otra|usala|hace otra|ahora hace|con esto|"
     r"pone la|el titulo|el titular|el cta|segunda foto|quita "
     r")\b"
+)
+CHAT_RE = re.compile(
+    r"\b("
+    r"ideas?|opciones?|escrib(i|ime)|write me|dame \d|"
+    r"recomend|ayudame|ayuda con|mejorame|brainstorm|"
+    r"solo (el )?copy|solo texto|opciones de titulos?|hashtags?|captions?"
+    r")\b"
+)
+IMAGE_RE = re.compile(
+    r"\b("
+    r"imagen|pieza|publicidad|flyer|folleto|"
+    r"hacelo imagen|convert\w*(?:lo)?(?: en| a)? imagen"
+    r")\b"
+)
+FORMAT_RE = re.compile(
+    r"\b(publicacion|historia|historias|carrusel|carousel|reel|instagram|\bposts?\b)\b"
+)
+CREATE_RE = re.compile(
+    r"\b(haceme|creame|armame|generame|quiero una|necesito una|convert|hacelo)\b"
 )
 FORMAT_LABELS = {
     "post": "marketing_ia_format_post",
@@ -96,6 +118,19 @@ FORMAT_LABELS = {
     "flyer": "marketing_ia_format_flyer",
     "reel": "marketing_ia_format_reel",
 }
+ACTION_FORMATS = {
+    "generate_post_image": ["post"],
+    "generate_story_image": ["story"],
+    "generate_carousel": ["post", "story"],
+    "generate_reel_storyboard": ["story"],
+}
+VISUAL_ACTIONS = frozenset(ACTION_FORMATS)
+CHAT_SYSTEM_PROMPT = (
+    "Sos JRH IA, el asistente creativo de un agente inmobiliario. "
+    "Respondé en el idioma del usuario, con ideas concretas y accionables. "
+    "Si conviene una pieza visual, ofrecé generar la imagen. "
+    "No inventes datos de una propiedad que no te pasaron."
+)
 
 
 def _fold(text):
@@ -148,9 +183,88 @@ def match_property_from_prompt(prompt, properties):
         if score >= 5:
             ranked.append((score, item))
     if not ranked:
+        token_hits = {}
+        for item in properties or []:
+            blob = " ".join(
+                [
+                    _fold(item.get("address") or ""),
+                    _fold(item.get("locality") or ""),
+                    _fold(item.get("neighborhood") or ""),
+                ]
+            )
+            for token in {part for part in re.split(r"[^\w]+", blob) if len(part) >= 4}:
+                if token in text:
+                    token_hits.setdefault(token, []).append(item)
+        unique = [
+            items[0]
+            for items in token_hits.values()
+            if len(items) == 1
+        ]
+        if len({item.get("id") for item in unique}) == 1:
+            return unique[0]
         return None
     ranked.sort(key=lambda pair: pair[0], reverse=True)
     return ranked[0][1]
+
+
+def _action_from_type(content_type, requested_format):
+    if requested_format == "flyer":
+        return "generate_post_image"
+    if requested_format == "reel":
+        return "generate_reel_storyboard"
+    if content_type == "story":
+        return "generate_story_image"
+    if content_type == "carousel":
+        return "generate_carousel"
+    if content_type == "whatsapp":
+        return "generate_whatsapp"
+    if content_type == "post":
+        return "generate_post_image"
+    return "chat"
+
+
+def _resolve_action(folded, content_type, requested_format, last_generation, preferred_mode):
+    chat_hit = bool(CHAT_RE.search(folded))
+    visual_hit = bool(IMAGE_RE.search(folded) or FORMAT_RE.search(folded))
+    image_hit = bool(IMAGE_RE.search(folded))
+    create_hit = bool(CREATE_RE.search(folded))
+    exclusive_chat = chat_hit and not create_hit and not image_hit
+    last_action = ((last_generation or {}).get("generated_data") or {}).get("action")
+    last_type = (last_generation or {}).get("content_type")
+    format_switch = bool(
+        content_type in ("post", "story", "carousel", "whatsapp")
+        and last_type
+        and content_type != last_type
+    )
+
+    if preferred_mode == "chat" and not image_hit and not create_hit and not REVISION_RE.search(folded):
+        return "chat"
+    if preferred_mode == "create" and not exclusive_chat:
+        mapped = _action_from_type(content_type, requested_format)
+        return mapped if mapped != "chat" else "generate_post_image"
+
+    if last_generation and not format_switch and REVISION_RE.search(folded):
+        return "edit_existing_generation"
+
+    if exclusive_chat:
+        return "chat"
+
+    if last_generation and not format_switch and (
+        (visual_hit or create_hit or image_hit) and len(folded) < 140
+    ):
+        if last_action in VISUAL_ACTIONS or visual_hit or create_hit or image_hit:
+            return "edit_existing_generation"
+
+    if visual_hit or create_hit or image_hit:
+        mapped = _action_from_type(content_type, requested_format)
+        if mapped != "chat":
+            return mapped
+        if visual_hit or create_hit or image_hit:
+            return "generate_post_image"
+
+    if content_type == "whatsapp":
+        return "generate_whatsapp"
+    return "chat"
 
 
 def interpret_prompt(
@@ -160,6 +274,7 @@ def interpret_prompt(
     last_generation=None,
     property_id=None,
     properties=None,
+    preferred_mode="auto",
 ):
     folded = _fold(prompt)
     content_type = None
@@ -228,10 +343,29 @@ def interpret_prompt(
             origin = "personal_brand"
         else:
             origin = "free"
-    content_type = content_type or ("post" if origin == "property" else "copy")
+    content_type = content_type or (
+        "post"
+        if origin == "property"
+        and (CREATE_RE.search(folded) or IMAGE_RE.search(folded) or FORMAT_RE.search(folded))
+        else "copy"
+    )
     needs_property = origin == "property" and not property_id
     parent_id = last_generation["id"] if revising and last_generation else None
+    action = _resolve_action(
+        folded,
+        content_type,
+        requested_format,
+        last_generation,
+        (preferred_mode or "auto").strip().lower(),
+    )
+    if action == "edit_existing_generation":
+        parent_id = last_generation["id"] if last_generation else parent_id
+    if action == "chat":
+        needs_property = False
+    elif action in VISUAL_ACTIONS and origin == "property" and not property_id:
+        needs_property = True
     return {
+        "action": action,
         "content_type": content_type,
         "origin": origin,
         "objective": objective,
@@ -241,7 +375,7 @@ def interpret_prompt(
         "requested_format": requested_format,
         "property_id": property_id,
         "matched_property": matched,
-        "revising": bool(parent_id),
+        "revising": bool(parent_id) or action == "edit_existing_generation",
         "parent_generation_id": parent_id,
         "needs_property": needs_property,
     }
@@ -260,15 +394,11 @@ def _conversation_title(prompt, property_row):
 def _ack_key(intent, *, needs_property=False):
     if needs_property:
         return "marketing_ia_need_property"
-    if intent.get("revising"):
+    if intent.get("action") == "chat":
+        return None
+    if intent.get("revising") or intent.get("action") == "edit_existing_generation":
         return "marketing_ia_ack_revise"
-    if intent.get("origin") == "personal_brand":
-        return "marketing_ia_ack_brand"
-    if intent.get("objective") == "capture_owner":
-        return "marketing_ia_ack_capture"
-    if intent.get("origin") == "property":
-        return "marketing_ia_ack_property"
-    return "marketing_ia_ack_generic"
+    return "marketing_ia_ack_visual"
 
 
 def _picker_properties(organization_id, user):
@@ -321,6 +451,21 @@ def _hydrate_messages(organization_id, messages, *, properties=None):
                 display, FORMAT_LABELS.get(generation.get("content_type"), "marketing_ia_format_copy")
             )
             generation["cover_url"] = covers.get(generation.get("property_id"))
+            data = generation.get("generated_data") or {}
+            asset_ids = list(data.get("visual_asset_ids") or [])
+            if data.get("visual_asset_id") and data["visual_asset_id"] not in asset_ids:
+                asset_ids.insert(0, data["visual_asset_id"])
+            generation["visual_assets"] = [
+                {
+                    "id": asset_id,
+                    "preview_url": f"/marketing/assets/{asset_id}/preview",
+                    "download_url": f"/marketing/assets/{asset_id}/download.png",
+                }
+                for asset_id in asset_ids
+            ]
+            generation["visual_preview_url"] = (
+                generation["visual_assets"][0]["preview_url"] if generation["visual_assets"] else None
+            )
         item["generation"] = generation
         hydrated.append(item)
     return hydrated
@@ -366,6 +511,131 @@ def build_chat_workspace(
     }
 
 
+def _visual_formats(intent, last_generation=None):
+    action = intent.get("action")
+    if action == "edit_existing_generation":
+        last_action = ((last_generation or {}).get("generated_data") or {}).get("action")
+        if last_action in ACTION_FORMATS:
+            return ACTION_FORMATS[last_action]
+        fmt = intent.get("requested_format") or intent.get("content_type") or "post"
+        if fmt == "story":
+            return ["story"]
+        if fmt == "flyer":
+            return ["flyer"]
+        return ["post"]
+    if intent.get("requested_format") == "flyer":
+        return ["flyer"]
+    return ACTION_FORMATS.get(action) or ["post"]
+
+
+def _last_visual_asset_id(generation):
+    data = (generation or {}).get("generated_data") or {}
+    if data.get("visual_asset_id"):
+        return data["visual_asset_id"]
+    ids = data.get("visual_asset_ids") or []
+    return ids[0] if ids else None
+
+
+def _attach_visual_assets(generation, batch_view):
+    from modules.database.marketing_generations_repository import update_marketing_generation
+
+    assets = []
+    for item in (batch_view or {}).get("assets") or []:
+        if not item.get("id"):
+            continue
+        ready = item.get("ready") or item.get("storage_key")
+        assets.append(
+            {
+                "id": item["id"],
+                "format": item.get("format"),
+                "ready": bool(ready),
+                "preview_url": f"/marketing/assets/{item['id']}/preview" if ready else None,
+                "download_url": (
+                    f"/marketing/assets/{item['id']}/download.png" if ready else None
+                ),
+            }
+        )
+    data = dict(generation.get("generated_data") or {})
+    data["visual_batch_id"] = (batch_view or {}).get("generation_id") or (batch_view or {}).get("id")
+    data["visual_asset_ids"] = [item["id"] for item in assets]
+    data["visual_failed"] = not any(item.get("ready") for item in assets)
+    if assets:
+        data["visual_asset_id"] = assets[0]["id"]
+    generation = update_marketing_generation(
+        generation["id"],
+        generation["organization_id"],
+        generated_data=data,
+    )
+    return generation
+
+
+def _run_visual_for_chat(organization_id, user, intent, prompt, language, last_generation=None):
+    import os
+
+    from modules.marketing_service import start_marketing_batch
+
+    property_id = intent.get("property_id")
+    if not property_id:
+        return None
+    formats = _visual_formats(intent, last_generation)
+    reference_id = None
+    variation = False
+    if intent.get("action") == "edit_existing_generation":
+        reference_id = _last_visual_asset_id(last_generation)
+        variation = bool(reference_id)
+    previous = os.environ.get("MARKETING_SYNC")
+    os.environ["MARKETING_SYNC"] = "1"
+    try:
+        return start_marketing_batch(
+            organization_id,
+            user,
+            property_id=property_id,
+            prompt=prompt,
+            language=language,
+            formats=formats,
+            count=1,
+            style=intent.get("style"),
+            request_text=prompt,
+            reference_asset_id=reference_id,
+            variation=variation,
+        )
+    finally:
+        if previous is None:
+            os.environ.pop("MARKETING_SYNC", None)
+        else:
+            os.environ["MARKETING_SYNC"] = previous
+
+
+def _mock_chat_reply(prompt, language):
+    if (language or "es").startswith("en"):
+        return (
+            "Here are a few directions you can take with that brief. "
+            "If you want, I can turn one into a visual post or story."
+        )
+    return (
+        "Puedo ayudarte con ideas, copy o una pieza visual. "
+        f"Sobre «{prompt.strip()[:80]}»: armá 3 ángulos (ubicación, estilo de vida y llamado a la visita) "
+        "y después convertimos el que más te cierre en imagen."
+    )
+
+
+def _conversational_reply(prompt, *, language="es"):
+    from modules.marketing_ai import MOCK_PROVIDER, resolve_provider
+    from modules.marketing_ai_client import MarketingAIClientError, request_marketing_text
+
+    engine = resolve_provider()
+    if getattr(engine, "name", MOCK_PROVIDER) != "openai":
+        return _mock_chat_reply(prompt, language)
+    try:
+        return request_marketing_text(
+            instructions=CHAT_SYSTEM_PROMPT,
+            user_payload=prompt,
+            max_tokens=500,
+        )
+    except MarketingAIClientError:
+        return _mock_chat_reply(prompt, language)
+
+
 def send_chat_message(
     organization_id,
     user,
@@ -375,6 +645,7 @@ def send_chat_message(
     property_id=None,
     language="es",
     attachment_name=None,
+    preferred_mode="auto",
 ):
     organization_id = require_organization_id(organization_id)
     prompt = (prompt or "").strip()
@@ -395,6 +666,7 @@ def send_chat_message(
         last_generation=last,
         property_id=property_id,
         properties=properties,
+        preferred_mode=preferred_mode,
     )
     property_row = None
     if intent.get("property_id"):
@@ -429,17 +701,27 @@ def send_chat_message(
         content=prompt,
         metadata=user_meta,
     )
-    ack = _t(_ack_key(intent, needs_property=intent.get("needs_property")), language)
-    add_marketing_message(
-        conversation["id"],
-        organization_id,
-        role="assistant",
-        message_type="text",
-        content=ack,
-        metadata={"intent": user_meta["intent"]},
-    )
     generation = None
-    if not intent.get("needs_property"):
+    if intent.get("needs_property"):
+        add_marketing_message(
+            conversation["id"],
+            organization_id,
+            role="assistant",
+            message_type="text",
+            content=_t("marketing_ia_need_property", language),
+            metadata={"intent": user_meta["intent"]},
+        )
+    elif intent.get("action") == "chat":
+        reply = _conversational_reply(prompt, language=language)
+        add_marketing_message(
+            conversation["id"],
+            organization_id,
+            role="assistant",
+            message_type="text",
+            content=reply,
+            metadata={"intent": user_meta["intent"], "action": "chat"},
+        )
+    else:
         extra_notes = prompt
         if intent.get("requested_format") == "reel":
             extra_notes = f"{prompt}\nFormato pedido: reel 9:16."
@@ -448,7 +730,7 @@ def send_chat_message(
         generation = create_and_run_generation(
             organization_id,
             user,
-            content_type=intent["content_type"],
+            content_type=intent["content_type"] if intent["content_type"] in ("post", "story", "carousel", "copy", "whatsapp") else "post",
             origin=intent["origin"],
             property_id=intent.get("property_id"),
             objective=intent.get("objective"),
@@ -459,16 +741,55 @@ def send_chat_message(
             language=language,
             parent_generation_id=intent.get("parent_generation_id"),
         )
+        data = dict(generation.get("generated_data") or {})
+        data["action"] = intent.get("action")
+        data["requested_format"] = intent.get("requested_format") or intent["content_type"]
+        from modules.database.marketing_generations_repository import update_marketing_generation
+
+        generation = update_marketing_generation(
+            generation["id"],
+            organization_id,
+            generated_data=data,
+        )
+        if intent.get("action") in VISUAL_ACTIONS or intent.get("action") == "edit_existing_generation":
+            try:
+                batch = _run_visual_for_chat(
+                    organization_id,
+                    user,
+                    intent,
+                    prompt,
+                    language,
+                    last_generation=last,
+                )
+                if batch:
+                    generation = _attach_visual_assets(generation, batch)
+                else:
+                    data = dict(generation.get("generated_data") or {})
+                    data["visual_failed"] = True
+                    generation = update_marketing_generation(
+                        generation["id"], organization_id, generated_data=data
+                    )
+            except Exception:
+                logger.exception("marketing chat visual generation failed")
+                data = dict(generation.get("generated_data") or {})
+                data["visual_failed"] = True
+                generation = update_marketing_generation(
+                    generation["id"], organization_id, generated_data=data
+                )
         gen_meta = {
+            "action": intent.get("action"),
             "requested_format": intent.get("requested_format") or intent["content_type"],
             "parent_generation_id": intent.get("parent_generation_id"),
+            "visual_asset_id": (generation.get("generated_data") or {}).get("visual_asset_id"),
+            "visual_asset_ids": (generation.get("generated_data") or {}).get("visual_asset_ids") or [],
         }
+        lead = _t(_ack_key(intent) or "marketing_ia_ack_visual", language)
         add_marketing_message(
             conversation["id"],
             organization_id,
             role="assistant",
             message_type="generation",
-            content=generation.get("generated_copy"),
+            content=lead,
             generation_id=generation["id"],
             metadata=gen_meta,
         )
@@ -501,31 +822,57 @@ def regenerate_in_conversation(
         content=_t("marketing_ia_regenerate", language),
         metadata={"action": "regenerate", "generation_id": generation_id},
     )
-    add_marketing_message(
-        conversation_id,
-        organization_id,
-        role="assistant",
-        message_type="text",
-        content=_t("marketing_ia_ack_revise", language),
-        metadata={"action": "regenerate"},
-    )
     generation = regenerate_generation(
         organization_id,
         user,
         generation_id,
         language=language,
     )
+    data = dict(generation.get("generated_data") or {})
+    data["action"] = (source.get("generated_data") or {}).get("action") or "generate_post_image"
+    data["requested_format"] = (source.get("generated_data") or {}).get("requested_format") or source.get(
+        "content_type"
+    )
+    from modules.database.marketing_generations_repository import update_marketing_generation
+
+    generation = update_marketing_generation(
+        generation["id"], organization_id, generated_data=data
+    )
+    source_action = data.get("action")
+    if source_action in VISUAL_ACTIONS or source_action == "edit_existing_generation":
+        try:
+            intent = {
+                "action": source_action if source_action in VISUAL_ACTIONS else "edit_existing_generation",
+                "content_type": source.get("content_type"),
+                "requested_format": data.get("requested_format"),
+                "property_id": source.get("property_id"),
+                "style": source.get("style"),
+            }
+            batch = _run_visual_for_chat(
+                organization_id,
+                user,
+                intent,
+                source.get("prompt_input") or "",
+                language,
+                last_generation=source,
+            )
+            if batch:
+                generation = _attach_visual_assets(generation, batch)
+        except Exception:
+            logger.exception("marketing chat visual regenerate failed")
     add_marketing_message(
         conversation_id,
         organization_id,
         role="assistant",
         message_type="generation",
-        content=generation.get("generated_copy"),
+        content=_t("marketing_ia_ack_revise", language),
         generation_id=generation["id"],
         metadata={
-            "requested_format": (source.get("generated_data") or {}).get("requested_format")
-            or source.get("content_type"),
+            "action": source_action,
+            "requested_format": data.get("requested_format"),
             "parent_generation_id": source["id"],
+            "visual_asset_id": (generation.get("generated_data") or {}).get("visual_asset_id"),
+            "visual_asset_ids": (generation.get("generated_data") or {}).get("visual_asset_ids") or [],
         },
     )
     return {

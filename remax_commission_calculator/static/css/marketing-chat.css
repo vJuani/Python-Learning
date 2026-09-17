@@ -29,6 +29,7 @@ body.is-marketing-chat-page .mkt-chat {
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 0.4rem;
     text-align: center;
     text-decoration: none;
     font-weight: 700;
@@ -37,6 +38,10 @@ body.is-marketing-chat-page .mkt-chat {
     border-radius: 999px;
     padding: 0.72rem 0.9rem;
     box-shadow: 0 8px 18px color-mix(in srgb, var(--color-brand, #0e4f38) 22%, transparent);
+}
+
+.mkt-chat__new svg {
+    flex-shrink: 0;
 }
 
 .mkt-chat__nav-label,
@@ -85,9 +90,10 @@ body.is-marketing-chat-page .mkt-chat {
 .mkt-chat__tools a {
     color: var(--muted, #5b6b7c);
     text-decoration: none;
-    padding: 0.48rem 0.6rem;
-    border-radius: 10px;
-    font-size: 0.88rem;
+    padding: 0.42rem 0.65rem;
+    border-radius: 11px;
+    font-size: 0.86rem;
+    font-weight: 600;
 }
 
 .mkt-chat__tools a:hover {
@@ -104,17 +110,18 @@ body.is-marketing-chat-page .mkt-chat {
 .mkt-chat__header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.9rem 1.5rem 0.35rem;
+    padding: 1rem 1.75rem 0.2rem;
 }
 
 .mkt-chat__header h1 {
-    margin: 0;
-    font-size: 0.92rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
+    margin: 0 auto;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: var(--muted, #5b6b7c);
+    color: color-mix(in srgb, var(--color-brand, #0e4f38) 70%, var(--muted, #5b6b7c));
 }
 
 .mkt-chat__history-btn {
@@ -132,9 +139,9 @@ body.is-marketing-chat-page .mkt-chat {
 
 .mkt-chat__empty {
     min-height: 100%;
-    max-width: 38rem;
+    max-width: 40rem;
     margin: 0 auto;
-    padding: 1.5rem 0 2rem;
+    padding: 1.1rem 0 1.6rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -144,29 +151,37 @@ body.is-marketing-chat-page .mkt-chat {
 
 .mkt-chat__empty-bot {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
-    width: min(14.5rem, 58vw);
-    height: min(19rem, 42vh);
+    width: min(16rem, 64vw);
+    height: min(16rem, 42vh);
     margin: 0 auto 0.35rem;
     overflow: visible;
     background: transparent;
 }
 
 .mkt-chat__empty-bot img,
-.mkt-chat__empty-bot svg,
 .mkt-chat__empty-bot .jrh-bot-hero {
     display: block;
-    width: auto !important;
+    width: 100% !important;
     height: 100% !important;
     max-width: 100%;
     max-height: 100%;
     margin: 0 auto;
     object-fit: contain !important;
-    object-position: center bottom;
+    object-position: center;
     background: transparent;
     filter: drop-shadow(0 16px 28px color-mix(in srgb, var(--color-brand, #0e4f38) 22%, transparent));
     animation: mktBotFloat 5s ease-in-out infinite;
+}
+
+.mkt-chat__kicker {
+    margin: 0 0 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-brand, #0e4f38);
 }
 
 .mkt-chat__hello {
@@ -179,9 +194,9 @@ body.is-marketing-chat-page .mkt-chat {
 
 .mkt-chat__help {
     margin: 0;
-    max-width: 34ch;
+    max-width: 42ch;
     color: var(--muted, #5b6b7c);
-    line-height: 1.45;
+    line-height: 1.5;
 }
 
 .mkt-chat__starters {
@@ -246,20 +261,24 @@ body.is-marketing-chat-page .mkt-chat {
 }
 
 .mkt-msg__bot {
-    flex: 0 0 2.5rem;
-    width: 2.5rem;
-    height: 3.35rem;
+    flex: 0 0 2.75rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     overflow: visible;
     background: transparent;
 }
 
 .mkt-msg__bot img,
 .mkt-msg__bot .jrh-bot-hero {
-    width: auto !important;
-    height: 3.35rem !important;
-    max-width: 2.5rem;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 2.75rem;
+    max-height: 2.75rem;
     object-fit: contain !important;
-    object-position: center bottom;
+    object-position: center;
     background: transparent;
 }
 
@@ -269,11 +288,15 @@ body.is-marketing-chat-page .mkt-chat {
     background: var(--surface, #fff);
     border: 1px solid var(--border-soft, #dce6df);
     border-radius: 6px 18px 18px 18px;
-    padding: 0.85rem 1rem;
+    padding: 0.95rem 1.05rem 1rem;
+    box-shadow: 0 10px 28px rgba(14, 32, 24, 0.04);
 }
 
-.mkt-msg--assistant .mkt-msg__bubble > p {
-    margin: 0 0 0.75rem;
+.mkt-msg--assistant .mkt-msg__bubble > p,
+.mkt-msg__lead {
+    margin: 0 0 0.85rem;
+    color: var(--text, #122018);
+    line-height: 1.45;
 }
 
 .mkt-result {
@@ -281,12 +304,42 @@ body.is-marketing-chat-page .mkt-chat {
     gap: 0.75rem;
 }
 
-.mkt-result__preview {
-    border: 1px solid var(--border-soft, #dce6df);
-    border-radius: 16px;
+.mkt-result__gallery {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.mkt-result__visual {
+    display: block;
     overflow: hidden;
-    background: #0f1713;
-    color: #f4f7f5;
+    border-radius: 18px;
+    background: #eef3ef;
+    border: 1px solid var(--border-soft, #dce6df);
+}
+
+.mkt-msg--assistant .mkt-msg__bubble:has(.mkt-result--visual) {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0.15rem 0 0.2rem;
+}
+
+.mkt-result--visual {
+    gap: 0.7rem;
+    padding: 0.2rem 0 0;
+}
+
+.mkt-result__visual img {
+    display: block;
+    width: 100%;
+    max-height: min(34rem, 72vh);
+    object-fit: contain;
+    background:
+        linear-gradient(180deg, #f3f6f4 0%, #e7eee9 100%);
+}
+
+.mkt-result__copy:not(.mkt-result__copy-panel .mkt-result__copy) {
+    padding: 0.2rem 0.1rem 0;
 }
 
 .mkt-result__photo {
@@ -294,15 +347,40 @@ body.is-marketing-chat-page .mkt-chat {
     max-height: 220px;
     object-fit: cover;
     display: block;
+    border-radius: 16px;
+}
+
+.mkt-result__meta {
+    margin: 0;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted, #5b6b7c);
+    font-weight: 700;
+}
+
+.mkt-result__copy-panel {
+    border: 1px solid var(--border-soft, #dce6df);
+    border-radius: 14px;
+    padding: 0.35rem 0.85rem 0.7rem;
+    background: color-mix(in srgb, var(--color-bg, #f5f8f6) 70%, #fff);
+}
+
+.mkt-result__copy-panel summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.88rem;
+    padding: 0.45rem 0;
+    color: var(--text, #122018);
 }
 
 .mkt-result__copy {
-    padding: 1rem 1.05rem 0.35rem;
+    padding: 0.15rem 0 0.2rem;
 }
 
 .mkt-result__copy h3 {
     margin: 0 0 0.4rem;
-    font-size: 1.2rem;
+    font-size: 1.05rem;
 }
 
 .mkt-result__copy p,
@@ -310,17 +388,15 @@ body.is-marketing-chat-page .mkt-chat {
     margin: 0 0 0.45rem;
 }
 
-.mkt-result__cta {
-    font-weight: 700;
+.mkt-warn {
+    margin: 0;
+    font-size: 0.88rem;
+    color: #8a4b12;
 }
 
-.mkt-result__format {
-    margin: 0;
-    padding: 0.55rem 1.05rem 0.8rem;
-    font-size: 0.78rem;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: #c5d4cc;
+.mkt-msg--assistant .mkt-msg__bubble:has(.mkt-result--visual) .mkt-msg__lead {
+    margin: 0 0 0.75rem;
+    padding: 0.15rem 0.1rem 0;
 }
 
 .mkt-result__actions {
@@ -328,6 +404,11 @@ body.is-marketing-chat-page .mkt-chat {
     flex-wrap: wrap;
     gap: 0.4rem;
     align-items: center;
+}
+
+.mkt-result__actions .btn {
+    border-radius: 999px;
+    font-size: 0.82rem;
 }
 
 .mkt-result__library {
@@ -347,12 +428,40 @@ body.is-marketing-chat-page .mkt-chat {
 
 .mkt-composer__shell {
     display: grid;
-    gap: 0.35rem;
-    padding: 0.85rem 0.9rem 0.7rem;
+    gap: 0.45rem;
+    padding: 0.7rem 0.85rem 0.7rem;
     border: 1px solid var(--border-soft, #dce6df);
     border-radius: 22px;
     background: var(--surface, #fff);
     box-shadow: 0 14px 36px rgba(14, 32, 24, 0.08);
+}
+
+.mkt-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.15rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-bg, #f5f8f6) 88%, #fff);
+    width: fit-content;
+}
+
+.mkt-mode__btn {
+    border: 0;
+    background: transparent;
+    border-radius: 999px;
+    padding: 0.28rem 0.7rem;
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--muted, #5b6b7c);
+    cursor: pointer;
+}
+
+.mkt-mode__btn.is-active {
+    background: #fff;
+    color: var(--text, #122018);
+    box-shadow: 0 4px 10px rgba(14, 32, 24, 0.06);
 }
 
 .mkt-composer textarea {
@@ -414,8 +523,9 @@ body.is-marketing-chat-page .mkt-chat {
 
 .mkt-composer__send {
     margin-left: auto;
-    width: 2.25rem;
-    height: 2.25rem;
+    min-width: 2.35rem;
+    height: 2.35rem;
+    padding: 0 0.85rem;
     border: 0;
     border-radius: 999px;
     background: var(--color-brand, #0e4f38);
@@ -423,18 +533,28 @@ body.is-marketing-chat-page .mkt-chat {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 0.35rem;
     cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.mkt-composer__send-label {
+    line-height: 1;
 }
 
 .mkt-chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    margin: 0 0 0.45rem 0.15rem;
-    padding: 0.25rem 0.55rem;
+    gap: 0.4rem;
+    margin: 0 0 0.55rem 0.1rem;
+    padding: 0.32rem 0.65rem 0.32rem 0.7rem;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-brand, #0e4f38) 12%, #fff);
-    font-size: 0.88rem;
+    background: color-mix(in srgb, var(--color-brand, #0e4f38) 10%, #fff);
+    border: 1px solid color-mix(in srgb, var(--color-brand, #0e4f38) 16%, transparent);
+    font-size: 0.84rem;
+    font-weight: 600;
 }
 
 .mkt-chip button {
@@ -580,11 +700,12 @@ body.is-marketing-chat-page .mkt-chat {
     }
 
     .mkt-chat__empty-bot {
-        width: min(11.5rem, 64vw);
-        height: min(15rem, 36vh);
+        width: min(12rem, 70vw);
+        height: min(12rem, 36vh);
     }
 
-    .mkt-composer__tool--label span {
+    .mkt-composer__tool--label span,
+    .mkt-composer__send-label {
         display: none;
     }
 

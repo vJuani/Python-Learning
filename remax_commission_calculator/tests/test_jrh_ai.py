@@ -566,12 +566,13 @@ class JrhAiTests(unittest.TestCase):
         self.assertNotIn("QUERY_", body)
         self.assertIn("branding/jrh-ai/", body)
         self.assertIn("jrh-bot-hero", body)
-        self.assertIn("jrh-ia-hero-light.png", body)
-        self.assertIn("jrh-ia-hero-dark.png", body)
+        self.assertIn("jrh_ia_bot_light.png", body)
+        self.assertIn("jrh_ia_bot_dark.png", body)
         self.assertNotIn("jrh-bot-hero.svg", body)
+        self.assertNotIn("jrh-ia-hero-light.png", body)
         self.assertNotIn("jrh-bot-hero.webp", body)
         self.assertIn("Preguntar", body)
-        self.assertIn("Todavía no hay conversación.", body)
+        self.assertIn("Podés buscar propiedades", body)
         self.assertNotIn("Escribí un pedido", body)
 
     def test_19c_agent_sees_acm_quick_action(self):

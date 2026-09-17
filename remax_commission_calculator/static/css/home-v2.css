@@ -64,22 +64,29 @@
 }
 
 .jrh-hero__mascot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     justify-self: end;
     align-self: center;
-    padding: 0.2rem 0.15rem 0;
+    width: 7.5rem;
+    height: 7.5rem;
+    padding: 0;
     min-width: 0;
+    overflow: visible;
     background: transparent;
 }
 
 .jrh-hero__mascot img,
 .jrh-hero .jrh-bot-hero {
     display: block;
-    width: auto;
+    width: 100%;
+    height: 100%;
     max-width: 120px;
     max-height: 120px;
     margin: 0 auto;
     object-fit: contain;
-    object-position: center bottom;
+    object-position: center;
     background: transparent;
     filter: drop-shadow(0 8px 14px var(--ia-soft));
     animation: jrhFloat 5s ease-in-out infinite;
@@ -457,13 +464,15 @@
 
     .jrh-hero__mascot {
         justify-self: center;
-        padding: 0.45rem 0.55rem 0.2rem;
+        width: 10rem;
+        height: 10rem;
+        padding: 0;
     }
 
     .jrh-hero__mascot img,
     .jrh-hero .jrh-bot-hero {
-        max-width: 156px;
-        max-height: 176px;
+        max-width: 160px;
+        max-height: 160px;
     }
 }
 

@@ -310,9 +310,12 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertIn("Plantillas", body)
         self.assertIn("Brand kit", body)
         self.assertIn('mkt-chat__empty-bot', body)
-        self.assertIn('width="220"', body)
+        self.assertIn('width="280"', body)
+        self.assertIn("jrh_ia_bot_light.png", body)
+        self.assertIn("jrh_ia_bot_dark.png", body)
+        self.assertNotIn("jrh-ia-hero-light.png", body)
         self.assertNotIn("<h2>Marketing IA</h2>", body)
-        self.assertIn("Pedile a JRH que cree algo", body)
+        self.assertIn("Pedile a JRH una imagen, un copy o una idea", body)
         create_page = client.get("/marketing/create")
         self.assertEqual(create_page.status_code, 200)
         self.assertIn('name="content_type"', create_page.get_data(as_text=True))
@@ -344,6 +347,7 @@ class MarketingGenerationsTests(unittest.TestCase):
             properties=properties,
         )
         self.assertEqual(first["content_type"], "post")
+        self.assertEqual(first["action"], "generate_post_image")
         self.assertEqual(first["origin"], "property")
         self.assertEqual(first["style"], "premium")
         self.assertEqual(first["property_id"], 7)
@@ -354,7 +358,7 @@ class MarketingGenerationsTests(unittest.TestCase):
             "origin": "property",
             "style": "premium",
             "property_id": 7,
-            "generated_data": {},
+            "generated_data": {"action": "generate_post_image"},
         }
         follow = interpret_prompt(
             "Cambiale el título",
@@ -362,6 +366,7 @@ class MarketingGenerationsTests(unittest.TestCase):
             properties=properties,
         )
         self.assertTrue(follow["revising"])
+        self.assertEqual(follow["action"], "edit_existing_generation")
         self.assertEqual(follow["parent_generation_id"], 99)
         self.assertEqual(follow["content_type"], "post")
         story = interpret_prompt(
@@ -370,7 +375,60 @@ class MarketingGenerationsTests(unittest.TestCase):
             properties=properties,
         )
         self.assertEqual(story["content_type"], "story")
+        self.assertEqual(story["action"], "generate_story_image")
         self.assertEqual(story["parent_generation_id"], 99)
+
+    def test_interpret_prompt_chat_vs_visual(self):
+        properties = [{"id": 11, "address": "Italia 220", "locality": "Palermo"}]
+        chat = interpret_prompt("Dame ideas para una campaña de captación")
+        self.assertEqual(chat["action"], "chat")
+        self.assertFalse(chat["needs_property"])
+        titles = interpret_prompt("Escribime 3 opciones de título")
+        self.assertEqual(titles["action"], "chat")
+        visual = interpret_prompt(
+            "Haceme una publicación para vender la propiedad de Italia",
+            properties=properties,
+        )
+        self.assertEqual(visual["action"], "generate_post_image")
+        self.assertEqual(visual["property_id"], 11)
+        modern = interpret_prompt(
+            "Quiero una versión más moderna",
+            last_generation={
+                "id": 5,
+                "content_type": "post",
+                "origin": "property",
+                "property_id": 11,
+                "generated_data": {"action": "generate_post_image"},
+            },
+            properties=properties,
+        )
+        self.assertEqual(modern["action"], "edit_existing_generation")
+        combo = interpret_prompt("Quiero una historia y un carrusel", property_id=11)
+        self.assertEqual(combo["action"], "generate_carousel")
+        convert = interpret_prompt(
+            "Ahora convertí la opción 2 en una imagen",
+            last_generation={
+                "id": 8,
+                "content_type": "post",
+                "origin": "property",
+                "property_id": 11,
+                "generated_data": {"action": "generate_post_image"},
+            },
+            property_id=11,
+        )
+        self.assertEqual(convert["action"], "edit_existing_generation")
+        forced_chat = interpret_prompt(
+            "Haceme una publicación",
+            property_id=11,
+            preferred_mode="chat",
+        )
+        self.assertEqual(forced_chat["action"], "generate_post_image")
+        forced_create = interpret_prompt(
+            "algo lindo para esta propiedad",
+            property_id=11,
+            preferred_mode="create",
+        )
+        self.assertEqual(forced_create["action"], "generate_post_image")
 
     def test_http_chat_creates_conversation_and_iterates(self):
         client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
@@ -389,9 +447,14 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         body = page.get_data(as_text=True)
         self.assertIn("Libertador 1000", body)
+        self.assertIn("Perfecto, armé una primera versión.", body)
         self.assertIn("Copy de prueba", body)
+        self.assertIn("mkt-result", body)
         self.assertIn("Editar", body)
         self.assertIn("Regenerar", body)
+        self.assertIn("Crear otra versión", body)
+        self.assertIn("/marketing/assets/", body)
+        self.assertIn("Ver texto de la publicación", body)
         follow = client.post(
             location,
             data={"prompt": "Cambiale el título"},
@@ -415,6 +478,21 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(other.get(location).status_code, 403)
         foreign = self._login(self.foreign_admin_id, ROLE_ADMIN, organization_id=self.other_org)
         self.assertEqual(foreign.get(location).status_code, 403)
+
+    def test_http_chat_ideas_stay_conversational(self):
+        client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
+        created = client.post(
+            "/marketing/chat",
+            data={"prompt": "Dame ideas para una campaña de captación"},
+            follow_redirects=False,
+        )
+        self.assertEqual(created.status_code, 302)
+        page = client.get(created.headers["Location"])
+        body = page.get_data(as_text=True)
+        self.assertIn("Dame ideas para una campaña de captación", body)
+        self.assertIn("Puedo ayudarte con ideas", body)
+        self.assertNotIn("mkt-result__gallery", body)
+        self.assertNotIn("Perfecto, armé una primera versión.", body)
 
     def test_http_guest_forbidden(self):
         client = app.test_client()

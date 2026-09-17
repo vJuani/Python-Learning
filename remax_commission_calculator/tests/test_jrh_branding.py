@@ -14,58 +14,78 @@ from modules.agenda_nlp import (
 )
 from modules.jrh_branding import (
     JRH_AI_REL_DIR,
+    JRH_BOT_DARK,
+    JRH_BOT_LIGHT,
+    jrh_ai_dir,
     resolve_jrh_mascot_rel,
 )
 from modules.jrh_home import build_jrh_chip_actions
 
 
 class JrhBrandingTests(unittest.TestCase):
-    def test_resolver_finds_existing_placeholder(self):
-        rel = resolve_jrh_mascot_rel("hero")
-        self.assertIsNotNone(rel)
-        self.assertTrue(rel.startswith(f"{JRH_AI_REL_DIR}/"))
-        self.assertTrue(rel.endswith(".png") or rel.endswith(".svg"))
-        self.assertNotIn(".webp", rel)
+    def test_official_bot_files_exist(self):
+        folder = jrh_ai_dir()
+        self.assertTrue((folder / JRH_BOT_LIGHT).is_file())
+        self.assertTrue((folder / JRH_BOT_DARK).is_file())
 
-    def test_official_themed_raster_wins_over_legacy_and_svg(self):
+    def test_resolver_uses_official_bot_pair(self):
+        self.assertEqual(
+            resolve_jrh_mascot_rel("hero", "light"),
+            f"{JRH_AI_REL_DIR}/{JRH_BOT_LIGHT}",
+        )
+        self.assertEqual(
+            resolve_jrh_mascot_rel("hero", "dark"),
+            f"{JRH_AI_REL_DIR}/{JRH_BOT_DARK}",
+        )
+        self.assertEqual(
+            resolve_jrh_mascot_rel("avatar", "light"),
+            f"{JRH_AI_REL_DIR}/{JRH_BOT_LIGHT}",
+        )
+        self.assertEqual(
+            resolve_jrh_mascot_rel("floating", "dark"),
+            f"{JRH_AI_REL_DIR}/{JRH_BOT_DARK}",
+        )
+
+    def test_official_bot_wins_over_legacy_and_svg(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
             (folder / "jrh-bot-hero.svg").write_text("<svg></svg>", encoding="utf-8")
             (folder / "jrh-bot-hero.png").write_bytes(b"legacy")
-            (folder / "jrh-ia-hero-light.png").write_bytes(b"official-light")
-            (folder / "jrh-ia-hero-dark.png").write_bytes(b"official-dark")
-            (folder / "jrh-ia-launcher-light.png").write_bytes(b"launcher")
+            (folder / "jrh-ia-hero-light.png").write_bytes(b"old-crop")
+            (folder / JRH_BOT_LIGHT).write_bytes(b"official-light")
+            (folder / JRH_BOT_DARK).write_bytes(b"official-dark")
             with patch("modules.jrh_branding.jrh_ai_dir", return_value=folder):
                 self.assertEqual(
                     resolve_jrh_mascot_rel("hero", "light"),
-                    f"{JRH_AI_REL_DIR}/jrh-ia-hero-light.png",
+                    f"{JRH_AI_REL_DIR}/{JRH_BOT_LIGHT}",
                 )
                 self.assertEqual(
                     resolve_jrh_mascot_rel("hero", "dark"),
-                    f"{JRH_AI_REL_DIR}/jrh-ia-hero-dark.png",
+                    f"{JRH_AI_REL_DIR}/{JRH_BOT_DARK}",
                 )
                 self.assertEqual(
                     resolve_jrh_mascot_rel("floating", "light"),
-                    f"{JRH_AI_REL_DIR}/jrh-ia-launcher-light.png",
+                    f"{JRH_AI_REL_DIR}/{JRH_BOT_LIGHT}",
                 )
                 self.assertNotIn(".svg", resolve_jrh_mascot_rel("hero"))
+                self.assertNotIn("jrh-ia-hero", resolve_jrh_mascot_rel("hero", "light"))
 
-    def test_single_master_raster_is_reused(self):
+    def test_official_bot_is_reused_for_every_slot(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
-            (folder / "jrh-bot-hero.png").write_bytes(b"png")
+            (folder / JRH_BOT_LIGHT).write_bytes(b"png")
             with patch("modules.jrh_branding.jrh_ai_dir", return_value=folder):
                 self.assertEqual(
                     resolve_jrh_mascot_rel("hero"),
-                    f"{JRH_AI_REL_DIR}/jrh-bot-hero.png",
+                    f"{JRH_AI_REL_DIR}/{JRH_BOT_LIGHT}",
                 )
                 self.assertEqual(
                     resolve_jrh_mascot_rel("avatar"),
-                    f"{JRH_AI_REL_DIR}/jrh-bot-hero.png",
+                    f"{JRH_AI_REL_DIR}/{JRH_BOT_LIGHT}",
                 )
                 self.assertEqual(
                     resolve_jrh_mascot_rel("floating"),
-                    f"{JRH_AI_REL_DIR}/jrh-bot-hero.png",
+                    f"{JRH_AI_REL_DIR}/{JRH_BOT_LIGHT}",
                 )
 
     def test_missing_asset_returns_none(self):

@@ -665,12 +665,13 @@ html[data-theme="dark"] .jrh-mascot--on-dark {
 
 .jrh-float img,
 .jrh-float .jrh-bot-floating {
-    width: auto;
-    height: 3.35rem;
+    width: 2.7rem;
+    height: 2.7rem;
     max-width: 2.7rem;
+    max-height: 2.7rem;
     flex-shrink: 0;
     object-fit: contain;
-    object-position: center bottom;
+    object-position: center;
     background: transparent;
     overflow: visible;
 }

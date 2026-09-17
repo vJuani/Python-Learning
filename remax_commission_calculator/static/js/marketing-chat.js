@@ -14,6 +14,16 @@
   var historyBtn = root.querySelector("[data-mkt-history]");
   var sidebar = root.querySelector("[data-mkt-sidebar]");
 
+  var intentMode = root.querySelector("[data-mkt-intent-mode]");
+  root.querySelectorAll("[data-mkt-mode]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      if (intentMode) intentMode.value = button.getAttribute("data-mkt-mode") || "auto";
+      root.querySelectorAll("[data-mkt-mode]").forEach(function (item) {
+        item.classList.toggle("is-active", item === button);
+      });
+    });
+  });
+
   function setProperty(id, label) {
     if (propertyId) propertyId.value = id || "";
     if (chipLabel) chipLabel.textContent = label || "";

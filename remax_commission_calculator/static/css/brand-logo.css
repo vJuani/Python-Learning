@@ -163,23 +163,37 @@ html[data-sidebar="pinned"] .jrh-sidebar__logo--full.brand-logo-slot,
     max-height: 1.75rem;
 }
 
+img.jrh-bot-hero,
+img.jrh-bot-avatar,
+img.jrh-bot-floating {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center;
+    background: transparent;
+    border: 0;
+}
+
 /* Mascot light/dark rasters. Loaded last so page CSS cannot show both. */
 img.jrh-mascot--on-dark.jrh-bot-hero,
 img.jrh-mascot--on-dark.jrh-bot-avatar,
 img.jrh-mascot--on-dark.jrh-bot-floating {
-    display: none;
+    display: none !important;
 }
 
 html[data-theme="dark"] img.jrh-mascot--on-light.jrh-bot-hero,
 html[data-theme="dark"] img.jrh-mascot--on-light.jrh-bot-avatar,
 html[data-theme="dark"] img.jrh-mascot--on-light.jrh-bot-floating {
-    display: none;
+    display: none !important;
 }
 
 html[data-theme="dark"] img.jrh-mascot--on-dark.jrh-bot-hero,
 html[data-theme="dark"] img.jrh-mascot--on-dark.jrh-bot-avatar,
 html[data-theme="dark"] img.jrh-mascot--on-dark.jrh-bot-floating {
-    display: block;
+    display: block !important;
 }
 
 .site-brand-logo--lockup .brand-logo,

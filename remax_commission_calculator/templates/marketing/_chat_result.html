@@ -1,10 +1,28 @@
 {% set data = generation.generated_data or {} %}
-<article class="mkt-result" data-mkt-result>
-    <div class="mkt-result__preview">
-        {% if generation.cover_url %}
-        <img src="{{ generation.cover_url }}" alt="" class="mkt-result__photo">
-        {% endif %}
+{% set visuals = generation.visual_assets or [] %}
+<article class="mkt-result{% if visuals %} mkt-result--visual{% endif %}" data-mkt-result>
+    {% if visuals %}
+    <div class="mkt-result__gallery">
+        {% for asset in visuals %}
+        <a class="mkt-result__visual" href="{{ asset.download_url or asset.preview_url }}" target="_blank" rel="noopener">
+            <img src="{{ asset.preview_url }}" alt="{{ t(generation.format_label_key) }}">
+        </a>
+        {% endfor %}
+    </div>
+    {% elif generation.cover_url %}
+    <img src="{{ generation.cover_url }}" alt="" class="mkt-result__photo">
+    {% endif %}
+    <p class="mkt-result__meta">{{ t(generation.format_label_key) }}</p>
+    {% if (generation.generated_data or {}).get('visual_failed') and not visuals %}
+    <p class="mkt-warn">{{ t('marketing_ia_visual_failed') }}</p>
+    {% endif %}
+    {% if visuals %}
+    <details class="mkt-result__copy-panel">
+        <summary>{{ t('marketing_ia_view_copy') }}</summary>
         <div class="mkt-result__copy">
+    {% else %}
+        <div class="mkt-result__copy">
+    {% endif %}
             {% if generation.content_type == 'post' %}
             <h3>{{ data.headline or generation.generated_copy }}</h3>
             <p>{{ data.caption }}</p>
@@ -36,26 +54,35 @@
             {% if data.body %}<p>{{ data.body }}</p>{% endif %}
             {% if data.cta %}<p class="mkt-result__cta">{{ data.cta }}</p>{% endif %}
             {% elif generation.generated_copy %}
-            <pre>{{ generation.generated_copy }}</pre>
+            <p>{{ generation.generated_copy }}</p>
             {% endif %}
             {% if generation.status == 'failed' and generation.error_message %}
             <p class="mkt-warn">{{ generation.error_message }}</p>
             {% endif %}
         </div>
-        <p class="mkt-result__format">{{ t(generation.format_label_key) }}</p>
-    </div>
+    {% if visuals %}
+    </details>
+    {% endif %}
     <div class="mkt-result__actions">
         <button type="button" class="btn btn-secondary" data-mkt-edit>{{ t('marketing_ia_edit') }}</button>
         <form method="post" action="{{ url_for('marketing_conversation_regenerate', conversation_id=view.conversation.id) }}">
             <input type="hidden" name="generation_id" value="{{ generation.id }}">
             <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_regenerate') }}</button>
         </form>
+        <form method="post" action="{{ url_for('marketing_conversation_regenerate', conversation_id=view.conversation.id) }}">
+            <input type="hidden" name="generation_id" value="{{ generation.id }}">
+            <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_another_version') }}</button>
+        </form>
+        {% if visuals and visuals[0].download_url %}
+        <a class="btn btn-secondary" href="{{ visuals[0].download_url }}">{{ t('marketing_download_png') }}</a>
+        {% else %}
         <button
             type="button"
             class="btn btn-secondary"
             data-mkt-download
             data-download-name="jrh-{{ generation.content_type }}-{{ generation.id }}.txt"
         >{{ t('marketing_download') }}</button>
+        {% endif %}
         <button
             type="button"
             class="btn btn-secondary"

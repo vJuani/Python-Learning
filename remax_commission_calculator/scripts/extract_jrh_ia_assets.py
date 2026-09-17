@@ -1,7 +1,12 @@
-"""Extract official JRH IA mascot crops from the two-panel brand sheet.
+"""Do not regenerate the official JRH IA bot from the brand sheet.
 
-Does not redraw the character. Crops the approved full-body poses and
-knocks out the sheet background.
+Canonical UI files live at:
+
+    static/branding/jrh-ai/jrh_ia_bot_light.png
+    static/branding/jrh-ai/jrh_ia_bot_dark.png
+
+This script is leftover crop tooling. Running it must not overwrite
+those two files.
 """
 
 from __future__ import annotations

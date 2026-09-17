@@ -398,22 +398,24 @@
     .m-jrh-card__bot {
         flex: 0 0 auto;
         width: 64px;
-        height: 96px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         overflow: visible;
         background: transparent;
         pointer-events: none;
     }
 
     .m-jrh-card__bot img,
-    .m-jrh-card__bot svg,
     .m-jrh-card .jrh-bot-hero,
     .m-jrh-card .jrh-bot-avatar {
         width: 64px;
-        height: 96px;
+        height: 64px;
         max-width: 64px;
-        max-height: 96px;
+        max-height: 64px;
         object-fit: contain;
-        object-position: center bottom;
+        object-position: center;
         background: transparent;
         transform: none;
         filter: drop-shadow(0 8px 14px color-mix(in srgb, var(--color-text) 14%, transparent));
@@ -880,15 +882,18 @@
 
     body.is-home-v2 .jrh-hero__mascot {
         width: 72px;
-        align-self: end;
+        height: 72px;
+        align-self: center;
     }
 
     body.is-home-v2 .jrh-hero__mascot img,
     body.is-home-v2 .jrh-hero .jrh-bot-hero {
         max-width: 72px;
-        max-height: 88px;
+        max-height: 72px;
         width: 72px;
-        height: auto;
+        height: 72px;
+        object-fit: contain;
+        object-position: center;
     }
 
     body.is-home-v2 .jrh-hero__chips {
@@ -2127,10 +2132,10 @@
 
     body.is-jrh-ask-page .jrh-studio__empty-bot {
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         justify-content: center;
         width: 88px;
-        height: 112px;
+        height: 88px;
         margin: 8px 0 4px;
         border-radius: 0;
         overflow: visible;
@@ -2142,15 +2147,14 @@
     }
 
     body.is-jrh-ask-page .jrh-studio__empty-bot img,
-    body.is-jrh-ask-page .jrh-studio__empty-bot svg,
     body.is-jrh-ask-page .jrh-studio__empty-bot .jrh-bot-hero,
     body.is-jrh-ask-page .jrh-studio__empty-bot .jrh-bot-avatar {
-        width: auto !important;
-        height: 112px !important;
+        width: 88px !important;
+        height: 88px !important;
         max-width: 88px;
-        max-height: 112px;
+        max-height: 88px;
         object-fit: contain !important;
-        object-position: center bottom;
+        object-position: center;
         transform: none;
         background: transparent !important;
         filter: drop-shadow(0 10px 16px color-mix(in srgb, var(--color-text) 16%, transparent));

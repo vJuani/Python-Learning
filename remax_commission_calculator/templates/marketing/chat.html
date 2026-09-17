@@ -22,7 +22,12 @@
 {% set send_action = url_for('marketing_conversation', conversation_id=conversation.id) if conversation else url_for('marketing_chat_send') %}
 <section class="mkt-chat" data-mkt-chat>
     <aside class="mkt-chat__sidebar" data-mkt-sidebar>
-        <a class="mkt-chat__new" href="{{ url_for('marketing_home') }}">{{ t('marketing_ia_new_chat') }}</a>
+        <a class="mkt-chat__new" href="{{ url_for('marketing_home') }}">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            {{ t('marketing_ia_new_chat') }}
+        </a>
         {% include "marketing/_chat_recents.html" %}
         <nav class="mkt-chat__tools" aria-label="{{ t('marketing_ia_title') }}">
             <a href="{{ url_for('marketing_generations') }}">{{ t('marketing_ia_creations') }}</a>
@@ -44,13 +49,14 @@
             <div class="mkt-msg mkt-msg--{{ message.role }}" id="m-{{ message.id }}">
                 {% if message.role == 'assistant' %}
                 <div class="mkt-msg__bot" aria-hidden="true">
-                    {% with variant='hero', width=40, height=56, decorative=true %}
+                    {% with variant='hero', width=44, height=44, decorative=true %}
                     {% include "dashboard/_jrh_mascot.html" %}
                     {% endwith %}
                 </div>
                 {% endif %}
                 <div class="mkt-msg__bubble">
                     {% if message.message_type == 'generation' and message.generation %}
+                    {% if message.content %}<p class="mkt-msg__lead">{{ message.content }}</p>{% endif %}
                     {% with generation=message.generation %}
                     {% include "marketing/_chat_result.html" %}
                     {% endwith %}
@@ -62,8 +68,9 @@
             {% endfor %}
             {% else %}
             <div class="mkt-chat__empty">
+                <p class="mkt-chat__kicker">{{ t('marketing_ia_title') }}</p>
                 <div class="mkt-chat__empty-bot">
-                    {% with variant='hero', width=220, height=320, decorative=true %}
+                    {% with variant='hero', width=280, height=280, decorative=true %}
                     {% include "dashboard/_jrh_mascot.html" %}
                     {% endwith %}
                 </div>
@@ -92,6 +99,12 @@
                 <button type="button" data-mkt-clear-property aria-label="{{ t('marketing_ia_clear_property') }}">×</button>
             </div>
             <div class="mkt-composer__shell">
+                <div class="mkt-mode" role="group" aria-label="{{ t('marketing_ia_title') }}">
+                    <input type="hidden" name="intent_mode" value="auto" data-mkt-intent-mode>
+                    <button type="button" class="mkt-mode__btn is-active" data-mkt-mode="auto">{{ t('marketing_ia_mode_auto') }}</button>
+                    <button type="button" class="mkt-mode__btn" data-mkt-mode="create">{{ t('marketing_ia_mode_create') }}</button>
+                    <button type="button" class="mkt-mode__btn" data-mkt-mode="chat">{{ t('marketing_ia_mode_chat') }}</button>
+                </div>
                 <label class="visually-hidden" for="mkt-chat-prompt">{{ t('marketing_ia_composer_ph') }}</label>
                 <textarea
                     id="mkt-chat-prompt"
@@ -127,6 +140,7 @@
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
                             <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
+                        <span class="mkt-composer__send-label">{{ t('marketing_ia_send') }}</span>
                     </button>
                 </div>
             </div>

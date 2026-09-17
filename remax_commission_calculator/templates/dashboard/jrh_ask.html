@@ -94,7 +94,7 @@
         <div class="jrh-studio__mascot-wrap hide-mobile">
             <span class="jrh-studio__glow" aria-hidden="true"></span>
             <div class="jrh-studio__mascot">
-                {% with variant='hero', width=320, height=420, decorative=false %}
+                {% with variant='hero', width=320, height=320, decorative=false %}
                 {% include "dashboard/_jrh_mascot.html" %}
                 {% endwith %}
             </div>
@@ -113,7 +113,7 @@
             {% if not jrh_ask and not jrh_result %}
             <div class="jrh-studio__empty">
                 <div class="jrh-studio__empty-bot hide-desktop">
-                    {% with variant='hero', width=80, height=112, decorative=true %}
+                    {% with variant='hero', width=88, height=88, decorative=true %}
                     {% include "dashboard/_jrh_mascot.html" %}
                     {% endwith %}
                 </div>

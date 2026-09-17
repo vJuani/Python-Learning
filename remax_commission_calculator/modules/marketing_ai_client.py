@@ -150,6 +150,61 @@ def _post_once(*, payload, timeout):
     return parsed, usage
 
 
+def request_marketing_text(
+    *,
+    instructions,
+    user_payload,
+    model=None,
+    temperature=None,
+    max_tokens=700,
+    timeout=DEFAULT_TIMEOUT,
+):
+    """Plain conversational reply. Never logs secrets or full listing text."""
+    model = model or get_marketing_ai_model()
+    if temperature is None:
+        temperature = get_copy_temperature()
+    user_text = (
+        user_payload if isinstance(user_payload, str) else json.dumps(user_payload, ensure_ascii=False)
+    )
+    payload = {
+        "model": model,
+        "temperature": temperature,
+        "max_tokens": int(max_tokens),
+        "messages": [
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": user_text},
+        ],
+    }
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise MarketingAIClientError(
+            "missing_openai_api_key",
+            details={"openai_api_key_present": False},
+        )
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = json.loads(response.read().decode("utf-8"))
+            content = body["choices"][0]["message"]["content"]
+    except Exception as error:
+        code = "openai_timeout" if _is_timeout_error(error) else "openai_request_failed"
+        if isinstance(error, urllib.error.HTTPError):
+            code = f"openai_http_{error.code}"
+        raise MarketingAIClientError(code) from error
+    text = (content or "").strip()
+    if not text:
+        raise MarketingAIClientError("openai_invalid_response")
+    return text
+
+
 def request_marketing_json(
     *,
     instructions,

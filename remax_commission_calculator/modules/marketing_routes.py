@@ -133,6 +133,7 @@ def register_marketing_routes(app, helpers):
                     property_id=request.form.get("property_id", type=int),
                     language=get_current_language(),
                     attachment_name=_attachment_name(),
+                    preferred_mode=request.form.get("intent_mode") or "auto",
                 )
             except MarketingError as error:
                 return _handle(error, fallback_endpoint="marketing_home")
@@ -160,6 +161,7 @@ def register_marketing_routes(app, helpers):
                 property_id=request.form.get("property_id", type=int),
                 language=get_current_language(),
                 attachment_name=_attachment_name(),
+                preferred_mode=request.form.get("intent_mode") or "auto",
             )
         except MarketingError as error:
             return _handle(error, fallback_endpoint="marketing_home")

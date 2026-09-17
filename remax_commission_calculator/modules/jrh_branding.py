@@ -1,11 +1,12 @@
 """Resolve official JRH AI mascot files under static/branding/jrh-ai/.
 
-Official themed rasters win:
+Canonical assets (full body, transparent PNG):
 
-    jrh-ia-{hero|avatar|launcher}-{light|dark}.png
+    jrh_ia_bot_light.png
+    jrh_ia_bot_dark.png
 
-Legacy jrh-bot-*.png files are next. SVG placeholders are last-resort
-fallback only so the UI never shows a broken image icon.
+These win for every variant (hero, avatar, floating). Older cropped
+rasters and SVG placeholders are not used while the official pair exists.
 """
 
 from __future__ import annotations
@@ -20,14 +21,12 @@ from modules.config import BASE_DIR
 
 JRH_AI_REL_DIR = "branding/jrh-ai"
 JRH_MASCOT_VARIANTS = ("hero", "avatar", "floating")
-JRH_MASCOT_SLOTS = {
-    "hero": "hero",
-    "avatar": "avatar",
-    "floating": "launcher",
-    "launcher": "launcher",
+JRH_BOT_LIGHT = "jrh_ia_bot_light.png"
+JRH_BOT_DARK = "jrh_ia_bot_dark.png"
+JRH_BOT_FILES = {
+    "light": JRH_BOT_LIGHT,
+    "dark": JRH_BOT_DARK,
 }
-_RASTER_EXTS = (".webp", ".png")
-_VECTOR_EXTS = (".svg",)
 _LOG = logging.getLogger("modules.jrh_branding")
 
 
@@ -53,78 +52,18 @@ def _lookup_name(filename: str) -> str | None:
     return None
 
 
-def _first_existing(names) -> str | None:
-    seen = set()
-    for name in names:
-        key = name.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        found = _lookup_name(name)
-        if found:
-            return _rel(found)
-    return None
-
-
-def _slot(variant: str) -> str:
-    return JRH_MASCOT_SLOTS.get(variant, "hero")
-
-
-def _official_names(variant: str, theme: str | None):
-    slot = _slot(variant)
-    names = []
-    themes = (theme,) if theme in ("light", "dark") else ("light", "dark")
-    for current in themes:
-        for ext in _RASTER_EXTS:
-            names.append(f"jrh-ia-{slot}-{current}{ext}")
-    for ext in _RASTER_EXTS:
-        names.append(f"jrh-ia-{slot}{ext}")
-    if theme == "dark":
-        for ext in _RASTER_EXTS:
-            names.append(f"jrh-ia-{slot}-light{ext}")
-    return names
-
-
-def _legacy_raster_names(variant: str):
-    names = [
-        f"jrh-bot-{variant}.webp",
-        f"jrh-bot-{variant}.png",
-        "jrh-bot.webp",
-        "jrh-bot.png",
-        "jrh-mascot.webp",
-        "jrh-mascot.png",
-        "jrh-bot-hero.webp",
-        "jrh-bot-hero.png",
-    ]
-    for other in JRH_MASCOT_VARIANTS:
-        if other == variant:
-            continue
-        names.extend(
-            (
-                f"jrh-bot-{other}.webp",
-                f"jrh-bot-{other}.png",
-            )
-        )
-    return names
-
-
-def _vector_names(variant: str):
-    return (
-        f"jrh-bot-{variant}.svg",
-        "jrh-bot.svg",
-        "jrh-bot-hero.svg",
-        "jrh-bot-avatar.svg",
-        "jrh-bot-floating.svg",
-    )
-
-
 def resolve_jrh_mascot_rel(variant: str = "hero", theme: str | None = None) -> str | None:
-    chosen = variant if variant in JRH_MASCOT_SLOTS else "hero"
-    return (
-        _first_existing(_official_names(chosen, theme))
-        or _first_existing(_legacy_raster_names(chosen))
-        or _first_existing(_vector_names(chosen))
-    )
+    """Always serve the official full-body bot. Variant is a layout slot only."""
+    _ = variant
+    wanted = theme if theme in ("light", "dark") else "light"
+    found = _lookup_name(JRH_BOT_FILES[wanted])
+    if found:
+        return _rel(found)
+    other = "dark" if wanted == "light" else "light"
+    found = _lookup_name(JRH_BOT_FILES[other])
+    if found:
+        return _rel(found)
+    return None
 
 
 def _url_for_rel(url_for, rel: str | None) -> str:
