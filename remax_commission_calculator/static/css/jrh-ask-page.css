@@ -486,10 +486,12 @@ body.is-jrh-ask-page .app-main-inner {
 
 .jrh-float img,
 .jrh-float .jrh-bot-floating {
-    width: 2.85rem;
-    height: 2.85rem;
+    width: auto;
+    height: 3.35rem;
+    max-width: 2.7rem;
     flex-shrink: 0;
     object-fit: contain;
+    object-position: center bottom;
     background: transparent;
     filter: drop-shadow(0 4px 8px color-mix(in srgb, var(--color-brand) 22%, transparent));
 }
@@ -574,11 +576,12 @@ body.is-jrh-ask-page .jrh-float {
 
     .jrh-float {
         width: 3.4rem;
-        height: 3.4rem;
+        height: 4rem;
         max-width: none;
-        padding: 0.35rem;
-        border-radius: 999px;
+        padding: 0.25rem;
+        border-radius: 1.15rem;
         justify-content: center;
+        overflow: visible;
     }
 
     .jrh-float div {

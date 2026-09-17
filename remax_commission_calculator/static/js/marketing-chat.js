@@ -16,7 +16,7 @@
 
   function setProperty(id, label) {
     if (propertyId) propertyId.value = id || "";
-    if (chipLabel) chipLabel.textContent = label ? "🏠 " + label : "";
+    if (chipLabel) chipLabel.textContent = label || "";
     if (chip) chip.hidden = !id;
   }
 

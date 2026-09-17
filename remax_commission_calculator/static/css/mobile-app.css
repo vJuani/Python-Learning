@@ -1513,6 +1513,7 @@
 
     body.is-home-v2 .jrh-float,
     body.is-jrh-ask-page .jrh-float,
+    body.is-marketing-chat-page .jrh-float,
     body.m-more-open .jrh-float,
     body.m-sheet-open .jrh-float {
         display: none !important;
@@ -1520,15 +1521,15 @@
 
     .jrh-float {
         z-index: 25;
-        width: 52px;
-        height: 52px;
-        min-width: 52px;
-        max-width: 52px;
-        padding: 6px;
+        width: 3.35rem;
+        height: 3.9rem;
+        min-width: 3.35rem;
+        max-width: 3.35rem;
+        padding: 4px;
         right: 16px;
         bottom: calc(var(--m-nav-h) + 16px);
-        border-radius: 999px;
-        overflow: hidden;
+        border-radius: 1.15rem;
+        overflow: visible;
     }
 
     .jrh-float div {

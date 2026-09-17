@@ -44,7 +44,7 @@
             <div class="mkt-msg mkt-msg--{{ message.role }}" id="m-{{ message.id }}">
                 {% if message.role == 'assistant' %}
                 <div class="mkt-msg__bot" aria-hidden="true">
-                    {% with variant='hero', width=36, height=48, decorative=true %}
+                    {% with variant='hero', width=40, height=56, decorative=true %}
                     {% include "dashboard/_jrh_mascot.html" %}
                     {% endwith %}
                 </div>
@@ -63,11 +63,10 @@
             {% else %}
             <div class="mkt-chat__empty">
                 <div class="mkt-chat__empty-bot">
-                    {% with variant='hero', width=96, height=128, decorative=true %}
+                    {% with variant='hero', width=220, height=320, decorative=true %}
                     {% include "dashboard/_jrh_mascot.html" %}
                     {% endwith %}
                 </div>
-                <h2>{{ t('marketing_ia_title') }}</h2>
                 <p class="mkt-chat__hello">{{ t('marketing_ia_chat_hello') }}</p>
                 <p class="mkt-chat__help">{{ t('marketing_ia_chat_help') }}</p>
                 <div class="mkt-chat__starters">
@@ -89,34 +88,47 @@
             <input type="hidden" name="property_id" value="{{ view.selected_property.id if view.selected_property else '' }}" data-mkt-property-id>
             <p class="mkt-composer__status" data-mkt-generating hidden>{{ t('marketing_ia_generating') }}</p>
             <div class="mkt-chip" data-mkt-property-chip{% if not view.selected_property %} hidden{% endif %}>
-                <span data-mkt-property-label>{% if view.selected_property %}🏠 {{ view.selected_property.address }}{% endif %}</span>
+                <span data-mkt-property-label>{% if view.selected_property %}{{ view.selected_property.address }}{% endif %}</span>
                 <button type="button" data-mkt-clear-property aria-label="{{ t('marketing_ia_clear_property') }}">×</button>
             </div>
-            <label class="visually-hidden" for="mkt-chat-prompt">{{ t('marketing_ia_composer_ph') }}</label>
-            <textarea
-                id="mkt-chat-prompt"
-                name="prompt"
-                rows="2"
-                required
-                placeholder="{{ t('marketing_ia_composer_ph') }}"
-                data-mkt-chat-prompt
-            ></textarea>
-            <div class="mkt-composer__bar">
-                <label class="mkt-composer__tool">
-                    <input type="file" name="attachment" accept="image/*,.pdf" hidden data-mkt-file>
-                    <span aria-hidden="true">📎</span>
-                    <span class="visually-hidden">{{ t('marketing_ia_attach') }}</span>
-                </label>
-                <button type="button" class="mkt-composer__tool" data-mkt-open-picker>
-                    🏠 {{ t('marketing_ia_pick_property') }}
-                </button>
-                <button
-                    type="button"
-                    class="mkt-composer__tool"
-                    data-jrh-voice
-                    aria-label="{{ t('jrh_voice_talk') }}"
-                >🎤</button>
-                <button type="submit" class="mkt-composer__send" aria-label="{{ t('marketing_ia_send') }}">➜</button>
+            <div class="mkt-composer__shell">
+                <label class="visually-hidden" for="mkt-chat-prompt">{{ t('marketing_ia_composer_ph') }}</label>
+                <textarea
+                    id="mkt-chat-prompt"
+                    name="prompt"
+                    rows="1"
+                    required
+                    placeholder="{{ t('marketing_ia_composer_ph') }}"
+                    data-mkt-chat-prompt
+                ></textarea>
+                <div class="mkt-composer__bar">
+                    <label class="mkt-composer__tool" title="{{ t('marketing_ia_attach') }}">
+                        <input type="file" name="attachment" accept="image/*,.pdf" hidden data-mkt-file>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+                            <path d="M21.4 11.6 12.1 20.9a6 6 0 1 1-8.5-8.5l9.9-9.9a4 4 0 0 1 5.7 5.7l-9.9 9.9a2 2 0 1 1-2.8-2.8l8.5-8.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span class="visually-hidden">{{ t('marketing_ia_attach') }}</span>
+                    </label>
+                    <button type="button" class="mkt-composer__tool mkt-composer__tool--label" data-mkt-open-picker>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+                            <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+                        </svg>
+                        <span>{{ t('marketing_ia_pick_property') }}</span>
+                    </button>
+                    <button
+                        type="button"
+                        class="mkt-composer__tool"
+                        data-jrh-voice
+                        aria-label="{{ t('jrh_voice_talk') }}"
+                    >
+                        {% include "_jrh_mic.html" %}
+                    </button>
+                    <button type="submit" class="mkt-composer__send" aria-label="{{ t('marketing_ia_send') }}">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+                            <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <p class="mkt-composer__hint" data-jrh-voice-status data-listening="{{ t('jrh_voice_listening') }}" data-transcribing="{{ t('jrh_voice_transcribing') }}" data-heard="{{ t('jrh_voice_heard') }}" hidden></p>
             <p class="mkt-composer__hint" data-jrh-voice-unsupported hidden>{{ t('jrh_voice_unsupported') }}</p>

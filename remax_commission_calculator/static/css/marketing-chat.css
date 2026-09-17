@@ -3,38 +3,47 @@ body.is-marketing-chat-page .app-main-inner {
     padding: 0;
 }
 
+body.is-marketing-chat-page .jrh-float {
+    display: none !important;
+}
+
 body.is-marketing-chat-page .mkt-chat {
     display: grid;
-    grid-template-columns: 17.5rem minmax(0, 1fr);
+    grid-template-columns: 17rem minmax(0, 1fr);
     min-height: calc(100dvh - 5.5rem);
-    background: var(--color-bg, #f5f8f6);
+    background:
+        radial-gradient(circle at 72% 18%, color-mix(in srgb, var(--color-brand, #0e4f38) 8%, transparent), transparent 32%),
+        var(--color-bg, #f5f8f6);
 }
 
 .mkt-chat__sidebar {
     display: flex;
     flex-direction: column;
-    gap: 1.1rem;
-    padding: 1rem 0.9rem 1.25rem;
+    gap: 1rem;
+    padding: 1.1rem 0.85rem 1.15rem;
     border-right: 1px solid var(--border-soft, #dce6df);
-    background: color-mix(in srgb, var(--surface, #fff) 88%, #0e4f38 4%);
+    background: color-mix(in srgb, var(--surface, #fff) 92%, #0e4f38 4%);
 }
 
 .mkt-chat__new {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     text-decoration: none;
     font-weight: 700;
     color: #fff;
     background: var(--color-brand, #0e4f38);
-    border-radius: 12px;
-    padding: 0.7rem 0.85rem;
+    border-radius: 999px;
+    padding: 0.72rem 0.9rem;
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--color-brand, #0e4f38) 22%, transparent);
 }
 
 .mkt-chat__nav-label,
 .mkt-chat__empty-nav {
     margin: 0 0 0.45rem;
     font-size: 0.72rem;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted, #5b6b7c);
     font-weight: 700;
@@ -45,16 +54,16 @@ body.is-marketing-chat-page .mkt-chat {
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 0.25rem;
+    gap: 0.2rem;
 }
 
 .mkt-chat__conv {
     display: block;
     text-decoration: none;
     color: var(--text, #122018);
-    border-radius: 10px;
-    padding: 0.55rem 0.65rem;
-    font-size: 0.92rem;
+    border-radius: 12px;
+    padding: 0.58rem 0.7rem;
+    font-size: 0.9rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -68,15 +77,17 @@ body.is-marketing-chat-page .mkt-chat {
 .mkt-chat__tools {
     margin-top: auto;
     display: grid;
-    gap: 0.2rem;
+    gap: 0.15rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-soft, #dce6df);
 }
 
 .mkt-chat__tools a {
     color: var(--muted, #5b6b7c);
     text-decoration: none;
-    padding: 0.45rem 0.55rem;
-    border-radius: 8px;
-    font-size: 0.9rem;
+    padding: 0.48rem 0.6rem;
+    border-radius: 10px;
+    font-size: 0.88rem;
 }
 
 .mkt-chat__tools a:hover {
@@ -94,12 +105,16 @@ body.is-marketing-chat-page .mkt-chat {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.85rem 1.25rem 0.5rem;
+    padding: 0.9rem 1.5rem 0.35rem;
 }
 
 .mkt-chat__header h1 {
     margin: 0;
-    font-size: 1.15rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted, #5b6b7c);
 }
 
 .mkt-chat__history-btn {
@@ -112,51 +127,99 @@ body.is-marketing-chat-page .mkt-chat {
 
 .mkt-chat__thread {
     overflow: auto;
-    padding: 0.5rem 1.25rem 1rem;
+    padding: 0.35rem 1.5rem 1rem;
 }
 
 .mkt-chat__empty {
-    max-width: 36rem;
-    margin: 8vh auto 0;
+    min-height: 100%;
+    max-width: 38rem;
+    margin: 0 auto;
+    padding: 1.5rem 0 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
 }
 
-.mkt-chat__empty-bot img,
-.mkt-chat__empty-bot svg {
-    width: 96px;
-    height: auto;
-    margin: 0 auto;
+.mkt-chat__empty-bot {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    width: min(14.5rem, 58vw);
+    height: min(19rem, 42vh);
+    margin: 0 auto 0.35rem;
+    overflow: visible;
+    background: transparent;
 }
 
-.mkt-chat__empty h2 {
-    margin: 0.6rem 0 0.2rem;
+.mkt-chat__empty-bot img,
+.mkt-chat__empty-bot svg,
+.mkt-chat__empty-bot .jrh-bot-hero {
+    display: block;
+    width: auto !important;
+    height: 100% !important;
+    max-width: 100%;
+    max-height: 100%;
+    margin: 0 auto;
+    object-fit: contain !important;
+    object-position: center bottom;
+    background: transparent;
+    filter: drop-shadow(0 16px 28px color-mix(in srgb, var(--color-brand, #0e4f38) 22%, transparent));
+    animation: mktBotFloat 5s ease-in-out infinite;
 }
 
 .mkt-chat__hello {
-    margin: 0;
-    font-size: 1.35rem;
-    font-weight: 700;
+    margin: 0.35rem 0 0.35rem;
+    font-size: clamp(1.45rem, 2.4vw, 1.85rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--text, #122018);
 }
 
 .mkt-chat__help {
+    margin: 0;
+    max-width: 34ch;
     color: var(--muted, #5b6b7c);
+    line-height: 1.45;
 }
 
 .mkt-chat__starters {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.45rem;
-    margin-top: 1rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem;
+    width: min(34rem, 100%);
+    margin-top: 1.35rem;
 }
 
 .mkt-chat__starters button {
     border: 1px solid var(--border-soft, #dce6df);
-    background: var(--surface, #fff);
-    border-radius: 999px;
-    padding: 0.45rem 0.8rem;
+    background: color-mix(in srgb, var(--surface, #fff) 88%, transparent);
+    border-radius: 16px;
+    padding: 0.85rem 0.7rem;
     font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text, #122018);
     cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mkt-chat__starters button:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--color-brand, #0e4f38) 35%, var(--border-soft, #dce6df));
+    box-shadow: 0 10px 22px rgba(14, 79, 56, 0.08);
+}
+
+@keyframes mktBotFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mkt-chat__empty-bot img,
+    .mkt-chat__empty-bot .jrh-bot-hero {
+        animation: none;
+    }
 }
 
 .mkt-msg {
@@ -183,12 +246,21 @@ body.is-marketing-chat-page .mkt-chat {
 }
 
 .mkt-msg__bot {
-    flex: 0 0 36px;
+    flex: 0 0 2.5rem;
+    width: 2.5rem;
+    height: 3.35rem;
+    overflow: visible;
+    background: transparent;
 }
 
-.mkt-msg__bot img {
-    width: 36px;
-    height: auto;
+.mkt-msg__bot img,
+.mkt-msg__bot .jrh-bot-hero {
+    width: auto !important;
+    height: 3.35rem !important;
+    max-width: 2.5rem;
+    object-fit: contain !important;
+    object-position: center bottom;
+    background: transparent;
 }
 
 .mkt-msg--assistant .mkt-msg__bubble {
@@ -269,46 +341,88 @@ body.is-marketing-chat-page .mkt-chat {
     bottom: 0;
     margin: 0 auto;
     width: min(46rem, calc(100% - 2rem));
-    padding: 0 0 1.1rem;
+    padding: 0 0 1.2rem;
+    background: linear-gradient(180deg, transparent, var(--color-bg, #f5f8f6) 28%);
+}
+
+.mkt-composer__shell {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.85rem 0.9rem 0.7rem;
+    border: 1px solid var(--border-soft, #dce6df);
+    border-radius: 22px;
+    background: var(--surface, #fff);
+    box-shadow: 0 14px 36px rgba(14, 32, 24, 0.08);
 }
 
 .mkt-composer textarea {
     width: 100%;
     resize: none;
-    border: 1px solid var(--border-soft, #dce6df);
-    border-radius: 18px;
-    padding: 0.9rem 1rem 3.1rem;
-    min-height: 4.6rem;
+    border: 0;
+    border-radius: 0;
+    padding: 0.15rem 0.35rem 0.2rem;
+    min-height: 2.4rem;
+    max-height: 10rem;
     font: inherit;
-    background: var(--surface, #fff);
+    background: transparent;
+    outline: none;
 }
 
 .mkt-composer__bar {
     display: flex;
-    gap: 0.4rem;
+    gap: 0.35rem;
     align-items: center;
-    margin: -2.55rem 0.65rem 0;
-    position: relative;
 }
 
 .mkt-composer__tool {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-width: 2.1rem;
+    height: 2.1rem;
+    padding: 0 0.55rem;
     border: 0;
-    background: color-mix(in srgb, var(--color-bg, #f5f8f6) 70%, #fff);
+    background: color-mix(in srgb, var(--color-bg, #f5f8f6) 80%, #fff);
     border-radius: 999px;
-    padding: 0.35rem 0.7rem;
     cursor: pointer;
     font: inherit;
+    color: var(--text, #122018);
+}
+
+.mkt-composer__tool svg,
+.mkt-composer__tool .jrh-mic-icon {
+    display: block;
+    flex-shrink: 0;
+}
+
+.mkt-composer__tool .jrh-mic-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.mkt-composer__tool .jrh-mic-waves {
+    display: none;
+}
+
+.mkt-composer__tool--label {
+    width: auto;
+    padding: 0 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 600;
 }
 
 .mkt-composer__send {
     margin-left: auto;
-    width: 2.3rem;
-    height: 2.3rem;
+    width: 2.25rem;
+    height: 2.25rem;
     border: 0;
     border-radius: 999px;
     background: var(--color-brand, #0e4f38);
     color: #fff;
-    font-size: 1.05rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
 }
 
@@ -461,6 +575,19 @@ body.is-marketing-chat-page .mkt-chat {
         min-height: calc(100dvh - 7.5rem);
     }
 
+    .mkt-chat__starters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .mkt-chat__empty-bot {
+        width: min(11.5rem, 64vw);
+        height: min(15rem, 36vh);
+    }
+
+    .mkt-composer__tool--label span {
+        display: none;
+    }
+
     .mkt-composer {
         width: calc(100% - 1.2rem);
         padding-bottom: calc(0.75rem + var(--m-nav-h, 64px) + env(safe-area-inset-bottom));
@@ -470,4 +597,17 @@ body.is-marketing-chat-page .mkt-chat {
         margin-left: 0;
         width: 100%;
     }
+}
+
+html[data-theme="dark"] body.is-marketing-chat-page .mkt-chat {
+    background:
+        radial-gradient(circle at 72% 18%, color-mix(in srgb, var(--purple-primary, #7c6af7) 16%, transparent), transparent 34%),
+        var(--bg, #12141c);
+}
+
+html[data-theme="dark"] .mkt-chat__sidebar,
+html[data-theme="dark"] .mkt-composer__shell,
+html[data-theme="dark"] .mkt-chat__starters button {
+    background: color-mix(in srgb, var(--surface, #1b1e27) 94%, #7c6af7 4%);
+    border-color: var(--border-soft, #2a3140);
 }

@@ -1,8 +1,7 @@
-"""Extract official JRH IA mascot crops from the Codex brand sheet.
+"""Extract official JRH IA mascot crops from the two-panel brand sheet.
 
-Does not redraw the character. Crops the approved poses and knocks out
-the sheet background. Hue-shifts green to violet only when a dark pose
-is missing from the board.
+Does not redraw the character. Crops the approved full-body poses and
+knocks out the sheet background.
 """
 
 from __future__ import annotations
@@ -13,16 +12,13 @@ from pathlib import Path
 from PIL import Image
 
 BASE = Path(__file__).resolve().parents[1]
-SOURCE = BASE / "static" / "images" / "Imagen de Codex 15 sept 2026, 05_02_35 p.m..png"
+SOURCE = BASE / "static" / "images" / "jrh-ia-mascot-sheet.png"
 DEST = BASE / "static" / "branding" / "jrh-ai"
-PREVIEW = DEST / "_preview"
 
-# Full-sheet boxes (1448x1086). Include house-hats; exclude labels.
+# Two-panel full-body sheet (772x567). Include hat, hands, legs, hover ring.
 BOXES = {
-    "hero-light": (300, 128, 582, 575),
-    "hero-dark": (790, 155, 1095, 575),
-    "avatar-light": (1210, 145, 1418, 312),
-    "launcher-light": (1198, 492, 1368, 650),
+    "hero-light": (6, 12, 276, 510),
+    "hero-dark": (442, 54, 762, 498),
 }
 
 
@@ -127,6 +123,8 @@ def _knockout_sheet(im: Image.Image, *, mode: str) -> Image.Image:
     for y in range(h):
         for x in range(w):
             rgb = pix[x, y][:3]
+            if is_sheet(rgb) and not _is_accent(rgb):
+                continue
             if _lum(rgb) >= 170 or _is_accent(rgb):
                 core.append((x, y))
 
@@ -167,7 +165,7 @@ def _knockout_sheet(im: Image.Image, *, mode: str) -> Image.Image:
 
     if mode == "dark":
         _punch_dark_panel(rgba, dist_map)
-    return rgba
+    return _flood_from_edges(rgba, is_sheet)
 
 
 def _punch_dark_panel(im: Image.Image, dist_map: dict) -> None:
@@ -254,7 +252,9 @@ def _keep_largest(im: Image.Image, min_keep: int = 40) -> Image.Image:
             continue
         cx = sum(p[0] for p in cells) / len(cells)
         cy = sum(p[1] for p in cells) / len(cells)
-        near = abs(cx - lx) + abs(cy - ly) < max(w, h) * 0.28
+        if cy < h * 0.11 or cy > h * 0.90 or cx > w * 0.86:
+            continue
+        near = abs(cx - lx) + abs(cy - ly) < max(w, h) * 0.18
         tall_hat = cy < ly and abs(cx - lx) < w * 0.22 and len(cells) > len(components[0]) * 0.03
         if near or tall_hat:
             keep.add(id(cells))
@@ -274,6 +274,29 @@ def _keep_largest(im: Image.Image, min_keep: int = 40) -> Image.Image:
     return out
 
 
+def _wipe_caption_bands(im: Image.Image) -> Image.Image:
+    """Clear leftover sheet copy; keep hat, glow, and body accents."""
+    w, h = im.size
+    pix = im.load()
+    top_band = int(h * 0.22)
+    bottom_band = int(h * 0.92)
+    right_band = int(w * 0.90)
+    left_caption = int(w * 0.48)
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = pix[x, y]
+            if a == 0:
+                continue
+            if y < top_band and x < left_caption:
+                pix[x, y] = (r, g, b, 0)
+                continue
+            if _is_accent((r, g, b)):
+                continue
+            if y > bottom_band or x > right_band:
+                pix[x, y] = (r, g, b, 0)
+    return im
+
+
 def _trim(im: Image.Image, pad: int = 8) -> Image.Image:
     bbox = im.getbbox()
     if not bbox:
@@ -286,25 +309,11 @@ def _trim(im: Image.Image, pad: int = 8) -> Image.Image:
     return im.crop((l, t, r, b))
 
 
-def _circularize(im: Image.Image) -> Image.Image:
+def _bust(im: Image.Image) -> Image.Image:
+    """Head-to-chest crop for small avatars; keep the house hat."""
     w, h = im.size
-    side = min(w, h)
-    left = (w - side) // 2
-    top = (h - side) // 2
-    square = im.crop((left, top, left + side, top + side)).convert("RGBA")
-    pix = square.load()
-    cx = cy = (side - 1) / 2
-    radius = side / 2 - 0.5
-    for y in range(side):
-        for x in range(side):
-            r, g, b, a = pix[x, y]
-            d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
-            if d > radius:
-                pix[x, y] = (r, g, b, 0)
-            elif d > radius - 1.25:
-                fade = int(a * (radius - d) / 1.25)
-                pix[x, y] = (r, g, b, fade)
-    return square
+    bottom = max(int(h * 0.62), 1)
+    return _trim(im.crop((0, 0, w, bottom)), pad=6)
 
 
 def _green_to_violet(im: Image.Image, *, darken_fill: bool = False) -> Image.Image:
@@ -346,9 +355,6 @@ def _checker(im: Image.Image, path: Path, *, dark: bool = False) -> None:
 def _save(im: Image.Image, name: str) -> None:
     dest = DEST / name
     im.save(dest, format="PNG", optimize=False, compress_level=1)
-    PREVIEW.mkdir(parents=True, exist_ok=True)
-    _checker(im, PREVIEW / f"light-{name}")
-    _checker(im, PREVIEW / f"dark-{name}", dark=True)
     print(f"wrote {dest.name} {im.size} mode={im.mode}")
 
 
@@ -358,19 +364,23 @@ def main() -> None:
     DEST.mkdir(parents=True, exist_ok=True)
     sheet = Image.open(SOURCE).convert("RGB")
 
-    light_hero = _trim(_keep_largest(_knockout_sheet(sheet.crop(BOXES["hero-light"]), mode="light")))
-    dark_hero = _trim(_keep_largest(_knockout_sheet(sheet.crop(BOXES["hero-dark"]), mode="dark")))
-    avatar = _trim(_keep_largest(_knockout_sheet(sheet.crop(BOXES["avatar-light"]), mode="light")))
-    launcher = _circularize(
-        _trim(_knockout_sheet(sheet.crop(BOXES["launcher-light"]), mode="light"), pad=2)
+    light_hero = _trim(
+        _wipe_caption_bands(_keep_largest(_knockout_sheet(sheet.crop(BOXES["hero-light"]), mode="light"))),
+        pad=12,
     )
+    dark_hero = _trim(
+        _wipe_caption_bands(_keep_largest(_knockout_sheet(sheet.crop(BOXES["hero-dark"]), mode="dark"))),
+        pad=12,
+    )
+    avatar_light = _bust(light_hero)
+    avatar_dark = _bust(dark_hero)
 
     _save(light_hero, "jrh-ia-hero-light.png")
     _save(dark_hero, "jrh-ia-hero-dark.png")
-    _save(avatar, "jrh-ia-avatar-light.png")
-    _save(_green_to_violet(avatar), "jrh-ia-avatar-dark.png")
-    _save(launcher, "jrh-ia-launcher-light.png")
-    _save(_green_to_violet(launcher, darken_fill=True), "jrh-ia-launcher-dark.png")
+    _save(avatar_light, "jrh-ia-avatar-light.png")
+    _save(avatar_dark, "jrh-ia-avatar-dark.png")
+    _save(light_hero, "jrh-ia-launcher-light.png")
+    _save(dark_hero, "jrh-ia-launcher-dark.png")
 
 
 if __name__ == "__main__":

@@ -665,11 +665,14 @@ html[data-theme="dark"] .jrh-mascot--on-dark {
 
 .jrh-float img,
 .jrh-float .jrh-bot-floating {
-    width: 2.85rem;
-    height: 2.85rem;
+    width: auto;
+    height: 3.35rem;
+    max-width: 2.7rem;
     flex-shrink: 0;
     object-fit: contain;
+    object-position: center bottom;
     background: transparent;
+    overflow: visible;
 }
 
 .jrh-float strong,
@@ -689,18 +692,20 @@ html[data-theme="dark"] .jrh-mascot--on-dark {
 }
 
 body.is-jrh-ask-page .jrh-float,
-body.is-auth-page .jrh-float {
+body.is-auth-page .jrh-float,
+body.is-marketing-chat-page .jrh-float {
     display: none;
 }
 
 @media (max-width: 719px) {
     .jrh-float {
         width: 3.4rem;
-        height: 3.4rem;
+        height: 4rem;
         max-width: none;
-        padding: 0.35rem;
-        border-radius: 999px;
+        padding: 0.25rem;
+        border-radius: 1.15rem;
         justify-content: center;
+        overflow: visible;
     }
 
     .jrh-float div {
