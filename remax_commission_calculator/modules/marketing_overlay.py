@@ -7,18 +7,12 @@ import logging
 
 from PIL import Image
 
+from modules.marketing_context import MarketingError
 from modules.marketing_copy import summarize_listing_copy
 from modules.marketing_language import default_cta, default_headline
 from modules.marketing_flyer_modern import (
-    LAYOUT_VERSION,
-    LEGACY_TEMPLATES,
-    MODERN_FORMATS,
-    MODERN_PREMIUM_V1,
-    RENDERER_USED as MODERN_PREMIUM_RENDERER,
     V2_TEMPLATES,
-    render_modern_premium_v1,
     resolve_layout_template,
-    uses_modern_premium,
 )
 from modules.marketing_flyer_commercial import (
     RENDERER_USED as COMMERCIAL_V2_RENDERER,
@@ -28,7 +22,6 @@ from modules.marketing_renderer import (
     FORMAT_SIZES,
     _office_logo,
     load_property_photos,
-    render_modern_listing,
 )
 from modules.marketing_visual_spec import normalize_style
 
@@ -36,15 +29,13 @@ logger = logging.getLogger(__name__)
 
 OVERLAY_POST_PROCESS = "branding_overlay"
 OVERLAY_FN = "modules.marketing_overlay.stamp_branding_overlay"
-OVERLAY_LAYOUT = "modern-editorial-v1"
+# Display/debug default — always a V2 id.
+OVERLAY_LAYOUT = "modern_commercial_v2"
 PROVIDER_SKIP_ROLES = frozenset({"logo", "agent"})
 
 
 def overlay_enabled(options=None):
     options = options or {}
-    fmt = str(options.get("format") or "")
-    if fmt in MODERN_FORMATS:
-        return True
     if options.get("deterministic_overlay") is False:
         return False
     return True
@@ -69,7 +60,7 @@ def stamp_branding_overlay(
     style="light",
     language="es",
 ):
-    """Compose the final listing piece. Listing photos win over the AI collage."""
+    """Compose the final listing piece with a V2 template only."""
     options = options or {}
     art = art or {}
     facts = (context or {}).get("facts") or {}
@@ -99,49 +90,29 @@ def stamp_branding_overlay(
             "instagram": planned.get("agent_instagram") or agent.get("instagram") or "",
             "photo_path": agent.get("photo_path") if show_photo else None,
         }
-    layout = resolve_layout_template(fmt, options)
-    if layout in V2_TEMPLATES:
-        canvas = render_layout_v2(
-            layout,
-            size,
-            photos,
-            facts,
-            planned,
-            overlay_agent,
-            {**options, "photo_rows": (context or {}).get("photos") or []},
-            language=language,
-            fallback_hero=fallback if not photos else None,
-        )
-        renderer_used = COMMERCIAL_V2_RENDERER
-        layout_version = layout
-    elif layout == MODERN_PREMIUM_V1 or uses_modern_premium(fmt, options):
-        canvas = render_modern_premium_v1(
-            size,
-            photos,
-            facts,
-            planned,
-            overlay_agent,
-            options,
-            language=language,
-            fallback_hero=fallback if not photos else None,
-        )
-        renderer_used = MODERN_PREMIUM_RENDERER
-        layout = MODERN_PREMIUM_V1
-        layout_version = LAYOUT_VERSION
-    else:
-        canvas = render_modern_listing(
-            size,
-            photos,
-            facts,
-            planned,
-            overlay_agent,
-            options,
-            chosen,
-            fallback_hero=fallback if not photos else None,
-        )
-        renderer_used = "modules.marketing_renderer.render_modern_listing"
-        layout = layout or OVERLAY_LAYOUT
-        layout_version = layout
+    layout = resolve_layout_template(
+        fmt,
+        {
+            **options,
+            # Prefer the caller's creative style before normalize_style buckets.
+            "style": style or options.get("style") or options.get("creative_style") or chosen,
+        },
+    )
+    if layout not in V2_TEMPLATES:
+        raise MarketingError("marketing_err_no_v2_template", 400)
+    canvas = render_layout_v2(
+        layout,
+        size,
+        photos,
+        facts,
+        planned,
+        overlay_agent,
+        {**options, "photo_rows": (context or {}).get("photos") or []},
+        language=language,
+        fallback_hero=fallback if not photos else None,
+    )
+    renderer_used = COMMERCIAL_V2_RENDERER
+    layout_version = layout
     buffer = io.BytesIO()
     canvas.save(buffer, format="PNG", optimize=True)
     logo = _office_logo(facts)
@@ -153,6 +124,7 @@ def stamp_branding_overlay(
         len(photos),
         chosen,
     )
+    logger.info("template_used=%s", layout)
     return {
         "png_bytes": buffer.getvalue(),
         "agent_photo_composited": show_photo,

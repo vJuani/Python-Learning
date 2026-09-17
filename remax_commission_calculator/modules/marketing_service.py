@@ -878,6 +878,7 @@ def start_marketing_batch(
     parsed["request_text"] = note
     parsed["language"] = language
     parsed["cta"] = (cta or parsed.get("cta") or "").strip()
+    creative_style = str(style or "").strip().lower() or None
     if style:
         parsed["style"] = normalize_style(style)
     if include_agent is False:
@@ -927,9 +928,18 @@ def start_marketing_batch(
         include_agent=parsed.get("with_agent") is not False,
     )
     options = _options_from_request(parsed, context)
+    if creative_style:
+        options["creative_style"] = creative_style
     if layout_template:
         options["layout_template"] = layout_template
         options["template"] = layout_template
+    elif creative_style:
+        from modules.marketing_flyer_modern import STYLE_TO_V2
+
+        mapped = STYLE_TO_V2.get(creative_style)
+        if mapped:
+            options["layout_template"] = mapped
+            options["template"] = mapped
     if reference:
         ref_opts = dict(reference.get("options") or {})
         if parsed.get("with_agent") is False:

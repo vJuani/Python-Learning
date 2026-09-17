@@ -110,9 +110,9 @@ TEMPLATE_ALIASES = (
     ("comercial moderno", "modern_commercial_v2"),
     ("premium editorial", "premium_editorial_v2"),
     ("social punch", "social_punch_v2"),
-    ("modern premium", "modern_premium_v1"),
-    ("moderno premium", "modern_premium_v1"),
-    ("minimal", "minimal_v1"),
+    ("modern premium", "premium_editorial_v2"),
+    ("moderno premium", "premium_editorial_v2"),
+    ("minimal", "premium_editorial_v2"),
 )
 REVISION_RE = re.compile(
     r"\b("
