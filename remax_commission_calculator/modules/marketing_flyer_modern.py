@@ -40,12 +40,12 @@ LAYOUT_VERSION = "modern_premium_v1"
 CARD = (255, 255, 255)
 CARD_LINE = (220, 222, 216)
 BANDS = {
-    "header": 0.05,
-    "hero": 0.36,
-    "gallery": 0.14,
-    "features": 0.08,
-    "price_contact": 0.24,
-    "cta_footer": 0.13,
+    "header": 0.04,
+    "hero": 0.41,
+    "gallery": 0.13,
+    "features": 0.09,
+    "price_contact": 0.21,
+    "cta_footer": 0.12,
 }
 
 
@@ -101,13 +101,17 @@ def _layout_bands(height):
 def _hero_shade(width, height):
     shade = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     pixels = shade.load()
-    band = max(1, int(width * 0.48))
+    band = max(1, int(width * 0.54))
     for x in range(band):
-        fade = 1.0 - (x / float(band)) ** 1.35
-        alpha = int(172 * fade)
+        t = x / float(band)
+        if t < 0.20:
+            fade = 0.96
+        else:
+            fade = (1.0 - (t - 0.20) / 0.80) ** 1.7
+        alpha = int(198 * max(0.0, min(1.0, fade)))
         for y in range(height):
             pixels[x, y] = (8, 12, 22, alpha)
-    return shade.filter(ImageFilter.GaussianBlur(radius=1.2))
+    return shade.filter(ImageFilter.GaussianBlur(radius=7))
 
 
 def _icon_wa(draw, xy, size):
@@ -177,28 +181,28 @@ FEATURE_ICONS = (_icon_sofa, _icon_bed, _icon_bath, _icon_area)
 def _draw_header(canvas, facts, *, language, band):
     width, _height = canvas.size
     draw = ImageDraw.Draw(canvas)
-    pad = _u(width, 40)
-    logo = _u(width, 40)
-    top = max(8, (band["header"] - logo) // 2)
+    pad = _u(width, 36)
+    logo = min(_u(width, 32), max(22, band["header"] - 12))
+    top = max(6, (band["header"] - logo) // 2)
     placed = _paste_logo(canvas, _office_logo(facts), box=(logo, logo), xy=(pad, top))
     brand = facts.get("wordmark_text") or _office_brand(facts)
-    text_x = pad + (placed[0] + _u(width, 10) if placed else 0)
+    text_x = pad + (placed[0] + _u(width, 8) if placed else 0)
     if brand:
-        draw.text((text_x, top + 8), brand, font=font(_u(width, 20), bold=True), fill=INK)
+        draw.text((text_x, top + max(0, (logo - _u(width, 16)) // 2)), brand, font=font(_u(width, 16), bold=True), fill=INK)
     tagline = marketing_label("tagline", language)
     if tagline:
-        used = font(_u(width, 12), bold=True)
+        used = font(_u(width, 11), bold=True)
         tw = _text_width(draw, tagline, used)
-        draw.text((width - pad - tw, top + 12), tagline, font=used, fill=MUTED)
+        draw.text((width - pad - tw, top + max(0, (logo - _u(width, 11)) // 2)), tagline, font=used, fill=MUTED)
 
 
 def _draw_hero(canvas, photos, facts, copy, *, language, band, fallback=None):
     width, _height = canvas.size
-    pad = _u(width, 40)
+    pad = _u(width, 36)
     top = band["hero_top"]
-    hero_h = band["hero"] - _u(width, 8)
+    hero_h = band["hero"] - _u(width, 6)
     box = (width - pad * 2, hero_h)
-    radius = _u(width, 20)
+    radius = _u(width, 18)
     hero = photos[0] if photos else fallback
     if hero is not None:
         paste_cover_rounded(canvas, hero, (pad, top), box, radius=radius, focus=(0.5, 0.36))
@@ -208,131 +212,159 @@ def _draw_hero(canvas, photos, facts, copy, *, language, band, fallback=None):
     shade.putalpha(Image.composite(shade.split()[-1], Image.new("L", box, 0), mask))
     canvas.paste(shade, (pad, top), shade)
     draw = ImageDraw.Draw(canvas)
-    x = pad + _u(width, 32)
-    y = top + _u(width, 28)
-    max_w = int(box[0] * 0.56)
+    x = pad + _u(width, 28)
+    y = top + _u(width, 22)
+    max_w = int(box[0] * 0.58)
     badge = default_kicker(language, facts)
     if badge:
-        used = font(_u(width, 18), bold=True)
+        used = font(_u(width, 16), bold=True)
         tw = _text_width(draw, badge, used)
-        bh = _u(width, 40)
-        draw.rounded_rectangle((x, y, x + tw + _u(width, 32), y + bh), bh // 2, fill=WHITE)
-        draw.text((x + _u(width, 16), y + _u(width, 8)), badge, font=used, fill=INK)
-        y += bh + _u(width, 18)
-    title_font = font(_u(width, 58), bold=True)
+        bh = _u(width, 34)
+        draw.rounded_rectangle((x, y, x + tw + _u(width, 28), y + bh), bh // 2, fill=WHITE)
+        draw.text((x + _u(width, 14), y + _u(width, 6)), badge, font=used, fill=INK)
+        y += bh + _u(width, 14)
+    title_font = font(_u(width, 86), bold=True)
     for line in hero_stack_lines(language, facts):
         for wrapped in _wrap(draw, line, title_font, max_w)[:1]:
             draw.text((x, y), wrapped, font=title_font, fill=WHITE)
-            y += _u(width, 62)
-    bajada = _clip(copy.get("subheadline") or facts.get("benefit_line") or "", 62)
+            y += _u(width, 90)
+    bajada = _clip(copy.get("subheadline") or facts.get("benefit_line") or "", 70)
     if bajada:
-        body = font(_u(width, 20))
-        y += _u(width, 6)
+        body = font(_u(width, 24))
+        y += _u(width, 4)
         for line in _wrap(draw, bajada, body, max_w)[:2]:
-            draw.text((x, y), line, font=body, fill=(230, 234, 240))
-            y += _u(width, 28)
-    street = _clip(copy.get("street") or facts.get("title") or "", 32)
-    zone = _clip(copy.get("zone") or facts.get("zone_line") or "", 36)
-    y += _u(width, 14)
-    pin = 18
-    pin_y = y + 2
+            draw.text((x, y), line, font=body, fill=(232, 236, 242))
+            y += _u(width, 32)
+    street = _clip(copy.get("street") or facts.get("title") or "", 36)
+    zone = _clip(copy.get("zone") or facts.get("zone_line") or "", 40)
+    y += _u(width, 12)
+    pin = _u(width, 18)
+    pin_y = y + 4
     draw.ellipse((x, pin_y, x + pin, pin_y + pin), outline=WHITE, width=2)
-    draw.polygon([(x + 9, pin_y + 26), (x + 2, pin_y + 16), (x + 16, pin_y + 16)], outline=WHITE)
+    draw.ellipse((x + pin * 0.32, pin_y + pin * 0.28, x + pin * 0.68, pin_y + pin * 0.64), fill=WHITE)
     if street:
-        draw.text((x + 28, y), street, font=font(_u(width, 22), bold=True), fill=WHITE)
-        y += _u(width, 30)
+        draw.text((x + pin + 12, y), street, font=font(_u(width, 26), bold=True), fill=WHITE)
+        y += _u(width, 32)
     if zone:
-        draw.text((x + 28, y), zone, font=font(_u(width, 18)), fill=(210, 216, 224))
+        draw.text((x + pin + 12, y), zone, font=font(_u(width, 20)), fill=(214, 220, 228))
     return band["gallery_top"]
 
 
 def _draw_thumbs(canvas, photos, *, band):
-    extras = photos[1:4]
-    if not extras:
-        return band["features_top"]
+    extras = list(photos[1:4])
     width, _height = canvas.size
-    pad = _u(width, 40)
-    gap = _u(width, 12)
-    inset = _u(width, 10)
+    pad = _u(width, 36)
+    gap = _u(width, 10)
+    inset = _u(width, 6)
     thumb_h = band["gallery"] - inset
-    cell = (width - pad * 2 - gap * (len(extras) - 1)) // len(extras)
-    radius = _u(width, 14)
+    slots = 3
+    cell = (width - pad * 2 - gap * (slots - 1)) // slots
+    radius = _u(width, 12)
     top = band["gallery_top"] + 2
-    for index, photo in enumerate(extras):
-        paste_cover_rounded(
-            canvas,
-            photo,
-            (pad + index * (cell + gap), top),
-            (cell, thumb_h),
-            radius=radius,
-            focus=(0.5, 0.40),
-        )
+    draw = ImageDraw.Draw(canvas)
+    for index in range(slots):
+        xy = (pad + index * (cell + gap), top)
+        if index < len(extras) and extras[index] is not None:
+            paste_cover_rounded(
+                canvas,
+                extras[index],
+                xy,
+                (cell, thumb_h),
+                radius=radius,
+                focus=(0.5, 0.40),
+            )
+        else:
+            draw.rounded_rectangle(
+                (xy[0], xy[1], xy[0] + cell, xy[1] + thumb_h),
+                radius,
+                fill=CARD,
+                outline=CARD_LINE,
+                width=1,
+            )
     return band["features_top"]
 
 
 def _draw_features(draw, chips, *, band, width):
     if not chips:
         return
-    pad = _u(width, 40)
+    pad = _u(width, 36)
     x = pad
-    y = band["features_top"] + _u(width, 8)
-    h = band["features"] - _u(width, 16)
+    y = band["features_top"] + _u(width, 4)
+    h = band["features"] - _u(width, 8)
     inner_w = width - pad * 2
-    draw.rounded_rectangle((x, y, x + inner_w, y + h), _u(width, 16), fill=CARD, outline=CARD_LINE, width=1)
-    icon = _u(width, 32)
-    number_font = font(_u(width, 24), bold=True)
-    label_font = font(_u(width, 14))
+    radius = _u(width, 14)
+    draw.rounded_rectangle((x, y, x + inner_w, y + h), radius, fill=CARD, outline=CARD_LINE, width=1)
+    icon = _u(width, 34)
+    number_font = font(_u(width, 28), bold=True)
+    label_font = font(_u(width, 15))
     items = chips[:4]
     slot = inner_w // max(1, len(items))
     for index, chip in enumerate(items):
         number, label = _parse_chip(chip)
         painter = FEATURE_ICONS[min(index, 3)]
-        fx = x + index * slot + _u(width, 18)
+        fx = x + index * slot + _u(width, 16)
         fy = y + (h - icon) // 2
+        if index:
+            gx = x + index * slot
+            draw.line((gx, y + _u(width, 16), gx, y + h - _u(width, 16)), fill=CARD_LINE, width=1)
         painter(draw, (fx, fy, fx + icon, fy + icon), MUTED)
+        tx = fx + icon + 10
         if number:
-            draw.text((fx + icon + 10, fy - 2), number, font=number_font, fill=INK)
-            draw.text((fx + icon + 10, fy + _u(width, 24)), label or chip, font=label_font, fill=MUTED)
+            draw.text((tx, fy - 2), number, font=number_font, fill=INK)
+            draw.text((tx, fy + _u(width, 28)), label or chip, font=label_font, fill=MUTED)
         else:
-            draw.text((fx + icon + 10, fy + 6), chip, font=label_font, fill=INK)
+            draw.text((tx, fy + 6), chip, font=label_font, fill=INK)
 
 
 def _draw_price_benefit(draw, price, benefit, *, band, width):
-    pad = _u(width, 40)
-    y = band["price_top"] + _u(width, 8)
-    h = max(_u(width, 92), int(band["price_contact"] * 0.42))
-    used = font(_u(width, 48), bold=True)
-    price = price or ""
-    tw = _text_width(draw, price, used) if price else 0
-    pad_x = _u(width, 32)
-    card_w = tw + pad_x * 2 if price else 0
+    pad = _u(width, 36)
+    gap = _u(width, 12)
+    y = band["price_top"] + _u(width, 4)
+    h = max(_u(width, 108), int(band["price_contact"] * 0.40))
+    inner = width - pad * 2
+    price_w = int(inner * 0.46)
+    benefit_w = inner - price_w - gap
+    radius = _u(width, 18)
     if price:
-        draw.rounded_rectangle((pad, y, pad + card_w, y + h), h // 2, fill=NAVY)
-        draw.text((pad + pad_x, y + (h - _u(width, 48)) // 2 - 2), price, font=used, fill=WHITE)
+        draw.rounded_rectangle((pad, y, pad + price_w, y + h), radius, fill=NAVY)
+        px = _u(width, 72)
+        used = font(px, bold=True)
+        tw = _text_width(draw, price, used)
+        while tw > price_w - _u(width, 28) and px > 32:
+            px -= 2
+            used = font(px, bold=True)
+            tw = _text_width(draw, price, used)
+        draw.text(
+            (pad + (price_w - tw) // 2, y + (h - px) // 2 - 2),
+            price,
+            font=used,
+            fill=WHITE,
+        )
     if benefit:
-        bx = pad + card_w + _u(width, 24) if card_w else pad
-        by = y + _u(width, 16)
-        bw = width - pad - bx
-        bh = h - _u(width, 32)
-        draw.rounded_rectangle((bx, by, bx + bw, by + bh), _u(width, 16), fill=CARD, outline=CARD_LINE, width=1)
-        body = font(_u(width, 22), bold=True)
-        text_y = by + _u(width, 18)
-        for line in _wrap(draw, benefit, body, bw - _u(width, 36))[:2]:
+        bx = pad + (price_w + gap if price else 0)
+        bw = benefit_w if price else inner
+        draw.rounded_rectangle((bx, y, bx + bw, y + h), radius, fill=CARD, outline=CARD_LINE, width=1)
+        body = font(_u(width, 26), bold=True)
+        lines = _wrap(draw, benefit, body, bw - _u(width, 36))[:2]
+        text_h = len(lines) * _u(width, 34)
+        text_y = y + max(_u(width, 16), (h - text_h) // 2)
+        for line in lines:
             draw.text((bx + _u(width, 18), text_y), line, font=body, fill=INK)
-            text_y += _u(width, 28)
+            text_y += _u(width, 34)
     return y + h
 
 
-def _draw_cta(draw, *, xy, width, label, fill, icon="wa"):
+def _draw_cta(draw, *, xy, width, label, fill, icon="wa", min_w=0):
     if not label:
         return 0
-    used = font(_u(width, 22), bold=True)
+    px = _u(width, 26)
+    used = font(px, bold=True)
     tw = _text_width(draw, label, used)
-    icon_s = _u(width, 32)
-    pad_x = _u(width, 26)
-    h = _u(width, 72)
+    icon_s = _u(width, 36)
+    pad_x = _u(width, 22)
+    h = _u(width, 88)
     x, y = xy
-    pill_w = tw + pad_x * 2 + icon_s + 14
+    pill_w = min(max(tw + pad_x * 2 + icon_s + 14, min_w), max(icon_s + pad_x * 2, width - x - _u(width, 36)))
     if fill:
         draw.rounded_rectangle((x, y, x + pill_w, y + h), h // 2, fill=fill)
         text_fill = WHITE
@@ -343,52 +375,52 @@ def _draw_cta(draw, *, xy, width, label, fill, icon="wa"):
         _icon_wa(draw, (x + pad_x, y + (h - icon_s) // 2), icon_s)
     else:
         _icon_ig(draw, (x + pad_x, y + (h - icon_s) // 2), icon_s)
-    draw.text((x + pad_x + icon_s + 12, y + _u(width, 20)), label, font=used, fill=text_fill)
+    draw.text((x + pad_x + icon_s + 12, y + (h - px) // 2 - 1), label, font=used, fill=text_fill)
     return pill_w
 
 
 def _draw_contact(canvas, agent, *, band, after_price):
     if not agent:
         return False
-    width, height = canvas.size
-    pad = _u(width, 40)
-    block_top = after_price + _u(width, 10)
-    block_h = band["cta_top"] - block_top - _u(width, 8)
-    if block_h < _u(width, 90):
+    width, _height = canvas.size
+    pad = _u(width, 36)
+    block_top = after_price + _u(width, 8)
+    block_h = band["cta_top"] - block_top - _u(width, 4)
+    if block_h < _u(width, 96):
         block_h = _u(width, 110)
-    x1 = width - pad
-    x0 = pad
+    x0, x1 = pad, width - pad
     draw = ImageDraw.Draw(canvas)
     draw.rounded_rectangle((x0, block_top, x1, block_top + block_h), _u(width, 16), fill=CARD, outline=CARD_LINE, width=1)
-    cutout_h = min(_u(width, 228), max(_u(width, 160), block_h - _u(width, 12)))
-    photo_x = x1 - _u(width, 168)
-    photo_y = block_top + max(4, block_h - cutout_h)
+    cutout_h = min(_u(width, 158), max(_u(width, 118), int(block_h * 0.88)))
+    photo_w_guess = int(cutout_h * 0.72)
+    photo_x = x1 - photo_w_guess - _u(width, 8)
+    photo_y = block_top + max(2, block_h - cutout_h)
     pasted = False
     photo = load_agent_photo(agent.get("photo_path"))
     if photo is not None:
         pasted = paste_agent_cutout(canvas, photo, (photo_x, photo_y), height=cutout_h)
-    text_x = x0 + _u(width, 24)
-    text_y = block_top + _u(width, 18)
+    text_x = x0 + _u(width, 22)
+    text_y = block_top + _u(width, 16)
     name = agent.get("name") or ""
     title = agent.get("title") or ""
     if name:
-        draw.text((text_x, text_y), name, font=font(_u(width, 24), bold=True), fill=INK)
+        draw.text((text_x, text_y), name, font=font(_u(width, 26), bold=True), fill=INK)
         text_y += _u(width, 32)
     if title:
         draw.text((text_x, text_y), title, font=font(_u(width, 16)), fill=MUTED)
-        text_y += _u(width, 28)
-    icon = _u(width, 22)
+        text_y += _u(width, 26)
+    icon = _u(width, 24)
     whatsapp = " ".join(str(agent.get("whatsapp") or "").split())
     instagram = " ".join(str(agent.get("instagram") or "").split())
     if instagram and not instagram.startswith("@"):
         instagram = f"@{instagram.lstrip('@')}"
     if whatsapp:
         _icon_wa(draw, (text_x, text_y), icon)
-        draw.text((text_x + icon + 10, text_y), whatsapp, font=font(_u(width, 16)), fill=INK)
-        text_y += _u(width, 28)
+        draw.text((text_x + icon + 10, text_y + 2), whatsapp, font=font(_u(width, 18)), fill=INK)
+        text_y += _u(width, 30)
     if instagram:
         _icon_ig(draw, (text_x, text_y), icon)
-        draw.text((text_x + icon + 10, text_y), instagram, font=font(_u(width, 16)), fill=INK)
+        draw.text((text_x + icon + 10, text_y + 2), instagram, font=font(_u(width, 18)), fill=INK)
     return pasted
 
 
@@ -416,7 +448,7 @@ def render_modern_premium_v1(size, photos, facts, copy, agent, options, language
     band = _layout_bands(height)
     canvas = Image.new("RGBA", size, (*IVORY, 255))
     draw = ImageDraw.Draw(canvas)
-    pad = _u(width, 40)
+    pad = _u(width, 36)
     _draw_header(canvas, facts, language=language, band=band)
     _draw_hero(
         canvas,
@@ -436,11 +468,23 @@ def render_modern_premium_v1(size, photos, facts, copy, agent, options, language
     after_price = _draw_price_benefit(draw, price, benefit, band=band, width=width)
     if options.get("include_agent") and agent:
         _draw_contact(canvas, agent, band=band, after_price=after_price)
-    cta_y = band["cta_top"] + _u(width, 8)
-    cta = _clip(copy.get("cta") or "", 32)
+    cta_y = band["cta_top"] + _u(width, 6)
+    cta = _clip(copy.get("cta") or "", 36)
+    inner = width - pad * 2
+    gap = _u(width, 12)
+    btn_w = (inner - gap) // 2
     cta_x = pad
     if cta:
-        cta_x += _draw_cta(draw, xy=(pad, cta_y), width=width, label=cta, fill=WA_GREEN, icon="wa") + _u(width, 14)
+        used_w = _draw_cta(
+            draw,
+            xy=(pad, cta_y),
+            width=width,
+            label=cta,
+            fill=WA_GREEN,
+            icon="wa",
+            min_w=btn_w,
+        )
+        cta_x = pad + used_w + gap
     instagram = " ".join(str((agent or {}).get("instagram") or "").split())
     if instagram:
         ig_label = marketing_label("cta_instagram", language)
@@ -451,9 +495,10 @@ def render_modern_premium_v1(size, photos, facts, copy, agent, options, language
             label=ig_label,
             fill=None,
             icon="ig",
+            min_w=btn_w,
         )
-    footer_y = height - _u(width, 36)
-    draw.line((pad, footer_y - 10, width - pad, footer_y - 10), fill=CARD_LINE, width=1)
+    footer_y = height - _u(width, 28)
+    draw.line((pad, footer_y - 8, width - pad, footer_y - 8), fill=CARD_LINE, width=1)
     legal = facts.get("legal_footer_line") or facts.get("broker_footer_text") or ""
     brand = facts.get("wordmark_text") or _office_brand(facts)
     website = " ".join(
