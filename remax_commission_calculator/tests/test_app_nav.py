@@ -124,10 +124,10 @@ class AppNavTests(unittest.TestCase):
 
             with patch("modules.app_nav.is_guest_session", return_value=True):
                 keys = visible_endpoints(None)
-        self.assertIn("dashboard", keys)
         self.assertIn("properties_list", keys)
         self.assertIn("operations_list", keys)
         self.assertIn("reports_index", keys)
+        self.assertNotIn("dashboard", keys)
         self.assertNotIn("contacts_index", keys)
         self.assertNotIn("agenda_index", keys)
         self.assertNotIn("jrh_ask", keys)
@@ -247,6 +247,20 @@ class AppNavTests(unittest.TestCase):
     def test_nav_groups_have_unique_keys(self):
         keys = [group["key"] for group in NAV_GROUPS]
         self.assertEqual(len(keys), len(set(keys)))
+        self.assertNotIn("home", keys)
+
+    def test_http_agent_logo_is_home_not_duplicate_house(self):
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["user_id"] = self.agent_user_id
+            session["role"] = ROLE_AGENT
+            session["organization_id"] = self.org
+        page = client.get("/")
+        body = page.get_data(as_text=True)
+        self.assertIn('class="jrh-sidebar__logo-link"', body)
+        self.assertIn('href="/"', body)
+        self.assertNotIn("app-nav-link--home", body)
+        self.assertNotIn('data-nav-group="home"', body)
 
     def test_legacy_flag_defaults_off(self):
         self.assertFalse(use_legacy_nav())

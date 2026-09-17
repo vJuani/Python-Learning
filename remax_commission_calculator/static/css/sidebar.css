@@ -57,7 +57,8 @@
     }
 
     html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .app-rail-user-text,
-    html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .app-rail-logout {
+    html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .app-rail-logout,
+    html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .app-rail-account__menu {
         display: none;
     }
 
@@ -277,8 +278,32 @@
 
     html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .jrh-sidebar__link {
         justify-content: center;
-        padding-left: 0.35rem;
-        padding-right: 0.35rem;
+        align-items: center;
+        width: 2.5rem;
+        min-height: 2.5rem;
+        height: 2.5rem;
+        margin-inline: auto;
+        padding: 0;
+        gap: 0;
+    }
+
+    html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .jrh-sidebar__icon {
+        width: 1.25rem;
+        height: 1.25rem;
+        margin: 0;
+    }
+
+    html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .jrh-sidebar__label,
+    html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .jrh-sidebar__chevron,
+    html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .jrh-sidebar__badge,
+    html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .jrh-sidebar__chip {
+        display: none;
+    }
+
+    html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .jrh-sidebar__link.is-active::before {
+        left: 0.1rem;
+        top: 0.4rem;
+        bottom: 0.4rem;
     }
 
     html[data-sidebar]:not([data-sidebar="pinned"]) body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) .jrh-sidebar__children {

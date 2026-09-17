@@ -37,8 +37,16 @@ from modules.marketing_service import (
     vary_marketing_asset,
 )
 from modules.marketing_chat_service import (
+    archive_conversation,
     build_chat_workspace,
+    create_folder,
+    delete_conversation,
+    delete_folder,
+    move_conversation,
+    pin_conversation,
     regenerate_in_conversation,
+    rename_conversation,
+    rename_folder,
     send_chat_message,
 )
 from modules.marketing_generation_service import (
@@ -191,6 +199,115 @@ def register_marketing_routes(app, helpers):
         except MarketingError as error:
             return _handle(error, fallback_endpoint="marketing_home")
         return redirect(url_for("marketing_conversation", conversation_id=conversation_id))
+
+    def _conversation_redirect(conversation_id=None):
+        if conversation_id:
+            return redirect(url_for("marketing_conversation", conversation_id=conversation_id))
+        return redirect(url_for("marketing_home"))
+
+    @app.route("/marketing/c/<int:conversation_id>/pin", methods=["POST"])
+    def marketing_conversation_pin(conversation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        try:
+            pin_conversation(require_user_organization(), user, conversation_id)
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return _conversation_redirect(conversation_id)
+
+    @app.route("/marketing/c/<int:conversation_id>/rename", methods=["POST"])
+    def marketing_conversation_rename(conversation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        try:
+            rename_conversation(
+                require_user_organization(),
+                user,
+                conversation_id,
+                request.form.get("title"),
+            )
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return _conversation_redirect(conversation_id)
+
+    @app.route("/marketing/c/<int:conversation_id>/archive", methods=["POST"])
+    def marketing_conversation_archive(conversation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        try:
+            archive_conversation(require_user_organization(), user, conversation_id)
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return redirect(url_for("marketing_home"))
+
+    @app.route("/marketing/c/<int:conversation_id>/delete", methods=["POST"])
+    def marketing_conversation_delete(conversation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        try:
+            delete_conversation(require_user_organization(), user, conversation_id)
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return redirect(url_for("marketing_home"))
+
+    @app.route("/marketing/c/<int:conversation_id>/move", methods=["POST"])
+    def marketing_conversation_move(conversation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        folder_id = request.form.get("folder_id", type=int)
+        try:
+            move_conversation(
+                require_user_organization(),
+                user,
+                conversation_id,
+                folder_id=folder_id,
+            )
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return _conversation_redirect(conversation_id)
+
+    @app.route("/marketing/folders", methods=["POST"])
+    def marketing_folder_create():
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        try:
+            create_folder(require_user_organization(), user, request.form.get("name"))
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return redirect(url_for("marketing_home"))
+
+    @app.route("/marketing/folders/<int:folder_id>/rename", methods=["POST"])
+    def marketing_folder_rename(folder_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        try:
+            rename_folder(
+                require_user_organization(),
+                user,
+                folder_id,
+                request.form.get("name"),
+            )
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return redirect(url_for("marketing_home"))
+
+    @app.route("/marketing/folders/<int:folder_id>/delete", methods=["POST"])
+    def marketing_folder_delete(folder_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        try:
+            delete_folder(require_user_organization(), user, folder_id)
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return redirect(url_for("marketing_home"))
 
     @app.route("/marketing/create", methods=["GET", "POST"])
     def marketing_create():

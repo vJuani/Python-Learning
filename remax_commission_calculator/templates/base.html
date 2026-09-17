@@ -171,16 +171,30 @@
             {% set rail_last = (current_user.last_name or '').strip() %}
             {% set rail_name = (rail_first ~ ' ' ~ rail_last).strip() or current_user.username %}
             {% set rail_parts = rail_name.split() %}
-            <div class="app-rail-user">
-                <span class="app-rail-user-avatar" aria-hidden="true">
-                    {{ rail_parts[0][0:1]|upper }}{% if rail_parts|length > 1 %}{{ rail_parts[1][0:1]|upper }}{% endif %}
-                </span>
-                <div class="app-rail-user-text">
-                    <strong>{{ rail_name }}</strong>
-                    <span>{{ t('role_' ~ current_user.role) }}</span>
+            <details class="app-rail-account">
+                <summary class="app-rail-user" title="{{ t('nav_account') }}">
+                    <span class="app-rail-user-avatar" aria-hidden="true">
+                        {{ rail_parts[0][0:1]|upper }}{% if rail_parts|length > 1 %}{{ rail_parts[1][0:1]|upper }}{% endif %}
+                    </span>
+                    <div class="app-rail-user-text">
+                        <strong>{{ rail_name }}</strong>
+                        <span>{{ t('role_' ~ current_user.role) }}</span>
+                    </div>
+                </summary>
+                <div class="app-rail-account__menu" role="menu">
+                    {% if is_agent() %}
+                    <a href="{{ url_for('my_wallet') }}" role="menuitem">{{ t('nav_profile') }}</a>
+                    {% elif can_manage_users() %}
+                    <a href="{{ url_for('organization_settings') }}" role="menuitem">{{ t('nav_profile') }}</a>
+                    {% endif %}
+                    {% if can_manage_users() %}
+                    <a href="{{ url_for('organization_settings') }}" role="menuitem">{{ t('nav_organization_settings') }}</a>
+                    {% endif %}
+                    <a href="{{ url_for('privacy') }}" role="menuitem">{{ t('login_privacy') }}</a>
+                    <a href="{{ url_for('terms') }}" role="menuitem">{{ t('login_terms') }}</a>
+                    <a href="{{ url_for('logout') }}" role="menuitem">{{ t('logout') }}</a>
                 </div>
-            </div>
-            <a href="{{ url_for('logout') }}" class="app-rail-logout">{{ t('logout') }}</a>
+            </details>
             {% else %}
             <a href="{{ url_for('logout') }}" class="app-rail-logout">{{ t('logout') }}</a>
             {% endif %}
@@ -411,7 +425,7 @@
                         </button>
                     </div>
 
-                    <div class="header-tools-group header-tools-account">
+                    <div class="header-tools-group header-tools-account hide-desktop-rail-account">
                         <div class="header-account">
                         {% if current_user %}
                         {% set header_first = (current_user.first_name or '').strip() %}

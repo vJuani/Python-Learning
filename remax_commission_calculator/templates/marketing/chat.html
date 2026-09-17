@@ -20,7 +20,7 @@
 {% block content %}
 {% set conversation = view.conversation %}
 {% set send_action = url_for('marketing_conversation', conversation_id=conversation.id) if conversation else url_for('marketing_chat_send') %}
-<section class="mkt-chat" data-mkt-chat>
+<section class="mkt-chat" data-mkt-chat style="--mkt-sidebar-width: 17rem">
     <aside class="mkt-chat__sidebar" data-mkt-sidebar>
         <a class="mkt-chat__new" href="{{ url_for('marketing_home') }}">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
@@ -35,6 +35,7 @@
             <a href="{{ url_for('marketing_templates') }}">{{ t('marketing_ia_templates') }}</a>
             <a href="{{ url_for('organization_settings') if view.is_admin else url_for('marketing_brand_kit') }}">{{ t('marketing_ia_settings') }}</a>
         </nav>
+        <div class="mkt-chat__resize" data-mkt-resize aria-hidden="true"></div>
     </aside>
 
     <div class="mkt-chat__main">

@@ -38,18 +38,7 @@ ICONS = {
 }
 
 NAV_GROUPS = (
-    {
-        "key": "home",
-        "label_key": "nav_home_short",
-        "icon": "home",
-        "roles": (ROLE_ADMIN, ROLE_AGENT, ROLE_GUEST),
-        "item": {
-            "key": "home",
-            "endpoint": "dashboard",
-            "active_prefixes": (),
-            "exact": True,
-        },
-    },
+    # Home lives on the JRH logo in the rail brand, not as a duplicate house icon.
     {
         "key": "crm",
         "label_key": "nav_group_crm",

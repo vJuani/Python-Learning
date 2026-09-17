@@ -1,14 +1,5 @@
-{# Shared primary navigation — desktop rail and mobile menu. #}
-<a
-    href="{{ url_for('dashboard') }}"
-    class="nav-link app-nav-link app-nav-link--home{% if request.endpoint == 'dashboard' %} active{% endif %}"
->
-    <svg class="app-nav-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
-    </svg>
-    <span class="app-nav-link__label">{{ t('nav_home_short') }}</span>
-</a>
-
+{# Shared primary navigation — desktop rail and mobile menu.
+   Home is the JRH logo in the rail brand, not a duplicate house icon. #}
 {% if is_admin() %}
 <a
     href="{{ url_for('agents_list') }}"

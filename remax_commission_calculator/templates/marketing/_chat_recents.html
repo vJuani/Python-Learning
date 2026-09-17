@@ -1,19 +1,124 @@
-{% if view.conversations %}
-<nav class="mkt-chat__recents" aria-label="{{ t('marketing_ia_recent') }}">
-    <p class="mkt-chat__nav-label">{{ t('marketing_ia_recent') }}</p>
-    <ul>
-        {% for item in view.conversations %}
-        <li>
-            <a
-                class="mkt-chat__conv{% if view.conversation and view.conversation.id == item.id %} is-active{% endif %}"
-                href="{{ url_for('marketing_conversation', conversation_id=item.id) }}"
-            >
-                {{ item.title or t('marketing_ia_new_chat') }}
-            </a>
-        </li>
-        {% endfor %}
-    </ul>
-</nav>
-{% else %}
-<p class="mkt-chat__empty-nav">{{ t('marketing_ia_no_chats') }}</p>
-{% endif %}
+{% macro conv_item(item, folders) -%}
+{% set title = item.title or t('marketing_ia_new_chat') %}
+<li class="mkt-chat__item" data-mkt-conv-item data-title="{{ title }}">
+    <a
+        class="mkt-chat__conv{% if view.conversation and view.conversation.id == item.id %} is-active{% endif %}"
+        href="{{ url_for('marketing_conversation', conversation_id=item.id) }}"
+        title="{{ title }}"
+    >
+        <span class="mkt-chat__conv-title">{{ title }}</span>
+    </a>
+    <button
+        type="button"
+        class="mkt-chat__more"
+        data-mkt-conv-menu
+        aria-haspopup="menu"
+        aria-expanded="false"
+        aria-label="{{ t('nav_menu') }}"
+        title="{{ t('nav_menu') }}"
+    >⋯</button>
+    <div class="mkt-ctx" hidden role="menu" data-mkt-ctx>
+        <form method="post" action="{{ url_for('marketing_conversation_pin', conversation_id=item.id) }}">
+            <button type="submit" role="menuitem">
+                {% if item.is_pinned %}{{ t('marketing_ia_unpin') }}{% else %}{{ t('marketing_ia_pin') }}{% endif %}
+            </button>
+        </form>
+        <button type="button" role="menuitem" data-mkt-rename data-action="{{ url_for('marketing_conversation_rename', conversation_id=item.id) }}" data-title="{{ title }}">
+            {{ t('marketing_ia_rename') }}
+        </button>
+        <form method="post" action="{{ url_for('marketing_conversation_archive', conversation_id=item.id) }}">
+            <button type="submit" role="menuitem">{{ t('marketing_ia_archive') }}</button>
+        </form>
+        <div class="mkt-ctx__submenu" data-mkt-move>
+            <p class="mkt-ctx__label">{{ t('marketing_ia_move_folder') }}</p>
+            <form method="post" action="{{ url_for('marketing_conversation_move', conversation_id=item.id) }}">
+                <input type="hidden" name="folder_id" value="">
+                <button type="submit" role="menuitem">{{ t('marketing_ia_no_folder') }}</button>
+            </form>
+            {% for folder in folders %}
+            <form method="post" action="{{ url_for('marketing_conversation_move', conversation_id=item.id) }}">
+                <input type="hidden" name="folder_id" value="{{ folder.id }}">
+                <button type="submit" role="menuitem">{{ folder.name }}</button>
+            </form>
+            {% endfor %}
+        </div>
+        <form
+            method="post"
+            action="{{ url_for('marketing_conversation_delete', conversation_id=item.id) }}"
+            data-mkt-delete
+            data-confirm="{{ t('marketing_ia_delete_confirm') }}"
+        >
+            <button type="submit" class="mkt-ctx__danger" role="menuitem">{{ t('marketing_ia_delete') }}</button>
+        </form>
+    </div>
+</li>
+{%- endmacro %}
+
+<div class="mkt-chat__nav-scroll" data-mkt-nav-scroll>
+    <label class="mkt-chat__search">
+        <span class="visually-hidden">{{ t('marketing_ia_recent') }}</span>
+        <input type="search" placeholder="{{ t('marketing_ia_search_chats') }}" data-mkt-chat-search autocomplete="off">
+    </label>
+
+    {% if view.pinned %}
+    <nav class="mkt-chat__section" aria-label="{{ t('marketing_ia_pinned') }}">
+        <p class="mkt-chat__nav-label">{{ t('marketing_ia_pinned') }}</p>
+        <ul>
+            {% for item in view.pinned %}
+            {{ conv_item(item, view.folders) }}
+            {% endfor %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    <nav class="mkt-chat__section" aria-label="{{ t('marketing_ia_folders') }}" data-mkt-folders>
+        <div class="mkt-chat__section-head">
+            <p class="mkt-chat__nav-label">{{ t('marketing_ia_folders') }}</p>
+            <button type="button" class="mkt-chat__folder-add" data-mkt-folder-create title="{{ t('marketing_ia_new_folder') }}">+</button>
+        </div>
+        {% if view.folders %}
+        <ul class="mkt-chat__folders">
+            {% for folder in view.folders %}
+            <li class="mkt-chat__folder" data-mkt-folder data-folder-id="{{ folder.id }}">
+                <details>
+                    <summary>
+                        <span class="mkt-chat__folder-name" title="{{ folder.name }}">{{ folder.name }}</span>
+                        <span class="mkt-chat__folder-count">{{ folder.conversations|length }}</span>
+                    </summary>
+                    <div class="mkt-chat__folder-actions">
+                        <button type="button" data-mkt-folder-rename data-action="{{ url_for('marketing_folder_rename', folder_id=folder.id) }}" data-name="{{ folder.name }}">{{ t('marketing_ia_rename') }}</button>
+                        <form method="post" action="{{ url_for('marketing_folder_delete', folder_id=folder.id) }}" data-mkt-delete data-confirm="{{ t('marketing_ia_delete_folder_confirm') }}">
+                            <button type="submit" class="mkt-ctx__danger">{{ t('marketing_ia_delete') }}</button>
+                        </form>
+                    </div>
+                    {% if folder.conversations %}
+                    <ul>
+                        {% for item in folder.conversations %}
+                        {{ conv_item(item, view.folders) }}
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </details>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        <form class="mkt-chat__folder-form" method="post" action="{{ url_for('marketing_folder_create') }}" hidden data-mkt-folder-form>
+            <input type="text" name="name" maxlength="60" required placeholder="{{ t('marketing_ia_new_folder') }}" data-mkt-folder-input>
+            <button type="submit">{{ t('marketing_ia_new_folder') }}</button>
+        </form>
+    </nav>
+
+    {% if view.recent %}
+    <nav class="mkt-chat__section" aria-label="{{ t('marketing_ia_recent') }}">
+        <p class="mkt-chat__nav-label">{{ t('marketing_ia_recent') }}</p>
+        <ul>
+            {% for item in view.recent %}
+            {{ conv_item(item, view.folders) }}
+            {% endfor %}
+        </ul>
+    </nav>
+    {% elif not view.pinned and not view.folders %}
+    <p class="mkt-chat__empty-nav">{{ t('marketing_ia_no_chats') }}</p>
+    {% endif %}
+</div>

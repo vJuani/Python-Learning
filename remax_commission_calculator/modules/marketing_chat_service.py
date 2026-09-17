@@ -9,11 +9,17 @@ import unicodedata
 from modules.auth import is_admin, scoped_agent_id
 from modules.database.marketing_conversations_repository import (
     add_marketing_message,
+    create_conversation_folder,
     create_marketing_conversation,
+    delete_conversation_folder,
+    delete_marketing_conversation,
+    get_conversation_folder,
     get_marketing_conversation,
     last_generation_id_for_conversation,
+    list_conversation_folders,
     list_marketing_conversations,
     list_marketing_messages,
+    update_conversation_folder,
     update_marketing_conversation,
 )
 from modules.database.marketing_generations_repository import (
@@ -214,6 +220,116 @@ def require_conversation(organization_id, user, conversation_id):
     if not can_view_conversation(user, conversation):
         raise MarketingError("access_denied", 403)
     return conversation
+
+
+def _workspace_groups(conversations, folders):
+    pinned = []
+    recent = []
+    folder_items = {item["id"]: {**item, "conversations": []} for item in folders}
+    for item in conversations:
+        if item.get("is_archived"):
+            continue
+        if item.get("is_pinned"):
+            pinned.append(item)
+            continue
+        folder_id = item.get("folder_id")
+        if folder_id and folder_id in folder_items:
+            folder_items[folder_id]["conversations"].append(item)
+        else:
+            recent.append(item)
+    return {
+        "pinned": pinned,
+        "folders": [item for item in folder_items.values()],
+        "recent": recent,
+    }
+
+
+def pin_conversation(organization_id, user, conversation_id):
+    conversation = require_conversation(organization_id, user, conversation_id)
+    return update_marketing_conversation(
+        conversation["id"],
+        organization_id,
+        is_pinned=not conversation.get("is_pinned"),
+        touch=False,
+    )
+
+
+def rename_conversation(organization_id, user, conversation_id, title):
+    conversation = require_conversation(organization_id, user, conversation_id)
+    label = " ".join(str(title or "").split())
+    if not label:
+        raise MarketingError("marketing_ia_err_rename", 400)
+    return update_marketing_conversation(
+        conversation["id"],
+        organization_id,
+        title=label[:80],
+        touch=False,
+    )
+
+
+def archive_conversation(organization_id, user, conversation_id):
+    conversation = require_conversation(organization_id, user, conversation_id)
+    return update_marketing_conversation(
+        conversation["id"],
+        organization_id,
+        is_archived=not conversation.get("is_archived"),
+        is_pinned=False if not conversation.get("is_archived") else conversation.get("is_pinned"),
+        touch=False,
+    )
+
+
+def delete_conversation(organization_id, user, conversation_id):
+    conversation = require_conversation(organization_id, user, conversation_id)
+    return delete_marketing_conversation(conversation["id"], organization_id)
+
+
+def move_conversation(organization_id, user, conversation_id, folder_id=None):
+    conversation = require_conversation(organization_id, user, conversation_id)
+    if folder_id:
+        folder = get_conversation_folder(
+            folder_id, organization_id, user_id=user.get("id")
+        )
+        if folder is None:
+            raise MarketingError("marketing_ia_err_folder", 404)
+        return update_marketing_conversation(
+            conversation["id"],
+            organization_id,
+            folder_id=folder["id"],
+            touch=False,
+        )
+    return update_marketing_conversation(
+        conversation["id"],
+        organization_id,
+        clear_folder=True,
+        touch=False,
+    )
+
+
+def create_folder(organization_id, user, name):
+    folder = create_conversation_folder(
+        organization_id, user_id=user.get("id"), name=name
+    )
+    if folder is None:
+        raise MarketingError("marketing_ia_err_folder_name", 400)
+    return folder
+
+
+def rename_folder(organization_id, user, folder_id, name):
+    folder = update_conversation_folder(
+        folder_id, organization_id, user_id=user.get("id"), name=name
+    )
+    if folder is None:
+        raise MarketingError("marketing_ia_err_folder", 404)
+    return folder
+
+
+def delete_folder(organization_id, user, folder_id):
+    folder = delete_conversation_folder(
+        folder_id, organization_id, user_id=user.get("id")
+    )
+    if folder is None:
+        raise MarketingError("marketing_ia_err_folder", 404)
+    return folder
 
 
 _PROPERTY_NOUN_RE = re.compile(
@@ -1021,6 +1137,8 @@ def build_chat_workspace(
 ):
     organization_id = require_organization_id(organization_id)
     conversations = list_marketing_conversations(organization_id, user_id=user.get("id"))
+    folders = list_conversation_folders(organization_id, user_id=user.get("id"))
+    groups = _workspace_groups(conversations, folders)
     properties = _picker_properties(organization_id, user)
     conversation = None
     messages = []
@@ -1043,6 +1161,9 @@ def build_chat_workspace(
                 break
     return {
         "conversations": conversations,
+        "pinned": groups["pinned"],
+        "folders": groups["folders"],
+        "recent": groups["recent"],
         "conversation": conversation,
         "messages": messages,
         "properties": properties,

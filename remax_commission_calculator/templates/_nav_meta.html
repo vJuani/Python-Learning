@@ -1,32 +1,23 @@
 {% if can_manage_users() or is_agent() %}
 <div class="main-nav-meta header-nav-meta">
     {% set notifications_active = request.endpoint in ('notifications_list', 'notifications_mark_read', 'notifications_mark_all_read', 'notifications_open') %}
-    <a
-        href="{{ url_for('notifications_list') }}"
-        class="nav-link nav-notifications-link{% if notifications_active %} active{% endif %}"
-        aria-label="{{ t('nav_notifications') }}"
-    >
-        {% include "_jrh_bell.html" %}
-        {% if unread_notifications %}
-        <span class="badge badge-pending">{{ unread_notifications }}</span>
-        {% endif %}
-    </a>
+    {% set bell_active = request.endpoint == 'pendings_center' or notifications_active %}
+    {% set bell_count = (pending_badge_count if pending_center_enabled and pending_badge_count else 0) + (unread_notifications or 0) %}
     {% if pending_center_enabled %}
-    {% set bell_active = request.endpoint == 'pendings_center' %}
     <details class="nav-dropdown nav-bell-dropdown{% if bell_active %} is-active{% endif %}">
         <summary
-            class="nav-link nav-bell-link nav-dropdown-toggle{% if bell_active %} active{% endif %}"
-            aria-label="{{ t('pending_center_title') }}"
+            class="nav-link nav-bell-link nav-notifications-link nav-dropdown-toggle{% if bell_active %} active{% endif %}"
+            aria-label="{{ t('nav_notifications') }}"
         >
             {% include "_jrh_bell.html" %}
-            {% if pending_badge_count %}
-            <span class="badge badge-pending">{{ pending_badge_count }}</span>
+            {% if bell_count %}
+            <span class="badge badge-pending">{{ bell_count }}</span>
             {% endif %}
         </summary>
 
         <div class="nav-dropdown-menu nav-bell-menu" role="menu">
             <p class="nav-bell-menu__header">
-                {{ t('pending_center_count', count=pending_badge_count) }}
+                {{ t('pending_center_count', count=pending_badge_count or 0) }}
             </p>
 
             {% if pending_bell_items %}
@@ -53,7 +44,7 @@
             >{{ t('pending_center_view_all') }}</a>
             <a
                 href="{{ url_for('notifications_list') }}"
-                class="nav-dropdown-item"
+                class="nav-dropdown-item{% if notifications_active %} active{% endif %}"
                 role="menuitem"
             >
                 {{ t('nav_notifications') }}
@@ -70,6 +61,17 @@
             {% endif %}
         </div>
     </details>
+    {% else %}
+    <a
+        href="{{ url_for('notifications_list') }}"
+        class="nav-link nav-notifications-link{% if notifications_active %} active{% endif %}"
+        aria-label="{{ t('nav_notifications') }}"
+    >
+        {% include "_jrh_bell.html" %}
+        {% if unread_notifications %}
+        <span class="badge badge-pending">{{ unread_notifications }}</span>
+        {% endif %}
+    </a>
     {% endif %}
 
     {% if can_manage_users() %}

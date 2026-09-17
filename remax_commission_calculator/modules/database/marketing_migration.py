@@ -231,8 +231,33 @@ def _ensure_conversations(cursor, *, postgres):
     cursor.execute(conversations_sql)
     cursor.execute(messages_sql)
     _ensure_conversation_context(cursor, postgres=postgres)
+    _ensure_conversation_workspace(cursor, postgres=postgres)
     for statement in CONVERSATION_INDEXES:
         cursor.execute(statement)
+
+
+CONVERSATION_FOLDERS_SQL = """
+CREATE TABLE IF NOT EXISTS marketing_conversation_folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+
+    FOREIGN KEY (organization_id)
+        REFERENCES organizations(id) ON DELETE RESTRICT,
+    FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE
+)
+"""
+
+CONVERSATION_WORKSPACE_COLUMNS = (
+    ("is_pinned", "INTEGER NOT NULL DEFAULT 0"),
+    ("is_archived", "INTEGER NOT NULL DEFAULT 0"),
+    ("folder_id", "INTEGER"),
+    ("last_message_at", "TEXT"),
+)
 
 
 def _ensure_conversation_context(cursor, *, postgres):
@@ -245,6 +270,44 @@ def _ensure_conversation_context(cursor, *, postgres):
         cursor.execute(
             "ALTER TABLE marketing_conversations ADD COLUMN context_json TEXT"
         )
+
+
+def _ensure_conversation_workspace(cursor, *, postgres):
+    folders_sql = CONVERSATION_FOLDERS_SQL
+    if postgres:
+        folders_sql = (
+            folders_sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+            .replace("organization_id INTEGER NOT NULL", "organization_id BIGINT NOT NULL")
+            .replace("user_id INTEGER NOT NULL", "user_id BIGINT NOT NULL")
+            .replace("sort_order INTEGER NOT NULL DEFAULT 0", "sort_order BIGINT NOT NULL DEFAULT 0")
+        )
+    cursor.execute(folders_sql)
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_mkt_conv_folders_user
+        ON marketing_conversation_folders (organization_id, user_id, sort_order)
+        """
+    )
+    for name, definition in CONVERSATION_WORKSPACE_COLUMNS:
+        if postgres:
+            mapped = (
+                definition.replace("INTEGER NOT NULL DEFAULT 0", "SMALLINT NOT NULL DEFAULT 0")
+                .replace("INTEGER", "BIGINT")
+            )
+            cursor.execute(
+                f"ALTER TABLE marketing_conversations ADD COLUMN IF NOT EXISTS {name} {mapped}"
+            )
+            continue
+        if not _column_exists(cursor, "marketing_conversations", name):
+            cursor.execute(
+                f"ALTER TABLE marketing_conversations ADD COLUMN {name} {definition}"
+            )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_mkt_conv_org_user_pin
+        ON marketing_conversations (organization_id, user_id, is_pinned, is_archived, updated_at)
+        """
+    )
 
 
 def _ensure_whatsapp_content_type(cursor, *, postgres):
