@@ -182,6 +182,7 @@ def register_marketing_routes(app, helpers):
                 conversation_id,
                 request.form.get("generation_id", type=int),
                 language=get_current_language(),
+                visual_only=request.form.get("visual_only") in {"1", "true", "on"},
             )
         except MarketingError as error:
             return _handle(error, fallback_endpoint="marketing_home")

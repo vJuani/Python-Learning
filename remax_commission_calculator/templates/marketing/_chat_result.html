@@ -1,5 +1,6 @@
 {% set data = generation.generated_data or {} %}
 {% set visuals = generation.visual_assets or [] %}
+{% set visual_failed = (data.visual_failed or data.visual_status == 'failed') and not visuals %}
 <article class="mkt-result{% if visuals %} mkt-result--visual{% endif %}" data-mkt-result>
     {% if visuals %}
     <div class="mkt-result__gallery">
@@ -9,12 +10,28 @@
         </a>
         {% endfor %}
     </div>
-    {% elif generation.cover_url %}
+    {% elif generation.cover_url and not visual_failed %}
     <img src="{{ generation.cover_url }}" alt="" class="mkt-result__photo">
     {% endif %}
     <p class="mkt-result__meta">{{ t(generation.format_label_key) }}</p>
-    {% if (generation.generated_data or {}).get('visual_failed') and not visuals %}
-    <p class="mkt-warn">{{ t('marketing_ia_visual_failed') }}</p>
+    {% if visual_failed %}
+    <p class="mkt-warn">
+        {% if data.visual_error == 'missing_photos' %}
+            {{ t('marketing_ia_visual_no_photos') }}
+        {% elif data.visual_error == 'missing_property' %}
+            {{ t('marketing_ia_visual_no_property') }}
+        {% else %}
+            {{ t('marketing_ia_visual_error') }}
+        {% endif %}
+    </p>
+    <form method="post" action="{{ url_for('marketing_conversation_regenerate', conversation_id=view.conversation.id) }}" class="mkt-result__retry">
+        <input type="hidden" name="generation_id" value="{{ generation.id }}">
+        <input type="hidden" name="visual_only" value="1">
+        <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_visual_retry') }}</button>
+    </form>
+    {% if config.DEBUG and (data.visual_stage or data.visual_error) %}
+    <p class="mkt-debug">{{ data.visual_stage }} · {{ data.visual_error }}</p>
+    {% endif %}
     {% endif %}
     {% if visuals %}
     <details class="mkt-result__copy-panel">
@@ -67,6 +84,9 @@
         <button type="button" class="btn btn-secondary" data-mkt-edit>{{ t('marketing_ia_edit') }}</button>
         <form method="post" action="{{ url_for('marketing_conversation_regenerate', conversation_id=view.conversation.id) }}">
             <input type="hidden" name="generation_id" value="{{ generation.id }}">
+            {% if visual_failed or not visuals %}
+            <input type="hidden" name="visual_only" value="1">
+            {% endif %}
             <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_regenerate') }}</button>
         </form>
         <form method="post" action="{{ url_for('marketing_conversation_regenerate', conversation_id=view.conversation.id) }}">

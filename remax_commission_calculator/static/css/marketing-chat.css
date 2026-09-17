@@ -394,6 +394,16 @@ body.is-marketing-chat-page .mkt-chat {
     color: #8a4b12;
 }
 
+.mkt-result__retry {
+    margin: 0.35rem 0 0.15rem;
+}
+
+.mkt-debug {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: var(--muted, #5b6b7c);
+}
+
 .mkt-msg--assistant .mkt-msg__bubble:has(.mkt-result--visual) .mkt-msg__lead {
     margin: 0 0 0.75rem;
     padding: 0.15rem 0.1rem 0;

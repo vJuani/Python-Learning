@@ -99,6 +99,12 @@
       if (generating) generating.hidden = false;
     });
   }
+  root.querySelectorAll("form[method='post']").forEach(function (form) {
+    if (form === composer) return;
+    form.addEventListener("submit", function () {
+      if (generating) generating.hidden = false;
+    });
+  });
 
   if (thread) {
     thread.scrollTop = thread.scrollHeight;

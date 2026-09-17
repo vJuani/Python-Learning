@@ -46,7 +46,7 @@ from modules.marketing_image_provider import (
     get_marketing_image_provider_name,
 )
 from modules.marketing_flyer_modern import resolve_layout_template
-from modules.marketing_overlay import overlay_enabled, provider_references
+from modules.marketing_overlay import overlay_enabled, provider_references, stamp_branding_overlay
 from modules.marketing_quality import validate_creative
 from modules.marketing_references import collect_reference_images
 from modules.marketing_photo_selector import select_photos_for_item
@@ -498,6 +498,30 @@ def _update_options(asset, **fields):
     return get_marketing_asset(asset["id"], asset["organization_id"])
 
 
+def _render_local_visual(context, fmt, *, options, art, language):
+    import io
+
+    from PIL import Image
+
+    size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["post"]
+    blank = Image.new("RGB", size, (245, 244, 240))
+    buffer = io.BytesIO()
+    blank.save(buffer, format="PNG")
+    overlay_meta = stamp_branding_overlay(
+        buffer.getvalue(),
+        context=context,
+        art=art,
+        fmt=fmt,
+        options=options,
+        style=options.get("visual_direction") or options.get("style") or "premium",
+        language=language,
+    )
+    template_used = overlay_meta.get("template_used") or overlay_meta.get("layout") or ""
+    logger.info("marketing_visual_renderer template=%s", template_used)
+    logger.info("template_used=%s", template_used)
+    return overlay_meta
+
+
 def _process_item(organization_id, asset_id, *, retry=False):
     stage = "asset_loading"
     asset = get_marketing_asset(asset_id, organization_id)
@@ -536,46 +560,88 @@ def _process_item(organization_id, asset_id, *, retry=False):
             packed.get("agent_photo_loaded"),
             agent_sent,
         )
+        logger.info(
+            "marketing_visual_start generation_id=%s asset_id=%s",
+            batch_id,
+            asset_id,
+        )
         options["property_agent_id"] = packed.get("property_agent_id")
         options["agent_branding_found"] = packed.get("agent_branding_found")
         options["agent_photo_present"] = packed.get("agent_photo_present")
         options["agent_photo_variant"] = packed.get("agent_photo_variant")
         options["agent_photo_loaded"] = packed.get("agent_photo_loaded")
         options["agent_photo_sent_to_provider"] = agent_sent
-        stage = "image_generation"
+        photos = context.get("photos") or []
+        logger.info("marketing_visual_photos count=%s", len(photos))
+        logger.info(
+            "marketing_visual_agent resolved=%s",
+            str(bool(options.get("include_agent") and (context.get("agent") or packed.get("agent_branding_found")))).lower(),
+        )
         art = _art_from_asset(asset)
         fmt = asset["format"]
         size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
-        generated = generate_validated_marketing_image(
-            context,
-            fmt,
-            options=options,
-            art=art,
-            request_text=options.get("request_text") or options.get("prompt") or "",
-            style=options.get("style"),
-            cta=options.get("cta") or art.get("cta") or "",
-            include_price=options.get("show_price", True),
-            include_agent=bool(options.get("include_agent")),
-            variation_index=max(1, int(options.get("format_index") or 1)),
-            size=size,
-            references=references,
-            language=options.get("language") or context.get("language") or "es",
-        )
-        png_bytes = generated["png_bytes"]
-        agent_composited = bool(generated.get("agent_photo_composited"))
-        options["layout_engine"] = "openai_images"
-        options["template_used"] = generated.get("template_used") or options.get("layout_template")
-        options["renderer_used"] = generated.get("renderer_used") or ""
-        options["layout_version"] = generated.get("layout_version") or options.get("template_used")
-        if options.get("template_used"):
-            options["layout_template"] = options["template_used"]
-        options["agent_photo_composited"] = agent_composited
-        options["logo_stamped"] = bool(generated.get("logo_stamped") or options.get("logo_stamped"))
-        options["layout_attempts"] = (generated.get("quality") or {}).get("attempt") or 1
-        options["quality_reasons"] = (generated.get("quality") or {}).get("reasons") or []
-        options["language"] = generated.get("language") or options.get("language") or "es"
-        if generated.get("language_retry"):
-            options["language_retry"] = True
+        if options.get("local_render"):
+            if not photos:
+                raise MarketingError("marketing_ia_visual_no_photos", 400)
+            stage = "visual_render"
+            overlay_meta = _render_local_visual(
+                context,
+                fmt,
+                options=options,
+                art=art,
+                language=options.get("language") or context.get("language") or "es",
+            )
+            png_bytes = overlay_meta["png_bytes"]
+            agent_composited = bool(overlay_meta.get("agent_photo_composited"))
+            options["layout_engine"] = "pillow_modern_renderer"
+            options["template_used"] = overlay_meta.get("template_used") or options.get("layout_template")
+            options["renderer_used"] = overlay_meta.get("renderer_used") or "pillow_modern_renderer"
+            options["layout_version"] = overlay_meta.get("layout_version") or options.get("template_used")
+            if options.get("template_used"):
+                options["layout_template"] = options["template_used"]
+            options["agent_photo_composited"] = agent_composited
+            options["logo_stamped"] = bool(overlay_meta.get("logo_stamped"))
+            options["pipeline_post_process"] = overlay_meta.get("post_process")
+            options["pipeline_post_process_fn"] = overlay_meta.get("post_process_fn")
+            options["language"] = options.get("language") or context.get("language") or "es"
+            logger.info(
+                "marketing_visual_render_ok path=pending template_used=%s photos=%s",
+                options.get("template_used"),
+                overlay_meta.get("listing_photos"),
+            )
+            generated = {"quality": {"attempt": 1, "reasons": []}, "language": options["language"]}
+        else:
+            stage = "image_generation"
+            generated = generate_validated_marketing_image(
+                context,
+                fmt,
+                options=options,
+                art=art,
+                request_text=options.get("request_text") or options.get("prompt") or "",
+                style=options.get("style"),
+                cta=options.get("cta") or art.get("cta") or "",
+                include_price=options.get("show_price", True),
+                include_agent=bool(options.get("include_agent")),
+                variation_index=max(1, int(options.get("format_index") or 1)),
+                size=size,
+                references=references,
+                language=options.get("language") or context.get("language") or "es",
+            )
+            png_bytes = generated["png_bytes"]
+            agent_composited = bool(generated.get("agent_photo_composited"))
+            options["layout_engine"] = "openai_images"
+            options["template_used"] = generated.get("template_used") or options.get("layout_template")
+            options["renderer_used"] = generated.get("renderer_used") or ""
+            options["layout_version"] = generated.get("layout_version") or options.get("template_used")
+            if options.get("template_used"):
+                options["layout_template"] = options["template_used"]
+            options["agent_photo_composited"] = agent_composited
+            options["logo_stamped"] = bool(generated.get("logo_stamped") or options.get("logo_stamped"))
+            options["layout_attempts"] = (generated.get("quality") or {}).get("attempt") or 1
+            options["quality_reasons"] = (generated.get("quality") or {}).get("reasons") or []
+            options["language"] = generated.get("language") or options.get("language") or "es"
+            if generated.get("language_retry"):
+                options["language_retry"] = True
         options["requires_legal_review"] = bool(
             generated.get("requires_legal_review")
             or ((context.get("facts") or {}).get("requires_legal_review"))
@@ -586,22 +652,40 @@ def _process_item(organization_id, asset_id, *, retry=False):
         )
         from modules.marketing_image_provider import OpenAIMarketingImageProvider, MockMarketingImageProvider
 
-        pipeline_audit = (
-            OpenAIMarketingImageProvider.last_audit
-            or MockMarketingImageProvider.last_audit
-            or {}
-        )
-        options["legacy_compositor"] = bool(pipeline_audit.get("legacy_compositor"))
-        options["pipeline_provider"] = pipeline_audit.get("provider") or get_marketing_image_provider_name()
-        options["pipeline_model"] = pipeline_audit.get("model") or get_openai_image_model()
-        options["pipeline_endpoint"] = pipeline_audit.get("endpoint")
-        options["pipeline_post_process"] = (
-            generated.get("post_process") or pipeline_audit.get("post_process")
-        )
-        options["pipeline_post_process_fn"] = generated.get("post_process_fn")
+        if options.get("local_render"):
+            options["legacy_compositor"] = False
+            options["pipeline_provider"] = "pillow_modern_renderer"
+            options["pipeline_model"] = options.get("template_used") or "modern_premium_v1"
+            options["pipeline_endpoint"] = None
+            options.setdefault("pipeline_post_process", generated.get("post_process") or "branding_overlay")
+            options.setdefault("pipeline_post_process_fn", generated.get("post_process_fn"))
+            final_quality = generated.get("quality") or {"score": 1, "attempt": 1, "reasons": []}
+        else:
+            pipeline_audit = (
+                OpenAIMarketingImageProvider.last_audit
+                or MockMarketingImageProvider.last_audit
+                or {}
+            )
+            options["legacy_compositor"] = bool(pipeline_audit.get("legacy_compositor"))
+            options["pipeline_provider"] = pipeline_audit.get("provider") or get_marketing_image_provider_name()
+            options["pipeline_model"] = pipeline_audit.get("model") or get_openai_image_model()
+            options["pipeline_endpoint"] = pipeline_audit.get("endpoint")
+            options["pipeline_post_process"] = (
+                generated.get("post_process") or pipeline_audit.get("post_process")
+            )
+            options["pipeline_post_process_fn"] = generated.get("post_process_fn")
+            final_quality = generated.get("quality") or validate_creative(
+                png_bytes,
+                size=size,
+                options=options,
+                references=references,
+                agent_photo_sent=agent_sent,
+                agent_photo_composited=agent_composited,
+                fmt=fmt,
+            )
         logger.info(
             "marketing item=%s agent_photo_composited=%s source=%s "
-            "legacy_compositor=%s provider=%s model=%s endpoint=%s post_process=%s",
+            "legacy_compositor=%s provider=%s model=%s endpoint=%s post_process=%s template_used=%s",
             asset_id,
             agent_composited,
             options["pipeline_provider"],
@@ -610,15 +694,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
             options["pipeline_model"],
             options["pipeline_endpoint"],
             options["pipeline_post_process"],
-        )
-        final_quality = generated.get("quality") or validate_creative(
-            png_bytes,
-            size=size,
-            options=options,
-            references=references,
-            agent_photo_sent=agent_sent,
-            agent_photo_composited=agent_composited,
-            fmt=fmt,
+            options.get("template_used"),
         )
         options["quality_score"] = final_quality.get("score")
         stage = "persistence"
@@ -629,6 +705,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
             png_bytes,
             generation_id=batch_id,
         )
+        logger.info("marketing_visual_render_ok path=%s", storage_key)
         pdf_key = None
         if fmt == "flyer":
             pdf_key = _write_bytes(
@@ -640,8 +717,8 @@ def _process_item(organization_id, asset_id, *, retry=False):
             )
         options["pipeline_status"] = PIPELINE_COMPLETED
         options["error"] = None
-        options["source"] = get_marketing_image_provider_name()
-        options["model"] = get_openai_image_model()
+        options["source"] = options.get("pipeline_provider") or get_marketing_image_provider_name()
+        options["model"] = options.get("pipeline_model") or get_openai_image_model()
         with _DB_LOCK:
             update_marketing_asset(
                 asset_id,
@@ -650,6 +727,10 @@ def _process_item(organization_id, asset_id, *, retry=False):
                 pdf_storage_key=pdf_key,
                 options_json=ensure_json_serializable(options, path="options"),
             )
+        logger.info(
+            "marketing_visual_storage_ok url=/marketing/assets/%s/preview",
+            asset_id,
+        )
     except Exception as error:
         logger.exception(
             "Marketing generation item failed batch_id=%s item_id=%s stage=%s",
@@ -665,6 +746,11 @@ def _process_item(organization_id, asset_id, *, retry=False):
         )
         if isinstance(error, MarketingError):
             error_key = error.message_key
+        logger.info(
+            "marketing_visual_failed stage=%s error=%s",
+            stage,
+            error_key,
+        )
         _update_options(asset, pipeline_status=PIPELINE_FAILED, error=error_key)
     return get_marketing_asset(asset_id, organization_id)
 
@@ -757,10 +843,13 @@ def start_marketing_batch(
     style=None,
     cta=None,
     request_text=None,
+    copy_override=None,
+    local_render=False,
 ):
     organization_id = require_organization_id(organization_id)
     cleanup_expired_marketing_assets(organization_id)
-    assert_openai_configured()
+    if not local_render:
+        assert_openai_configured()
     token = (idempotency_key or "").strip() or None
     if token:
         existing = find_batch_by_idempotency(organization_id, token)
@@ -883,20 +972,57 @@ def start_marketing_batch(
     for item in items:
         sort_index += 1
         try:
-            art = plan_item(
-                context,
-                parsed,
-                fmt=item["format"],
-                index=item["index"],
-                used_directions=used,
-            )
             item_options = dict(options)
+            if copy_override:
+                art = {
+                    "visual_direction": parsed.get("style") or style or "premium",
+                    "creative_brief": "",
+                    "background_style": "",
+                    "layout": {},
+                    "headline": copy_override.get("headline") or "",
+                    "short_hook": copy_override.get("subheadline") or "",
+                    "cta": copy_override.get("cta") or "",
+                }
+                copy = {
+                    "headline": copy_override.get("headline") or "",
+                    "subheadline": copy_override.get("subheadline") or "",
+                    "description": copy_override.get("description")
+                    or copy_override.get("caption")
+                    or "",
+                    "cta": copy_override.get("cta") or "",
+                    "caption": copy_override.get("caption")
+                    or copy_override.get("description")
+                    or "",
+                    "hashtags": copy_override.get("hashtags") or [],
+                }
+            else:
+                art = plan_item(
+                    context,
+                    parsed,
+                    fmt=item["format"],
+                    index=item["index"],
+                    used_directions=used,
+                )
+                copy = {
+                    "headline": art.get("headline") or "",
+                    "subheadline": art.get("short_hook") or "",
+                    "description": "",
+                    "cta": art.get("cta") or "",
+                    "caption": art.get("headline") or "",
+                    "hashtags": [],
+                }
             selected_photos = select_photos_for_item(
                 context.get("photos") or [],
                 fmt=item["format"],
                 index=max(0, int(item["index"]) - 1),
             )
             layout_template = resolve_layout_template(item["format"], item_options)
+            logger.info(
+                "template_used=%s format=%s local_render=%s",
+                layout_template,
+                item["format"],
+                str(bool(local_render)).lower(),
+            )
             item_options.update(
                 {
                     "pipeline_status": PIPELINE_QUEUED,
@@ -911,20 +1037,19 @@ def start_marketing_batch(
                     "format_index": item["index"],
                     "prompt": parsed.get("prompt") or prompt,
                     "reference_asset_id": reference_asset_id,
-                    "source": get_marketing_image_provider_name(),
+                    "source": "pillow_modern_renderer" if local_render else get_marketing_image_provider_name(),
                     "temporary": True,
                     "expires_at": expires_at,
                     "photo_ids": [photo.get("id") for photo in selected_photos if photo.get("id")],
+                    "local_render": bool(local_render),
+                    "include_agent": parsed.get("with_agent") is not False,
+                    "show_agent_photo": parsed.get("with_agent_photo") is not False,
+                    "show_price": parsed.get("show_price") is not False,
+                    "cta": copy.get("cta") or parsed.get("cta") or "",
+                    "language": language,
+                    "format": item["format"],
                 }
             )
-            copy = {
-                "headline": art.get("headline") or "",
-                "subheadline": art.get("short_hook") or "",
-                "description": "",
-                "cta": art.get("cta") or "",
-                "caption": art.get("headline") or "",
-                "hashtags": [],
-            }
             create_marketing_asset(
                 organization_id,
                 property_id=property_data["id"],
@@ -981,7 +1106,14 @@ def start_marketing_batch(
                 temporary=True,
                 expires_at=expires_at,
             )
-    if _run_sync():
+    logger.info(
+        "marketing_visual_start generation_id=%s property_id=%s local_render=%s items=%s",
+        batch_id,
+        property_data["id"],
+        str(bool(local_render)).lower(),
+        len(items),
+    )
+    if _run_sync() or local_render:
         _run_batch(organization_id, batch_id)
     else:
         thread = threading.Thread(

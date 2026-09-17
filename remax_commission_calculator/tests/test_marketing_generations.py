@@ -17,6 +17,8 @@ os.environ.pop("OPENAI_API_KEY", None)
 
 from unittest.mock import patch
 
+from PIL import Image
+
 from modules.auth import ROLE_ADMIN, ROLE_AGENT, hash_password
 from modules.config import apply_config
 from modules.database import add_agent, add_organization, add_property, add_user, create_tables
@@ -28,6 +30,7 @@ from modules.database.marketing_generations_repository import (
     list_marketing_generations,
 )
 from modules.database.marketing_migration import migrate_marketing
+from modules.database.property_media_repository import STRATEGY_COPY, upsert_property_media
 from modules.database.users_repository import get_user_by_id
 from modules.marketing_ai import (
     MOCK_MODEL,
@@ -102,6 +105,27 @@ VALID_WHATSAPP = {
     "cta": "¿Te armo un horario?",
 }
 
+_PRIVATE_ROOT = Path(_TEST_TMP.name) / "uploads"
+
+
+def _add_listing_photo(organization_id, property_id, name="cover.jpg"):
+    relative = f"organizations/{organization_id}/properties/{property_id}/media/{name}"
+    path = _PRIVATE_ROOT / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (1200, 900), (70, 86, 98)).save(path, "JPEG", quality=90)
+    upsert_property_media(
+        organization_id,
+        property_id,
+        source="manual",
+        external_media_id=name,
+        original_url=None,
+        storage_key=relative.replace("\\", "/"),
+        storage_strategy=STRATEGY_COPY,
+        position=0,
+        is_cover=True,
+        content_type="image/jpeg",
+    )
+
 
 class MarketingGenerationsTests(unittest.TestCase):
     @classmethod
@@ -153,6 +177,24 @@ class MarketingGenerationsTests(unittest.TestCase):
         )
         cls.property_id = add_property(
             "Libertador 1000",
+            "Buenos Aires",
+            cls.org,
+            agent_id=cls.agent_id,
+            created_by_user_id=cls.admin_id,
+        )
+        _add_listing_photo(cls.org, cls.property_id, "libertador.jpg")
+        cls.italia_id = add_property(
+            "Italia 220",
+            "Palermo",
+            cls.org,
+            agent_id=cls.agent_id,
+            neighborhood="Palermo",
+            locality="Palermo",
+            created_by_user_id=cls.admin_id,
+        )
+        _add_listing_photo(cls.org, cls.italia_id, "italia.jpg")
+        cls.bare_id = add_property(
+            "Sin Fotos 100",
             "Buenos Aires",
             cls.org,
             agent_id=cls.agent_id,
@@ -412,11 +454,38 @@ class MarketingGenerationsTests(unittest.TestCase):
                 "content_type": "post",
                 "origin": "property",
                 "property_id": 11,
-                "generated_data": {"action": "generate_post_image"},
+                "generated_copy": "Copy de prueba",
+                "status": "completed",
+                "generated_data": {"action": "generate_post_image", "headline": "Italia"},
             },
             property_id=11,
         )
-        self.assertEqual(convert["action"], "edit_existing_generation")
+        self.assertEqual(convert["action"], "generate_visual")
+        hacelo = interpret_prompt(
+            "hacelo imagen",
+            last_generation={
+                "id": 9,
+                "content_type": "post",
+                "origin": "property",
+                "property_id": 11,
+                "generated_copy": "Copy de prueba",
+                "status": "completed",
+                "generated_data": {
+                    "action": "generate_post_image",
+                    "copy_status": "completed",
+                    "headline": "Italia",
+                },
+            },
+            property_id=11,
+        )
+        self.assertEqual(hacelo["action"], "generate_visual")
+        self.assertFalse(hacelo["revising"])
+        italia = interpret_prompt(
+            "creame una publicación de la propiedad de italia",
+            properties=properties,
+        )
+        self.assertEqual(italia["action"], "generate_post_image")
+        self.assertEqual(italia["property_id"], 11)
         forced_chat = interpret_prompt(
             "Haceme una publicación",
             property_id=11,
@@ -478,6 +547,70 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(other.get(location).status_code, 403)
         foreign = self._login(self.foreign_admin_id, ROLE_ADMIN, organization_id=self.other_org)
         self.assertEqual(foreign.get(location).status_code, 403)
+
+    def test_http_chat_italia_visual_and_hacelo_imagen(self):
+        client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
+        created = client.post(
+            "/marketing/chat",
+            data={"prompt": "creame una publicación de la propiedad de italia"},
+            follow_redirects=False,
+        )
+        self.assertEqual(created.status_code, 302)
+        location = created.headers["Location"]
+        page = client.get(location)
+        body = page.get_data(as_text=True)
+        self.assertIn("Perfecto, armé una primera versión.", body)
+        self.assertIn("Copy de prueba", body)
+        self.assertIn("mkt-result__gallery", body)
+        self.assertIn("/marketing/assets/", body)
+        self.assertIn("Ver texto de la publicación", body)
+        self.assertNotIn("No pude generar la imagen.", body)
+        from modules.database.marketing_conversations_repository import (
+            last_generation_id_for_conversation,
+            list_marketing_conversations,
+        )
+
+        conversations = list_marketing_conversations(self.org, user_id=self.agent_user_id)
+        conversation_id = conversations[0]["id"]
+        first_id = last_generation_id_for_conversation(conversation_id, self.org)
+        first = get_marketing_generation(first_id, self.org)
+        data = first.get("generated_data") or {}
+        self.assertEqual(data.get("copy_status"), "completed")
+        self.assertEqual(data.get("visual_status"), "completed")
+        self.assertEqual(data.get("template_used"), "modern_premium_v1")
+        self.assertTrue(data.get("visual_asset_url"))
+        before = len(list_marketing_generations(self.org))
+        follow = client.post(
+            location,
+            data={"prompt": "hacelo imagen"},
+            follow_redirects=False,
+        )
+        self.assertEqual(follow.status_code, 302)
+        thread = client.get(location).get_data(as_text=True)
+        self.assertNotIn("Listo. Ajusto la pieza con lo que pediste.", thread)
+        self.assertIn("Perfecto, armé una primera versión.", thread)
+        self.assertIn("mkt-result__gallery", thread)
+        self.assertEqual(len(list_marketing_generations(self.org)), before)
+        second_id = last_generation_id_for_conversation(conversation_id, self.org)
+        self.assertEqual(second_id, first_id)
+        second = get_marketing_generation(second_id, self.org)
+        self.assertEqual((second.get("generated_data") or {}).get("visual_status"), "completed")
+
+    def test_http_chat_visual_missing_photos_is_specific(self):
+        client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
+        created = client.post(
+            "/marketing/chat",
+            data={
+                "prompt": "Haceme una publicación de Sin Fotos 100",
+                "property_id": str(self.bare_id),
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(created.status_code, 302)
+        body = client.get(created.headers["Location"]).get_data(as_text=True)
+        self.assertIn("esta propiedad no tiene fotos", body)
+        self.assertIn("Reintentar", body)
+        self.assertNotIn("Armé el contenido, pero la imagen no quedó lista", body)
 
     def test_http_chat_ideas_stay_conversational(self):
         client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
