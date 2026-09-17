@@ -378,6 +378,14 @@ class MarketingIaTests(unittest.TestCase):
         formats = {item["format"]: item for item in result["assets"]}
         self.assertEqual(Image.open(resolve_asset_file(formats["post"])).size, FORMAT_SIZES["post"])
         self.assertEqual(Image.open(resolve_asset_file(formats["flyer"])).size, FORMAT_SIZES["flyer"])
+        from modules.marketing_flyer_modern import MODERN_PREMIUM_V1, RENDERER_USED
+
+        flyer = formats["flyer"]
+        self.assertEqual(flyer["template"], MODERN_PREMIUM_V1)
+        self.assertEqual((flyer.get("options") or {}).get("template_used"), MODERN_PREMIUM_V1)
+        self.assertEqual((flyer.get("options") or {}).get("renderer_used"), RENDERER_USED)
+        self.assertEqual((flyer.get("options") or {}).get("layout_version"), MODERN_PREMIUM_V1)
+        self.assertEqual((formats["post"].get("options") or {}).get("template_used"), MODERN_PREMIUM_V1)
 
     def test_11_parser_pack_and_variation(self):
         parsed = parse_marketing_request(self._pack_prompt())
@@ -1153,10 +1161,12 @@ class MarketingIaTests(unittest.TestCase):
             context.get("agent"),
             language="es",
         )
-        self.assertEqual(copy["headline"], "DEPARTAMENTO EN VENTA")
+        self.assertEqual(copy["headline"], "2 AMBIENTES EN VENTA EN VICTORIA")
         self.assertIn("Santamarina", copy["street"])
         self.assertIn("Victoria", copy["zone"])
-        self.assertEqual(copy["cta"], "Contáctanos")
+        self.assertEqual(copy["cta"], "Coordinemos una visita.")
+        self.assertTrue(copy.get("subheadline"))
+        self.assertNotIn("oportunidad única", (copy.get("subheadline") or "").lower())
         self.assertEqual(copy["agent_whatsapp"], "+54 9 11 3170 4333")
         self.assertEqual(copy["agent_instagram"], "@josebarreiro")
         self.assertIn("Mauro Marvisi", copy["legal_footer"])
@@ -1394,7 +1404,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         options = spanish["assets"][0].get("options") or {}
         self.assertEqual(options.get("language"), "es")
-        self.assertEqual((spanish["assets"][0].get("copy_snapshot") or {}).get("cta"), "Contáctanos")
+        self.assertEqual((spanish["assets"][0].get("copy_snapshot") or {}).get("cta"), "Coordinemos una visita.")
         english = start_marketing_batch(
             self.org,
             self._user(self.agent_user_id),
@@ -1406,7 +1416,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         en_options = english["assets"][0].get("options") or {}
         self.assertEqual(en_options.get("language"), "en")
-        self.assertEqual((english["assets"][0].get("copy_snapshot") or {}).get("cta"), "Inquire Now")
+        self.assertEqual((english["assets"][0].get("copy_snapshot") or {}).get("cta"), "Let's book a visit.")
 
     def test_49_creative_uses_organization_brand_not_jrh(self):
         self.assertTrue(is_system_brand_text("JRH One"))
@@ -1446,7 +1456,7 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(facts["brand_name"], "RE/MAX Data House")
         self.assertEqual(facts["office_name"], "RE/MAX Data House")
         self.assertTrue(facts["show_wordmark"])
-        self.assertEqual(facts["operation_title"], "DEPARTAMENTO EN VENTA")
+        self.assertEqual(facts["operation_title"], "2 AMBIENTES EN VENTA EN VICTORIA")
         self.assertEqual(facts["zone_line"], "Victoria, PBA")
         self.assertEqual(facts["legal_broker_name"], "Mauro Marvisi")
         self.assertIn("CUCICBA", facts["legal_footer_line"])
@@ -1549,6 +1559,183 @@ class MarketingIaTests(unittest.TestCase):
         sent = [item["role"] for item in provider_references(packed["references"])]
         self.assertNotIn("logo", sent)
         self.assertNotIn("agent", sent)
+
+    def test_51_overlay_rebuilds_modern_listing_from_real_photos(self):
+        from modules.marketing_overlay import OVERLAY_LAYOUT
+        from modules.marketing_renderer import IG_PINK, WA_GREEN, prepare_agent_cutout
+
+        plate = Image.new("RGBA", (360, 480), (0, 0, 0, 255))
+        draw = ImageDraw.Draw(plate)
+        draw.ellipse((110, 40, 250, 190), fill=(210, 160, 130, 255))
+        draw.rounded_rectangle((90, 200, 270, 460), 50, fill=(20, 80, 190, 255))
+        cut = prepare_agent_cutout(plate)
+        self.assertEqual(cut.getpixel((8, 8))[3], 0)
+        self.assertGreater(cut.getpixel((cut.width // 2, 80))[3], 200)
+
+        context = build_property_marketing_context(self._property())
+        blank = Image.new("RGB", FORMAT_SIZES["story"], (120, 80, 80))
+        buffer = io.BytesIO()
+        blank.save(buffer, format="PNG")
+        stamped = stamp_branding_overlay(
+            buffer.getvalue(),
+            context=context,
+            fmt="story",
+            options={
+                "include_agent": True,
+                "show_agent_photo": True,
+                "show_price": True,
+                "show_features": True,
+            },
+            style="light",
+            language="es",
+        )
+        self.assertEqual(stamped["layout"], OVERLAY_LAYOUT)
+        self.assertGreaterEqual(stamped["listing_photos"], 2)
+        image = Image.open(io.BytesIO(stamped["png_bytes"])).convert("RGB")
+        self.assertEqual(image.size, FORMAT_SIZES["story"])
+        self.assertNotEqual(image.getpixel((80, 1700)), (120, 80, 80))
+        green = sum(
+            1
+            for pixel in image.getdata()
+            if abs(pixel[0] - WA_GREEN[0]) < 28
+            and abs(pixel[1] - WA_GREEN[1]) < 28
+            and abs(pixel[2] - WA_GREEN[2]) < 28
+        )
+        pink = sum(
+            1
+            for pixel in image.getdata()
+            if abs(pixel[0] - IG_PINK[0]) < 36
+            and abs(pixel[1] - IG_PINK[1]) < 36
+            and abs(pixel[2] - IG_PINK[2]) < 36
+        )
+        self.assertGreater(green, 20)
+        self.assertGreater(pink, 20)
+        thumbs = image.crop((40, 1110, 1040, 1430))
+        sample = thumbs.resize((16, 6))
+        colors = {(pixel[0] // 20, pixel[1] // 20, pixel[2] // 20) for pixel in sample.getdata()}
+        self.assertGreaterEqual(len(colors), 4)
+
+    def test_52_commercial_copy_adapts_sale_rent_and_type(self):
+        from modules.marketing_language import (
+            commercial_cta,
+            hero_stack_lines,
+            listing_benefit_line,
+            operation_headline,
+            operation_kicker,
+        )
+
+        sale_apt = {
+            "property_type": "apartment",
+            "type_label": "Departamento",
+            "purpose": "sale",
+            "rooms": 2,
+            "covered_m2": 42,
+            "locality": "Victoria",
+        }
+        rent_apt = dict(sale_apt, purpose="rental")
+        studio = dict(sale_apt, rooms=1)
+        house = {"property_type": "house", "type_label": "Casa", "purpose": "sale", "locality": "San Isidro"}
+        self.assertEqual(operation_headline("es", sale_apt), "2 AMBIENTES EN VENTA EN VICTORIA")
+        self.assertEqual(operation_headline("es", rent_apt), "2 AMBIENTES EN ALQUILER EN VICTORIA")
+        self.assertEqual(operation_headline("es", studio), "MONOAMBIENTE EN VENTA EN VICTORIA")
+        self.assertEqual(operation_headline("es", house), "CASA EN VENTA EN SAN ISIDRO")
+        self.assertEqual(
+            operation_headline("es", {"property_type": "ph", "purpose": "sale", "rooms": 3, "locality": "Olivos"}),
+            "PH EN VENTA EN OLIVOS",
+        )
+        self.assertEqual(
+            operation_headline("es", {"property_type": "apartment", "purpose": "sale", "rooms": 3, "locality": "San Isidro"}),
+            "3 AMBIENTES EN VENTA EN SAN ISIDRO",
+        )
+        self.assertEqual(hero_stack_lines("es", sale_apt), ["DEPARTAMENTO", "2 AMBIENTES", "EN VICTORIA"])
+        self.assertEqual(hero_stack_lines("es", house), ["CASA", "EN SAN ISIDRO"])
+        self.assertEqual(operation_kicker("es", sale_apt), "EN VENTA")
+        self.assertEqual(operation_kicker("es", rent_apt), "EN ALQUILER")
+        self.assertEqual(commercial_cta("es", sale_apt, style="commercial"), "Consultame para visitarlo.")
+        self.assertEqual(commercial_cta("es", rent_apt, style="modern"), "Consultame disponibilidad.")
+        self.assertNotEqual(
+            listing_benefit_line("es", sale_apt, style="commercial"),
+            listing_benefit_line("es", rent_apt, style="commercial"),
+        )
+        self.assertIn("vivir o invertir", listing_benefit_line("es", sale_apt, style="commercial").lower())
+        self.assertIn("próxima etapa", listing_benefit_line("es", rent_apt, style="commercial").lower())
+        for line in (
+            listing_benefit_line("es", sale_apt, style="premium"),
+            listing_benefit_line("es", rent_apt, style="modern"),
+            listing_benefit_line("es", studio, style="aspirational"),
+        ):
+            folded = line.lower()
+            self.assertNotIn("oportunidad única", folded)
+            self.assertNotIn("hogar de tus sueños", folded)
+            self.assertNotIn("imperdible", folded)
+            self.assertNotIn("precio irrepetible", folded)
+        context = build_property_marketing_context(self._property())
+        self.assertEqual(context["facts"]["kicker"], "EN VENTA")
+        self.assertTrue(context["facts"]["benefit_line"])
+        planned = summarize_listing_copy(context["facts"], context.get("agent"), language="es")
+        self.assertEqual(planned["headline"], "2 AMBIENTES EN VENTA EN VICTORIA")
+        self.assertIn("Victoria", planned["zone"])
+        self.assertEqual(planned["cta"], "Coordinemos una visita.")
+
+    def test_53_modern_premium_flyer_uses_reference_layout(self):
+        from modules.marketing_flyer_modern import MODERN_PREMIUM_V1, RENDERER_USED
+        from modules.marketing_renderer import WA_GREEN
+
+        context = build_property_marketing_context(self._property())
+        blank = Image.new("RGB", FORMAT_SIZES["flyer"], (120, 80, 80))
+        buffer = io.BytesIO()
+        blank.save(buffer, format="PNG")
+        stamped = stamp_branding_overlay(
+            buffer.getvalue(),
+            context=context,
+            fmt="flyer",
+            options={
+                "include_agent": True,
+                "show_agent_photo": True,
+                "show_price": True,
+                "show_features": True,
+            },
+            style="light",
+            language="es",
+        )
+        self.assertEqual(stamped["layout"], MODERN_PREMIUM_V1)
+        self.assertEqual(stamped["template_used"], MODERN_PREMIUM_V1)
+        self.assertEqual(stamped["renderer_used"], RENDERER_USED)
+        self.assertEqual(stamped["layout_version"], MODERN_PREMIUM_V1)
+        self.assertGreaterEqual(stamped["listing_photos"], 3)
+        image = Image.open(io.BytesIO(stamped["png_bytes"])).convert("RGB")
+        self.assertEqual(image.size, FORMAT_SIZES["flyer"])
+        hero_left = image.crop((60, 140, 280, 420))
+        dark = sum(1 for pixel in hero_left.resize((20, 20)).getdata() if pixel[0] < 80 and pixel[2] < 90)
+        self.assertGreater(dark, 40)
+        green = sum(
+            1
+            for pixel in image.getdata()
+            if abs(pixel[0] - WA_GREEN[0]) < 28
+            and abs(pixel[1] - WA_GREEN[1]) < 28
+            and abs(pixel[2] - WA_GREEN[2]) < 28
+        )
+        self.assertGreater(green, 40)
+        legacy = stamp_branding_overlay(
+            buffer.getvalue(),
+            context=context,
+            fmt="flyer",
+            options={"template": "legacy", "include_agent": True, "show_agent_photo": True},
+            style="light",
+            language="es",
+        )
+        self.assertEqual(legacy["layout"], "legacy")
+        self.assertEqual(legacy["renderer_used"], "modules.marketing_renderer.render_modern_listing")
+        styled = stamp_branding_overlay(
+            buffer.getvalue(),
+            context=context,
+            fmt="flyer",
+            options={"template": "light_premium", "include_agent": True, "show_agent_photo": True},
+            style="light",
+            language="es",
+        )
+        self.assertEqual(styled["template_used"], MODERN_PREMIUM_V1)
+        self.assertEqual(styled["renderer_used"], RENDERER_USED)
 
 
 def _quality_png():

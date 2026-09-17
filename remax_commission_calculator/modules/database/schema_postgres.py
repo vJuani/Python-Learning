@@ -1931,6 +1931,10 @@ def create_postgres_schema():
 
         migrate_marketing_postgres(cursor)
 
+        from .marketing_eval_migration import migrate_marketing_eval_postgres
+
+        migrate_marketing_eval_postgres(cursor)
+
         from .push_subscriptions_migration import (
             migrate_push_subscriptions_postgres,
         )

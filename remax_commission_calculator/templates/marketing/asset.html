@@ -16,6 +16,7 @@
         <p class="mkt-kicker">{{ asset.format_label }}</p>
         <h2>{{ asset.property_address or asset.headline }}</h2>
         <p class="field-help">{{ asset.format_label }} · {{ asset.when_label }}</p>
+        <p class="mkt-debug">template_used: {{ asset.template_used or asset.options.template_used or 'unknown' }}<br>renderer_used: {{ asset.renderer_used or asset.options.renderer_used or 'unknown' }}<br>layout_version: {{ asset.layout_version or asset.options.layout_version or 'unknown' }}</p>
     </div>
     <div class="page-actions">
         {% if asset.ready %}

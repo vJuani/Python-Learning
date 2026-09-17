@@ -191,7 +191,7 @@ def build_marketing_image_prompt(
     if forbidden_language_hits(headline, language) or is_location_headline(headline, facts):
         headline = default_headline(language, facts, chosen_style)
     if forbidden_language_hits(cta_text, language):
-        cta_text = default_cta(language)
+        cta_text = default_cta(language, facts)
     show_price = include_price if include_price is not None else options.get("show_price", True)
     if (facts.get("price_policy") or {}).get("private"):
         show_price = False
@@ -200,8 +200,9 @@ def build_marketing_image_prompt(
         facts,
         agent if want_agent or include_agent else None,
         headline=headline,
-        cta=cta_text or default_cta(language),
+        cta=cta_text or default_cta(language, facts, chosen_style),
         language=language,
+        style=chosen_style,
     )
     photo_count = len(photos)
     secondary = (
@@ -253,15 +254,16 @@ def build_marketing_image_prompt(
                 "Do not add text, logos, prices, or faces to fix the previous attempt."
             )
         return (
-            "Compose a premium real-estate PHOTO layout only. "
+            "Compose a premium real-estate PHOTO field only. "
             f"{canvas_line}"
             "VISUAL-ONLY MODE: Do NOT render any text, numbers, logos, wordmarks, "
             "prices, addresses, CTAs, agent names, faces, WhatsApp, Instagram, "
-            "or legal lines. A deterministic template will stamp those later. "
-            "Leave clean empty bands: the top ~110px for a later logo lockup, "
-            "and the lower third for later type, price, CTA, agent and legal. "
+            "or legal lines. A deterministic template will compose the final piece. "
+            "Fill the frame with listing photography. Do not leave empty ivory or "
+            "navy bands for later type. "
             "LOCKED PHOTO LAYOUT: one large hero and two equal secondary photos "
-            "of the SAME listing. Do not invent another composition. "
+            "of the SAME listing, tightly cropped, no dead space. Do not invent "
+            "another composition. "
             f"{photo_block} "
             f"{language_prompt_block(language)} "
             f"Format: {FORMAT_BRIEFS.get(fmt, FORMAT_BRIEFS['story'])} "
@@ -463,7 +465,7 @@ def generate_validated_marketing_image(
         if repair_reasons and "wrong_language" in repair_reasons:
             art = dict(art)
             art["headline"] = default_headline(language, (context or {}).get("facts") or {}, chosen_style)
-            cta = default_cta(language)
+            cta = default_cta(language, (context or {}).get("facts") or {})
         last_prompt = build_marketing_image_prompt(
             context,
             fmt,
@@ -501,6 +503,10 @@ def generate_validated_marketing_image(
             last_png = overlay_meta["png_bytes"]
             options["pipeline_post_process"] = overlay_meta["post_process"]
             options["pipeline_post_process_fn"] = overlay_meta["post_process_fn"]
+            options["template_used"] = overlay_meta.get("template_used") or overlay_meta.get("layout")
+            options["renderer_used"] = overlay_meta.get("renderer_used")
+            options["layout_version"] = overlay_meta.get("layout_version") or options["template_used"]
+            options["layout_template"] = options["template_used"]
             options["agent_photo_composited"] = overlay_meta["agent_photo_composited"]
             options["logo_stamped"] = overlay_meta["logo_stamped"]
             options["agent_photo_sent_to_provider"] = any(
@@ -586,6 +592,9 @@ def generate_validated_marketing_image(
         "logo_stamped": bool(options.get("logo_stamped")),
         "post_process": options.get("pipeline_post_process"),
         "post_process_fn": options.get("pipeline_post_process_fn"),
+        "template_used": options.get("template_used"),
+        "renderer_used": options.get("renderer_used"),
+        "layout_version": options.get("layout_version"),
     }
 
 

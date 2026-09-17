@@ -127,11 +127,12 @@ COMPOSITIONS = {
         "theme": "light",
         "mood": "editorial, quiet luxury, magazine cover, ivory paper",
         "brief": (
-            "Light Premium: one locked listing layout on an ivory field. "
+            "Light Premium: modern editorial listing on an ivory field. "
             "Office logo + full office name top-left, short kicker top-right, "
-            "one large hero, two equal secondary photos, commercial title, "
-            "street + locality, four attribute icons, price, slim CTA, "
-            "agent block, legal hairline. Navy ink, electric blue only on the CTA. "
+            "one large hero, two equal secondary photos in a tight grid, "
+            "strong commercial title, street + locality, four modern attribute "
+            "icons, clear price, filled CTA, agent cutout with WhatsApp and "
+            "Instagram icons, legal hairline. Navy ink, electric blue on the CTA. "
             "No navy outer frame. No PowerPoint. Do not invent another composition."
         ),
     },
@@ -152,7 +153,8 @@ STYLE_BRIEFS = {
     LIGHT_PREMIUM: (
         "LIGHT PREMIUM. Ivory or soft off-white canvas, never a navy plate. "
         "Same locked layout every time: logo+name, kicker, hero, two thumbs, "
-        "operation title, address, facts, price, slim CTA, agent, legal. "
+        "strong title, address, facts, price, filled CTA, agent cutout, "
+        "WhatsApp and Instagram, legal. "
         "Navy ink, electric blue only on the CTA. Quiet, elegant, expensive."
     ),
     BLUE_PREMIUM: (

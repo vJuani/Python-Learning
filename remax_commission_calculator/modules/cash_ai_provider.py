@@ -259,7 +259,7 @@ def request_structured_json(
     image_bytes_len=0,
     image_content_type=None,
     log_prefix="cash_ai",
-    return_usage=False,
+    return_meta=False,
     timeout=90,
 ):
     """
@@ -411,9 +411,18 @@ def request_structured_json(
         usage.get("output_tokens"),
     )
 
-    if return_usage:
-        return parsed, usage
-    return parsed
+    if not return_meta:
+        return parsed
+
+    openai_usage = body.get("usage") if isinstance(body, dict) else {}
+    openai_usage = openai_usage if isinstance(openai_usage, dict) else {}
+    return {
+        "data": parsed,
+        "model": (body.get("model") if isinstance(body, dict) else None) or model,
+        "tokens_input": openai_usage.get("prompt_tokens"),
+        "tokens_output": openai_usage.get("completion_tokens"),
+        "request_id": request_id,
+    }
 
 
 def _openai_extract(

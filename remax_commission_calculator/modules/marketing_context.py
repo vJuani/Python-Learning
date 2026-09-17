@@ -13,7 +13,12 @@ from modules.database.organizations_repository import get_organization_by_id
 from modules.formatting import format_listing_money
 from modules.i18n import translate
 from modules.marketing_branding import resolve_marketing_branding
-from modules.marketing_language import default_kicker, marketing_zone_line, operation_headline
+from modules.marketing_language import (
+    default_kicker,
+    listing_benefit_line,
+    marketing_zone_line,
+    operation_headline,
+)
 from modules.property_detail_view import (
     compact_property_location,
     compact_property_title,
@@ -438,10 +443,23 @@ def build_property_marketing_context(
         "has_logo": branding["has_logo"],
         "wordmark_text": branding.get("wordmark_text") or branding["brand_name"],
         "show_wordmark": bool(branding.get("wordmark_text") or not branding["has_logo"]),
-        "kicker": default_kicker(language),
+        "property_type": display.get("property_type"),
+        "kicker": default_kicker(language, {"purpose": purpose}),
+        "benefit_line": listing_benefit_line(language, {
+            "purpose": purpose,
+            "property_type": display.get("property_type"),
+            "type_label": type_label,
+            "rooms": display.get("rooms"),
+            "covered_m2": display.get("covered_m2"),
+            "total_m2": display.get("total_m2"),
+            "locality": locality,
+        }),
         "operation_title": operation_headline(language, {
             "type_label": type_label,
+            "property_type": display.get("property_type"),
             "purpose": purpose,
+            "rooms": display.get("rooms"),
+            "locality": locality,
         }),
         "zone_line": marketing_zone_line({
             "locality": locality,
