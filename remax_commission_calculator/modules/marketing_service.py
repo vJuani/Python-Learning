@@ -45,6 +45,7 @@ from modules.marketing_image_provider import (
     MarketingImageError,
     get_marketing_image_provider_name,
 )
+from modules.marketing_flyer_modern import resolve_layout_template
 from modules.marketing_overlay import overlay_enabled, provider_references
 from modules.marketing_quality import validate_creative
 from modules.marketing_references import collect_reference_images
@@ -148,7 +149,10 @@ def _decorate_asset(asset, language="es"):
     item["format_label"] = translate(f"marketing_format_{fmt}_short", language=language)
     if item["format_label"] == f"marketing_format_{fmt}_short":
         item["format_label"] = translate(f"marketing_format_{fmt}", language=language)
-    item["template_label"] = options.get("visual_direction") or item.get("template") or ""
+    item["template_used"] = options.get("template_used") or options.get("layout_template") or item.get("template") or ""
+    item["renderer_used"] = options.get("renderer_used") or ""
+    item["layout_version"] = options.get("layout_version") or item["template_used"]
+    item["template_label"] = item["template_used"] or options.get("visual_direction") or item.get("template") or ""
     item["when_label"] = _relative_day(item.get("created_at"), language)
     item["headline"] = copy.get("headline") or ""
     item["pipeline_status"] = _pipeline_status(item)
@@ -507,6 +511,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
         stage = "references"
         context = _context_from_asset(asset)
         options = dict(asset.get("options") or {})
+        options["layout_template"] = resolve_layout_template(asset["format"], options)
         selected = select_photos_for_item(
             context.get("photos") or [],
             fmt=asset["format"],
@@ -561,6 +566,11 @@ def _process_item(organization_id, asset_id, *, retry=False):
         png_bytes = generated["png_bytes"]
         agent_composited = bool(generated.get("agent_photo_composited"))
         options["layout_engine"] = "openai_images"
+        options["template_used"] = generated.get("template_used") or options.get("layout_template")
+        options["renderer_used"] = generated.get("renderer_used") or ""
+        options["layout_version"] = generated.get("layout_version") or options.get("template_used")
+        if options.get("template_used"):
+            options["layout_template"] = options["template_used"]
         options["agent_photo_composited"] = agent_composited
         options["logo_stamped"] = bool(generated.get("logo_stamped") or options.get("logo_stamped"))
         options["layout_attempts"] = (generated.get("quality") or {}).get("attempt") or 1
@@ -888,6 +898,7 @@ def start_marketing_batch(
                 fmt=item["format"],
                 index=max(0, int(item["index"]) - 1),
             )
+            layout_template = resolve_layout_template(item["format"], item_options)
             item_options.update(
                 {
                     "pipeline_status": PIPELINE_QUEUED,
@@ -895,6 +906,9 @@ def start_marketing_batch(
                     "creative_brief": art.get("creative_brief"),
                     "background_style": art.get("background_style"),
                     "layout": art.get("layout") or {},
+                    "layout_template": layout_template,
+                    "template_used": layout_template,
+                    "layout_version": layout_template,
                     "sort_index": sort_index,
                     "format_index": item["index"],
                     "prompt": parsed.get("prompt") or prompt,
@@ -920,7 +934,7 @@ def start_marketing_batch(
                 format=item["format"],
                 style=art.get("visual_direction") or "light",
                 tone=parsed.get("visual_direction") or "premium varied",
-                template=art.get("visual_direction") or "direction",
+                template=layout_template,
                 copy_snapshot=ensure_json_serializable(copy, path="copy_snapshot"),
                 property_snapshot=ensure_json_serializable(snapshot, path="property_snapshot"),
                 agent_branding_snapshot=ensure_json_serializable(

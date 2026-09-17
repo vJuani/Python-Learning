@@ -503,6 +503,10 @@ def generate_validated_marketing_image(
             last_png = overlay_meta["png_bytes"]
             options["pipeline_post_process"] = overlay_meta["post_process"]
             options["pipeline_post_process_fn"] = overlay_meta["post_process_fn"]
+            options["template_used"] = overlay_meta.get("template_used") or overlay_meta.get("layout")
+            options["renderer_used"] = overlay_meta.get("renderer_used")
+            options["layout_version"] = overlay_meta.get("layout_version") or options["template_used"]
+            options["layout_template"] = options["template_used"]
             options["agent_photo_composited"] = overlay_meta["agent_photo_composited"]
             options["logo_stamped"] = overlay_meta["logo_stamped"]
             options["agent_photo_sent_to_provider"] = any(
@@ -588,6 +592,9 @@ def generate_validated_marketing_image(
         "logo_stamped": bool(options.get("logo_stamped")),
         "post_process": options.get("pipeline_post_process"),
         "post_process_fn": options.get("pipeline_post_process_fn"),
+        "template_used": options.get("template_used"),
+        "renderer_used": options.get("renderer_used"),
+        "layout_version": options.get("layout_version"),
     }
 
 

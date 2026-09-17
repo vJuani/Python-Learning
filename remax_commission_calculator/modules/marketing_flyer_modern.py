@@ -30,19 +30,32 @@ from modules.marketing_renderer import (
     paste_cover_rounded,
 )
 
-MODERN_PREMIUM_LAYOUT = "modern_premium"
+MODERN_PREMIUM_V1 = "modern_premium_v1"
+MODERN_PREMIUM_LAYOUT = MODERN_PREMIUM_V1
+MODERN_PREMIUM_ALIASES = frozenset({MODERN_PREMIUM_V1, "modern_premium"})
 LEGACY_TEMPLATES = frozenset({"legacy", "editorial", "modern-editorial-v1"})
 MODERN_FORMATS = frozenset({"flyer", "post"})
+RENDERER_USED = "pillow_modern_renderer"
+LAYOUT_VERSION = "modern_premium_v1"
+
+
+def explicit_layout_choice(options=None):
+    options = options or {}
+    return str(options.get("template") or options.get("layout_template") or "").strip()
+
+
+def resolve_layout_template(fmt, options=None):
+    """Flyer/post always resolve to modern_premium_v1 unless legacy is explicit."""
+    template = explicit_layout_choice(options)
+    if template in LEGACY_TEMPLATES:
+        return template
+    if str(fmt or "") in MODERN_FORMATS or template in MODERN_PREMIUM_ALIASES:
+        return MODERN_PREMIUM_V1
+    return "modern-editorial-v1"
 
 
 def uses_modern_premium(fmt, options=None):
-    options = options or {}
-    template = str(options.get("template") or options.get("layout_template") or "").strip()
-    if template in LEGACY_TEMPLATES:
-        return False
-    if template == MODERN_PREMIUM_LAYOUT:
-        return True
-    return str(fmt or "") in MODERN_FORMATS
+    return resolve_layout_template(fmt, options) == MODERN_PREMIUM_V1
 
 
 def _clip(text, limit):
@@ -321,7 +334,21 @@ def _draw_agent(canvas, agent, *, width, height):
 
 
 def render_modern_premium(size, photos, facts, copy, agent, options, language="es", *, fallback_hero=None):
-    """Reference board layout. Does not reuse the old listing card stack."""
+    """Deprecated name. The export renderer is render_modern_premium_v1."""
+    return render_modern_premium_v1(
+        size,
+        photos,
+        facts,
+        copy,
+        agent,
+        options,
+        language=language,
+        fallback_hero=fallback_hero,
+    )
+
+
+def render_modern_premium_v1(size, photos, facts, copy, agent, options, language="es", *, fallback_hero=None):
+    """Final export layout: hero overlay, 3 thumbs, price pill, cutout agent. Not the old listing card."""
     width, height = size
     facts = facts or {}
     copy = copy or {}

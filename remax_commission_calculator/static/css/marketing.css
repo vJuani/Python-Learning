@@ -31,6 +31,14 @@ body.is-creative-page .app-main-inner {
     align-items: flex-start;
     margin-bottom: 1.1rem;
 }
+.mkt-debug {
+    margin: 0.25rem 0 0.45rem;
+    color: #5b6b7c;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    word-break: break-all;
+}
 .mkt-composer__head h1 {
     margin: 0.15rem 0 0.35rem;
     color: #0a1633;

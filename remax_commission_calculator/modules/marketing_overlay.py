@@ -10,8 +10,14 @@ from PIL import Image
 from modules.marketing_copy import summarize_listing_copy
 from modules.marketing_language import default_cta, default_headline
 from modules.marketing_flyer_modern import (
-    MODERN_PREMIUM_LAYOUT,
-    render_modern_premium,
+    LAYOUT_VERSION,
+    LEGACY_TEMPLATES,
+    MODERN_FORMATS,
+    MODERN_PREMIUM_V1,
+    RENDERER_USED as MODERN_PREMIUM_RENDERER,
+    explicit_layout_choice,
+    render_modern_premium_v1,
+    resolve_layout_template,
     uses_modern_premium,
 )
 from modules.marketing_renderer import (
@@ -32,6 +38,9 @@ PROVIDER_SKIP_ROLES = frozenset({"logo", "agent"})
 
 def overlay_enabled(options=None):
     options = options or {}
+    fmt = str(options.get("format") or "")
+    if fmt in MODERN_FORMATS:
+        return True
     if options.get("deterministic_overlay") is False:
         return False
     return True
@@ -86,8 +95,13 @@ def stamp_branding_overlay(
             "instagram": planned.get("agent_instagram") or agent.get("instagram") or "",
             "photo_path": agent.get("photo_path") if show_photo else None,
         }
-    if uses_modern_premium(fmt, options):
-        canvas = render_modern_premium(
+    layout = resolve_layout_template(fmt, options)
+    legacy_requested = explicit_layout_choice(options) in LEGACY_TEMPLATES
+    use_modern = uses_modern_premium(fmt, options) or (
+        str(fmt) in MODERN_FORMATS and not legacy_requested
+    )
+    if use_modern:
+        canvas = render_modern_premium_v1(
             size,
             photos,
             facts,
@@ -97,7 +111,9 @@ def stamp_branding_overlay(
             language=language,
             fallback_hero=fallback if not photos else None,
         )
-        layout = MODERN_PREMIUM_LAYOUT
+        renderer_used = MODERN_PREMIUM_RENDERER
+        layout = MODERN_PREMIUM_V1
+        layout_version = LAYOUT_VERSION
     else:
         canvas = render_modern_listing(
             size,
@@ -109,7 +125,9 @@ def stamp_branding_overlay(
             chosen,
             fallback_hero=fallback if not photos else None,
         )
-        layout = OVERLAY_LAYOUT
+        renderer_used = "modules.marketing_renderer.render_modern_listing"
+        layout = layout or OVERLAY_LAYOUT
+        layout_version = layout
     buffer = io.BytesIO()
     canvas.save(buffer, format="PNG", optimize=True)
     logo = _office_logo(facts)
@@ -128,5 +146,8 @@ def stamp_branding_overlay(
         "post_process": OVERLAY_POST_PROCESS,
         "post_process_fn": OVERLAY_FN,
         "layout": layout,
+        "template_used": layout,
+        "renderer_used": renderer_used,
+        "layout_version": layout_version,
         "listing_photos": len(photos),
     }

@@ -377,6 +377,14 @@ class MarketingIaTests(unittest.TestCase):
         formats = {item["format"]: item for item in result["assets"]}
         self.assertEqual(Image.open(resolve_asset_file(formats["post"])).size, FORMAT_SIZES["post"])
         self.assertEqual(Image.open(resolve_asset_file(formats["flyer"])).size, FORMAT_SIZES["flyer"])
+        from modules.marketing_flyer_modern import MODERN_PREMIUM_V1, RENDERER_USED
+
+        flyer = formats["flyer"]
+        self.assertEqual(flyer["template"], MODERN_PREMIUM_V1)
+        self.assertEqual((flyer.get("options") or {}).get("template_used"), MODERN_PREMIUM_V1)
+        self.assertEqual((flyer.get("options") or {}).get("renderer_used"), RENDERER_USED)
+        self.assertEqual((flyer.get("options") or {}).get("layout_version"), MODERN_PREMIUM_V1)
+        self.assertEqual((formats["post"].get("options") or {}).get("template_used"), MODERN_PREMIUM_V1)
 
     def test_11_parser_pack_and_variation(self):
         parsed = parse_marketing_request(self._pack_prompt())
@@ -1665,7 +1673,7 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(planned["cta"], "Coordinemos una visita.")
 
     def test_53_modern_premium_flyer_uses_reference_layout(self):
-        from modules.marketing_flyer_modern import MODERN_PREMIUM_LAYOUT
+        from modules.marketing_flyer_modern import MODERN_PREMIUM_V1, RENDERER_USED
         from modules.marketing_renderer import WA_GREEN
 
         context = build_property_marketing_context(self._property())
@@ -1685,7 +1693,10 @@ class MarketingIaTests(unittest.TestCase):
             style="light",
             language="es",
         )
-        self.assertEqual(stamped["layout"], MODERN_PREMIUM_LAYOUT)
+        self.assertEqual(stamped["layout"], MODERN_PREMIUM_V1)
+        self.assertEqual(stamped["template_used"], MODERN_PREMIUM_V1)
+        self.assertEqual(stamped["renderer_used"], RENDERER_USED)
+        self.assertEqual(stamped["layout_version"], MODERN_PREMIUM_V1)
         self.assertGreaterEqual(stamped["listing_photos"], 3)
         image = Image.open(io.BytesIO(stamped["png_bytes"])).convert("RGB")
         self.assertEqual(image.size, FORMAT_SIZES["flyer"])
@@ -1708,7 +1719,18 @@ class MarketingIaTests(unittest.TestCase):
             style="light",
             language="es",
         )
-        self.assertEqual(legacy["layout"], "modern-editorial-v1")
+        self.assertEqual(legacy["layout"], "legacy")
+        self.assertEqual(legacy["renderer_used"], "modules.marketing_renderer.render_modern_listing")
+        styled = stamp_branding_overlay(
+            buffer.getvalue(),
+            context=context,
+            fmt="flyer",
+            options={"template": "light_premium", "include_agent": True, "show_agent_photo": True},
+            style="light",
+            language="es",
+        )
+        self.assertEqual(styled["template_used"], MODERN_PREMIUM_V1)
+        self.assertEqual(styled["renderer_used"], RENDERER_USED)
 
 
 def _quality_png():
