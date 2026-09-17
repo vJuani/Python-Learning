@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from modules.auth import is_admin, scoped_agent_id
+from modules.auth import is_agent, scoped_agent_id
 from modules.database.marketing_generations_repository import (
     CONTENT_TYPES,
     ORIGINS,
@@ -64,12 +64,10 @@ def can_view_generation(user, generation):
         return False
     if generation.get("organization_id") != user.get("organization_id"):
         return False
-    if is_admin(user):
-        return True
     agent_id = user.get("agent_id")
-    if agent_id and generation.get("agent_id") == agent_id:
+    if is_agent(user) and agent_id and generation.get("agent_id") == agent_id:
         return True
-    return generation.get("created_by_user_id") == user.get("id")
+    return False
 
 
 def require_generation(organization_id, user, generation_id):
@@ -220,6 +218,8 @@ def create_and_run_generation(
     organization_id = require_organization_id(organization_id)
     content_type = (content_type or "").strip().lower()
     origin = (origin or "").strip().lower()
+    if not is_agent(user) or not scoped_agent_id(user):
+        raise MarketingError("access_denied", 403)
     if content_type not in CONTENT_TYPES:
         raise MarketingError("marketing_ia_err_type", 400)
     if origin not in ORIGINS:
@@ -328,7 +328,7 @@ def discard_generation(organization_id, user, generation_id):
 
 def list_generation_views(organization_id, user, *, content_type=None, language="es"):
     organization_id = require_organization_id(organization_id)
-    author_id = None if is_admin(user) else user.get("id")
+    author_id = user.get("id")
     items = list_marketing_generations(
         organization_id,
         created_by_user_id=author_id,

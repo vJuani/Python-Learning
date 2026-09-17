@@ -327,10 +327,8 @@ class AgendaV2Tests(unittest.TestCase):
             created_by_user_id=self.agent_user_b,
         )
         self._login("v2_admin_a")
-        team = self.client.get("/agenda").get_data(as_text=True)
-        self.assertIn("Tarea del equipo A", team)
-        self.assertNotIn("Tarea del equipo B", team)
-        self.assertIn("Equipo", team)
+        blocked = self.client.get("/agenda")
+        self.assertIn(blocked.status_code, (302, 403))
 
         self._login("v2_agent_b")
         foreign = self.client.get("/agenda").get_data(as_text=True)

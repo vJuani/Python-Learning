@@ -1,0 +1,19 @@
+{% if view.conversations %}
+<nav class="mkt-chat__recents" aria-label="{{ t('marketing_ia_recent') }}">
+    <p class="mkt-chat__nav-label">{{ t('marketing_ia_recent') }}</p>
+    <ul>
+        {% for item in view.conversations %}
+        <li>
+            <a
+                class="mkt-chat__conv{% if view.conversation and view.conversation.id == item.id %} is-active{% endif %}"
+                href="{{ url_for('marketing_conversation', conversation_id=item.id) }}"
+            >
+                {{ item.title or t('marketing_ia_new_chat') }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</nav>
+{% else %}
+<p class="mkt-chat__empty-nav">{{ t('marketing_ia_no_chats') }}</p>
+{% endif %}

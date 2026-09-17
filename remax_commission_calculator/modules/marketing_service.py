@@ -109,8 +109,6 @@ def can_view_asset(user, asset):
         return False
     if int(user.get("organization_id") or 0) != int(asset.get("organization_id") or 0):
         return False
-    if is_admin(user):
-        return True
     if is_agent(user):
         return int(user.get("agent_id") or 0) == int(asset.get("agent_id") or 0)
     return False

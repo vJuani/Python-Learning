@@ -136,6 +136,12 @@
                 <strong>{{ t('nav_my_operations') }}</strong>
                 <span>{{ t('home_shortcut_operations_help') }}</span>
             </a>
+            {% if team_block and is_team_leader() %}
+            <a class="home-shortcuts__card" href="{{ url_for('team_report', team_leader_id=team_block.leader_id) }}">
+                <strong>{{ t('nav_team_report') }}</strong>
+                <span>{{ t('team_report_subtitle') }}</span>
+            </a>
+            {% endif %}
         </section>
 
         <section class="jrh-today home-card">

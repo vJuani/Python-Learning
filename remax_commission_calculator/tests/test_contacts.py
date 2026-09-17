@@ -161,14 +161,13 @@ class ContactsTests(unittest.TestCase):
         contact = self._create(name="Privada Org A")
         self._login("contacts_admin_b")
         response = self.client.get(f"/contacts/{contact['id']}")
-        self.assertEqual(response.status_code, 404)
+        self.assertIn(response.status_code, (302, 403))
 
-    def test_05_staff_reads_org_and_cannot_create(self):
+    def test_05_staff_cannot_open_contacts(self):
         self._create(name="Visible para staff")
         self._login("contacts_admin_a")
         page = self.client.get("/contacts")
-        self.assertEqual(page.status_code, 200)
-        self.assertIn("Visible para staff", page.get_data(as_text=True))
+        self.assertIn(page.status_code, (302, 403))
         created = self.client.post(
             "/contacts/new",
             data={"name": "Staff no crea"},

@@ -6,7 +6,7 @@ import logging
 import time
 
 from modules.agent_account import build_agent_detail_view
-from modules.auth import is_admin, is_agent
+from modules.auth import can_use_agent_workspace, is_admin, is_agent
 from modules.database.tenant import require_organization_id
 from modules.i18n import translate
 from modules.jrh_ai_classify import (
@@ -511,9 +511,15 @@ def _handle_agenda(
     from modules.agent_tasks import build_agenda_view
     from modules.google_calendar import attach_google_overlay
 
-    if not agent_id and is_agent(user):
-        return _fallback(language, confidence)
-    scoped = agent_id if is_agent(user) else None
+    if not can_use_agent_workspace(user) or not agent_id:
+        return _result(
+            QUERY_AGENDA,
+            "needs_attention",
+            language=language,
+            message_key="access_denied",
+            confidence=confidence,
+        )
+    scoped = agent_id
     tz = organization_timezone(organization_id)
     current = (now or now_utc()).astimezone(tz)
     resolved = resolve_agenda_date(entities, current)
@@ -1351,12 +1357,12 @@ def _handle_create_task(
 ):
     from modules.agenda_ai import interpret_agenda_input
 
-    if not agent_id:
+    if not can_use_agent_workspace(user) or not agent_id:
         return _result(
             CREATE_TASK,
             "needs_attention",
             language=language,
-            message_key="jrh_ai_task_needs_agent",
+            message_key="access_denied",
             confidence=confidence,
         )
     parsed = interpret_agenda_input(
@@ -2133,7 +2139,7 @@ def _handle_start_marketing(
     from modules.entity_match import UNIQUE_MIN
     from modules.marketing_context import assert_marketing_access, MarketingError
 
-    if not user or not (is_admin(user) or (is_agent(user) and agent_id)):
+    if not user or not can_use_agent_workspace(user) or not agent_id:
         return _result(
             START_MARKETING_CONTENT,
             "needs_attention",
@@ -2149,22 +2155,17 @@ def _handle_start_marketing(
         and entities.get("previous_kind") == "property"
         and entities.get("previous_id")
     ):
-        if is_admin(user):
-            row = get_property_record(entities["previous_id"], organization_id)
-            if row:
-                matches = [{"id": row["id"], "address": row.get("address"), "name": row.get("address")}]
-        else:
-            owned = _owned_property_match(
-                organization_id, entities.get("previous_id"), agent_id
-            )
-            if owned:
-                matches = [owned]
+        owned = _owned_property_match(
+            organization_id, entities.get("previous_id"), agent_id
+        )
+        if owned:
+            matches = [owned]
     if not matches and query:
         matches = _resolve_acm_properties(
             organization_id,
             query,
             user=user,
-            agent_id=None if is_admin(user) else agent_id,
+            agent_id=agent_id,
             entities=entities,
         )
     if not matches:
@@ -2380,6 +2381,14 @@ def _handle_contact(
     confidence,
     **_kwargs,
 ):
+    if not can_use_agent_workspace(user) or not agent_id:
+        return _result(
+            QUERY_CONTACT,
+            "needs_attention",
+            language=language,
+            message_key="access_denied",
+            confidence=confidence,
+        )
     from modules.contacts import load_contact
 
     query = entities.get("contact_name") or entities.get("agent_name") or ""

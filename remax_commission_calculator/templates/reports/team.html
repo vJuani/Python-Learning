@@ -12,7 +12,7 @@
         action="{{ url_for('team_report', team_leader_id=report.leader.id) }}"
         id="team-report-filter-form"
     >
-        {% if is_admin() and report.team_leaders %}
+        {% if is_admin() %}
         <label class="report-field">
             <span>{{ t('team_leader_label') }}</span>
             <select
@@ -84,12 +84,14 @@
     </div>
 
     <div class="page-actions">
+        {% set export_args = request.args.to_dict(flat=True) %}
+        {% set _ = export_args.pop('team_leader_id', none) %}
         <a
-            href="{{ url_for('team_report_pdf', team_leader_id=report.leader.id, **request.args) }}"
+            href="{{ url_for('team_report_pdf', team_leader_id=report.leader.id, **export_args) }}"
             class="btn btn-secondary"
         >{{ t('export_pdf') }}</a>
         <a
-            href="{{ url_for('team_report_xlsx', team_leader_id=report.leader.id, **request.args) }}"
+            href="{{ url_for('team_report_xlsx', team_leader_id=report.leader.id, **export_args) }}"
             class="btn btn-secondary"
         >{{ t('export_excel') }}</a>
         <a href="{{ url_for('agents_detail', agent_id=report.leader.id) }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>

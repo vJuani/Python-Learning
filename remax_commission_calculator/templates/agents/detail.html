@@ -8,7 +8,7 @@
         <h2>{{ agent.name }}</h2>
         <p>
             <span class="type-tag badge-{{ agent.type|lower }}">{{ agent.type }}</span>
-            {% if is_team_leader %}
+            {% if profile_is_team_leader %}
             · {{ t('team_leader_badge') }}
             {% endif %}
             {% if team_leader and show_team_leader %}
@@ -26,7 +26,7 @@
     </div>
 
     <div class="page-actions">
-        {% if is_team_leader and can_view_team_report %}
+        {% if profile_is_team_leader and can_view_team_report %}
         <a
             href="{{ url_for('team_report', team_leader_id=agent.id) }}"
             class="btn btn-secondary"
@@ -84,7 +84,7 @@
 </section>
 {% endif %}
 
-{% if is_team_leader and junior_rows %}
+{% if profile_is_team_leader and junior_rows %}
 <section class="panel">
     <div class="panel-header">
         <h3>{{ t('team_section_title') }}</h3>

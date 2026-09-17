@@ -7,6 +7,7 @@ from __future__ import annotations
 from flask import abort, redirect, render_template, request, session, url_for
 
 from modules.auth import (
+    can_use_agent_workspace,
     get_current_user,
     is_agent,
     is_guest_session,
@@ -66,15 +67,15 @@ def register_contact_routes(app, helpers):
             abort(403)
 
         user = get_current_user()
-        if user is None:
+        if not can_use_agent_workspace(user):
             abort(403)
 
         return user
 
     def _scope(user):
-        if is_agent(user):
+        if is_agent(user) and user.get("agent_id"):
             return user.get("agent_id"), True
-        return None, False
+        abort(403)
 
     def _payload_from_form():
         return {

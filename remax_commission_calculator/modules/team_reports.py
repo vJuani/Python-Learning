@@ -17,6 +17,7 @@ from modules.database.agent_wallet_repository import (
     sum_wallet_by_type,
 )
 from modules.database.agents_repository import (
+    agent_is_team_leader,
     get_agent_record,
     get_agents,
     list_team_juniors,
@@ -200,10 +201,6 @@ def list_team_leaders(organization_id):
             leaders.append(agent)
 
     return leaders
-
-
-def agent_is_team_leader(organization_id, agent_id):
-    return len(list_team_juniors(agent_id, organization_id)) > 0
 
 
 def _agent_approved_stats(

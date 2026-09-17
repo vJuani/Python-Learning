@@ -292,6 +292,26 @@ def scoped_agent_id(user=None):
     return user.get("agent_id")
 
 
+def can_use_agent_workspace(user=None):
+    """Personal agent tools: Agenda, Contactos, Marketing IA."""
+    if is_guest_session():
+        return False
+    user = user or get_current_user()
+    if user is None or not is_agent(user):
+        return False
+    return bool(user.get("agent_id"))
+
+
+def is_team_leader(user=None):
+    """Capability on an agent: has at least one junior assigned."""
+    user = user or get_current_user()
+    if not can_use_agent_workspace(user):
+        return False
+    from modules.database.agents_repository import agent_is_team_leader
+
+    return agent_is_team_leader(user.get("organization_id"), user.get("agent_id"))
+
+
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):

@@ -66,7 +66,9 @@
     <div class="ds-home__layout home-panel__layout">
         <div class="ds-home__main home-panel__main">
             {% include "dashboard/_pending_block.html" %}
+            {% if can_use_agent_workspace() %}
             {% include "dashboard/_agenda_block.html" %}
+            {% endif %}
 
             {% set content_card_title = t('dashboard_active_operations_title') %}
             {% set content_card_link_href = url_for('operations_list') %}
@@ -202,7 +204,7 @@
                 {% include "components/content_card.html" %}
             </div>
 
-            {% if team_block %}
+            {% if team_block and is_team_leader() %}
             {% set content_card_title = team_block.labels.title %}
             {% set content_card_link_href = url_for('team_report', team_leader_id=team_block.leader_id) %}
             {% set content_card_link_label = team_block.labels.open_report %}
@@ -223,6 +225,7 @@
         <aside class="ds-home__aside home-panel__aside" aria-label="{{ t('dashboard_tools_title') }}">
             {% include "components/ai_card.html" %}
 
+            {% if can_use_agent_workspace() %}
             {% set content_card_title = t('dashboard_tasks_title') ~ ' (' ~ (home_panel.tasks|length) ~ ')' %}
             {% set content_card_link_href = url_for('agenda_index') %}
             {% set content_card_link_label = t('agenda_view_all') %}
@@ -252,6 +255,7 @@
                 {% endif %}
             {% endset %}
             {% include "components/content_card.html" %}
+            {% endif %}
 
             {% if home_panel.reminders %}
             {% set content_card_title = t('dashboard_reminders_title') ~ ' (' ~ (home_panel.reminders|length) ~ ')' %}

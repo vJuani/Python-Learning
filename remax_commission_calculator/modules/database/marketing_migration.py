@@ -132,6 +132,66 @@ GENERATION_INDEXES = (
 )
 
 
+CONVERSATIONS_SQL = """
+CREATE TABLE IF NOT EXISTS marketing_conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    title TEXT,
+    property_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+
+    FOREIGN KEY (organization_id)
+        REFERENCES organizations(id) ON DELETE RESTRICT,
+    FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (property_id)
+        REFERENCES properties(id) ON DELETE SET NULL
+)
+"""
+
+MESSAGES_SQL = """
+CREATE TABLE IF NOT EXISTS marketing_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    message_type TEXT NOT NULL DEFAULT 'text',
+    content TEXT,
+    generation_id INTEGER,
+    metadata_json TEXT,
+    created_at TEXT NOT NULL,
+
+    FOREIGN KEY (conversation_id)
+        REFERENCES marketing_conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (generation_id)
+        REFERENCES marketing_generations(id) ON DELETE SET NULL,
+
+    CHECK (role IN ('user', 'assistant')),
+    CHECK (message_type IN ('text', 'generation', 'status'))
+)
+"""
+
+CONVERSATION_INDEXES = (
+    """
+    CREATE INDEX IF NOT EXISTS idx_mkt_conv_org_user
+    ON marketing_conversations (organization_id, user_id, updated_at)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_mkt_conv_org_updated
+    ON marketing_conversations (organization_id, updated_at)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_mkt_msg_conversation
+    ON marketing_messages (conversation_id, created_at)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_mkt_msg_generation
+    ON marketing_messages (generation_id)
+    """,
+)
+
+
 def _ensure_generations(cursor, *, postgres):
     sql = GENERATIONS_SQL
     if postgres:
@@ -146,6 +206,30 @@ def _ensure_generations(cursor, *, postgres):
     cursor.execute(sql)
     _ensure_whatsapp_content_type(cursor, postgres=postgres)
     for statement in GENERATION_INDEXES:
+        cursor.execute(statement)
+    _ensure_conversations(cursor, postgres=postgres)
+
+
+def _pg_int_sql(sql):
+    return (
+        sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+        .replace("organization_id INTEGER NOT NULL", "organization_id BIGINT NOT NULL")
+        .replace("user_id INTEGER NOT NULL", "user_id BIGINT NOT NULL")
+        .replace("property_id INTEGER,", "property_id BIGINT,")
+        .replace("conversation_id INTEGER NOT NULL", "conversation_id BIGINT NOT NULL")
+        .replace("generation_id INTEGER,", "generation_id BIGINT,")
+    )
+
+
+def _ensure_conversations(cursor, *, postgres):
+    conversations_sql = CONVERSATIONS_SQL
+    messages_sql = MESSAGES_SQL
+    if postgres:
+        conversations_sql = _pg_int_sql(conversations_sql)
+        messages_sql = _pg_int_sql(messages_sql)
+    cursor.execute(conversations_sql)
+    cursor.execute(messages_sql)
+    for statement in CONVERSATION_INDEXES:
         cursor.execute(statement)
 
 

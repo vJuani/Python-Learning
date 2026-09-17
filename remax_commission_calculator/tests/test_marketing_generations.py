@@ -42,8 +42,10 @@ from modules.marketing_ai import (
 from modules.marketing_ai_client import MarketingAIClientError, get_marketing_ai_model
 from modules.marketing_ai_prompts import build_copy_instructions
 from modules.marketing_context import MarketingError
+from modules.marketing_chat_service import interpret_prompt
 from modules.marketing_generation_service import (
     build_generation_context,
+    can_view_generation,
     create_and_run_generation,
     discard_generation,
     list_generation_views,
@@ -182,6 +184,18 @@ class MarketingGenerationsTests(unittest.TestCase):
         migrate_marketing()
         rows = list_marketing_generations(self.org)
         self.assertIsInstance(rows, list)
+        connection = get_connection()
+        try:
+            names = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        finally:
+            connection.close()
+        self.assertIn("marketing_conversations", names)
+        self.assertIn("marketing_messages", names)
 
     def test_mock_provider_does_not_call_real_api(self):
         result = generate_content(
@@ -257,12 +271,13 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertIn(theirs["id"], other_ids)
         self.assertNotIn(mine["id"], other_ids)
 
-    def test_admin_sees_organization_generations(self):
+    def test_admin_cannot_see_agent_generations(self):
         agent = self._user(self.agent_user_id)
         admin = self._user(self.admin_id)
         generation = create_and_run_generation(self.org, agent, content_type="copy", origin="free")
         admin_ids = {item["id"] for item in list_generation_views(self.org, admin)}
-        self.assertIn(generation["id"], admin_ids)
+        self.assertNotIn(generation["id"], admin_ids)
+        self.assertFalse(can_view_generation(admin, generation))
 
     def test_no_cross_organization_access(self):
         owner = self._user(self.agent_user_id)
@@ -290,10 +305,11 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(hub.status_code, 200)
         body = hub.get_data(as_text=True)
         self.assertIn("Marketing IA", body)
-        self.assertIn("Crear contenido", body)
+        self.assertIn("¿Qué querés crear hoy?", body)
         self.assertIn("Mis creaciones", body)
         self.assertIn("Plantillas", body)
         self.assertIn("Brand kit", body)
+        self.assertIn("Pedile a JRH que cree algo", body)
         create_page = client.get("/marketing/create")
         self.assertEqual(create_page.status_code, 200)
         self.assertIn('name="content_type"', create_page.get_data(as_text=True))
@@ -318,11 +334,91 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(listing.status_code, 200)
         self.assertIn("Copy", listing.get_data(as_text=True))
 
+    def test_interpret_prompt_property_and_revision(self):
+        properties = [{"id": 7, "address": "Don Bosco 477", "locality": "Victoria"}]
+        first = interpret_prompt(
+            "Haceme una publicidad premium para Instagram de Don Bosco 477",
+            properties=properties,
+        )
+        self.assertEqual(first["content_type"], "post")
+        self.assertEqual(first["origin"], "property")
+        self.assertEqual(first["style"], "premium")
+        self.assertEqual(first["property_id"], 7)
+        self.assertFalse(first["revising"])
+        last = {
+            "id": 99,
+            "content_type": "post",
+            "origin": "property",
+            "style": "premium",
+            "property_id": 7,
+            "generated_data": {},
+        }
+        follow = interpret_prompt(
+            "Cambiale el título",
+            last_generation=last,
+            properties=properties,
+        )
+        self.assertTrue(follow["revising"])
+        self.assertEqual(follow["parent_generation_id"], 99)
+        self.assertEqual(follow["content_type"], "post")
+        story = interpret_prompt(
+            "Ahora haceme una historia",
+            last_generation=last,
+            properties=properties,
+        )
+        self.assertEqual(story["content_type"], "story")
+        self.assertEqual(story["parent_generation_id"], 99)
+
+    def test_http_chat_creates_conversation_and_iterates(self):
+        client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
+        created = client.post(
+            "/marketing/chat",
+            data={
+                "prompt": "Haceme un post moderno de Libertador 1000 para venderlo.",
+                "property_id": str(self.property_id),
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(created.status_code, 302)
+        location = created.headers["Location"]
+        self.assertIn("/marketing/c/", location)
+        page = client.get(location)
+        self.assertEqual(page.status_code, 200)
+        body = page.get_data(as_text=True)
+        self.assertIn("Libertador 1000", body)
+        self.assertIn("Copy de prueba", body)
+        self.assertIn("Editar", body)
+        self.assertIn("Regenerar", body)
+        follow = client.post(
+            location,
+            data={"prompt": "Cambiale el título"},
+            follow_redirects=False,
+        )
+        self.assertEqual(follow.status_code, 302)
+        thread = client.get(location)
+        self.assertIn("Cambiale el título", thread.get_data(as_text=True))
+        from modules.database.marketing_conversations_repository import (
+            last_generation_id_for_conversation,
+            list_marketing_conversations,
+        )
+        from modules.database.marketing_generations_repository import get_marketing_generation
+
+        conversations = list_marketing_conversations(self.org, user_id=self.agent_user_id)
+        self.assertEqual(len(conversations), 1)
+        last_id = last_generation_id_for_conversation(conversations[0]["id"], self.org)
+        child = get_marketing_generation(last_id, self.org)
+        self.assertIsNotNone(child["parent_generation_id"])
+        other = self._login(self.other_user_id, ROLE_AGENT, agent_id=self.other_agent_id)
+        self.assertEqual(other.get(location).status_code, 403)
+        foreign = self._login(self.foreign_admin_id, ROLE_ADMIN, organization_id=self.other_org)
+        self.assertEqual(foreign.get(location).status_code, 403)
+
     def test_http_guest_forbidden(self):
         client = app.test_client()
         self.assertEqual(client.get("/marketing").status_code, 403)
         self.assertEqual(client.get("/marketing/create").status_code, 403)
         self.assertEqual(client.get("/marketing/generations").status_code, 403)
+        self.assertEqual(client.post("/marketing/chat", data={"prompt": "hola"}).status_code, 403)
 
     def test_http_agent_cannot_open_other_generation(self):
         owner = self._user(self.agent_user_id)
@@ -336,10 +432,10 @@ class MarketingGenerationsTests(unittest.TestCase):
         generation = create_and_run_generation(self.org, owner, content_type="copy", origin="free")
         client = self._login(self.foreign_admin_id, ROLE_ADMIN, organization_id=self.other_org)
         page = client.get(f"/marketing/generations/{generation['id']}")
-        self.assertEqual(page.status_code, 404)
+        self.assertEqual(page.status_code, 403)
 
     def test_http_regenerate_and_discard(self):
-        client = self._login(self.admin_id, ROLE_ADMIN)
+        client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
         created = client.post(
             "/marketing/create",
             data={"content_type": "post", "origin": "office"},
@@ -370,22 +466,20 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn("Tipo de pieza", page.get_data(as_text=True))
 
-    def test_staff_generates_inside_organization(self):
+    def test_staff_cannot_generate(self):
         admin = self._user(self.admin_id)
-        generation = create_and_run_generation(
-            self.org,
-            admin,
-            content_type="copy",
-            origin="property",
-            property_id=self.property_id,
-            objective="sell_property",
-            style="premium",
-            tone="formal",
-        )
-        self.assertEqual(generation["status"], "completed")
-        self.assertEqual(generation["organization_id"], self.org)
-        self.assertEqual(generation["property_id"], self.property_id)
-        self.assertEqual(generation["objective"], "sell_property")
+        with self.assertRaises(MarketingError) as raised:
+            create_and_run_generation(
+                self.org,
+                admin,
+                content_type="copy",
+                origin="property",
+                property_id=self.property_id,
+                objective="sell_property",
+                style="premium",
+                tone="formal",
+            )
+        self.assertEqual(raised.exception.status_code, 403)
 
     def test_valid_structured_output(self):
         parsed = validate_generation_output(VALID_CAROUSEL, content_type="carousel")
@@ -513,7 +607,7 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertNotIn("sk-", generation["error_message"] or "")
 
     def test_missing_api_key_marks_failed(self):
-        user = self._user(self.admin_id)
+        user = self._user(self.agent_user_id)
         with patch.dict(os.environ, {"OPENAI_API_KEY": "", "MARKETING_AI_PROVIDER": "openai"}):
             generation = self._run_openai(user)
         self.assertEqual(generation["status"], "failed")

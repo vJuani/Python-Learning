@@ -12,7 +12,7 @@ from flask import (
     url_for,
 )
 
-from modules.auth import get_current_user, is_admin, is_agent, is_guest_session
+from modules.auth import get_current_user, is_admin, is_guest_session, can_use_agent_workspace
 from modules.marketing_context import MarketingError
 from modules.marketing_qa import resolve_qa_file, run_raw_story_qa
 from modules.marketing_eval import (
@@ -35,6 +35,11 @@ from modules.marketing_service import (
     select_marketing_asset,
     start_marketing_batch,
     vary_marketing_asset,
+)
+from modules.marketing_chat_service import (
+    build_chat_workspace,
+    regenerate_in_conversation,
+    send_chat_message,
 )
 from modules.marketing_generation_service import (
     create_and_run_generation,
@@ -61,9 +66,7 @@ def register_marketing_routes(app, helpers):
         if is_guest_session():
             return None
         user = get_current_user()
-        if user is None:
-            return None
-        if is_admin(user) or is_agent(user):
+        if can_use_agent_workspace(user):
             return user
         return None
 
@@ -89,13 +92,98 @@ def register_marketing_routes(app, helpers):
             query.setdefault("property_id", result.get("property_id"))
         return url_for("marketing_new", **{key: value for key, value in query.items() if value})
 
+    def _chat_workspace(user, organization_id, conversation_id=None):
+        language = get_current_language()
+        view = build_chat_workspace(
+            organization_id,
+            user,
+            conversation_id=conversation_id,
+            language=language,
+        )
+        return render_template("marketing/chat.html", view=view)
+
+    def _attachment_name():
+        upload = request.files.get("attachment")
+        if upload is None:
+            return None
+        name = (upload.filename or "").strip()
+        return name or None
+
     @app.route("/marketing")
     def marketing_home():
         user = _marketing_user()
         if user is None:
             return _forbidden()
-        require_user_organization()
-        return render_template("marketing/hub.html")
+        organization_id = require_user_organization()
+        return _chat_workspace(user, organization_id)
+
+    @app.route("/marketing/c/<int:conversation_id>", methods=["GET", "POST"])
+    def marketing_conversation(conversation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        if request.method == "POST":
+            try:
+                result = send_chat_message(
+                    organization_id,
+                    user,
+                    prompt=request.form.get("prompt"),
+                    conversation_id=conversation_id,
+                    property_id=request.form.get("property_id", type=int),
+                    language=get_current_language(),
+                    attachment_name=_attachment_name(),
+                )
+            except MarketingError as error:
+                return _handle(error, fallback_endpoint="marketing_home")
+            return redirect(
+                url_for("marketing_conversation", conversation_id=result["conversation"]["id"])
+            )
+        try:
+            return _chat_workspace(user, organization_id, conversation_id)
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+
+    @app.route("/marketing/chat", methods=["POST"])
+    def marketing_chat_send():
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        conversation_id = request.form.get("conversation_id", type=int)
+        try:
+            result = send_chat_message(
+                organization_id,
+                user,
+                prompt=request.form.get("prompt"),
+                conversation_id=conversation_id,
+                property_id=request.form.get("property_id", type=int),
+                language=get_current_language(),
+                attachment_name=_attachment_name(),
+            )
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return redirect(
+            url_for("marketing_conversation", conversation_id=result["conversation"]["id"])
+        )
+
+    @app.route("/marketing/c/<int:conversation_id>/regenerate", methods=["POST"])
+    def marketing_conversation_regenerate(conversation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            regenerate_in_conversation(
+                organization_id,
+                user,
+                conversation_id,
+                request.form.get("generation_id", type=int),
+                language=get_current_language(),
+            )
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return redirect(url_for("marketing_conversation", conversation_id=conversation_id))
 
     @app.route("/marketing/create", methods=["GET", "POST"])
     def marketing_create():

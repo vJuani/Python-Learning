@@ -119,7 +119,11 @@ class JrhChipActionsTests(unittest.TestCase):
     def test_agent_chips_include_acm_and_performance(self):
         keys = [
             item["key"]
-            for item in build_jrh_chip_actions(can_acm=True, can_productivity=True)
+            for item in build_jrh_chip_actions(
+                can_acm=True,
+                can_productivity=True,
+                can_agent_workspace=True,
+            )
         ]
         self.assertEqual(
             keys,
@@ -128,7 +132,9 @@ class JrhChipActionsTests(unittest.TestCase):
 
     def test_staff_chips_omit_agent_only(self):
         keys = [item["key"] for item in build_jrh_chip_actions()]
-        self.assertEqual(keys, ["search", "agenda", "contacts", "billing"])
+        self.assertEqual(keys, ["search", "billing"])
+        self.assertNotIn("agenda", keys)
+        self.assertNotIn("contacts", keys)
         self.assertNotIn("acm", keys)
 
 

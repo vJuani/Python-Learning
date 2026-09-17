@@ -174,6 +174,7 @@ def build_agent_home(
         can_acm=True,
         can_productivity=True,
         can_marketing=True,
+        can_agent_workspace=True,
     ):
         item = dict(action)
         if item.get("key") == "agenda":
@@ -215,7 +216,13 @@ def build_agent_home(
     }
 
 
-def build_jrh_chip_actions(*, can_acm=False, can_productivity=False, can_marketing=False):
+def build_jrh_chip_actions(
+    *,
+    can_acm=False,
+    can_productivity=False,
+    can_marketing=False,
+    can_agent_workspace=False,
+):
     """Shared Home + /jrh composer chips. Staff-only actions stay off."""
     actions = [
         {
@@ -223,22 +230,29 @@ def build_jrh_chip_actions(*, can_acm=False, can_productivity=False, can_marketi
             "label_key": "jrh_quick_search",
             "example_key": "jrh_ask_ex_property",
         },
-        {
-            "key": "agenda",
-            "label_key": "jrh_type_agenda",
-            "example_key": "jrh_example_agenda",
-        },
-        {
-            "key": "contacts",
-            "label_key": "jrh_quick_contacts",
-            "example_key": "jrh_ask_ex_contacts",
-        },
+    ]
+    if can_agent_workspace:
+        actions.extend(
+            (
+                {
+                    "key": "agenda",
+                    "label_key": "jrh_type_agenda",
+                    "example_key": "jrh_example_agenda",
+                },
+                {
+                    "key": "contacts",
+                    "label_key": "jrh_quick_contacts",
+                    "example_key": "jrh_ask_ex_contacts",
+                },
+            )
+        )
+    actions.append(
         {
             "key": "billing",
             "label_key": "jrh_quick_billing",
             "example_key": "jrh_example_invoice",
         },
-    ]
+    )
     if can_acm:
         actions.append(
             {

@@ -92,6 +92,43 @@ class TeamReportsTests(unittest.TestCase):
             agent_id=cls.pablo,
             email="pablo@example.com",
         )
+        cls.maria = add_agent("Maria Leader", "Puro", cls.org)
+        cls.maria_junior = add_agent(
+            "Maria Junior",
+            "Junior",
+            cls.org,
+            team_leader_agent_id=cls.maria,
+        )
+        cls.maria_user = add_user(
+            "maria_user",
+            pwd,
+            ROLE_AGENT,
+            cls.org,
+            agent_id=cls.maria,
+            email="maria@example.com",
+        )
+        cls.foreign_leader = add_agent("Foreign Leader", "Puro", cls.other)
+        cls.foreign_junior = add_agent(
+            "Foreign Junior",
+            "Junior",
+            cls.other,
+            team_leader_agent_id=cls.foreign_leader,
+        )
+        cls.foreign_user = add_user(
+            "foreign_tl",
+            pwd,
+            ROLE_AGENT,
+            cls.other,
+            agent_id=cls.foreign_leader,
+            email="foreign.tl@example.com",
+        )
+        cls.foreign_admin = add_user(
+            "foreign_admin",
+            pwd,
+            ROLE_ADMIN,
+            cls.other,
+            email="foreign.admin@example.com",
+        )
 
         op = calculate_operation_details(
             "Pablo Reynals",
@@ -172,37 +209,66 @@ class TeamReportsTests(unittest.TestCase):
         self.assertEqual(block["juniors_active"], 1)
         self.assertIn("labels", block)
 
-    def test_http_scopes(self):
+    def _login(self, user_id, role, organization_id, agent_id=None):
         client = app.test_client()
-
         with client.session_transaction() as sess:
-            sess["user_id"] = self.pablo_user
-        # Junior cannot open Tomas wallet/profile
-        denied = client.get(f"/agents/{self.tomas}")
-        self.assertEqual(denied.status_code, 302)
+            sess["user_id"] = user_id
+            sess["role"] = role
+            sess["organization_id"] = organization_id
+            if agent_id is not None:
+                sess["agent_id"] = agent_id
+        return client
 
-        # Junior can open own profile
-        own = client.get(f"/agents/{self.pablo}")
+    def test_http_scopes(self):
+        junior = self._login(
+            self.pablo_user, ROLE_AGENT, self.org, self.pablo
+        )
+        denied_profile = junior.get(f"/agents/{self.tomas}")
+        self.assertIn(denied_profile.status_code, (302, 403))
+        own = junior.get(f"/agents/{self.pablo}")
         self.assertEqual(own.status_code, 200)
+        self.assertIn(junior.get(f"/reports/team/{self.tomas}").status_code, (302, 403))
+        self.assertIn(junior.get(f"/reports/team/{self.pablo}").status_code, (302, 403))
+        self.assertIn(junior.get("/reports/team").status_code, (302, 403))
 
-        # Junior cannot open team report as Tomas
-        forbidden = client.get(f"/reports/team/{self.tomas}")
-        self.assertEqual(forbidden.status_code, 302)
+        leader = self._login(
+            self.tomas_user, ROLE_AGENT, self.org, self.tomas
+        )
+        junior_profile = leader.get(f"/agents/{self.pablo}")
+        self.assertEqual(junior_profile.status_code, 200)
+        own_team = leader.get(f"/reports/team/{self.tomas}")
+        self.assertEqual(own_team.status_code, 200)
+        self.assertIn("Resumen de Team", own_team.get_data(as_text=True))
+        self.assertIn(leader.get(f"/reports/team/{self.maria}").status_code, (302, 403))
+        self.assertEqual(
+            leader.get(f"/reports/team/{self.tomas}?team_leader_id={self.maria}").status_code,
+            200,
+        )
+        switched = leader.get(
+            f"/reports/team/{self.tomas}?team_leader_id={self.maria}"
+        )
+        self.assertNotIn("Maria Leader", switched.get_data(as_text=True))
+        self.assertEqual(leader.get(f"/reports/team/{self.tomas}/pdf").status_code, 200)
 
-        with client.session_transaction() as sess:
-            sess["user_id"] = self.tomas_user
-        # TL can open junior profile
-        junior = client.get(f"/agents/{self.pablo}")
-        self.assertEqual(junior.status_code, 200)
-        report = client.get(f"/reports/team/{self.tomas}")
-        self.assertEqual(report.status_code, 200)
+        other_leader = self._login(
+            self.maria_user, ROLE_AGENT, self.org, self.maria
+        )
+        self.assertIn(other_leader.get(f"/reports/team/{self.tomas}").status_code, (302, 403))
+        self.assertEqual(other_leader.get(f"/reports/team/{self.maria}").status_code, 200)
 
-        with client.session_transaction() as sess:
-            sess["user_id"] = self.admin_id
-        admin_report = client.get(f"/reports/team/{self.tomas}")
-        self.assertEqual(admin_report.status_code, 200)
-        pdf = client.get(f"/reports/team/{self.tomas}/pdf")
-        self.assertEqual(pdf.status_code, 200)
+        admin = self._login(self.admin_id, ROLE_ADMIN, self.org)
+        self.assertIn(admin.get(f"/reports/team/{self.tomas}").status_code, (302, 403))
+        self.assertIn(admin.get("/reports/team").status_code, (302, 403))
+        self.assertIn(admin.get(f"/reports/team/{self.tomas}/pdf").status_code, (302, 403))
+
+        foreign = self._login(
+            self.foreign_user, ROLE_AGENT, self.other, self.foreign_leader
+        )
+        self.assertIn(foreign.get(f"/reports/team/{self.tomas}").status_code, (302, 403))
+        self.assertEqual(
+            foreign.get(f"/reports/team/{self.foreign_leader}").status_code,
+            200,
+        )
 
 
 if __name__ == "__main__":

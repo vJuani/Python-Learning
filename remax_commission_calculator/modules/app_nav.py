@@ -6,7 +6,7 @@ import os
 
 from flask import url_for
 
-from modules.auth import is_admin, is_agent, is_guest_session
+from modules.auth import is_admin, is_agent, is_guest_session, is_team_leader
 
 
 ROLE_ADMIN = "admin"
@@ -54,7 +54,7 @@ NAV_GROUPS = (
         "key": "crm",
         "label_key": "nav_group_crm",
         "icon": "contacts",
-        "roles": (ROLE_ADMIN, ROLE_AGENT),
+        "roles": (ROLE_AGENT,),
         "children": (
             {
                 "key": "contacts",
@@ -62,7 +62,8 @@ NAV_GROUPS = (
                 "icon": "contacts",
                 "endpoint": "contacts_index",
                 "active_prefixes": ("contacts_",),
-                "roles": (ROLE_ADMIN, ROLE_AGENT),
+                "roles": (ROLE_AGENT,),
+                "require_agent_id": True,
             },
         ),
     },
@@ -94,11 +95,12 @@ NAV_GROUPS = (
         "key": "agenda",
         "label_key": "agenda_title",
         "icon": "agenda",
-        "roles": (ROLE_ADMIN, ROLE_AGENT),
+        "roles": (ROLE_AGENT,),
         "item": {
             "key": "agenda",
             "endpoint": "agenda_index",
             "active_prefixes": ("agenda_",),
+            "require_agent_id": True,
         },
     },
     {
@@ -182,11 +184,12 @@ NAV_GROUPS = (
         "key": "marketing",
         "label_key": "marketing_ia_title",
         "icon": "marketing",
-        "roles": (ROLE_ADMIN, ROLE_AGENT),
+        "roles": (ROLE_AGENT,),
         "item": {
             "key": "marketing",
             "endpoint": "marketing_home",
             "active_prefixes": ("marketing_",),
+            "require_agent_id": True,
         },
     },
     {
@@ -218,14 +221,6 @@ NAV_GROUPS = (
                 "roles": (ROLE_ADMIN, ROLE_AGENT, ROLE_GUEST),
             },
             {
-                "key": "team_report_admin",
-                "label_key": "nav_team_report",
-                "icon": "team",
-                "endpoint": "team_report",
-                "active_prefixes": ("team_report",),
-                "roles": (ROLE_ADMIN,),
-            },
-            {
                 "key": "team_report_agent",
                 "label_key": "nav_team_report",
                 "icon": "team",
@@ -234,6 +229,7 @@ NAV_GROUPS = (
                 "active_prefixes": ("team_report",),
                 "roles": (ROLE_AGENT,),
                 "require_agent_id": True,
+                "require_team_leader": True,
             },
             {
                 "key": "productivity",
@@ -346,7 +342,7 @@ OMITTED_ITEMS = (
     },
     {
         "label": "Historia / Post / Flyer",
-        "reason": "Marketing hub lives at /marketing; composer remains /marketing/new",
+        "reason": "Marketing chat lives at /marketing; composer remains /marketing/new",
     },
 )
 
@@ -408,6 +404,8 @@ def _resolve_item(spec, *, user, role, endpoint, badges, language, translate):
     if not _role_allowed(spec.get("roles") or (role,), role):
         return None
     if spec.get("require_agent_id") and not _has_agent_id(user):
+        return None
+    if spec.get("require_team_leader") and not is_team_leader(user):
         return None
     try:
         href = url_for(spec["endpoint"], **_endpoint_args(spec, user))

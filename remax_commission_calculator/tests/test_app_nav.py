@@ -37,6 +37,13 @@ class AppNavTests(unittest.TestCase):
         cls.org = add_organization("Nav Org")
         pwd = hash_password("Password1")
         cls.agent_id = add_agent("Ana Nav", "Alto", cls.org)
+        cls.leader_id = add_agent("Luis Leader", "Puro", cls.org)
+        cls.junior_id = add_agent(
+            "Junior Nav",
+            "Junior",
+            cls.org,
+            team_leader_agent_id=cls.leader_id,
+        )
         cls.admin_id = add_user("admin_nav", pwd, ROLE_ADMIN, cls.org)
         cls.agent_user_id = add_user(
             "agent_nav",
@@ -46,6 +53,15 @@ class AppNavTests(unittest.TestCase):
             agent_id=cls.agent_id,
             first_name="Ana",
             last_name="Nav",
+        )
+        cls.leader_user_id = add_user(
+            "leader_nav",
+            pwd,
+            ROLE_AGENT,
+            cls.org,
+            agent_id=cls.leader_id,
+            first_name="Luis",
+            last_name="Leader",
         )
 
     def _nav(self, user, endpoint=None, unread=0):
@@ -80,7 +96,10 @@ class AppNavTests(unittest.TestCase):
         self.assertNotIn("acm_list", keys)
         self.assertNotIn("productivity_home", keys)
         self.assertIn("jrh_ask", keys)
-        self.assertIn("marketing_home", keys)
+        self.assertNotIn("marketing_home", keys)
+        self.assertNotIn("contacts_index", keys)
+        self.assertNotIn("agenda_index", keys)
+        self.assertNotIn("team_report", keys)
         self.assertEqual(nav["role"], "admin")
 
     def test_agent_sees_crm_agenda_not_cash(self):
@@ -89,6 +108,8 @@ class AppNavTests(unittest.TestCase):
             keys = visible_endpoints(user)
         self.assertIn("contacts_index", keys)
         self.assertIn("agenda_index", keys)
+        self.assertIn("marketing_home", keys)
+        self.assertNotIn("team_report", keys)
         self.assertIn("acm_list", keys)
         self.assertIn("my_agent_account", keys)
         self.assertIn("billing_list", keys)
@@ -198,6 +219,15 @@ class AppNavTests(unittest.TestCase):
         self.assertIn("logo-horizontal-dark-green.png", body)
         self.assertIn("isotype-dark-green.png", body)
 
+    def test_team_leader_sees_team_summary_and_agent_tools(self):
+        leader = self._user(self.leader_user_id, ROLE_AGENT, self.leader_id)
+        with app.test_request_context("/"):
+            keys = visible_endpoints(leader)
+        self.assertIn("team_report", keys)
+        self.assertIn("agenda_index", keys)
+        self.assertIn("contacts_index", keys)
+        self.assertIn("marketing_home", keys)
+
     def test_http_admin_page_shows_treasury(self):
         client = app.test_client()
         with client.session_transaction() as session:
@@ -209,6 +239,10 @@ class AppNavTests(unittest.TestCase):
         self.assertIn('href="/cash"', body)
         self.assertIn('href="/users"', body)
         self.assertNotIn('href="/acm"', body)
+        self.assertNotIn('href="/contacts"', body)
+        self.assertNotIn('href="/agenda"', body)
+        self.assertNotIn('href="/marketing"', body)
+        self.assertNotIn('href="/reports/team"', body)
 
     def test_nav_groups_have_unique_keys(self):
         keys = [group["key"] for group in NAV_GROUPS]

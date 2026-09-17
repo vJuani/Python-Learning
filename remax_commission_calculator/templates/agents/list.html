@@ -243,11 +243,7 @@
                 </div>
                 <div class="agents-banner__links">
                     <a href="{{ url_for('reports_index') }}">{{ t('agents_banner_reports') }}</a>
-                    {% if agents_panel.team_report_leader_id %}
-                    <a href="{{ url_for('team_report', team_leader_id=agents_panel.team_report_leader_id) }}">{{ t('agents_banner_compare') }}</a>
-                    {% else %}
                     <a href="{{ url_for('reports_index') }}">{{ t('agents_banner_compare') }}</a>
-                    {% endif %}
                     <a href="{{ url_for('reports_index', view='monthly') }}">{{ t('agents_banner_incentives') }}</a>
                 </div>
             </section>

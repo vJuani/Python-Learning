@@ -63,7 +63,9 @@
             <p>{{ task.title }}</p>
         </article>
         {% endfor %}
+        {% if can_use_agent_workspace() %}
         <a class="btn btn-secondary" href="{{ url_for('agenda_index') }}">{{ t('property_open_agenda') }}</a>
+        {% endif %}
     </section>
     {% endif %}
 

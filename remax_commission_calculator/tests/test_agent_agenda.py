@@ -496,9 +496,9 @@ class AgentAgendaTests(unittest.TestCase):
         self._login("agenda_admin_a")
         response = self.client.get("/agenda?filter=upcoming")
 
-        self.assertEqual(response.status_code, 200)
+        self.assertIn(response.status_code, (302, 403))
         body = response.get_data(as_text=True)
-        self.assertIn("Tarea org A", body)
+        self.assertNotIn("Tarea org A", body)
         self.assertNotIn("Tarea org B", body)
 
     def test_14_agent_cannot_see_another_agenda(self):

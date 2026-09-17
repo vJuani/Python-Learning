@@ -77,7 +77,7 @@
     </svg>
     <span class="app-nav-link__label">{{ t('nav_my_operations') }}</span>
 </a>
-{% if not is_guest_session() %}
+{% if can_use_agent_workspace() %}
 <a
     href="{{ url_for('agenda_index') }}"
     class="nav-link app-nav-link app-nav-link--agenda{% if request.endpoint and request.endpoint.startswith('agenda_') %} active{% endif %}"
@@ -98,6 +98,16 @@
         <path d="M16 8h5M18.5 5.5v5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
     </svg>
     <span class="app-nav-link__label">{{ t('contacts_title') }}</span>
+</a>
+<a
+    href="{{ url_for('marketing_home') }}"
+    class="nav-link app-nav-link{% if request.endpoint and request.endpoint.startswith('marketing_') %} active{% endif %}"
+>
+    <svg class="app-nav-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 10v4l12-6v12L5 14" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+        <path d="M5 14c0 2 1.5 4 4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+    </svg>
+    <span class="app-nav-link__label">{{ t('marketing_ia_title') }}</span>
 </a>
 {% endif %}
 {% if is_admin() %}
@@ -149,17 +159,6 @@
 
 {% if can_manage_users() %}
 <a
-    href="{{ url_for('team_report') }}"
-    class="nav-link app-nav-link app-nav-link--team{% if request.endpoint and request.endpoint.startswith('team_report') %} active{% endif %}"
->
-    <svg class="app-nav-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="8" cy="9" r="2.5" stroke="currentColor" stroke-width="1.75"/>
-        <circle cx="16" cy="9" r="2.5" stroke="currentColor" stroke-width="1.75"/>
-        <path d="M3 19c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
-    </svg>
-    <span class="app-nav-link__label">{{ t('nav_team_report') }}</span>
-</a>
-<a
     href="{{ url_for('organization_settings') }}"
     class="nav-link app-nav-link app-nav-link--settings{% if request.endpoint == 'organization_settings' %} active{% endif %}"
 >
@@ -170,6 +169,7 @@
     <span class="app-nav-link__label">{{ t('nav_profile') }}</span>
 </a>
 {% elif is_agent() and current_user and current_user.agent_id %}
+{% if is_team_leader() %}
 <a
     href="{{ url_for('team_report', team_leader_id=current_user.agent_id) }}"
     class="nav-link app-nav-link app-nav-link--team{% if request.endpoint and request.endpoint.startswith('team_report') %} active{% endif %}"
@@ -181,6 +181,7 @@
     </svg>
     <span class="app-nav-link__label">{{ t('nav_team_report') }}</span>
 </a>
+{% endif %}
 <a
     href="{{ url_for('my_agent_account') }}"
     class="nav-link app-nav-link app-nav-link--my-account{% if request.endpoint == 'my_agent_account' %} active{% endif %}"

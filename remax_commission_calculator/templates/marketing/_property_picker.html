@@ -1,0 +1,45 @@
+<dialog class="mkt-picker" data-mkt-picker>
+    <form method="dialog" class="mkt-picker__sheet">
+        <header class="mkt-picker__head">
+            <h2>{{ t('marketing_ia_pick_property') }}</h2>
+            <button type="submit" class="mkt-picker__close" aria-label="{{ t('marketing_ia_close_picker') }}">×</button>
+        </header>
+        <label class="visually-hidden" for="mkt-property-search">{{ t('marketing_ia_search_property') }}</label>
+        <input
+            id="mkt-property-search"
+            class="mkt-picker__search"
+            type="search"
+            placeholder="{{ t('marketing_ia_search_property') }}"
+            data-mkt-property-search
+            autocomplete="off"
+        >
+        <div class="mkt-picker__list" data-mkt-property-list>
+            {% for item in view.properties %}
+            <button
+                type="button"
+                class="mkt-picker__card"
+                data-mkt-pick-property
+                data-id="{{ item.id }}"
+                data-label="{{ item.address }}"
+                data-search="{{ item.address }} {{ item.locality or '' }} {{ item.neighborhood or '' }} {{ item.jurisdiction or '' }}"
+            >
+                {% if item.cover_url %}
+                <img src="{{ item.cover_url }}" alt="">
+                {% else %}
+                <span class="mkt-picker__ph" aria-hidden="true"></span>
+                {% endif %}
+                <span>
+                    <strong>{{ item.address }}</strong>
+                    <em>{{ item.locality or item.neighborhood or item.jurisdiction or '' }}</em>
+                    <small>
+                        {% if item.listing_price is not none %}{{ item.listing_price|listing_money(item.listing_currency) }}{% endif %}
+                        {% if item.rooms %} · {{ item.rooms }} amb.{% endif %}
+                    </small>
+                </span>
+            </button>
+            {% else %}
+            <p class="field-help">{{ t('marketing_ia_err_property') }}</p>
+            {% endfor %}
+        </div>
+    </form>
+</dialog>

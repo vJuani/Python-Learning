@@ -59,7 +59,6 @@ from modules.auth import (
     is_guest_session,
     login_required,
 )
-from modules.database.agents_repository import get_agents
 from modules.database.operations_repository import filter_operations
 from modules.database.properties_repository import (
     get_properties,
@@ -328,26 +327,11 @@ def register_agenda_routes(app, helpers):
     @app.route("/agenda")
     @login_required
     def agenda_index():
-        user = _require_user()
+        user, agent_id = _require_agent_user()
         organization_id = require_user_organization()
         language = get_current_language()
-        viewer_is_agent = is_agent(user)
-        agent_id = None
+        viewer_is_agent = True
         agents = []
-
-        if viewer_is_agent:
-            agent_id = user.get("agent_id")
-
-            if agent_id is None:
-                abort(403)
-        else:
-            agents = get_agents(organization_id)
-            requested = (request.args.get("agent_id") or "").strip()
-
-            if requested:
-                allowed = {str(agent["id"]) for agent in agents}
-                if requested in allowed:
-                    agent_id = int(requested)
 
         agenda_filter = (request.args.get("filter") or "").strip()
 

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-marketing-ia-page is-marketing-chat-page{% if is_mobile %} is-mobile{% endif %}{% endblock %}
+
+{% block mobile_topbar_title %}{{ t('marketing_ia_title') }}{% endblock %}
+
+{% block title %}{{ t('marketing_ia_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-chat.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/jrh-voice.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/marketing.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/marketing-chat.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+{% set conversation = view.conversation %}
+{% set send_action = url_for('marketing_conversation', conversation_id=conversation.id) if conversation else url_for('marketing_chat_send') %}
+<section class="mkt-chat" data-mkt-chat>
+    <aside class="mkt-chat__sidebar" data-mkt-sidebar>
+        <a class="mkt-chat__new" href="{{ url_for('marketing_home') }}">{{ t('marketing_ia_new_chat') }}</a>
+        {% include "marketing/_chat_recents.html" %}
+        <nav class="mkt-chat__tools" aria-label="{{ t('marketing_ia_title') }}">
+            <a href="{{ url_for('marketing_generations') }}">{{ t('marketing_ia_creations') }}</a>
+            <a href="{{ url_for('marketing_brand_kit') }}">{{ t('marketing_ia_brand_kit') }}</a>
+            <a href="{{ url_for('marketing_templates') }}">{{ t('marketing_ia_templates') }}</a>
+            <a href="{{ url_for('organization_settings') if view.is_admin else url_for('marketing_brand_kit') }}">{{ t('marketing_ia_settings') }}</a>
+        </nav>
+    </aside>
+
+    <div class="mkt-chat__main">
+        <header class="mkt-chat__header">
+            <button type="button" class="mkt-chat__history-btn hide-desktop" data-mkt-history aria-expanded="false">{{ t('marketing_history') }}</button>
+            <h1>{{ t('marketing_ia_title') }}</h1>
+        </header>
+
+        <div class="mkt-chat__thread" data-mkt-thread>
+            {% if conversation and view.messages %}
+            {% for message in view.messages %}
+            <div class="mkt-msg mkt-msg--{{ message.role }}" id="m-{{ message.id }}">
+                {% if message.role == 'assistant' %}
+                <div class="mkt-msg__bot" aria-hidden="true">
+                    {% with variant='hero', width=36, height=48, decorative=true %}
+                    {% include "dashboard/_jrh_mascot.html" %}
+                    {% endwith %}
+                </div>
+                {% endif %}
+                <div class="mkt-msg__bubble">
+                    {% if message.message_type == 'generation' and message.generation %}
+                    {% with generation=message.generation %}
+                    {% include "marketing/_chat_result.html" %}
+                    {% endwith %}
+                    {% elif message.content %}
+                    <p>{{ message.content }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="mkt-chat__empty">
+                <div class="mkt-chat__empty-bot">
+                    {% with variant='hero', width=96, height=128, decorative=true %}
+                    {% include "dashboard/_jrh_mascot.html" %}
+                    {% endwith %}
+                </div>
+                <h2>{{ t('marketing_ia_title') }}</h2>
+                <p class="mkt-chat__hello">{{ t('marketing_ia_chat_hello') }}</p>
+                <p class="mkt-chat__help">{{ t('marketing_ia_chat_help') }}</p>
+                <div class="mkt-chat__starters">
+                    <button type="button" data-mkt-starter data-prompt="{{ t('marketing_ia_starter_post_prompt') }}">{{ t('marketing_ia_starter_post') }}</button>
+                    <button type="button" data-mkt-starter data-prompt="{{ t('marketing_ia_starter_story_prompt') }}">{{ t('marketing_ia_starter_story') }}</button>
+                    <button type="button" data-mkt-starter data-prompt="{{ t('marketing_ia_starter_carousel_prompt') }}">{{ t('marketing_ia_starter_carousel') }}</button>
+                    <button type="button" data-mkt-starter data-prompt="{{ t('marketing_ia_starter_reel_prompt') }}">{{ t('marketing_ia_starter_reel') }}</button>
+                    <button type="button" data-mkt-starter data-prompt="{{ t('marketing_ia_starter_capture_prompt') }}">{{ t('marketing_ia_starter_capture') }}</button>
+                    <button type="button" data-mkt-starter data-prompt="{{ t('marketing_ia_starter_brand_prompt') }}">{{ t('marketing_ia_starter_brand') }}</button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <form class="mkt-composer" method="post" action="{{ send_action }}" enctype="multipart/form-data" data-mkt-composer>
+            {% if conversation %}
+            <input type="hidden" name="conversation_id" value="{{ conversation.id }}">
+            {% endif %}
+            <input type="hidden" name="property_id" value="{{ view.selected_property.id if view.selected_property else '' }}" data-mkt-property-id>
+            <p class="mkt-composer__status" data-mkt-generating hidden>{{ t('marketing_ia_generating') }}</p>
+            <div class="mkt-chip" data-mkt-property-chip{% if not view.selected_property %} hidden{% endif %}>
+                <span data-mkt-property-label>{% if view.selected_property %}🏠 {{ view.selected_property.address }}{% endif %}</span>
+                <button type="button" data-mkt-clear-property aria-label="{{ t('marketing_ia_clear_property') }}">×</button>
+            </div>
+            <label class="visually-hidden" for="mkt-chat-prompt">{{ t('marketing_ia_composer_ph') }}</label>
+            <textarea
+                id="mkt-chat-prompt"
+                name="prompt"
+                rows="2"
+                required
+                placeholder="{{ t('marketing_ia_composer_ph') }}"
+                data-mkt-chat-prompt
+            ></textarea>
+            <div class="mkt-composer__bar">
+                <label class="mkt-composer__tool">
+                    <input type="file" name="attachment" accept="image/*,.pdf" hidden data-mkt-file>
+                    <span aria-hidden="true">📎</span>
+                    <span class="visually-hidden">{{ t('marketing_ia_attach') }}</span>
+                </label>
+                <button type="button" class="mkt-composer__tool" data-mkt-open-picker>
+                    🏠 {{ t('marketing_ia_pick_property') }}
+                </button>
+                <button
+                    type="button"
+                    class="mkt-composer__tool"
+                    data-jrh-voice
+                    aria-label="{{ t('jrh_voice_talk') }}"
+                >🎤</button>
+                <button type="submit" class="mkt-composer__send" aria-label="{{ t('marketing_ia_send') }}">➜</button>
+            </div>
+            <p class="mkt-composer__hint" data-jrh-voice-status data-listening="{{ t('jrh_voice_listening') }}" data-transcribing="{{ t('jrh_voice_transcribing') }}" data-heard="{{ t('jrh_voice_heard') }}" hidden></p>
+            <p class="mkt-composer__hint" data-jrh-voice-unsupported hidden>{{ t('jrh_voice_unsupported') }}</p>
+        </form>
+    </div>
+    {% include "marketing/_property_picker.html" %}
+</section>
+{% endblock %}

@@ -542,7 +542,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         asset = result["assets"][0]
         self.assertTrue(can_view_asset(self._user(self.agent_user_id), asset))
-        self.assertTrue(can_view_asset(self._user(self.admin_id), asset))
+        self.assertFalse(can_view_asset(self._user(self.admin_id), asset))
         self.assertFalse(can_view_asset(self._user(self.other_user_id), asset))
         client = app.test_client()
         guest = client.get("/marketing")
@@ -555,7 +555,7 @@ class MarketingIaTests(unittest.TestCase):
             sess["user_id"] = self.agent_user_id
         hub = client.get("/marketing")
         self.assertEqual(hub.status_code, 200)
-        self.assertIn("Crear contenido".encode("utf-8"), hub.data)
+        self.assertIn("¿Qué querés crear hoy?".encode("utf-8"), hub.data)
         self.assertIn("Mis creaciones".encode("utf-8"), hub.data)
         ok = client.get("/marketing/new", follow_redirects=True)
         self.assertEqual(ok.status_code, 200)

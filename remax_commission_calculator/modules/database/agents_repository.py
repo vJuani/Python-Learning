@@ -162,6 +162,12 @@ def list_team_juniors(team_leader_agent_id, organization_id):
     ]
 
 
+def agent_is_team_leader(organization_id, agent_id):
+    if agent_id is None:
+        return False
+    return len(list_team_juniors(agent_id, organization_id)) > 0
+
+
 def find_agent_by_external_id(
     organization_id,
     external_provider,

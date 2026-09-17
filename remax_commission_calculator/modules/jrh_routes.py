@@ -5,6 +5,7 @@ from __future__ import annotations
 from flask import abort, redirect, render_template, request, session, url_for
 
 from modules.auth import (
+    can_use_agent_workspace,
     get_current_user,
     is_admin,
     is_agent,
@@ -158,7 +159,8 @@ def register_jrh_routes(app, helpers):
             jrh_chip_actions=build_jrh_chip_actions(
                 can_acm=bool(is_agent(user) and agent_id),
                 can_productivity=bool(is_agent(user) and agent_id),
-                can_marketing=bool((is_agent(user) and agent_id) or is_admin(user)),
+                can_marketing=can_use_agent_workspace(user),
+                can_agent_workspace=can_use_agent_workspace(user),
             ),
             jrh_now_label=now_label,
         )

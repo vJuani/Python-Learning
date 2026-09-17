@@ -34,6 +34,8 @@ from modules.auth import (
     is_admin,
     is_agent,
     is_guest_session,
+    is_team_leader,
+    can_use_agent_workspace,
     load_logged_in_user,
     login_guest_access,
     login_required,
@@ -539,6 +541,8 @@ def inject_auth_helpers():
         "can_approve": can_approve,
         "is_admin": is_admin,
         "is_agent": is_agent,
+        "is_team_leader": is_team_leader,
+        "can_use_agent_workspace": can_use_agent_workspace,
         "pending_access_requests": (
             count_pending_approvals(
                 user["organization_id"]
@@ -1573,8 +1577,10 @@ def get_dashboard_context(
         and not is_guest_session()
         and agent_id is not None
     ):
-        from modules.team_reports import (
+        from modules.database.agents_repository import (
             agent_is_team_leader,
+        )
+        from modules.team_reports import (
             build_dashboard_team_block,
         )
 
@@ -1607,7 +1613,8 @@ def get_dashboard_context(
         "jrh_chip_actions": build_jrh_chip_actions(
             can_acm=False,
             can_productivity=False,
-            can_marketing=is_admin(user),
+            can_marketing=can_use_agent_workspace(user),
+            can_agent_workspace=can_use_agent_workspace(user),
         ),
     }
 
@@ -4791,7 +4798,8 @@ def agents_detail(agent_id):
 
     can_view_team_report = (
         view["is_team_leader"]
-        and (is_admin_user or is_self)
+        and is_self
+        and is_team_leader(current_user)
     )
     billing_profile = None
     billing_profile_ready = False
@@ -4810,7 +4818,7 @@ def agents_detail(agent_id):
     return render_template(
         "agents/detail.html",
         agent=view["agent"],
-        is_team_leader=view["is_team_leader"],
+        profile_is_team_leader=view["is_team_leader"],
         juniors=view["juniors"],
         junior_rows=view["junior_rows"],
         team_leader=view["team_leader"],
@@ -4856,19 +4864,23 @@ def _require_team_report_access(team_leader_id):
 
     organization_id = require_user_organization()
     current_user = get_current_user()
-    leader = get_agent_by_id(team_leader_id, organization_id)
+    if not is_team_leader(current_user):
+        abort(403)
 
+    own_id = current_user.get("agent_id")
+    if own_id is None or int(own_id) != int(team_leader_id):
+        abort(403)
+
+    from modules.database.agents_repository import agent_is_team_leader
+
+    if not agent_is_team_leader(organization_id, own_id):
+        abort(403)
+
+    leader = get_agent_by_id(own_id, organization_id)
     if leader is None:
         abort(404)
 
-    if is_admin(current_user):
-        return organization_id, leader
-
-    linked_id = current_user.get("agent_id")
-    if linked_id == team_leader_id:
-        return organization_id, leader
-
-    abort(403)
+    return organization_id, leader
 
 
 def _load_team_report_for_request(team_leader_id):
@@ -4876,24 +4888,11 @@ def _load_team_report_for_request(team_leader_id):
         team_leader_id
     )
 
-    # Admin may switch leader via query param
-    current_user = get_current_user()
-    selected_id = team_leader_id
-    if is_admin(current_user):
-        raw = request.args.get("team_leader_id")
-        if raw:
-            try:
-                candidate = int(raw)
-                if get_agent_by_id(candidate, organization_id):
-                    selected_id = candidate
-            except (TypeError, ValueError):
-                pass
-
     from modules.team_reports import load_team_report
 
     report = load_team_report(
         organization_id,
-        selected_id,
+        _leader["id"],
         request.args,
         language=get_current_language(),
     )
@@ -4914,24 +4913,14 @@ def team_report(team_leader_id=None):
     organization_id = require_user_organization()
     current_user = get_current_user()
 
+    if not is_team_leader(current_user):
+        abort(403)
+
+    linked = current_user.get("agent_id")
+    if linked is None:
+        abort(403)
+
     if team_leader_id is None:
-        if is_admin(current_user):
-            from modules.team_reports import list_team_leaders
-
-            leaders = list_team_leaders(organization_id)
-            if not leaders:
-                flash_i18n("team_no_leaders", "error")
-                return redirect(url_for("agents_list"))
-            return redirect(
-                url_for(
-                    "team_report",
-                    team_leader_id=leaders[0]["id"],
-                )
-            )
-
-        linked = current_user.get("agent_id")
-        if linked is None:
-            abort(403)
         return redirect(
             url_for("team_report", team_leader_id=linked)
         )
