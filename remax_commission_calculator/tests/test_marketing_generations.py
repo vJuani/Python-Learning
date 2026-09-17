@@ -1291,6 +1291,110 @@ class MarketingGenerationsTests(unittest.TestCase):
         conversation = get_marketing_conversation(conversation_id, self.org)
         self.assertEqual(conversation["property_id"], self.italia_id)
 
+    def test_http_chat_italia_twins_keep_same_property_id_for_copy_and_visual(self):
+        """Two listings share address; only one has photos. Pipeline must stick to that id."""
+        from modules.database import add_property
+        from modules.database.marketing_conversations_repository import (
+            get_marketing_conversation,
+            last_generation_id_for_conversation,
+        )
+        from modules.database.marketing_generations_repository import get_marketing_generation
+        from modules.marketing_context import build_property_marketing_context
+        from modules.marketing_chat_service import interpret_prompt, resolve_property_from_prompt
+
+        bare_twin = add_property(
+            "Italia 1341",
+            "Martínez",
+            self.org,
+            agent_id=self.agent_id,
+            neighborhood="Martínez",
+            locality="Martínez",
+            created_by_user_id=self.admin_id,
+        )
+        photo_twin = add_property(
+            "Italia 1341",
+            "Martínez",
+            self.org,
+            agent_id=self.agent_id,
+            neighborhood="Martínez",
+            locality="Martínez",
+            created_by_user_id=self.admin_id,
+        )
+        _add_listing_photo(self.org, photo_twin, "italia-twin.jpg")
+        self.assertNotEqual(bare_twin, photo_twin)
+
+        properties = [
+            {
+                "id": bare_twin,
+                "address": "Italia 1341",
+                "locality": "Martínez",
+                "neighborhood": "Martínez",
+                "photo_count": 0,
+                "has_photos": False,
+            },
+            {
+                "id": photo_twin,
+                "address": "Italia 1341",
+                "locality": "Martínez",
+                "neighborhood": "Martínez",
+                "photo_count": 3,
+                "has_photos": True,
+                "cover_url": "/covers/twin.jpg",
+            },
+        ]
+        resolved = resolve_property_from_prompt("Haceme una publicación de Italia", properties)
+        self.assertEqual(resolved["status"], "resolved")
+        self.assertEqual(resolved["property"]["id"], photo_twin)
+        self.assertTrue(resolved["auto_picked"])
+        intent = interpret_prompt("Haceme una publicación de Italia", properties=properties)
+        self.assertEqual(intent["property_id"], photo_twin)
+
+        client = self._login(self.agent_user_id, ROLE_AGENT, agent_id=self.agent_id)
+        created = client.post(
+            "/marketing/chat",
+            data={"prompt": "Haceme una publicación de Italia 1341"},
+            follow_redirects=False,
+        )
+        self.assertEqual(created.status_code, 302)
+        location = created.headers["Location"]
+        body = client.get(location).get_data(as_text=True)
+        self.assertIn("tiene fotos", body.lower())
+        self.assertNotIn("esta propiedad no tiene fotos", body.lower())
+        self.assertIn("mkt-result__gallery", body)
+
+        conversation_id = int(location.rstrip("/").split("/")[-1])
+        conversation = get_marketing_conversation(conversation_id, self.org)
+        self.assertEqual(conversation["property_id"], photo_twin)
+        last_id = last_generation_id_for_conversation(conversation_id, self.org)
+        generation = get_marketing_generation(last_id, self.org)
+        self.assertEqual(generation["property_id"], photo_twin)
+        self.assertEqual(
+            (generation.get("generated_data") or {}).get("resolved_property_id"),
+            photo_twin,
+        )
+        self.assertEqual(
+            (generation.get("generated_data") or {}).get("visual_status"),
+            "completed",
+        )
+        photo_count = build_property_marketing_context(
+            {"id": photo_twin, "organization_id": self.org, "address": "Italia 1341"},
+            language="es",
+        ).get("photo_count")
+        self.assertGreater(photo_count, 0)
+
+        # Retry must keep the same generation property_id (never re-resolve by text).
+        retry = client.post(
+            f"/marketing/c/{conversation_id}/regenerate",
+            data={"generation_id": str(last_id), "visual_only": "1"},
+            follow_redirects=False,
+        )
+        self.assertEqual(retry.status_code, 302)
+        retried = get_marketing_generation(last_id, self.org)
+        self.assertEqual(retried["property_id"], photo_twin)
+        conversation = get_marketing_conversation(conversation_id, self.org)
+        self.assertEqual(conversation["property_id"], photo_twin)
+
+
     def test_http_chat_italia_auto_picks_listing_with_photos(self):
         from modules.database import add_property
         from modules.database.marketing_conversations_repository import (

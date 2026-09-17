@@ -481,6 +481,25 @@ def _tokens(text):
     return [part for part in re.split(r"[^\w]+", text or "") if part]
 
 
+def _as_property_id(value):
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _find_property_by_id(properties, property_id):
+    target = _as_property_id(property_id)
+    if target is None or not properties:
+        return None
+    for item in properties:
+        if _as_property_id(item.get("id")) == target:
+            return item
+    return None
+
+
 def _expand_token(token):
     return _ABBREVIATIONS.get(token, token)
 
@@ -589,6 +608,11 @@ def _photo_count(item):
 
 def _has_listing_photos(item):
     return _photo_count(item) > 0
+
+
+def _log_property_trace(event, **fields):
+    parts = [f"{key}={fields[key]}" for key in sorted(fields) if fields[key] is not None]
+    logger.info("%s %s", event, " ".join(parts))
 
 
 def _is_publishable_listing(item):
@@ -882,7 +906,10 @@ def interpret_prompt(
         origin = "office"
         content_type = content_type or "post"
 
-    composer_property_id = property_id
+    composer_property_id = _as_property_id(property_id)
+    conversation_property_id = _as_property_id((conversation or {}).get("property_id"))
+    last_property_id = _as_property_id((last_generation or {}).get("property_id"))
+    property_id = composer_property_id
     query = extract_property_query(prompt)
     resolution = {
         "query": query,
@@ -892,24 +919,21 @@ def interpret_prompt(
         "auto_picked": False,
     }
     matched = None
-    current_listing = None
-    if conversation and conversation.get("property_id") and properties:
-        current_listing = next(
-            (
-                item
-                for item in properties
-                if item.get("id") == conversation.get("property_id")
-            ),
-            None,
-        )
+    current_listing = _find_property_by_id(properties, conversation_property_id)
+    last_listing = _find_property_by_id(properties, last_property_id)
     if composer_property_id:
         resolution["status"] = "selected"
-    elif _should_search_property(folded, query):
-        if (
-            current_listing
-            and query
-            and _score_property_query(current_listing, query) >= _MIN_PROPERTY_SCORE
-        ):
+        matched = _find_property_by_id(properties, composer_property_id)
+        if matched:
+            resolution["property"] = matched
+            resolution["matches"] = [matched]
+    elif conversation_property_id and current_listing:
+        # Pinned conversation listing wins: never re-resolve twins by address/title.
+        query_matches_pinned = (
+            not query
+            or _score_property_query(current_listing, query) >= _MIN_PROPERTY_SCORE
+        )
+        if query_matches_pinned or not _should_search_property(folded, query):
             resolution = {
                 "query": query,
                 "status": "inherited",
@@ -918,26 +942,61 @@ def interpret_prompt(
                 "auto_picked": False,
             }
             matched = current_listing
-            property_id = current_listing.get("id")
-        else:
+            property_id = conversation_property_id
+        elif _should_search_property(folded, query):
             resolution = resolve_property_from_prompt(prompt, properties)
             if resolution.get("status") == "resolved":
                 matched = resolution.get("property")
-                property_id = (matched or {}).get("id")
+                property_id = _as_property_id((matched or {}).get("id"))
+                reason = "has_photos" if resolution.get("auto_picked") else "unique_match"
+                _log_property_trace(
+                    "marketing_property_resolved",
+                    property_id=property_id,
+                    reason=reason,
+                    score=listing_marketing_score(matched, query) if matched else None,
+                    photo_count=_photo_count(matched),
+                    auto_picked=int(bool(resolution.get("auto_picked"))),
+                )
             elif resolution.get("status") in {"none", "ambiguous"}:
                 property_id = None
+    elif last_property_id and last_listing and not _should_search_property(folded, query):
+        resolution = {
+            "query": query,
+            "status": "inherited",
+            "property": last_listing,
+            "matches": [last_listing],
+            "auto_picked": False,
+        }
+        matched = last_listing
+        property_id = last_property_id
+    elif _should_search_property(folded, query):
+        resolution = resolve_property_from_prompt(prompt, properties)
+        if resolution.get("status") == "resolved":
+            matched = resolution.get("property")
+            property_id = _as_property_id((matched or {}).get("id"))
+            reason = "has_photos" if resolution.get("auto_picked") else "unique_match"
+            _log_property_trace(
+                "marketing_property_resolved",
+                property_id=property_id,
+                reason=reason,
+                score=listing_marketing_score(matched, query) if matched else None,
+                photo_count=_photo_count(matched),
+                auto_picked=int(bool(resolution.get("auto_picked"))),
+            )
+        elif resolution.get("status") in {"none", "ambiguous"}:
+            property_id = None
     explicit_listing_ref = bool(_PROPERTY_NOUN_RE.search(folded)) or any(
         token.isdigit() for token in _tokens(resolution.get("query") or "")
     )
     if (
         not property_id
-        and conversation
-        and conversation.get("property_id")
+        and conversation_property_id
         and resolution.get("status") != "ambiguous"
         and not (resolution.get("status") == "none" and explicit_listing_ref)
     ):
-        property_id = conversation.get("property_id")
+        property_id = conversation_property_id
         resolution["status"] = "inherited"
+        matched = matched or current_listing
 
     revising = bool(last_generation) and bool(
         REVISION_RE.search(folded) or content_type or len(folded) < 90
@@ -955,9 +1014,12 @@ def interpret_prompt(
         if not property_id and resolution.get("status") != "ambiguous" and not (
             resolution.get("status") == "none" and explicit_listing_ref
         ):
-            property_id = last_generation.get("property_id")
+            property_id = last_property_id
             if property_id and resolution.get("status") in {"unset", "none"}:
                 resolution["status"] = "inherited"
+                matched = matched or last_listing
+
+    property_id = _as_property_id(property_id)
 
     if origin is None:
         if property_id:
@@ -1051,6 +1113,7 @@ def _picker_properties(organization_id, user):
     try:
         from modules.property_sync.media import (
             get_property_media_url,
+            is_displayable_media,
             list_property_media_for_properties,
             pick_cover_media,
         )
@@ -1060,9 +1123,15 @@ def _picker_properties(organization_id, user):
             organization_id,
             [row["id"] for row in rows if row.get("id")],
         ):
-            grouped.setdefault(item["property_id"], []).append(item)
+            property_id = _as_property_id(item.get("property_id"))
+            if property_id is None:
+                continue
+            if not is_displayable_media(item):
+                continue
+            grouped.setdefault(property_id, []).append(item)
         for row in rows:
-            media = grouped.get(int(row["id"]), []) if row.get("id") else []
+            property_id = _as_property_id(row.get("id"))
+            media = grouped.get(property_id, []) if property_id is not None else []
             row["photo_count"] = len(media)
             row["has_photos"] = bool(media)
             cover = pick_cover_media(media)
@@ -1077,6 +1146,7 @@ def _picker_properties(organization_id, user):
 
 
 def _resolve_property(organization_id, user, property_id):
+    property_id = _as_property_id(property_id)
     if not property_id:
         return None
     record = get_property_record(property_id, organization_id)
@@ -1319,6 +1389,7 @@ def _run_visual_for_chat(
     language,
     last_generation=None,
     generation=None,
+    conversation=None,
 ):
     import os
 
@@ -1326,13 +1397,41 @@ def _run_visual_for_chat(
     from modules.marketing_service import start_marketing_batch
 
     generation_id = (generation or last_generation or {}).get("id")
-    property_id = intent.get("property_id") or (generation or last_generation or {}).get("property_id")
-    logger.info("marketing_visual_start generation_id=%s property_id=%s", generation_id, property_id)
+    # Generation property_id is the source of truth for what copy already used.
+    # Never re-resolve by address/title from the prompt.
+    generation_property_id = _as_property_id(
+        (generation or {}).get("property_id")
+        or (last_generation or {}).get("property_id")
+    )
+    conversation_property_id = _as_property_id((conversation or {}).get("property_id"))
+    intent_property_id = _as_property_id((intent or {}).get("property_id"))
+    property_id = generation_property_id or conversation_property_id or intent_property_id
+    if property_id and intent is not None:
+        intent["property_id"] = property_id
+
     if not property_id:
+        _log_property_trace(
+            "marketing_visual_start",
+            generation_id=generation_id,
+            resolved_property_id=None,
+            conversation_property_id=conversation_property_id,
+            generation_property_id=generation_property_id,
+            visual_property_id=None,
+            photo_count=0,
+        )
         return {"ok": False, "stage": "property", "error": "missing_property", "batch": None}
 
     property_data = get_property_record(property_id, organization_id)
     if property_data is None:
+        _log_property_trace(
+            "marketing_visual_start",
+            generation_id=generation_id,
+            resolved_property_id=property_id,
+            conversation_property_id=conversation_property_id,
+            generation_property_id=generation_property_id,
+            visual_property_id=property_id,
+            photo_count=0,
+        )
         return {"ok": False, "stage": "property", "error": "missing_property", "batch": None}
 
     context = build_property_marketing_context(
@@ -1341,10 +1440,19 @@ def _run_visual_for_chat(
         include_agent=intent.get("include_agent") is not False,
     )
     photos = context.get("photos") or []
+    photo_count = len(photos)
     agent = context.get("agent") or {}
-    logger.info("marketing_visual_photos count=%s", len(photos))
+    _log_property_trace(
+        "marketing_visual_start",
+        generation_id=generation_id,
+        resolved_property_id=property_id,
+        conversation_property_id=conversation_property_id,
+        generation_property_id=generation_property_id,
+        visual_property_id=property_id,
+        photo_count=photo_count,
+    )
     logger.info("marketing_visual_agent resolved=%s", str(bool(agent)).lower())
-    if not photos:
+    if photo_count <= 0:
         return {"ok": False, "stage": "photos", "error": "missing_photos", "batch": None}
 
     formats = _visual_formats(intent, generation or last_generation)
@@ -1369,6 +1477,12 @@ def _run_visual_for_chat(
             layout_template=intent.get("layout_template") or intent.get("format"),
             cta=intent.get("cta"),
         )
+        _log_property_trace(
+            "marketing_visual_complete",
+            generation_id=generation_id,
+            property_id=property_id,
+            photo_count=photo_count,
+        )
         return {"ok": True, "stage": "complete", "error": None, "batch": batch}
     finally:
         if previous is None:
@@ -1377,7 +1491,16 @@ def _run_visual_for_chat(
             os.environ["MARKETING_SYNC"] = previous
 
 
-def _apply_visual_to_generation(organization_id, user, intent, prompt, language, generation, last_generation=None):
+def _apply_visual_to_generation(
+    organization_id,
+    user,
+    intent,
+    prompt,
+    language,
+    generation,
+    last_generation=None,
+    conversation=None,
+):
     generation = _patch_generation_data(
         generation,
         visual_status="processing",
@@ -1394,6 +1517,7 @@ def _apply_visual_to_generation(organization_id, user, intent, prompt, language,
             language,
             last_generation=last_generation or generation,
             generation=generation,
+            conversation=conversation,
         )
     except Exception as error:
         logger.exception("marketing chat visual generation failed")
@@ -1568,8 +1692,19 @@ def send_chat_message(
     property_row = None
     if intent.get("property_id"):
         property_row = _resolve_property(organization_id, user, intent["property_id"])
-        intent["property_id"] = property_row["id"]
+        intent["property_id"] = _as_property_id(property_row["id"])
         intent["needs_property"] = False
+        _log_property_trace(
+            "marketing_property_bound",
+            resolved_property_id=intent["property_id"],
+            conversation_property_id=_as_property_id((conversation or {}).get("property_id")),
+            photo_count=(
+                _photo_count(_find_property_by_id(properties, intent["property_id"]))
+                if properties
+                else None
+            ),
+            status=intent.get("property_status"),
+        )
     if conversation is None:
         conversation = create_marketing_conversation(
             organization_id,
@@ -1579,7 +1714,9 @@ def send_chat_message(
         )
     else:
         updates = {}
-        if intent.get("property_id") and intent["property_id"] != conversation.get("property_id"):
+        if intent.get("property_id") and intent["property_id"] != _as_property_id(
+            conversation.get("property_id")
+        ):
             updates["property_id"] = intent["property_id"]
         if not conversation.get("title"):
             updates["title"] = _conversation_title(work_prompt, property_row)
@@ -1728,6 +1865,10 @@ def send_chat_message(
         )
         data["copy_status"] = data.get("copy_status") or "completed"
         data["include_agent"] = intent.get("include_agent")
+        # Keep visual on the generation's property_id; never re-resolve by prompt text.
+        intent["property_id"] = _as_property_id(
+            generation.get("property_id") or intent.get("property_id")
+        )
         generation = update_marketing_generation(
             generation["id"],
             organization_id,
@@ -1741,6 +1882,7 @@ def send_chat_message(
             language,
             generation,
             last_generation=last,
+            conversation=conversation,
         )
         gen_meta = {
             "action": "generate_visual",
@@ -1783,6 +1925,11 @@ def send_chat_message(
                 f"{extra_notes}\nUsar solo la marca de la inmobiliaria. "
                 "No incluir foto ni datos del agente."
             )
+        _log_property_trace(
+            "marketing_copy",
+            property_id=intent.get("property_id"),
+            conversation_property_id=_as_property_id(conversation.get("property_id")),
+        )
         generation = create_and_run_generation(
             organization_id,
             user,
@@ -1807,11 +1954,16 @@ def send_chat_message(
         data["channel"] = context.get("channel")
         data["creative_style"] = context.get("style")
         data["layout_template"] = context.get("layout_template")
+        data["resolved_property_id"] = _as_property_id(
+            generation.get("property_id") or intent.get("property_id")
+        )
         generation = update_marketing_generation(
             generation["id"],
             organization_id,
             generated_data=data,
         )
+        # Align intent to the generation row — copy already bound this property_id.
+        intent["property_id"] = _as_property_id(generation.get("property_id") or intent.get("property_id"))
         if _wants_visual(intent) and data["copy_status"] == "completed":
             generation = _apply_visual_to_generation(
                 organization_id,
@@ -1821,6 +1973,7 @@ def send_chat_message(
                 language,
                 generation,
                 last_generation=last,
+                conversation=conversation,
             )
         gen_meta = {
             "action": intent.get("action"),
@@ -1894,14 +2047,23 @@ def regenerate_in_conversation(
     requested_format = source_data.get("requested_format") or source.get("content_type")
     conversation = get_marketing_conversation(conversation_id, organization_id)
     stored = conversation_context(conversation)
+    # Retry must reuse the generation property_id — never re-resolve by text.
+    retry_property_id = _as_property_id(source.get("property_id"))
     intent = {
         "action": "generate_visual" if retry_visual_only else source_action,
         "content_type": source.get("content_type"),
         "requested_format": requested_format,
-        "property_id": source.get("property_id") or stored.get("property_id"),
+        "property_id": retry_property_id,
         "style": source.get("style"),
         "include_agent": stored.get("include_agent"),
     }
+    _log_property_trace(
+        "marketing_visual_retry",
+        generation_id=generation_id,
+        generation_property_id=retry_property_id,
+        conversation_property_id=_as_property_id(conversation.get("property_id")),
+        visual_only=int(bool(retry_visual_only)),
+    )
     if retry_visual_only and copy_ok:
         generation = _apply_visual_to_generation(
             organization_id,
@@ -1911,6 +2073,7 @@ def regenerate_in_conversation(
             language,
             source,
             last_generation=source,
+            conversation=conversation,
         )
         ack_key = "marketing_ia_ack_visual"
     else:
@@ -1925,9 +2088,11 @@ def regenerate_in_conversation(
         data["requested_format"] = requested_format
         data["copy_status"] = "completed" if generation.get("status") == "completed" else "failed"
         data["visual_status"] = "idle"
+        data["resolved_property_id"] = _as_property_id(generation.get("property_id"))
         generation = update_marketing_generation(
             generation["id"], organization_id, generated_data=data
         )
+        intent["property_id"] = _as_property_id(generation.get("property_id") or retry_property_id)
         if _wants_visual({"action": source_action}) and data["copy_status"] == "completed":
             generation = _apply_visual_to_generation(
                 organization_id,
@@ -1937,6 +2102,7 @@ def regenerate_in_conversation(
                 language,
                 generation,
                 last_generation=source,
+                conversation=conversation,
             )
         ack_key = "marketing_ia_ack_revise"
     add_marketing_message(
