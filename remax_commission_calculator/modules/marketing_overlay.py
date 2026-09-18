@@ -1,4 +1,7 @@
-"""Deterministic branding overlay. The model never redraws logo, agent, or facts."""
+"""Deterministic branding overlay. The model never redraws logo, agent, or facts.
+
+New generations use modern_commercial_v3 (SVG→PNG) only. No V1/V2 fallback.
+"""
 
 from __future__ import annotations
 
@@ -11,12 +14,13 @@ from modules.marketing_context import MarketingError
 from modules.marketing_copy import summarize_listing_copy
 from modules.marketing_language import default_cta, default_headline
 from modules.marketing_flyer_modern import (
-    V2_TEMPLATES,
+    MODERN_COMMERCIAL_V3,
+    V3_TEMPLATES,
     resolve_layout_template,
 )
-from modules.marketing_flyer_commercial import (
-    RENDERER_USED as COMMERCIAL_V2_RENDERER,
-    render_layout_v2,
+from modules.marketing_flyer_commercial_v3 import (
+    RENDERER_USED as COMMERCIAL_V3_RENDERER,
+    render_modern_commercial_v3,
 )
 from modules.marketing_renderer import (
     FORMAT_SIZES,
@@ -29,8 +33,7 @@ logger = logging.getLogger(__name__)
 
 OVERLAY_POST_PROCESS = "branding_overlay"
 OVERLAY_FN = "modules.marketing_overlay.stamp_branding_overlay"
-# Display/debug default — always a V2 id.
-OVERLAY_LAYOUT = "modern_commercial_v2"
+OVERLAY_LAYOUT = MODERN_COMMERCIAL_V3
 PROVIDER_SKIP_ROLES = frozenset({"logo", "agent"})
 
 
@@ -60,7 +63,7 @@ def stamp_branding_overlay(
     style="light",
     language="es",
 ):
-    """Compose the final listing piece with a V2 template only."""
+    """Compose the final listing piece with modern_commercial_v3 only."""
     options = options or {}
     art = art or {}
     facts = (context or {}).get("facts") or {}
@@ -70,7 +73,8 @@ def stamp_branding_overlay(
     fallback = Image.open(io.BytesIO(png_bytes)).convert("RGB")
     if fallback.size != size:
         fallback = fallback.resize(size, Image.Resampling.LANCZOS)
-    photos = load_property_photos((context or {}).get("photos") or [])
+    photo_rows = list((context or {}).get("photos") or [])
+    photos = load_property_photos(photo_rows)
     planned = copy or summarize_listing_copy(
         facts,
         agent,
@@ -94,25 +98,29 @@ def stamp_branding_overlay(
         fmt,
         {
             **options,
-            # Prefer the caller's creative style before normalize_style buckets.
             "style": style or options.get("style") or options.get("creative_style") or chosen,
         },
     )
-    if layout not in V2_TEMPLATES:
-        raise MarketingError("marketing_err_no_v2_template", 400)
-    canvas = render_layout_v2(
-        layout,
-        size,
-        photos,
-        facts,
-        planned,
-        overlay_agent,
-        {**options, "photo_rows": (context or {}).get("photos") or []},
-        language=language,
-        fallback_hero=fallback if not photos else None,
-    )
-    renderer_used = COMMERCIAL_V2_RENDERER
-    layout_version = layout
+    if layout not in V3_TEMPLATES:
+        raise MarketingError("marketing_err_no_v3_template", 400)
+    try:
+        canvas = render_modern_commercial_v3(
+            size,
+            photos,
+            facts,
+            planned,
+            overlay_agent,
+            {**options, "photo_rows": photo_rows},
+            language=language,
+            fallback_hero=fallback if not photos else None,
+            photo_rows=photo_rows,
+        )
+    except MarketingError:
+        raise
+    except Exception as exc:
+        logger.exception("modern_commercial_v3 failed")
+        raise MarketingError("marketing_err_v3_render_failed", 500) from exc
+
     buffer = io.BytesIO()
     canvas.save(buffer, format="PNG", optimize=True)
     logo = _office_logo(facts)
@@ -133,7 +141,7 @@ def stamp_branding_overlay(
         "post_process_fn": OVERLAY_FN,
         "layout": layout,
         "template_used": layout,
-        "renderer_used": renderer_used,
-        "layout_version": layout_version,
+        "renderer_used": COMMERCIAL_V3_RENDERER,
+        "layout_version": layout,
         "listing_photos": len(photos),
     }

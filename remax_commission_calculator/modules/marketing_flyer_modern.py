@@ -1,66 +1,65 @@
-"""Shared Marketing flyer helpers + V2-only layout resolver.
+"""Shared Marketing layout resolver — V3 only for new renders.
 
-V1 templates (modern_premium_v1 / modern-editorial-v1) are retired.
-New renders must use modern_commercial_v2 / premium_editorial_v2 / social_punch_v2.
+V1 / V2 Pillow templates are retired for generation. Names migrate to
+modern_commercial_v3. There is no fallback renderer.
 """
 
 from __future__ import annotations
 
-from PIL import Image, ImageDraw, ImageFilter
-
 from modules.marketing_context import MarketingError
-from modules.marketing_renderer import (
-    IG_PINK,
-    WA_GREEN,
-    WHITE,
-)
 
+MODERN_COMMERCIAL_V3 = "modern_commercial_v3"
+# Retained as identifiers for migration / tests only — never rendered.
 MODERN_COMMERCIAL_V2 = "modern_commercial_v2"
 PREMIUM_EDITORIAL_V2 = "premium_editorial_v2"
 SOCIAL_PUNCH_V2 = "social_punch_v2"
-V2_TEMPLATES = frozenset(
-    {MODERN_COMMERCIAL_V2, PREMIUM_EDITORIAL_V2, SOCIAL_PUNCH_V2}
-)
+MODERN_PREMIUM_V1 = "modern_premium_v1"
 
-# Retired V1 / legacy names → migrate to V2 (never re-render with V1).
-RETIRED_TEMPLATE_TO_V2 = {
-    "modern_premium_v1": PREMIUM_EDITORIAL_V2,
-    "modern_premium": PREMIUM_EDITORIAL_V2,
-    "modern-premium-v1": PREMIUM_EDITORIAL_V2,
-    "modern-editorial-v1": MODERN_COMMERCIAL_V2,
-    "modern_editorial_v1": MODERN_COMMERCIAL_V2,
-    "modern_editorial": MODERN_COMMERCIAL_V2,
-    "modern-editorial": MODERN_COMMERCIAL_V2,
-    "legacy": MODERN_COMMERCIAL_V2,
-    "editorial": MODERN_COMMERCIAL_V2,
-    "minimal_v1": PREMIUM_EDITORIAL_V2,
-    "minimal": PREMIUM_EDITORIAL_V2,
-    "light_premium": MODERN_COMMERCIAL_V2,
-    "light": MODERN_COMMERCIAL_V2,
+V3_TEMPLATES = frozenset({MODERN_COMMERCIAL_V3})
+# Historical ids still accepted as input, always resolve to V3.
+LEGACY_TO_V3 = {
+    MODERN_COMMERCIAL_V3: MODERN_COMMERCIAL_V3,
+    MODERN_COMMERCIAL_V2: MODERN_COMMERCIAL_V3,
+    PREMIUM_EDITORIAL_V2: MODERN_COMMERCIAL_V3,
+    SOCIAL_PUNCH_V2: MODERN_COMMERCIAL_V3,
+    "modern_premium_v1": MODERN_COMMERCIAL_V3,
+    "modern_premium": MODERN_COMMERCIAL_V3,
+    "modern-premium-v1": MODERN_COMMERCIAL_V3,
+    "modern-editorial-v1": MODERN_COMMERCIAL_V3,
+    "modern_editorial_v1": MODERN_COMMERCIAL_V3,
+    "modern_editorial": MODERN_COMMERCIAL_V3,
+    "modern-editorial": MODERN_COMMERCIAL_V3,
+    "legacy": MODERN_COMMERCIAL_V3,
+    "editorial": MODERN_COMMERCIAL_V3,
+    "minimal_v1": MODERN_COMMERCIAL_V3,
+    "minimal": MODERN_COMMERCIAL_V3,
+    "light_premium": MODERN_COMMERCIAL_V3,
+    "light": MODERN_COMMERCIAL_V3,
 }
 
-STYLE_TO_V2 = {
-    "premium": PREMIUM_EDITORIAL_V2,
-    "elegant": PREMIUM_EDITORIAL_V2,
-    "minimal": PREMIUM_EDITORIAL_V2,
-    "corporate": PREMIUM_EDITORIAL_V2,
-    # Legacy visual buckets from normalize_style → commercial default
-    "light_premium": MODERN_COMMERCIAL_V2,
-    "light": MODERN_COMMERCIAL_V2,
-    "blue_premium": MODERN_COMMERCIAL_V2,
-    "commercial": MODERN_COMMERCIAL_V2,
-    "modern": MODERN_COMMERCIAL_V2,
-    "dynamic": SOCIAL_PUNCH_V2,
-    "punch": SOCIAL_PUNCH_V2,
+STYLE_TO_V3 = {
+    "premium": MODERN_COMMERCIAL_V3,
+    "elegant": MODERN_COMMERCIAL_V3,
+    "minimal": MODERN_COMMERCIAL_V3,
+    "corporate": MODERN_COMMERCIAL_V3,
+    "light_premium": MODERN_COMMERCIAL_V3,
+    "light": MODERN_COMMERCIAL_V3,
+    "blue_premium": MODERN_COMMERCIAL_V3,
+    "commercial": MODERN_COMMERCIAL_V3,
+    "modern": MODERN_COMMERCIAL_V3,
+    "dynamic": MODERN_COMMERCIAL_V3,
+    "punch": MODERN_COMMERCIAL_V3,
 }
 
-# Kept for import compatibility; always V2.
-MODERN_PREMIUM_V1 = "modern_premium_v1"  # retired id — resolve migrates it
-LEGACY_TEMPLATES = frozenset(RETIRED_TEMPLATE_TO_V2)
+# Back-compat aliases used by older imports / tests.
+V2_TEMPLATES = V3_TEMPLATES
+RETIRED_TEMPLATE_TO_V2 = LEGACY_TO_V3
+STYLE_TO_V2 = STYLE_TO_V3
+LEGACY_TEMPLATES = frozenset(k for k in LEGACY_TO_V3 if k != MODERN_COMMERCIAL_V3)
+RENDERER_USED = "svg_commercial_v3"
+LAYOUT_VERSION = MODERN_COMMERCIAL_V3
+DEFAULT_LAYOUT_TEMPLATE = MODERN_COMMERCIAL_V3
 MODERN_FORMATS = frozenset({"flyer", "post", "story", "status"})
-RENDERER_USED = "pillow_commercial_v2"
-LAYOUT_VERSION = MODERN_COMMERCIAL_V2
-DEFAULT_LAYOUT_TEMPLATE = MODERN_COMMERCIAL_V2
 
 
 def explicit_layout_choice(options=None):
@@ -74,40 +73,54 @@ def explicit_layout_choice(options=None):
 
 
 def resolve_layout_template(fmt, options=None):
-    """Resolve a V2 template only. Retired V1 names migrate; never return V1."""
-    del fmt  # all formats use the same V2 family
+    """Resolve modern_commercial_v3 only. Legacy names migrate; unknown names fail."""
+    del fmt
     options = options or {}
     template = explicit_layout_choice(options)
-    if template in V2_TEMPLATES:
+    if template in V3_TEMPLATES:
         return template
-    if template in RETIRED_TEMPLATE_TO_V2:
-        return RETIRED_TEMPLATE_TO_V2[template]
+    if template in LEGACY_TO_V3:
+        return LEGACY_TO_V3[template]
     if template:
-        raise MarketingError("marketing_err_no_v2_template", 400)
+        raise MarketingError("marketing_err_no_v3_template", 400)
     style = str(
         options.get("creative_style")
         or options.get("style")
         or options.get("visual_direction")
         or ""
     ).strip().lower()
-    if style in STYLE_TO_V2:
-        return STYLE_TO_V2[style]
-    return MODERN_COMMERCIAL_V2
+    if style in STYLE_TO_V3:
+        return STYLE_TO_V3[style]
+    return MODERN_COMMERCIAL_V3
 
 
 def require_v2_template(template):
+    """Deprecated name — enforces V3."""
+    return require_v3_template(template)
+
+
+def require_v3_template(template):
     name = str(template or "").strip()
-    if name in V2_TEMPLATES:
+    if name in V3_TEMPLATES:
         return name
-    if name in RETIRED_TEMPLATE_TO_V2:
-        return RETIRED_TEMPLATE_TO_V2[name]
-    raise MarketingError("marketing_err_no_v2_template", 400)
+    if name in LEGACY_TO_V3:
+        return LEGACY_TO_V3[name]
+    raise MarketingError("marketing_err_no_v3_template", 400)
 
 
 def uses_modern_premium(fmt, options=None):
-    """Retired helper — always False. Kept so old imports do not crash."""
     del fmt, options
     return False
+
+
+# ---------------------------------------------------------------------------
+# Legacy Pillow helpers kept only so marketing_flyer_commercial (V2, unused)
+# can still be imported. V3 must not call these for layout composition.
+# ---------------------------------------------------------------------------
+
+from PIL import Image, ImageDraw, ImageFilter  # noqa: E402
+
+from modules.marketing_renderer import IG_PINK, WA_GREEN, WHITE  # noqa: E402
 
 
 def _clip(text, limit):
@@ -124,10 +137,7 @@ def _hero_shade(width, height):
     band = max(1, int(width * 0.54))
     for x in range(band):
         t = x / float(band)
-        if t < 0.20:
-            fade = 0.96
-        else:
-            fade = (1.0 - (t - 0.20) / 0.80) ** 1.7
+        fade = 0.96 if t < 0.20 else (1.0 - (t - 0.20) / 0.80) ** 1.7
         alpha = int(198 * max(0.0, min(1.0, fade)))
         for y in range(height):
             pixels[x, y] = (8, 12, 22, alpha)
@@ -163,7 +173,10 @@ def _icon_ig(draw, xy, size, *, fill=IG_PINK, stroke=WHITE):
     r = size * 0.20
     draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=stroke, width=max(2, size // 10))
     dot = max(2, size // 8)
-    draw.ellipse((x + size * 0.68, y + size * 0.18, x + size * 0.68 + dot, y + size * 0.18 + dot), fill=stroke)
+    draw.ellipse(
+        (x + size * 0.68, y + size * 0.18, x + size * 0.68 + dot, y + size * 0.18 + dot),
+        fill=stroke,
+    )
 
 
 def _icon_sofa(draw, box, color):
@@ -184,7 +197,11 @@ def _icon_bed(draw, box, color):
 def _icon_bath(draw, box, color):
     x0, y0, x1, y1 = box
     draw.arc((x0 + 3, y0 + 8, x1 - 3, y1 - 1), 0, 180, fill=color, width=2)
-    draw.line((x0 + 3, y0 + (y1 - y0) // 2 + 2, x1 - 3, y0 + (y1 - y0) // 2 + 2), fill=color, width=2)
+    draw.line(
+        (x0 + 3, y0 + (y1 - y0) // 2 + 2, x1 - 3, y0 + (y1 - y0) // 2 + 2),
+        fill=color,
+        width=2,
+    )
     draw.line((x1 - 8, y0 + 3, x1 - 8, y0 + 11), fill=color, width=2)
     draw.ellipse((x1 - 12, y0 + 2, x1 - 4, y0 + 9), outline=color, width=2)
 

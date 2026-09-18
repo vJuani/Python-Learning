@@ -1679,9 +1679,8 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(planned["cta"], "Coordinemos una visita.")
 
     def test_53_modern_premium_flyer_uses_reference_layout(self):
-        from modules.marketing_flyer_commercial import (
-            MODERN_COMMERCIAL_V2,
-            PREMIUM_EDITORIAL_V2,
+        from modules.marketing_flyer_commercial_v3 import (
+            MODERN_COMMERCIAL_V3,
             RENDERER_USED,
         )
         from modules.marketing_flyer_modern import MODERN_PREMIUM_V1
@@ -1703,10 +1702,10 @@ class MarketingIaTests(unittest.TestCase):
             style="light",
             language="es",
         )
-        self.assertEqual(stamped["layout"], MODERN_COMMERCIAL_V2)
-        self.assertEqual(stamped["template_used"], MODERN_COMMERCIAL_V2)
+        self.assertEqual(stamped["layout"], MODERN_COMMERCIAL_V3)
+        self.assertEqual(stamped["template_used"], MODERN_COMMERCIAL_V3)
         self.assertEqual(stamped["renderer_used"], RENDERER_USED)
-        self.assertEqual(stamped["layout_version"], MODERN_COMMERCIAL_V2)
+        self.assertEqual(stamped["layout_version"], MODERN_COMMERCIAL_V3)
         self.assertGreaterEqual(stamped["listing_photos"], 3)
         image = Image.open(io.BytesIO(stamped["png_bytes"])).convert("RGB")
         self.assertEqual(image.size, FORMAT_SIZES["flyer"])
@@ -1719,7 +1718,7 @@ class MarketingIaTests(unittest.TestCase):
             if pixel[0] < 40 and pixel[1] < 50 and pixel[2] < 80
         )
         self.assertGreater(navy, 200)
-        # Retired V1 / legacy names must migrate to V2 — never re-render V1.
+        # Retired V1 / V2 names must migrate to V3 — never re-render legacy.
         legacy = stamp_branding_overlay(
             buffer.getvalue(),
             context=context,
@@ -1728,7 +1727,7 @@ class MarketingIaTests(unittest.TestCase):
             style="light",
             language="es",
         )
-        self.assertEqual(legacy["template_used"], MODERN_COMMERCIAL_V2)
+        self.assertEqual(legacy["template_used"], MODERN_COMMERCIAL_V3)
         self.assertEqual(legacy["renderer_used"], RENDERER_USED)
         styled = stamp_branding_overlay(
             buffer.getvalue(),
@@ -1738,7 +1737,7 @@ class MarketingIaTests(unittest.TestCase):
             style="light",
             language="es",
         )
-        self.assertEqual(styled["template_used"], MODERN_COMMERCIAL_V2)
+        self.assertEqual(styled["template_used"], MODERN_COMMERCIAL_V3)
         self.assertEqual(styled["renderer_used"], RENDERER_USED)
         explicit = stamp_branding_overlay(
             buffer.getvalue(),
@@ -1748,21 +1747,21 @@ class MarketingIaTests(unittest.TestCase):
             style="light",
             language="es",
         )
-        self.assertEqual(explicit["template_used"], PREMIUM_EDITORIAL_V2)
+        self.assertEqual(explicit["template_used"], MODERN_COMMERCIAL_V3)
         self.assertEqual(explicit["renderer_used"], RENDERER_USED)
         self.assertNotIn("modern_premium_v1", explicit["template_used"])
         self.assertNotIn("modern-editorial", explicit["template_used"])
 
     def test_54_new_renders_never_use_v1_templates(self):
         from modules.marketing_context import MarketingError
-        from modules.marketing_flyer_commercial import (
-            MODERN_COMMERCIAL_V2,
-            PREMIUM_EDITORIAL_V2,
+        from modules.marketing_flyer_commercial_v3 import (
+            MODERN_COMMERCIAL_V3,
             RENDERER_USED,
-            SOCIAL_PUNCH_V2,
-            V2_TEMPLATES,
         )
-        from modules.marketing_flyer_modern import resolve_layout_template
+        from modules.marketing_flyer_modern import (
+            V3_TEMPLATES,
+            resolve_layout_template,
+        )
 
         banned = {
             "modern_premium_v1",
@@ -1771,35 +1770,38 @@ class MarketingIaTests(unittest.TestCase):
             "modern-editorial-v1",
             "modern_editorial_v1",
             "modern_editorial",
+            "modern_commercial_v2",
+            "premium_editorial_v2",
+            "social_punch_v2",
         }
         for fmt in ("flyer", "post", "story"):
             resolved = resolve_layout_template(fmt, {})
-            self.assertIn(resolved, V2_TEMPLATES)
+            self.assertIn(resolved, V3_TEMPLATES)
             self.assertNotIn(resolved, banned)
         self.assertEqual(
             resolve_layout_template("flyer", {"template": "modern_premium_v1"}),
-            PREMIUM_EDITORIAL_V2,
+            MODERN_COMMERCIAL_V3,
         )
         self.assertEqual(
             resolve_layout_template("post", {"template_used": "modern-editorial-v1"}),
-            MODERN_COMMERCIAL_V2,
+            MODERN_COMMERCIAL_V3,
         )
         self.assertEqual(
             resolve_layout_template("story", {"style": "dynamic"}),
-            SOCIAL_PUNCH_V2,
+            MODERN_COMMERCIAL_V3,
         )
         with self.assertRaises(MarketingError) as raised:
             resolve_layout_template("flyer", {"template": "does_not_exist_v9"})
-        self.assertEqual(raised.exception.message_key, "marketing_err_no_v2_template")
+        self.assertEqual(raised.exception.message_key, "marketing_err_no_v3_template")
 
         context = build_property_marketing_context(self._property())
         blank = Image.new("RGB", FORMAT_SIZES["post"], (90, 90, 90))
         buffer = io.BytesIO()
         blank.save(buffer, format="PNG")
         for fmt, style, expected in (
-            ("post", "commercial", MODERN_COMMERCIAL_V2),
-            ("flyer", "premium", PREMIUM_EDITORIAL_V2),
-            ("story", "dynamic", SOCIAL_PUNCH_V2),
+            ("post", "commercial", MODERN_COMMERCIAL_V3),
+            ("flyer", "premium", MODERN_COMMERCIAL_V3),
+            ("story", "dynamic", MODERN_COMMERCIAL_V3),
         ):
             stamped = stamp_branding_overlay(
                 buffer.getvalue(),
@@ -1825,7 +1827,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         asset = batch["assets"][0]
         used = (asset.get("options") or {}).get("template_used") or asset.get("template")
-        self.assertEqual(used, PREMIUM_EDITORIAL_V2)
+        self.assertEqual(used, MODERN_COMMERCIAL_V3)
         self.assertNotIn(used, banned)
 
 

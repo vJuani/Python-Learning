@@ -7,6 +7,7 @@ cryptography==44.0.0
 openpyxl==3.1.5
 psycopg[binary]==3.2.13
 reportlab==4.2.5
+PyMuPDF==1.24.14
 requests==2.32.3
 pywebpush==1.14.1
 py-vapid==1.9.1
