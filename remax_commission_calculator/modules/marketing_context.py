@@ -402,6 +402,7 @@ def build_property_marketing_context(
         "agent_id": display.get("agent_id"),
         "title": compact_property_title(display),
         "location_line": compact_property_location(display),
+        "postal_code": display.get("postal_code") or None,
         "neighborhood": display.get("neighborhood") or None,
         "locality": display.get("locality") or locality or None,
         "jurisdiction": display.get("jurisdiction"),

@@ -1611,7 +1611,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         self.assertGreater(green, 20)
         self.assertGreater(pink, 20)
-        thumbs = image.crop((40, 1110, 1040, 1430))
+        thumbs = image.crop((40, 820, 1040, 1100))
         sample = thumbs.resize((16, 6))
         colors = {(pixel[0] // 20, pixel[1] // 20, pixel[2] // 20) for pixel in sample.getdata()}
         self.assertGreaterEqual(len(colors), 4)
@@ -1682,6 +1682,8 @@ class MarketingIaTests(unittest.TestCase):
         from modules.marketing_flyer_commercial_v3 import (
             MODERN_COMMERCIAL_V3,
             RENDERER_USED,
+            build_marketing_svg,
+            build_marketing_v3_context,
         )
         from modules.marketing_flyer_modern import MODERN_PREMIUM_V1
 
@@ -1709,15 +1711,32 @@ class MarketingIaTests(unittest.TestCase):
         self.assertGreaterEqual(stamped["listing_photos"], 3)
         image = Image.open(io.BytesIO(stamped["png_bytes"])).convert("RGB")
         self.assertEqual(image.size, FORMAT_SIZES["flyer"])
-        hero_left = image.crop((60, 140, 280, 420))
-        dark = sum(1 for pixel in hero_left.resize((20, 20)).getdata() if pixel[0] < 80 and pixel[2] < 90)
-        self.assertGreater(dark, 40)
+        ctx = build_marketing_v3_context(
+            facts=context.get("facts") or {},
+            copy={"headline": "Casa moderna en Martínez", "cta": "Consultame para visitarla"},
+            agent=context.get("agent"),
+            options={"include_agent": True, "show_price": True, "show_features": True},
+            language="es",
+            canvas_size=FORMAT_SIZES["flyer"],
+            fallback_hero=blank,
+        )
+        svg = build_marketing_svg(ctx)
+        self.assertIn("Casa", svg)
+        self.assertIn("moderna", svg)
+        self.assertIn("Hablemos de tu", svg)
+        self.assertIn("CONFIANZA", svg)
+        self.assertIn("Consultame para visitarla", svg)
+        self.assertIn("Asesoramiento", svg)
+        self.assertNotIn(">CASA<", svg)
+        page = image.crop((40, int(image.height * 0.72), image.width - 40, image.height - 20))
+        light = sum(1 for pixel in page.resize((24, 12)).getdata() if pixel[0] > 220 and pixel[1] > 220)
+        self.assertGreater(light, 80)
         navy = sum(
             1
             for pixel in image.getdata()
             if pixel[0] < 40 and pixel[1] < 50 and pixel[2] < 80
         )
-        self.assertGreater(navy, 200)
+        self.assertGreater(navy, 80)
         # Retired V1 / V2 names must migrate to V3 — never re-render legacy.
         legacy = stamp_branding_overlay(
             buffer.getvalue(),

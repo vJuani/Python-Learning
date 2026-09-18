@@ -92,6 +92,7 @@ def stamp_branding_overlay(
             "title": planned.get("agent_title") or agent.get("title") or "",
             "whatsapp": planned.get("agent_whatsapp") or agent.get("whatsapp") or "",
             "instagram": planned.get("agent_instagram") or agent.get("instagram") or "",
+            "email": planned.get("agent_email") or agent.get("email") or "",
             "photo_path": agent.get("photo_path") if show_photo else None,
         }
     layout = resolve_layout_template(

@@ -30,6 +30,14 @@ MARKETING_COPY = {
         "headline_editorial": "Tu próximo hogar está acá",
         "headline_commercial": "Disponible ahora",
         "headline_luxury": "Exclusiva",
+        "whisper": "Hablemos de tu próximo hogar",
+        "location_blurb": (
+            "Un entorno residencial, tranquilo y con excelente conectividad. "
+            "Cerca de colegios, comercios y de todo lo que necesitás."
+        ),
+        "trust_advice": "Asesoramiento personalizado",
+        "trust_support": "Acompañamiento en todo el proceso",
+        "trust_project": "Tu proyecto en manos expertas",
     },
     "en": {
         "default_headline_sale": "For Sale",
@@ -50,6 +58,14 @@ MARKETING_COPY = {
         "headline_editorial": "Your next home is here",
         "headline_commercial": "Available now",
         "headline_luxury": "Exclusive",
+        "whisper": "Let's talk about your next home",
+        "location_blurb": (
+            "A quiet residential setting with excellent connectivity. "
+            "Close to schools, shops and everything you need."
+        ),
+        "trust_advice": "Personalized advice",
+        "trust_support": "Support throughout the process",
+        "trust_project": "Your project in expert hands",
     },
 }
 

@@ -62,8 +62,9 @@ def main():
     agent = {
         "name": "Jose Barreiro",
         "title": "Agente inmobiliario",
-        "whatsapp": "11 2345-6789",
-        "instagram": "@jose.barreiro",
+        "whatsapp": "+54 9 11 2513-1361",
+        "instagram": "@josebarreiro_remax",
+        "email": "jose@remaxdatahouse.com.ar",
         "photo_path": str(agent_path),
     }
     photo_rows = [

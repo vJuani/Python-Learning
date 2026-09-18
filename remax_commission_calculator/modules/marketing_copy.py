@@ -128,6 +128,7 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
     title = autofit_text(agent.get("title") or default_agent_role(language), max_chars=22, max_lines=1)
     whatsapp = {"text": " ".join(str(agent.get("whatsapp") or "").split())}
     instagram = {"text": " ".join(str(agent.get("instagram") or "").split())}
+    email = {"text": " ".join(str(agent.get("email") or "").split())}
     chosen_cta = " ".join(str(cta or "").split()) or default_cta(language, facts, style)
     if HYPE_COPY_RE.search(chosen_cta):
         chosen_cta = default_cta(language, facts, style)
@@ -163,6 +164,7 @@ def summarize_listing_copy(facts, agent=None, *, headline="", cta="", language="
         "agent_title": title["text"],
         "agent_whatsapp": whatsapp["text"],
         "agent_instagram": instagram["text"],
+        "agent_email": email["text"],
         "legal_broker_line": legal_name["text"],
         "legal_license_line": legal_license["text"],
         "legal_footer": legal["text"].replace("\n", " "),
