@@ -655,7 +655,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
         if options.get("local_render"):
             options["legacy_compositor"] = False
             options["pipeline_provider"] = "pillow_modern_renderer"
-            options["pipeline_model"] = options.get("template_used") or "modern_commercial_v3"
+            options["pipeline_model"] = options.get("template_used") or "modern_commercial_v2"
             options["pipeline_endpoint"] = None
             options.setdefault("pipeline_post_process", generated.get("post_process") or "branding_overlay")
             options.setdefault("pipeline_post_process_fn", generated.get("post_process_fn"))

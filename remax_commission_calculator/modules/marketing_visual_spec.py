@@ -13,7 +13,9 @@ SPEC_VERSION = "3.0"
 QUALITY_TARGET = "approved_jrh_story"
 
 STYLE_DIR = Path(__file__).resolve().parent.parent / "marketing_style_references"
+STATIC_STYLE_DIR = Path(__file__).resolve().parent.parent / "static" / "marketing_style_references"
 APPROVED_STYLE_NAME = "jrh-approved-story.jpg"
+V2_REFERENCE_NAME = "modern_commercial_v2_reference.png"
 
 PALETTE = {
     "navy": (10, 22, 51),
@@ -206,6 +208,9 @@ AVOID = (
 
 
 def approved_style_path():
+    v2 = STATIC_STYLE_DIR / V2_REFERENCE_NAME
+    if v2.is_file():
+        return v2
     path = STYLE_DIR / APPROVED_STYLE_NAME
     return path if path.is_file() else None
 

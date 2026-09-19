@@ -1,65 +1,101 @@
-"""Shared Marketing layout resolver — V3 only for new renders.
+"""Shared Marketing layout resolver — modern_commercial_v2 only.
 
-V1 / V2 Pillow templates are retired for generation. Names migrate to
-modern_commercial_v3. There is no fallback renderer.
+V1 / V3 / editorial / premium variants are retired for generation.
+Stored names migrate to modern_commercial_v2. There is no V1 renderer.
 """
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+
 from modules.marketing_context import MarketingError
 
-MODERN_COMMERCIAL_V3 = "modern_commercial_v3"
-# Retained as identifiers for migration / tests only — never rendered.
+logger = logging.getLogger(__name__)
+
 MODERN_COMMERCIAL_V2 = "modern_commercial_v2"
+# Retained as identifiers for migration / tests only — never rendered.
+MODERN_COMMERCIAL_V3 = "modern_commercial_v3"
 PREMIUM_EDITORIAL_V2 = "premium_editorial_v2"
 SOCIAL_PUNCH_V2 = "social_punch_v2"
 MODERN_PREMIUM_V1 = "modern_premium_v1"
 
-V3_TEMPLATES = frozenset({MODERN_COMMERCIAL_V3})
-# Historical ids still accepted as input, always resolve to V3.
-LEGACY_TO_V3 = {
-    MODERN_COMMERCIAL_V3: MODERN_COMMERCIAL_V3,
-    MODERN_COMMERCIAL_V2: MODERN_COMMERCIAL_V3,
-    PREMIUM_EDITORIAL_V2: MODERN_COMMERCIAL_V3,
-    SOCIAL_PUNCH_V2: MODERN_COMMERCIAL_V3,
-    "modern_premium_v1": MODERN_COMMERCIAL_V3,
-    "modern_premium": MODERN_COMMERCIAL_V3,
-    "modern-premium-v1": MODERN_COMMERCIAL_V3,
-    "modern-editorial-v1": MODERN_COMMERCIAL_V3,
-    "modern_editorial_v1": MODERN_COMMERCIAL_V3,
-    "modern_editorial": MODERN_COMMERCIAL_V3,
-    "modern-editorial": MODERN_COMMERCIAL_V3,
-    "legacy": MODERN_COMMERCIAL_V3,
-    "editorial": MODERN_COMMERCIAL_V3,
-    "minimal_v1": MODERN_COMMERCIAL_V3,
-    "minimal": MODERN_COMMERCIAL_V3,
-    "light_premium": MODERN_COMMERCIAL_V3,
-    "light": MODERN_COMMERCIAL_V3,
+V2_TEMPLATES = frozenset({MODERN_COMMERCIAL_V2})
+V1_BLOCKED_TEMPLATES = frozenset(
+    {
+        MODERN_PREMIUM_V1,
+        "modern_premium",
+        "modern-premium-v1",
+        "modern-editorial-v1",
+        "modern_editorial_v1",
+        "modern_editorial",
+        "modern-editorial",
+        "minimal_v1",
+    }
+)
+# Historical ids still accepted as input, always resolve to V2.
+LEGACY_TO_V2 = {
+    MODERN_COMMERCIAL_V2: MODERN_COMMERCIAL_V2,
+    MODERN_COMMERCIAL_V3: MODERN_COMMERCIAL_V2,
+    PREMIUM_EDITORIAL_V2: MODERN_COMMERCIAL_V2,
+    SOCIAL_PUNCH_V2: MODERN_COMMERCIAL_V2,
+    "modern_premium_v1": MODERN_COMMERCIAL_V2,
+    "modern_premium": MODERN_COMMERCIAL_V2,
+    "modern-premium-v1": MODERN_COMMERCIAL_V2,
+    "modern-editorial-v1": MODERN_COMMERCIAL_V2,
+    "modern_editorial_v1": MODERN_COMMERCIAL_V2,
+    "modern_editorial": MODERN_COMMERCIAL_V2,
+    "modern-editorial": MODERN_COMMERCIAL_V2,
+    "legacy": MODERN_COMMERCIAL_V2,
+    "editorial": MODERN_COMMERCIAL_V2,
+    "minimal_v1": MODERN_COMMERCIAL_V2,
+    "minimal": MODERN_COMMERCIAL_V2,
+    "light_premium": MODERN_COMMERCIAL_V2,
+    "light": MODERN_COMMERCIAL_V2,
 }
 
-STYLE_TO_V3 = {
-    "premium": MODERN_COMMERCIAL_V3,
-    "elegant": MODERN_COMMERCIAL_V3,
-    "minimal": MODERN_COMMERCIAL_V3,
-    "corporate": MODERN_COMMERCIAL_V3,
-    "light_premium": MODERN_COMMERCIAL_V3,
-    "light": MODERN_COMMERCIAL_V3,
-    "blue_premium": MODERN_COMMERCIAL_V3,
-    "commercial": MODERN_COMMERCIAL_V3,
-    "modern": MODERN_COMMERCIAL_V3,
-    "dynamic": MODERN_COMMERCIAL_V3,
-    "punch": MODERN_COMMERCIAL_V3,
+STYLE_TO_V2 = {
+    "premium": MODERN_COMMERCIAL_V2,
+    "elegant": MODERN_COMMERCIAL_V2,
+    "minimal": MODERN_COMMERCIAL_V2,
+    "corporate": MODERN_COMMERCIAL_V2,
+    "light_premium": MODERN_COMMERCIAL_V2,
+    "light": MODERN_COMMERCIAL_V2,
+    "blue_premium": MODERN_COMMERCIAL_V2,
+    "commercial": MODERN_COMMERCIAL_V2,
+    "modern": MODERN_COMMERCIAL_V2,
+    "dynamic": MODERN_COMMERCIAL_V2,
+    "punch": MODERN_COMMERCIAL_V2,
 }
 
 # Back-compat aliases used by older imports / tests.
-V2_TEMPLATES = V3_TEMPLATES
-RETIRED_TEMPLATE_TO_V2 = LEGACY_TO_V3
-STYLE_TO_V2 = STYLE_TO_V3
-LEGACY_TEMPLATES = frozenset(k for k in LEGACY_TO_V3 if k != MODERN_COMMERCIAL_V3)
-RENDERER_USED = "svg_commercial_v3"
-LAYOUT_VERSION = MODERN_COMMERCIAL_V3
-DEFAULT_LAYOUT_TEMPLATE = MODERN_COMMERCIAL_V3
+V3_TEMPLATES = V2_TEMPLATES
+LEGACY_TO_V3 = LEGACY_TO_V2
+STYLE_TO_V3 = STYLE_TO_V2
+RETIRED_TEMPLATE_TO_V2 = LEGACY_TO_V2
+LEGACY_TEMPLATES = frozenset(k for k in LEGACY_TO_V2 if k != MODERN_COMMERCIAL_V2)
+RENDERER_USED = "pillow_commercial_v2"
+LAYOUT_VERSION = MODERN_COMMERCIAL_V2
+DEFAULT_LAYOUT_TEMPLATE = MODERN_COMMERCIAL_V2
 MODERN_FORMATS = frozenset({"flyer", "post", "story", "status"})
+VISUAL_REFERENCE_NAME = "modern_commercial_v2_reference.png"
+
+
+def visual_reference_path():
+    root = Path(__file__).resolve().parent.parent
+    return root / "static" / "marketing_style_references" / VISUAL_REFERENCE_NAME
+
+
+def ensure_visual_reference():
+    path = visual_reference_path()
+    if path.is_file():
+        return path
+    logger.error(
+        "marketing visual reference missing template=%s path=%s",
+        MODERN_COMMERCIAL_V2,
+        path,
+    )
+    return None
 
 
 def explicit_layout_choice(options=None):
@@ -73,39 +109,40 @@ def explicit_layout_choice(options=None):
 
 
 def resolve_layout_template(fmt, options=None):
-    """Resolve modern_commercial_v3 only. Legacy names migrate; unknown names fail."""
+    """Resolve modern_commercial_v2 only. Legacy names migrate; unknown names fail."""
     del fmt
     options = options or {}
     template = explicit_layout_choice(options)
-    if template in V3_TEMPLATES:
+    if template in V2_TEMPLATES:
         return template
-    if template in LEGACY_TO_V3:
-        return LEGACY_TO_V3[template]
+    if template in LEGACY_TO_V2:
+        return LEGACY_TO_V2[template]
     if template:
-        raise MarketingError("marketing_err_no_v3_template", 400)
+        raise MarketingError("marketing_err_no_v2_template", 400)
     style = str(
         options.get("creative_style")
         or options.get("style")
         or options.get("visual_direction")
         or ""
     ).strip().lower()
-    if style in STYLE_TO_V3:
-        return STYLE_TO_V3[style]
-    return MODERN_COMMERCIAL_V3
+    if style in STYLE_TO_V2:
+        return STYLE_TO_V2[style]
+    return MODERN_COMMERCIAL_V2
 
 
 def require_v2_template(template):
-    """Deprecated name — enforces V3."""
-    return require_v3_template(template)
+    """Enforces modern_commercial_v2. V1 names migrate; they are never rendered."""
+    name = str(template or "").strip()
+    if name in V2_TEMPLATES:
+        return name
+    if name in LEGACY_TO_V2:
+        return LEGACY_TO_V2[name]
+    raise MarketingError("marketing_err_no_v2_template", 400)
 
 
 def require_v3_template(template):
-    name = str(template or "").strip()
-    if name in V3_TEMPLATES:
-        return name
-    if name in LEGACY_TO_V3:
-        return LEGACY_TO_V3[name]
-    raise MarketingError("marketing_err_no_v3_template", 400)
+    """Deprecated name — enforces V2."""
+    return require_v2_template(template)
 
 
 def uses_modern_premium(fmt, options=None):
@@ -114,8 +151,7 @@ def uses_modern_premium(fmt, options=None):
 
 
 # ---------------------------------------------------------------------------
-# Legacy Pillow helpers kept only so marketing_flyer_commercial (V2, unused)
-# can still be imported. V3 must not call these for layout composition.
+# Shared Pillow helpers used by marketing_flyer_commercial (active V2 renderer).
 # ---------------------------------------------------------------------------
 
 from PIL import Image, ImageDraw, ImageFilter  # noqa: E402

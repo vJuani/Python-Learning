@@ -38,6 +38,7 @@ MARKETING_COPY = {
         "trust_advice": "Asesoramiento personalizado",
         "trust_support": "Acompañamiento en todo el proceso",
         "trust_project": "Tu proyecto en manos expertas",
+        "closing_line": "Tu próximo capítulo te espera",
     },
     "en": {
         "default_headline_sale": "For Sale",
@@ -66,6 +67,7 @@ MARKETING_COPY = {
         "trust_advice": "Personalized advice",
         "trust_support": "Support throughout the process",
         "trust_project": "Your project in expert hands",
+        "closing_line": "Your next chapter awaits",
     },
 }
 

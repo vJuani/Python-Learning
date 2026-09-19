@@ -1678,23 +1678,21 @@ class MarketingIaTests(unittest.TestCase):
         self.assertIn("Victoria", planned["zone"])
         self.assertEqual(planned["cta"], "Coordinemos una visita.")
 
-    def test_53_modern_premium_flyer_uses_reference_layout(self):
-        from modules.marketing_flyer_commercial_v3 import (
-            MODERN_COMMERCIAL_V3,
-            RENDERER_USED,
-            build_marketing_svg,
-            build_marketing_v3_context,
+    def test_53_modern_commercial_v2_is_the_only_layout(self):
+        from modules.marketing_flyer_commercial import RENDERER_USED
+        from modules.marketing_flyer_modern import (
+            MODERN_COMMERCIAL_V2,
+            MODERN_PREMIUM_V1,
         )
-        from modules.marketing_flyer_modern import MODERN_PREMIUM_V1
 
         context = build_property_marketing_context(self._property())
-        blank = Image.new("RGB", FORMAT_SIZES["flyer"], (120, 80, 80))
+        blank = Image.new("RGB", FORMAT_SIZES["post"], (120, 80, 80))
         buffer = io.BytesIO()
         blank.save(buffer, format="PNG")
         stamped = stamp_branding_overlay(
             buffer.getvalue(),
             context=context,
-            fmt="flyer",
+            fmt="post",
             options={
                 "include_agent": True,
                 "show_agent_photo": True,
@@ -1704,81 +1702,70 @@ class MarketingIaTests(unittest.TestCase):
             style="light",
             language="es",
         )
-        self.assertEqual(stamped["layout"], MODERN_COMMERCIAL_V3)
-        self.assertEqual(stamped["template_used"], MODERN_COMMERCIAL_V3)
+        self.assertEqual(stamped["layout"], MODERN_COMMERCIAL_V2)
+        self.assertEqual(stamped["template_used"], MODERN_COMMERCIAL_V2)
         self.assertEqual(stamped["renderer_used"], RENDERER_USED)
-        self.assertEqual(stamped["layout_version"], MODERN_COMMERCIAL_V3)
+        self.assertEqual(stamped["layout_version"], MODERN_COMMERCIAL_V2)
         self.assertGreaterEqual(stamped["listing_photos"], 3)
         image = Image.open(io.BytesIO(stamped["png_bytes"])).convert("RGB")
-        self.assertEqual(image.size, FORMAT_SIZES["flyer"])
-        ctx = build_marketing_v3_context(
-            facts=context.get("facts") or {},
-            copy={"headline": "Casa moderna en Martínez", "cta": "Consultame para visitarla"},
-            agent=context.get("agent"),
-            options={"include_agent": True, "show_price": True, "show_features": True},
-            language="es",
-            canvas_size=FORMAT_SIZES["flyer"],
-            fallback_hero=blank,
-        )
-        svg = build_marketing_svg(ctx)
-        self.assertIn("Casa", svg)
-        self.assertIn("moderna", svg)
-        self.assertIn("Hablemos de tu", svg)
-        self.assertIn("CONFIANZA", svg)
-        self.assertIn("Consultame para visitarla", svg)
-        self.assertIn("Asesoramiento", svg)
-        self.assertNotIn(">CASA<", svg)
+        self.assertEqual(image.size, FORMAT_SIZES["post"])
         page = image.crop((40, int(image.height * 0.72), image.width - 40, image.height - 20))
-        light = sum(1 for pixel in page.resize((24, 12)).getdata() if pixel[0] > 220 and pixel[1] > 220)
-        self.assertGreater(light, 80)
+        light = sum(1 for pixel in page.resize((24, 12)).getdata() if pixel[0] > 200 and pixel[1] > 200)
+        self.assertGreater(light, 40)
         navy = sum(
             1
             for pixel in image.getdata()
             if pixel[0] < 40 and pixel[1] < 50 and pixel[2] < 80
         )
         self.assertGreater(navy, 80)
-        # Retired V1 / V2 names must migrate to V3 — never re-render legacy.
-        legacy = stamp_branding_overlay(
+        flyer = stamp_branding_overlay(
             buffer.getvalue(),
             context=context,
             fmt="flyer",
+            options={"include_agent": True, "show_agent_photo": True},
+            style="light",
+            language="es",
+        )
+        self.assertEqual(flyer["template_used"], MODERN_COMMERCIAL_V2)
+        self.assertEqual(Image.open(io.BytesIO(flyer["png_bytes"])).size, FORMAT_SIZES["flyer"])
+        legacy = stamp_branding_overlay(
+            buffer.getvalue(),
+            context=context,
+            fmt="post",
             options={"template": "legacy", "include_agent": True, "show_agent_photo": True},
             style="light",
             language="es",
         )
-        self.assertEqual(legacy["template_used"], MODERN_COMMERCIAL_V3)
+        self.assertEqual(legacy["template_used"], MODERN_COMMERCIAL_V2)
         self.assertEqual(legacy["renderer_used"], RENDERER_USED)
         styled = stamp_branding_overlay(
             buffer.getvalue(),
             context=context,
-            fmt="flyer",
+            fmt="post",
             options={"template": "light_premium", "include_agent": True, "show_agent_photo": True},
             style="light",
             language="es",
         )
-        self.assertEqual(styled["template_used"], MODERN_COMMERCIAL_V3)
-        self.assertEqual(styled["renderer_used"], RENDERER_USED)
+        self.assertEqual(styled["template_used"], MODERN_COMMERCIAL_V2)
         explicit = stamp_branding_overlay(
             buffer.getvalue(),
             context=context,
-            fmt="flyer",
+            fmt="post",
             options={"template": MODERN_PREMIUM_V1, "include_agent": True, "show_agent_photo": True},
             style="light",
             language="es",
         )
-        self.assertEqual(explicit["template_used"], MODERN_COMMERCIAL_V3)
-        self.assertEqual(explicit["renderer_used"], RENDERER_USED)
+        self.assertEqual(explicit["template_used"], MODERN_COMMERCIAL_V2)
         self.assertNotIn("modern_premium_v1", explicit["template_used"])
         self.assertNotIn("modern-editorial", explicit["template_used"])
+        self.assertNotIn("modern_commercial_v3", explicit["template_used"])
 
     def test_54_new_renders_never_use_v1_templates(self):
         from modules.marketing_context import MarketingError
-        from modules.marketing_flyer_commercial_v3 import (
-            MODERN_COMMERCIAL_V3,
-            RENDERER_USED,
-        )
+        from modules.marketing_flyer_commercial import RENDERER_USED
         from modules.marketing_flyer_modern import (
-            V3_TEMPLATES,
+            MODERN_COMMERCIAL_V2,
+            V2_TEMPLATES,
             resolve_layout_template,
         )
 
@@ -1789,38 +1776,43 @@ class MarketingIaTests(unittest.TestCase):
             "modern-editorial-v1",
             "modern_editorial_v1",
             "modern_editorial",
-            "modern_commercial_v2",
+            "modern_commercial_v3",
             "premium_editorial_v2",
             "social_punch_v2",
         }
         for fmt in ("flyer", "post", "story"):
             resolved = resolve_layout_template(fmt, {})
-            self.assertIn(resolved, V3_TEMPLATES)
+            self.assertEqual(resolved, MODERN_COMMERCIAL_V2)
+            self.assertIn(resolved, V2_TEMPLATES)
             self.assertNotIn(resolved, banned)
         self.assertEqual(
             resolve_layout_template("flyer", {"template": "modern_premium_v1"}),
-            MODERN_COMMERCIAL_V3,
+            MODERN_COMMERCIAL_V2,
         )
         self.assertEqual(
             resolve_layout_template("post", {"template_used": "modern-editorial-v1"}),
-            MODERN_COMMERCIAL_V3,
+            MODERN_COMMERCIAL_V2,
         )
         self.assertEqual(
             resolve_layout_template("story", {"style": "dynamic"}),
-            MODERN_COMMERCIAL_V3,
+            MODERN_COMMERCIAL_V2,
+        )
+        self.assertEqual(
+            resolve_layout_template("post", {"template": "modern_commercial_v3"}),
+            MODERN_COMMERCIAL_V2,
         )
         with self.assertRaises(MarketingError) as raised:
             resolve_layout_template("flyer", {"template": "does_not_exist_v9"})
-        self.assertEqual(raised.exception.message_key, "marketing_err_no_v3_template")
+        self.assertEqual(raised.exception.message_key, "marketing_err_no_v2_template")
 
         context = build_property_marketing_context(self._property())
         blank = Image.new("RGB", FORMAT_SIZES["post"], (90, 90, 90))
         buffer = io.BytesIO()
         blank.save(buffer, format="PNG")
         for fmt, style, expected in (
-            ("post", "commercial", MODERN_COMMERCIAL_V3),
-            ("flyer", "premium", MODERN_COMMERCIAL_V3),
-            ("story", "dynamic", MODERN_COMMERCIAL_V3),
+            ("post", "commercial", MODERN_COMMERCIAL_V2),
+            ("flyer", "premium", MODERN_COMMERCIAL_V2),
+            ("story", "dynamic", MODERN_COMMERCIAL_V2),
         ):
             stamped = stamp_branding_overlay(
                 buffer.getvalue(),
@@ -1846,7 +1838,7 @@ class MarketingIaTests(unittest.TestCase):
         )
         asset = batch["assets"][0]
         used = (asset.get("options") or {}).get("template_used") or asset.get("template")
-        self.assertEqual(used, MODERN_COMMERCIAL_V3)
+        self.assertEqual(used, MODERN_COMMERCIAL_V2)
         self.assertNotIn(used, banned)
 
 

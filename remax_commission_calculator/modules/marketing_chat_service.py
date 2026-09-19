@@ -106,13 +106,13 @@ TONE_ALIASES = (
     ("exclusivo", "exclusive"),
 )
 TEMPLATE_ALIASES = (
-    ("modern commercial", "modern_commercial_v3"),
-    ("comercial moderno", "modern_commercial_v3"),
-    ("premium editorial", "premium_editorial_v2"),
-    ("social punch", "social_punch_v2"),
-    ("modern premium", "premium_editorial_v2"),
-    ("moderno premium", "premium_editorial_v2"),
-    ("minimal", "premium_editorial_v2"),
+    ("modern commercial", "modern_commercial_v2"),
+    ("comercial moderno", "modern_commercial_v2"),
+    ("premium editorial", "modern_commercial_v2"),
+    ("social punch", "modern_commercial_v2"),
+    ("modern premium", "modern_commercial_v2"),
+    ("moderno premium", "modern_commercial_v2"),
+    ("minimal", "modern_commercial_v2"),
 )
 REVISION_RE = re.compile(
     r"\b("

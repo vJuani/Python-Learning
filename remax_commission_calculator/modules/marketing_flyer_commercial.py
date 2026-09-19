@@ -1,11 +1,17 @@
-"""Commercial v2 flyers. Editorial composition inspired by marketing_modern_reference."""
+"""Commercial v2 flyers. Visual language of modern_commercial_v2_reference.
+
+Does not copy the reference pixel-for-pixel. Replicates hierarchy, spacing,
+and commercial polish for 4:5 posts. V1 variants are not rendered.
+"""
 
 from __future__ import annotations
 
+import logging
 import re
 
 from PIL import Image, ImageDraw, ImageFilter
 
+from modules.marketing_context import MarketingError
 from modules.marketing_flyer_modern import (
     FEATURE_ICONS,
     _clip,
@@ -32,17 +38,16 @@ from modules.marketing_renderer import (
     _wrap,
     font,
     load_agent_photo,
-    paste_agent_cutout,
+    paste_circle,
     paste_cover_rounded,
 )
 
 MODERN_COMMERCIAL_V2 = "modern_commercial_v2"
 PREMIUM_EDITORIAL_V2 = "premium_editorial_v2"
 SOCIAL_PUNCH_V2 = "social_punch_v2"
-V2_TEMPLATES = frozenset(
-    {MODERN_COMMERCIAL_V2, PREMIUM_EDITORIAL_V2, SOCIAL_PUNCH_V2}
-)
+V2_TEMPLATES = frozenset({MODERN_COMMERCIAL_V2})
 RENDERER_USED = "pillow_commercial_v2"
+logger = logging.getLogger(__name__)
 
 # Palette aligned to the modern reference
 NAVY_DEEP = (12, 24, 46)
@@ -62,45 +67,20 @@ SCENE_CAPTIONS = {
     "dormitorio": ("DORMITORIO", "Descanso y confort"),
 }
 
-# Target vertical proportions (reference art direction)
+# Target vertical proportions (reference art direction — 4:5 commercial)
 VARIANT = {
     MODERN_COMMERCIAL_V2: {
-        "hero": 0.44,
-        "gallery": 0.17,
-        "location": 0.10,
-        "agent": 0.195,
-        "overlay": 0.92,
-        "thumbs": 3,
-        "captions": True,
-        "title": 110,
-        "price_amount": 64,
-        "cta": NAVY_CTA,
-        "hero_full_bleed": False,
-    },
-    PREMIUM_EDITORIAL_V2: {
-        "hero": 0.48,
-        "gallery": 0.145,
+        "hero": 0.36,
+        "facts": 0.075,
+        "gallery": 0.165,
         "location": 0.095,
         "agent": 0.175,
-        "overlay": 0.72,
-        "thumbs": 2,
-        "captions": False,
-        "title": 100,
-        "price_amount": 56,
-        "cta": NAVY_DEEP,
-        "hero_full_bleed": False,
-    },
-    SOCIAL_PUNCH_V2: {
-        "hero": 0.46,
-        "gallery": 0.155,
-        "location": 0.10,
-        "agent": 0.19,
-        "overlay": 1.05,
+        "overlay": 0.88,
         "thumbs": 3,
         "captions": True,
-        "title": 116,
-        "price_amount": 66,
-        "cta": (8, 16, 38),
+        "title": 92,
+        "price_amount": 58,
+        "cta": NAVY_CTA,
         "hero_full_bleed": False,
     },
 }
@@ -118,8 +98,9 @@ def render_layout_v2(
     *,
     fallback_hero=None,
 ):
-    name = layout if layout in VARIANT else MODERN_COMMERCIAL_V2
-    return render_commercial_v2(
+    if layout != MODERN_COMMERCIAL_V2:
+        raise MarketingError("marketing_err_no_v2_template", 400)
+    return render_modern_commercial_v2(
         size,
         photos,
         facts,
@@ -128,7 +109,6 @@ def render_layout_v2(
         options,
         language=language,
         fallback_hero=fallback_hero,
-        variant=name,
     )
 
 
@@ -151,55 +131,39 @@ def render_modern_commercial_v2(
 def render_premium_editorial_v2(
     size, photos, facts, copy, agent, options, language="es", *, fallback_hero=None
 ):
-    return render_commercial_v2(
-        size,
-        photos,
-        facts,
-        copy,
-        agent,
-        options,
-        language=language,
-        fallback_hero=fallback_hero,
-        variant=PREMIUM_EDITORIAL_V2,
-    )
+    raise MarketingError("marketing_err_v1_blocked", 400)
 
 
 def render_social_punch_v2(
     size, photos, facts, copy, agent, options, language="es", *, fallback_hero=None
 ):
-    return render_commercial_v2(
-        size,
-        photos,
-        facts,
-        copy,
-        agent,
-        options,
-        language=language,
-        fallback_hero=fallback_hero,
-        variant=SOCIAL_PUNCH_V2,
-    )
+    raise MarketingError("marketing_err_v1_blocked", 400)
 
 
-def _bands(height, spec):
+def _bands(height, spec, *, has_facts=True, has_gallery=True, has_location=True, has_agent=True):
     header = max(56, int(height * 0.048))
-    hero = int(height * spec["hero"])
-    gallery = int(height * spec["gallery"])
-    location = int(height * spec["location"])
-    agent = int(height * spec["agent"])
-    used = header + hero + gallery + location + agent
-    footer = max(48, height - used)
+    footer = max(48, int(height * 0.042))
+    facts = int(height * spec.get("facts", 0.075)) if has_facts else 0
+    gallery = int(height * spec["gallery"]) if has_gallery else 0
+    location = int(height * spec["location"]) if has_location else 0
+    agent = int(height * spec["agent"]) if has_agent else int(height * 0.09)
+    used = header + facts + gallery + location + agent + footer
+    hero = max(int(height * 0.30), height - used)
+    footer = max(40, height - header - hero - facts - gallery - location - agent)
     return {
         "header": header,
         "hero": hero,
+        "facts": facts,
         "gallery": gallery,
         "location": location,
         "agent": agent,
         "footer": footer,
         "hero_top": header,
-        "gallery_top": header + hero,
-        "location_top": header + hero + gallery,
-        "agent_top": header + hero + gallery + location,
-        "footer_top": header + hero + gallery + location + agent,
+        "facts_top": header + hero,
+        "gallery_top": header + hero + facts,
+        "location_top": header + hero + facts + gallery,
+        "agent_top": header + hero + facts + gallery + location,
+        "footer_top": header + hero + facts + gallery + location + agent,
     }
 
 
@@ -293,6 +257,18 @@ def _left_hero_shade(width, height, *, strength=1.0):
     return shade.filter(ImageFilter.GaussianBlur(radius=9))
 
 
+def _ellipsis(draw, text, used_font, max_width):
+    value = " ".join(str(text or "").split())
+    if not value:
+        return ""
+    if _text_width(draw, value, used_font) <= max_width:
+        return value
+    ellipsis = "…"
+    while value and _text_width(draw, value + ellipsis, used_font) > max_width:
+        value = value[:-1].rstrip()
+    return (value + ellipsis) if value else ellipsis
+
+
 def render_commercial_v2(
     size,
     photos,
@@ -305,15 +281,31 @@ def render_commercial_v2(
     fallback_hero=None,
     variant=MODERN_COMMERCIAL_V2,
 ):
+    if variant != MODERN_COMMERCIAL_V2:
+        raise MarketingError("marketing_err_no_v2_template", 400)
     width, height = size
     facts = facts or {}
     copy = copy or {}
     options = options or {}
-    spec = VARIANT.get(variant) or VARIANT[MODERN_COMMERCIAL_V2]
+    spec = VARIANT[MODERN_COMMERCIAL_V2]
     photos = [item for item in (photos or []) if item is not None]
-    band = _bands(height, spec)
+    feature_items = _feature_items(facts, copy) if options.get("show_features", True) else []
+    street = _clip(copy.get("street") or facts.get("title") or "", 44)
+    zone = _clip(copy.get("zone") or facts.get("zone_line") or facts.get("location_line") or "", 52)
+    amenities = [str(item).strip() for item in (facts.get("amenities") or []) if str(item).strip()][:3]
+    has_location = bool(street or zone or amenities)
+    has_gallery = len(photos) > 1
+    has_agent = bool(options.get("include_agent") and agent)
+    band = _bands(
+        height,
+        spec,
+        has_facts=bool(feature_items),
+        has_gallery=has_gallery,
+        has_location=has_location,
+        has_agent=has_agent,
+    )
     canvas = Image.new("RGBA", size, (*PAGE_BG, 255))
-    pad = _u(width, 36)
+    pad = _u(width, 40)
     _draw_header(canvas, facts, language=language, height=band["header"], pad=pad)
     _draw_hero(
         canvas,
@@ -325,16 +317,30 @@ def render_commercial_v2(
         pad=pad,
         spec=spec,
         fallback=fallback_hero,
-        show_features=options.get("show_features", True),
         show_price=options.get("show_price", True),
     )
-    _draw_thumbs(canvas, photos, band=band, pad=pad, spec=spec, photo_rows=options.get("photo_rows"))
-    _draw_location(canvas, facts, copy, band=band, pad=pad)
-    if options.get("include_agent") and agent:
+    if feature_items:
+        _draw_facts_row(canvas, feature_items, band=band, pad=pad)
+    if has_gallery:
+        _draw_thumbs(canvas, photos, band=band, pad=pad, spec=spec, photo_rows=options.get("photo_rows"))
+    if has_location:
+        _draw_location(
+            canvas,
+            facts,
+            copy,
+            band=band,
+            pad=pad,
+            street=street,
+            zone=zone,
+            amenities=amenities,
+            language=language,
+        )
+    if has_agent:
         _draw_agent_cta(canvas, agent, copy, band=band, pad=pad, spec=spec)
     else:
         _draw_cta_only(canvas, copy, band=band, pad=pad, spec=spec)
     _draw_footer(canvas, facts, band=band, pad=pad)
+    logger.info("template_used=%s", MODERN_COMMERCIAL_V2)
     return canvas.convert("RGB")
 
 
@@ -385,15 +391,14 @@ def _draw_hero(
     pad,
     spec,
     fallback,
-    show_features,
     show_price,
 ):
     width, _height = canvas.size
     top = band["hero_top"]
-    gap = _u(width, 6)
+    gap = _u(width, 8)
     hero_h = band["hero"] - gap
     box = (width - pad * 2, hero_h)
-    radius = _u(width, 26)
+    radius = _u(width, 28)
     hero = photos[0] if photos else fallback
     if hero is not None:
         paste_cover_rounded(canvas, hero, (pad, top), box, radius=radius, focus=(0.48, 0.32))
@@ -404,84 +409,96 @@ def _draw_hero(
     canvas.paste(shade, (pad, top), shade)
 
     draw = ImageDraw.Draw(canvas)
-    x = pad + _u(width, 40)
-    y = top + _u(width, 34)
-    # Protagonist column — short stacked lines at maximum type size.
-    max_w = int(box[0] * 0.46)
-    max_w = max(max_w, _u(width, 360))
+    x = pad + _u(width, 36)
+    y = top + _u(width, 32)
+    max_w = int(box[0] * 0.58)
+    max_w = max(max_w, _u(width, 340))
 
     badge = default_kicker(language, facts)
     if badge:
-        used = font(_u(width, 15), bold=True)
-        tw = _text_width(draw, badge, used)
-        bh = _u(width, 34)
-        # Dark capsule, white type (reference)
+        used = font(_u(width, 14), bold=True)
+        label = _ellipsis(draw, badge, used, max_w)
+        tw = _text_width(draw, label, used)
+        bh = _u(width, 32)
         draw.rounded_rectangle(
             (x, y, x + tw + _u(width, 28), y + bh),
             bh // 2,
             fill=(18, 24, 36),
         )
-        draw.text((x + _u(width, 14), y + _u(width, 7)), badge, font=used, fill=WHITE)
-        y += bh + _u(width, 22)
+        draw.text((x + _u(width, 14), y + _u(width, 6)), label, font=used, fill=WHITE)
+        y += bh + _u(width, 18)
 
     title_px = _u(width, spec["title"])
     lines = _headline_lines(copy, facts, language)[:3]
-    # Fit type to the column so stacks stay 2–3 editorial lines (not one word each).
-    while title_px > _u(width, 64):
+    while title_px > _u(width, 42):
         probe = font(title_px, bold=True)
         if all(_text_width(draw, line, probe) <= max_w for line in lines):
             break
         title_px -= 2
-    title_font = font(title_px, bold=True)
-    for line in lines:
-        draw.text((x, y), line, font=title_font, fill=WHITE)
-        y += int(title_px * 0.95)
+    for index, line in enumerate(lines):
+        italic = index == len(lines) - 1 and line.lower().startswith(("en ", "in "))
+        used = font(title_px, bold=not italic, italic=italic)
+        label = _ellipsis(draw, line, used, max_w)
+        draw.text((x, y), label, font=used, fill=WHITE)
+        y += int(title_px * 0.96)
 
-    bajada = _clip(
-        copy.get("subheadline") or facts.get("benefit_line") or "",
-        96 if spec["captions"] else 72,
-    )
+    bajada = copy.get("subheadline") or facts.get("benefit_line") or ""
     if bajada:
-        body = font(_u(width, 23))
-        y += _u(width, 12)
-        for line in _wrap(draw, bajada, body, int(box[0] * 0.50))[:2]:
-            draw.text((x, y), line, font=body, fill=SOFT_INK)
-            y += _u(width, 30)
-
-    features_y = top + hero_h - _u(width, 108)
-    if show_features:
-        _draw_hero_stats(draw, facts, copy, xy=(x, features_y), width=width)
+        body_px = _u(width, 22)
+        body = font(body_px)
+        y += _u(width, 10)
+        wrapped = _wrap(draw, bajada, body, max_w)[:2]
+        for line in wrapped:
+            draw.text((x, y), _ellipsis(draw, line, body, max_w), font=body, fill=SOFT_INK)
+            y += _u(width, 28)
 
     price = facts.get("price_label") if show_price else ""
     if price:
         _draw_price_card(
             draw,
             price,
-            box=(pad + box[0] - _u(width, 18), top + hero_h - _u(width, 18), width),
+            box=(pad + box[0] - _u(width, 16), top + hero_h - _u(width, 16), width),
             amount_px=_u(width, spec.get("price_amount") or 56),
         )
 
 
-def _draw_hero_stats(draw, facts, copy, *, xy, width):
-    items = _feature_items(facts, copy)
-    if not items:
+def _draw_facts_row(canvas, items, *, band, pad):
+    if not items or band.get("facts", 0) <= 0:
         return
-    x, y = xy
-    icon = _u(width, 30)
-    number_font = font(_u(width, 26), bold=True)
-    label_font = font(_u(width, 13))
-    for index, (number, label) in enumerate(items):
+    width, _height = canvas.size
+    draw = ImageDraw.Draw(canvas)
+    top = band["facts_top"]
+    h = band["facts"]
+    slots = min(4, len(items))
+    inner = width - pad * 2
+    cell = inner // slots
+    icon = _u(width, 34)
+    number_font = font(_u(width, 28), bold=True)
+    label_font = font(_u(width, 13), bold=True)
+    icon_color = (90, 104, 122)
+    y = top + max(_u(width, 10), (h - icon - _u(width, 8)) // 2)
+    for index, (number, label) in enumerate(items[:slots]):
+        x = pad + index * cell
         painter = FEATURE_ICONS[min(index, 3)]
-        painter(draw, (x, y, x + icon, y + icon), WHITE)
-        tx = x + icon + 8
+        painter(draw, (x, y, x + icon, y + icon), icon_color)
+        tx = x + icon + _u(width, 10)
+        max_tw = cell - icon - _u(width, 18)
         if number:
-            draw.text((tx, y - 2), number, font=number_font, fill=WHITE)
-            draw.text((tx, y + _u(width, 26)), label, font=label_font, fill=SOFT_INK)
-            span = max(_text_width(draw, number, number_font), _text_width(draw, label, label_font))
+            draw.text(
+                (tx, y - 2),
+                _ellipsis(draw, number, number_font, max_tw),
+                font=number_font,
+                fill=INK,
+            )
+            caption = _ellipsis(draw, (label or "").upper(), label_font, max_tw)
+            draw.text((tx, y + _u(width, 28)), caption, font=label_font, fill=MUTED)
         else:
-            draw.text((tx, y + 4), label, font=label_font, fill=WHITE)
-            span = _text_width(draw, label, label_font)
-        x += icon + span + _u(width, 34)
+            draw.text(
+                (tx, y + 6),
+                _ellipsis(draw, label, label_font, max_tw),
+                font=label_font,
+                fill=INK,
+            )
 
 
 def _draw_price_card(draw, price, *, box, amount_px):
@@ -518,48 +535,43 @@ def _draw_price_card(draw, price, *, box, amount_px):
 
 def _draw_thumbs(canvas, photos, *, band, pad, spec, photo_rows=None):
     extras = list(photos[1 : 1 + spec["thumbs"]])
-    rows = list(photo_rows or [])[1 : 1 + spec["thumbs"]]
+    extras = [item for item in extras if item is not None]
+    if not extras:
+        return
+    rows = list(photo_rows or [])[1 : 1 + len(extras)]
     width, _height = canvas.size
-    slots = spec["thumbs"]
-    gap = _u(width, 12)
-    thumb_h = band["gallery"] - _u(width, 14)
+    slots = len(extras)
+    gap = _u(width, 14)
+    thumb_h = band["gallery"] - _u(width, 16)
     cell = (width - pad * 2 - gap * (slots - 1)) // max(1, slots)
-    radius = _u(width, 16)
-    top = band["gallery_top"] + _u(width, 6)
-    draw = ImageDraw.Draw(canvas)
+    radius = _u(width, 18)
+    top = band["gallery_top"] + _u(width, 8)
     default_scenes = ("living", "cocina", "jardin")
-    for index in range(slots):
+    for index, extra in enumerate(extras):
         xy = (pad + index * (cell + gap), top)
-        if index < len(extras) and extras[index] is not None:
-            paste_cover_rounded(
+        paste_cover_rounded(
+            canvas,
+            extra,
+            xy,
+            (cell, thumb_h),
+            radius=radius,
+            focus=(0.5, 0.42),
+        )
+        if spec["captions"]:
+            meta = rows[index] if index < len(rows) else {}
+            scene = photo_scene_label(meta or {}) or default_scenes[min(index, 2)]
+            title, subtitle = SCENE_CAPTIONS.get(scene, ("", ""))
+            if not title:
+                title = default_scenes[min(index, 2)].upper()
+                subtitle = SCENE_CAPTIONS.get(default_scenes[min(index, 2)], ("", ""))[1]
+            _draw_thumb_caption(
                 canvas,
-                extras[index],
-                xy,
-                (cell, thumb_h),
+                xy=xy,
+                size=(cell, thumb_h),
                 radius=radius,
-                focus=(0.5, 0.42),
-            )
-            if spec["captions"]:
-                meta = rows[index] if index < len(rows) else {}
-                scene = photo_scene_label(meta or {}) or default_scenes[min(index, 2)]
-                title, subtitle = SCENE_CAPTIONS.get(scene, ("", ""))
-                if not title:
-                    title = default_scenes[min(index, 2)].upper()
-                    subtitle = SCENE_CAPTIONS.get(default_scenes[min(index, 2)], ("", ""))[1]
-                _draw_thumb_caption(
-                    canvas,
-                    xy=xy,
-                    size=(cell, thumb_h),
-                    radius=radius,
-                    title=title,
-                    subtitle=subtitle,
-                    width=width,
-                )
-        else:
-            draw.rounded_rectangle(
-                (xy[0], xy[1], xy[0] + cell, xy[1] + thumb_h),
-                radius,
-                fill=(210, 214, 220),
+                title=title,
+                subtitle=subtitle,
+                width=width,
             )
 
 
@@ -606,107 +618,173 @@ def _icon_pin(draw, xy, size, fill=NAVY_CTA):
     )
 
 
-def _draw_location(canvas, facts, copy, *, band, pad):
-    """Solid info band — address + commercial benefit, not floating scraps."""
+def _icon_mail(draw, xy, size):
+    x, y = xy
+    draw.rounded_rectangle((x, y + 2, x + size, y + size - 2), max(3, size // 6), outline=MUTED, width=2)
+    draw.polygon(
+        (
+            (x + 2, y + 4),
+            (x + size / 2, y + size * 0.48),
+            (x + size - 2, y + 4),
+        ),
+        outline=MUTED,
+    )
+
+
+def _icon_tree(draw, xy, size, fill=NAVY_CTA):
+    x, y = xy
+    draw.ellipse((x + 2, y, x + size - 2, y + size * 0.72), outline=fill, width=2)
+    draw.line((x + size / 2, y + size * 0.55, x + size / 2, y + size), fill=fill, width=2)
+
+
+def _icon_wifi(draw, xy, size, fill=NAVY_CTA):
+    x, y = xy
+    for index, scale in enumerate((0.95, 0.65, 0.35)):
+        pad = int(size * (1 - scale) / 2)
+        draw.arc(
+            (x + pad, y + pad, x + size - pad, y + size - pad),
+            200,
+            340,
+            fill=fill,
+            width=max(2, size // 10),
+        )
+    dot = max(2, size // 8)
+    draw.ellipse(
+        (x + size / 2 - dot, y + size * 0.72, x + size / 2 + dot, y + size * 0.72 + dot * 2),
+        fill=fill,
+    )
+
+
+def _icon_shop(draw, xy, size, fill=NAVY_CTA):
+    x, y = xy
+    draw.rectangle((x + 4, y + size * 0.38, x + size - 4, y + size - 2), outline=fill, width=2)
+    draw.polygon(
+        (
+            (x + 2, y + size * 0.40),
+            (x + size / 2, y + 2),
+            (x + size - 2, y + size * 0.40),
+        ),
+        outline=fill,
+    )
+
+
+AMENITY_ICONS = (_icon_tree, _icon_shop, _icon_wifi)
+
+
+def _draw_location(canvas, facts, copy, *, band, pad, street, zone, amenities, language):
     width, _height = canvas.size
     draw = ImageDraw.Draw(canvas)
     top = band["location_top"]
     h = band["location"]
-    draw.rectangle((0, top, width, top + h), fill=BAND_BG)
+    if h <= 0:
+        return
+    pin = _u(width, 28)
+    street_font = font(_u(width, 24), bold=True)
+    zone_font = font(_u(width, 16))
+    left_w = int(width * 0.34)
+    inner_y = top + _u(width, 16)
+    if street or zone:
+        _icon_pin(draw, (pad, inner_y + 2), pin)
+        tx = pad + pin + 12
+        max_tw = left_w - pin - 20
+        if street:
+            draw.text((tx, inner_y), _ellipsis(draw, street, street_font, max_tw), font=street_font, fill=INK)
+            inner_y += _u(width, 28)
+        if zone:
+            draw.text((tx, inner_y), _ellipsis(draw, zone, zone_font, max_tw), font=zone_font, fill=MUTED)
 
-    street = _clip(copy.get("street") or facts.get("title") or "", 44)
-    zone = _clip(copy.get("zone") or facts.get("zone_line") or facts.get("location_line") or "", 52)
-    pin = _u(width, 30)
-    street_font = font(_u(width, 30), bold=True)
-    zone_font = font(_u(width, 18))
-    block_h = _u(width, 30) + ( _u(width, 28) if zone else 0 )
-    inner_y = top + max(_u(width, 16), (h - block_h) // 2)
-    _icon_pin(draw, (pad, inner_y + 2), pin)
-    tx = pad + pin + 14
-    if street:
-        draw.text((tx, inner_y), street, font=street_font, fill=INK)
-        inner_y += _u(width, 34)
-    if zone:
-        draw.text((tx, inner_y), zone, font=zone_font, fill=MUTED)
+    amenity_font = font(_u(width, 13))
+    amenity_x = pad + left_w + _u(width, 8)
+    amenity_w = int(width * 0.36)
+    if amenities:
+        slot = amenity_w // max(1, len(amenities))
+        icon = _u(width, 22)
+        ay = top + _u(width, 14)
+        for index, label in enumerate(amenities):
+            ax = amenity_x + index * slot
+            painter = AMENITY_ICONS[min(index, len(AMENITY_ICONS) - 1)]
+            painter(draw, (ax, ay), icon)
+            lines = _wrap(draw, label, amenity_font, slot - _u(width, 8))[:2]
+            ty = ay + icon + 4
+            for line in lines:
+                draw.text((ax, ty), line, font=amenity_font, fill=MUTED)
+                ty += _u(width, 16)
 
-    mid = int(width * 0.48)
-    rule_top = top + _u(width, 16)
-    rule_bot = top + h - _u(width, 16)
-    draw.line((mid, rule_top, mid, rule_bot), fill=DIVIDER, width=2)
-    benefit = _clip(facts.get("benefit_line") or copy.get("subheadline") or "", 90)
-    if benefit:
-        bx = mid + _u(width, 22)
-        tree = _u(width, 22)
-        body = font(_u(width, 18))
-        lines = _wrap(draw, benefit, body, width - bx - tree - pad - 16)[:3]
-        block = tree + max(0, len(lines) * _u(width, 24) - _u(width, 4))
-        cy = top + max(_u(width, 16), (h - max(tree, block)) // 2)
-        draw.ellipse((bx, cy, bx + tree, cy + tree), outline=NAVY_CTA, width=2)
-        text_x = bx + tree + 12
-        text_y = cy
-        for line in lines:
-            draw.text((text_x, text_y), line, font=body, fill=INK)
-            text_y += _u(width, 24)
+    closing = marketing_label("closing_line", language) or marketing_label("whisper", language)
+    if closing:
+        used = font(_u(width, 18), italic=True)
+        max_tw = int(width * 0.22)
+        rx = width - pad - max_tw
+        wrapped = _wrap(draw, closing, used, max_tw)[:2]
+        ty = top + max(_u(width, 22), (h - len(wrapped) * _u(width, 24)) // 2)
+        for line in wrapped:
+            draw.text((rx, ty), _ellipsis(draw, line, used, max_tw), font=used, fill=(176, 154, 122))
+            ty += _u(width, 24)
 
 
 def _draw_agent_cta(canvas, agent, copy, *, band, pad, spec):
-    """Editorial agent block + integrated CTA — person overlaps, never floats alone."""
+    """Agent block + CTA. Circular portrait, contacts, strong button — not a stuck cutout."""
     width, _height = canvas.size
     draw = ImageDraw.Draw(canvas)
     top = band["agent_top"]
     h = band["agent"]
-    # Fill the band — no dead PAGE_BG strip around a tiny card
-    card_top = top + _u(width, 4)
-    card_h = h - _u(width, 6)
-    draw.rounded_rectangle(
-        (pad // 2, card_top, width - pad // 2, card_top + card_h),
-        _u(width, 18),
-        fill=WHITE,
-    )
-
-    cutout_h = min(_u(width, 250), max(_u(width, 170), int(card_h * 1.12)))
-    photo_x = pad
-    photo_y = card_top + card_h - cutout_h + _u(width, 10)
+    card_top = top + _u(width, 6)
+    card_h = h - _u(width, 10)
+    diameter = min(_u(width, 168), max(_u(width, 118), card_h - _u(width, 24)))
     photo = load_agent_photo(agent.get("photo_path"))
-    text_x = pad + _u(width, 18)
+    text_x = pad
     if photo is not None:
-        pasted = paste_agent_cutout(canvas, photo, (photo_x, photo_y), height=cutout_h)
-        if pasted:
-            text_x = photo_x + int(cutout_h * 0.56) + _u(width, 4)
-
-    script = font(_u(width, 30), italic=True)
-    whisper = "Hablemos de tu próximo hogar"
-    draw.text((text_x, card_top + _u(width, 8)), whisper, font=script, fill=(200, 208, 218))
+        photo_y = card_top + max(0, (card_h - diameter) // 2)
+        paste_circle(canvas, photo, (pad, photo_y), diameter)
+        text_x = pad + diameter + _u(width, 18)
 
     name = agent.get("name") or ""
-    title = agent.get("title") or "Agente inmobiliario"
-    y = card_top + _u(width, 42)
+    title = agent.get("title") or ""
+    y = card_top + _u(width, 10)
+    name_font = font(_u(width, 30), bold=True)
+    title_font = font(_u(width, 16))
+    contact_max = int(width * 0.42)
     if name:
-        draw.text((text_x, y), name, font=font(_u(width, 30), bold=True), fill=INK)
+        draw.text((text_x, y), _ellipsis(draw, name, name_font, contact_max), font=name_font, fill=INK)
         y += _u(width, 36)
     if title:
-        draw.text((text_x, y), title, font=font(_u(width, 17)), fill=MUTED)
-        y += _u(width, 30)
+        draw.text((text_x, y), _ellipsis(draw, title, title_font, contact_max), font=title_font, fill=MUTED)
+        y += _u(width, 26)
 
-    icon = _u(width, 26)
+    icon = _u(width, 24)
+    contact_font = font(_u(width, 16))
     whatsapp = " ".join(str(agent.get("whatsapp") or "").split())
     instagram = " ".join(str(agent.get("instagram") or "").split())
+    email = " ".join(str(agent.get("email") or "").split())
     if instagram and not instagram.startswith("@"):
         instagram = f"@{instagram.lstrip('@')}"
-    contact_font = font(_u(width, 17))
+    contacts = []
     if whatsapp:
-        _icon_wa(draw, (text_x, y), icon)
-        draw.text((text_x + icon + 10, y + 2), whatsapp, font=contact_font, fill=INK)
-        y += _u(width, 32)
+        contacts.append(("wa", whatsapp))
     if instagram:
-        _icon_ig(draw, (text_x, y), icon)
-        draw.text((text_x + icon + 10, y + 2), instagram, font=contact_font, fill=INK)
+        contacts.append(("ig", instagram))
+    if email:
+        contacts.append(("mail", email))
+    for kind, value in contacts[:3]:
+        if kind == "wa":
+            _icon_wa(draw, (text_x, y), icon)
+        elif kind == "ig":
+            _icon_ig(draw, (text_x, y), icon)
+        else:
+            _icon_mail(draw, (text_x, y), icon)
+        draw.text(
+            (text_x + icon + 10, y + 2),
+            _ellipsis(draw, value, contact_font, contact_max - icon - 12),
+            font=contact_font,
+            fill=INK,
+        )
+        y += _u(width, 28)
 
-    cta = _clip(copy.get("cta") or "Consultame para visitarla", 34)
-    btn_w = min(_u(width, 420), int(width * 0.42))
-    btn_h = _u(width, 82)
+    cta = copy.get("cta") or "Consultame para visitarla"
+    btn_w = min(_u(width, 400), int(width * 0.40))
+    btn_h = _u(width, 72)
     btn_x = width - pad - btn_w
-    btn_y = card_top + max(_u(width, 48), (card_h - btn_h) // 2 - _u(width, 18))
+    btn_y = card_top + max(_u(width, 18), (card_h - btn_h) // 2 - _u(width, 16))
     _draw_cta_block(
         draw,
         xy=(btn_x, btn_y),
@@ -715,28 +793,25 @@ def _draw_agent_cta(canvas, agent, copy, *, band, pad, spec):
         fill=spec["cta"],
         width=width,
     )
-    trust = (
-        "Asesoramiento personalizado",
-        "Acompañamiento en todo el proceso",
-        "Tu proyecto en manos expertas",
-    )
-    tiny = font(_u(width, 12))
-    ty = btn_y + btn_h + _u(width, 14)
-    for line in trust:
-        tw = _text_width(draw, line, tiny)
-        draw.text((btn_x + max(0, (btn_w - tw) // 2), ty), line, font=tiny, fill=MUTED)
-        ty += _u(width, 17)
+    trust = marketing_label("trust_project", "es") or "Tu proyecto en manos expertas"
+    tiny = font(_u(width, 12), bold=True)
+    label = _ellipsis(draw, trust.upper(), tiny, btn_w)
+    tw = _text_width(draw, label, tiny)
+    ty = btn_y + btn_h + _u(width, 12)
+    if ty + _u(width, 16) <= card_top + card_h:
+        draw.text((btn_x + max(0, (btn_w - tw) // 2), ty), label, font=tiny, fill=MUTED)
 
 
 def _draw_cta_only(canvas, copy, *, band, pad, spec):
     width, _height = canvas.size
     draw = ImageDraw.Draw(canvas)
-    cta = _clip(copy.get("cta") or "Consultame para visitarla", 36)
-    top = band["agent_top"] + _u(width, 22)
+    cta = copy.get("cta") or "Consultame para visitarla"
+    top = band["agent_top"] + _u(width, 18)
+    btn_h = min(_u(width, 78), max(48, band["agent"] - _u(width, 28)))
     _draw_cta_block(
         draw,
         xy=(pad, top),
-        size=(width - pad * 2, _u(width, 84)),
+        size=(width - pad * 2, btn_h),
         label=cta,
         fill=spec["cta"],
         width=width,
@@ -747,23 +822,25 @@ def _draw_cta_block(draw, *, xy, size, label, fill, width):
     x, y = xy
     w, h = size
     draw.rounded_rectangle((x, y, x + w, y + h), min(h // 2, 36), fill=fill)
-    used = font(_u(width, 22), bold=True)
-    tw = _text_width(draw, label, used)
-    icon = _u(width, 30)
-    gap = 12
-    arrow_w = _u(width, 28)
+    used = font(_u(width, 20), bold=True)
+    icon = _u(width, 28)
+    gap = 10
+    arrow_w = _u(width, 24)
+    max_tw = max(40, w - icon - arrow_w - gap * 3 - _u(width, 24))
+    text = _ellipsis(draw, " ".join(str(label or "").split()), used, max_tw)
+    tw = _text_width(draw, text, used)
     content_w = icon + gap + tw + gap + arrow_w
-    inner = x + max(_u(width, 18), (w - content_w) // 2)
+    inner = x + max(_u(width, 16), (w - content_w) // 2)
     _icon_wa(draw, (inner, y + (h - icon) // 2), icon)
     draw.text(
-        (inner + icon + gap, y + (h - _u(width, 22)) // 2 - 1),
-        label,
+        (inner + icon + gap, y + (h - _u(width, 20)) // 2 - 1),
+        text,
         font=used,
         fill=WHITE,
     )
-    arrow = font(_u(width, 26), bold=True)
+    arrow = font(_u(width, 24), bold=True)
     draw.text(
-        (x + w - _u(width, 40), y + (h - _u(width, 26)) // 2 - 2),
+        (x + w - _u(width, 36), y + (h - _u(width, 24)) // 2 - 2),
         "→",
         font=arrow,
         fill=WHITE,
