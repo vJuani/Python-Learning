@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="{{ language or 'es' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1080">
+  <title>modern_commercial_v3</title>
+  <style>{{ font_css|safe }}{{ css|safe }}</style>
+</head>
+<body class="{{ body_class }}">
+<article id="poster" class="poster {{ modifiers }}">
+  <section class="hero">
+    {% if hero.src %}
+    <img class="hero__photo" src="{{ hero.src }}" alt="">
+    {% endif %}
+    <div class="hero__shade" aria-hidden="true"></div>
+    <header class="poster__header">
+      <div class="brand">
+        {% if branding.logo %}
+        <img class="brand__logo" src="{{ branding.logo }}" alt="">
+        {% endif %}
+        <div class="brand__name{% if branding.stacked %} brand__name--stacked{% endif %}">
+          {% if branding.stacked %}
+          <span>{{ branding.mark }}</span>
+          <small>{{ branding.submark }}</small>
+          {% else %}
+          {{ branding.name }}
+          {% endif %}
+        </div>
+      </div>
+      {% if branding.tagline %}
+      <div class="brand__tagline">{{ branding.tagline }}</div>
+      {% endif %}
+    </header>
+    <div class="hero__copy">
+      {% if operation %}<p class="kicker">{{ operation }}</p>{% endif %}
+      <h1 class="headline headline--{{ headline_size }}">
+        {% for line in headline_lines %}
+        <span class="headline__line{% if loop.last and headline_accent %} headline__line--accent{% endif %}">{{ line }}</span>
+        {% endfor %}
+      </h1>
+      {% if subheadline %}<p class="subhead">{{ subheadline }}</p>{% endif %}
+    </div>
+    {% if price.amount %}
+    <div class="price">
+      <span class="price__currency">{{ price.currency }}</span>
+      <span class="price__amount">{{ price.amount }}</span>
+    </div>
+    {% endif %}
+  </section>
+
+  <ul class="facts">
+    {% for fact in facts %}
+    <li class="fact">
+      <span class="fact__icon" data-label="{{ fact.label }}">
+        {% if 'Ambiente' in fact.label or fact.label == 'Rooms' %}
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14h16v3H4z"/><path d="M5 14V10c2-3 4-4 7-4s5 1 7 4v4"/><path d="M4 17v2M20 17v2"/></svg>
+        {% elif 'Dorm' in fact.label or fact.label == 'Bedrooms' %}
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V11h18v7"/><path d="M3 14h18"/><path d="M6 11V8a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3"/><path d="M3 18h18"/></svg>
+        {% elif 'Baño' in fact.label or fact.label == 'Baths' %}
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h16v4a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-4z"/><path d="M7 13V8a2 2 0 0 1 2-2h1"/><path d="M16 6v2M18 7h-4"/></svg>
+        {% else %}
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-6 8 6v9H4z"/><path d="M9 20v-7h6v7"/></svg>
+        {% endif %}
+      </span>
+      <span class="fact__value">{{ fact.value }}</span>
+      <span class="fact__label">{{ fact.label }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <section class="gallery gallery--{{ secondary|length }}">
+    {% for photo in secondary %}
+    <figure class="thumb">
+      <img src="{{ photo.src }}" alt="">
+      {% if photo.label %}
+      <figcaption>
+        <strong>{{ photo.label }}</strong>
+        {% if photo.caption %}<span>{{ photo.caption }}</span>{% endif %}
+      </figcaption>
+      {% endif %}
+    </figure>
+    {% endfor %}
+  </section>
+
+  <section class="place">
+    <div class="place__addr">
+      <span class="place__pin">{{ icons.pin|safe }}</span>
+      <div>
+        {% if location.street %}<strong>{{ location.street }}</strong>{% endif %}
+        {% if location.city %}<span>{{ location.city }}</span>{% endif %}
+      </div>
+    </div>
+    {% if location.chips %}
+    <ul class="place__chips">
+      {% for chip in location.chips %}
+      <li>
+        {{ chip.icon|safe }}
+        <span>{{ chip.label }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if location.quote %}<p class="place__quote">{{ location.quote }}</p>{% endif %}
+  </section>
+
+  <section class="closer">
+    {% if agent %}
+    <div class="agent">
+      {% if agent.photo %}
+      <div class="agent__photo"><img src="{{ agent.photo }}" alt=""></div>
+      {% endif %}
+      <div class="agent__meta">
+        {% if agent.name %}<h2>{{ agent.name }}</h2>{% endif %}
+        {% if agent.title %}<p class="role">{{ agent.title }}</p>{% endif %}
+        <ul class="contacts">
+          {% if agent.whatsapp %}
+          <li>{{ icons.whatsapp|safe }}<span>{{ agent.whatsapp }}</span></li>
+          {% endif %}
+          {% if agent.instagram %}
+          <li>{{ icons.instagram|safe }}<span>{{ agent.instagram }}</span></li>
+          {% endif %}
+          {% if agent.email %}
+          <li>{{ icons.email|safe }}<span>{{ agent.email }}</span></li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+    {% if cta.label %}
+    <div class="cta">
+      <p class="cta__btn">{{ icons.whatsapp_light|safe }}<em>{{ cta.label }}</em></p>
+      {% if cta.support %}<p class="cta__support">{{ cta.support }}</p>{% endif %}
+    </div>
+    {% endif %}
+  </section>
+
+  <footer class="poster__footer">
+    <span>{{ branding.name }}</span>
+    <span class="legal">{{ legal }}</span>
+    <span class="jrh">JRH One</span>
+  </footer>
+</article>
+</body>
+</html>

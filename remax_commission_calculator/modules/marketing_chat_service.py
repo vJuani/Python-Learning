@@ -1335,6 +1335,7 @@ def _attach_visual_assets(generation, batch_view):
                 "storage_key": item.get("storage_key"),
                 "template_used": item.get("template_used")
                 or ((item.get("options") or {}).get("template_used")),
+                "renderer_used": (item.get("options") or {}).get("renderer_used"),
             }
         )
         template_used = template_used or ready_assets[-1]["template_used"]
@@ -1350,6 +1351,7 @@ def _attach_visual_assets(generation, batch_view):
         data["visual_stage"] = "complete"
         data["visual_error"] = None
         data["template_used"] = template_used or data.get("template_used")
+        data["renderer_used"] = ready_assets[0].get("renderer_used") or data.get("renderer_used")
         logger.info(
             "marketing_visual_storage_ok url=%s template_used=%s",
             data["visual_asset_url"],

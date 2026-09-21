@@ -35,5 +35,11 @@ vapid_*.txt
 *.csv
 *.xlsx
 
+# Playwright browsers downloaded during build/dev
+ms-playwright/
+
+# HTML renderer debug dumps
+tmp/marketing_html_render/
+
 # Excel temporary lock files
 ~$*

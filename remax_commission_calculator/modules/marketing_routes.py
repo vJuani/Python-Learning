@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from flask import (
+    Response,
     abort,
     jsonify,
     redirect,
@@ -59,7 +60,10 @@ from modules.marketing_generation_service import (
 )
 from modules.database.organization_settings_repository import get_organization_settings
 from modules.database.marketing_repository import get_marketing_asset
+from modules.database.properties_repository import get_property_record
 from modules.i18n import normalize_language
+from modules.marketing_context import build_property_marketing_context
+from modules.marketing_render_html import build_marketing_render_context, render_marketing_html
 
 
 def register_marketing_routes(app, helpers):
@@ -772,3 +776,47 @@ def register_marketing_routes(app, helpers):
         if path is None:
             abort(404)
         return send_file(path, mimetype="image/png")
+
+    @app.route("/marketing/render-preview", methods=["GET"])
+    @app.route("/marketing/render-preview/<int:generation_id>", methods=["GET"])
+    def marketing_render_preview(generation_id=None):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        language = get_current_language()
+        property_id = request.args.get("property_id", type=int)
+        include_agent = (request.args.get("include_agent") or "1").strip() != "0"
+        show_price = (request.args.get("show_price") or "1").strip() != "0"
+        art = {}
+        try:
+            if generation_id:
+                generation = require_generation(organization_id, user, generation_id)
+                property_id = generation.get("property_id") or property_id
+                data = generation.get("generated_data") or {}
+                art = {
+                    "headline": data.get("headline") or "",
+                    "short_hook": data.get("subheadline") or "",
+                    "cta": data.get("cta") or "",
+                }
+            if not property_id:
+                abort(404)
+            record = get_property_record(property_id, organization_id)
+            if record is None:
+                abort(404)
+            context = build_property_marketing_context(record)
+            render_context = build_marketing_render_context(
+                context,
+                fmt="post",
+                options={
+                    "include_agent": include_agent,
+                    "show_price": show_price,
+                    "show_agent_photo": include_agent,
+                },
+                art=art,
+                language=language,
+            )
+            html = render_marketing_html(render_context)
+        except MarketingError as error:
+            return _handle(error, "marketing_home")
+        return Response(html, mimetype="text/html; charset=utf-8")

@@ -45,8 +45,14 @@ from modules.marketing_image_provider import (
     MarketingImageError,
     get_marketing_image_provider_name,
 )
-from modules.marketing_flyer_modern import resolve_layout_template
 from modules.marketing_overlay import overlay_enabled, provider_references, stamp_branding_overlay
+from modules.marketing_render_html import (
+    HTML_RENDERER,
+    HTML_TEMPLATE,
+    render_html_visual,
+    resolve_html_layout_template,
+    uses_html_renderer,
+)
 from modules.marketing_quality import validate_creative
 from modules.marketing_references import collect_reference_images
 from modules.marketing_photo_selector import select_photos_for_item
@@ -499,6 +505,22 @@ def _update_options(asset, **fields):
 
 
 def _render_local_visual(context, fmt, *, options, art, language):
+    if uses_html_renderer(fmt, options):
+        overlay_meta = render_html_visual(
+            context,
+            fmt,
+            options=options,
+            art=art,
+            language=language,
+        )
+        logger.info(
+            "marketing_visual_renderer template=%s renderer=%s",
+            overlay_meta.get("template_used"),
+            overlay_meta.get("renderer_used"),
+        )
+        logger.info("template_used=%s", overlay_meta.get("template_used"))
+        return overlay_meta
+
     import io
 
     from PIL import Image
@@ -533,7 +555,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
         stage = "references"
         context = _context_from_asset(asset)
         options = dict(asset.get("options") or {})
-        options["layout_template"] = resolve_layout_template(asset["format"], options)
+        options["layout_template"] = resolve_html_layout_template(asset["format"], options)
         selected = select_photos_for_item(
             context.get("photos") or [],
             fmt=asset["format"],
@@ -580,7 +602,8 @@ def _process_item(organization_id, asset_id, *, retry=False):
         art = _art_from_asset(asset)
         fmt = asset["format"]
         size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
-        if options.get("local_render"):
+        html_render = uses_html_renderer(fmt, options)
+        if html_render or options.get("local_render"):
             if not photos:
                 raise MarketingError("marketing_ia_visual_no_photos", 400)
             stage = "visual_render"
@@ -593,9 +616,12 @@ def _process_item(organization_id, asset_id, *, retry=False):
             )
             png_bytes = overlay_meta["png_bytes"]
             agent_composited = bool(overlay_meta.get("agent_photo_composited"))
-            options["layout_engine"] = "pillow_modern_renderer"
+            engine = overlay_meta.get("renderer_used") or (
+                HTML_RENDERER if html_render else "pillow_modern_renderer"
+            )
+            options["layout_engine"] = engine
             options["template_used"] = overlay_meta.get("template_used") or options.get("layout_template")
-            options["renderer_used"] = overlay_meta.get("renderer_used") or "pillow_modern_renderer"
+            options["renderer_used"] = engine
             options["layout_version"] = overlay_meta.get("layout_version") or options.get("template_used")
             if options.get("template_used"):
                 options["layout_template"] = options["template_used"]
@@ -605,8 +631,9 @@ def _process_item(organization_id, asset_id, *, retry=False):
             options["pipeline_post_process_fn"] = overlay_meta.get("post_process_fn")
             options["language"] = options.get("language") or context.get("language") or "es"
             logger.info(
-                "marketing_visual_render_ok path=pending template_used=%s photos=%s",
+                "marketing_visual_render_ok path=pending template_used=%s renderer_used=%s photos=%s",
                 options.get("template_used"),
+                options.get("renderer_used"),
                 overlay_meta.get("listing_photos"),
             )
             generated = {"quality": {"attempt": 1, "reasons": []}, "language": options["language"]}
@@ -652,10 +679,14 @@ def _process_item(organization_id, asset_id, *, retry=False):
         )
         from modules.marketing_image_provider import OpenAIMarketingImageProvider, MockMarketingImageProvider
 
-        if options.get("local_render"):
+        if html_render or options.get("local_render"):
             options["legacy_compositor"] = False
-            options["pipeline_provider"] = "pillow_modern_renderer"
-            options["pipeline_model"] = options.get("template_used") or "modern_commercial_v2"
+            options["pipeline_provider"] = options.get("renderer_used") or (
+                HTML_RENDERER if html_render else "pillow_modern_renderer"
+            )
+            options["pipeline_model"] = options.get("template_used") or (
+                HTML_TEMPLATE if html_render else "modern_commercial_v2"
+            )
             options["pipeline_endpoint"] = None
             options.setdefault("pipeline_post_process", generated.get("post_process") or "branding_overlay")
             options.setdefault("pipeline_post_process_fn", generated.get("post_process_fn"))
@@ -1030,7 +1061,7 @@ def start_marketing_batch(
                 fmt=item["format"],
                 index=max(0, int(item["index"]) - 1),
             )
-            layout_template = resolve_layout_template(item["format"], item_options)
+            layout_template = resolve_html_layout_template(item["format"], item_options)
             logger.info(
                 "template_used=%s format=%s local_render=%s",
                 layout_template,
@@ -1051,7 +1082,11 @@ def start_marketing_batch(
                     "format_index": item["index"],
                     "prompt": parsed.get("prompt") or prompt,
                     "reference_asset_id": reference_asset_id,
-                    "source": "pillow_modern_renderer" if local_render else get_marketing_image_provider_name(),
+                    "source": (
+                        HTML_RENDERER
+                        if uses_html_renderer(item["format"], item_options)
+                        else ("pillow_modern_renderer" if local_render else get_marketing_image_provider_name())
+                    ),
                     "temporary": True,
                     "expires_at": expires_at,
                     "photo_ids": [photo.get("id") for photo in selected_photos if photo.get("id")],

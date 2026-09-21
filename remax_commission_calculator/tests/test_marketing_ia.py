@@ -380,13 +380,15 @@ class MarketingIaTests(unittest.TestCase):
         self.assertEqual(Image.open(resolve_asset_file(formats["flyer"])).size, FORMAT_SIZES["flyer"])
         from modules.marketing_flyer_modern import MODERN_COMMERCIAL_V2
         from modules.marketing_flyer_commercial import RENDERER_USED
+        from modules.marketing_render_html import HTML_RENDERER, HTML_TEMPLATE
 
         flyer = formats["flyer"]
         self.assertEqual(flyer["template"], MODERN_COMMERCIAL_V2)
         self.assertEqual((flyer.get("options") or {}).get("template_used"), MODERN_COMMERCIAL_V2)
         self.assertEqual((flyer.get("options") or {}).get("renderer_used"), RENDERER_USED)
         self.assertEqual((flyer.get("options") or {}).get("layout_version"), MODERN_COMMERCIAL_V2)
-        self.assertEqual((formats["post"].get("options") or {}).get("template_used"), MODERN_COMMERCIAL_V2)
+        self.assertEqual((formats["post"].get("options") or {}).get("template_used"), HTML_TEMPLATE)
+        self.assertEqual((formats["post"].get("options") or {}).get("renderer_used"), HTML_RENDERER)
 
     def test_11_parser_pack_and_variation(self):
         parsed = parse_marketing_request(self._pack_prompt())
@@ -1826,6 +1828,8 @@ class MarketingIaTests(unittest.TestCase):
             self.assertEqual(stamped["renderer_used"], RENDERER_USED)
             self.assertNotIn(stamped["template_used"], banned)
 
+        from modules.marketing_render_html import HTML_TEMPLATE
+
         batch = start_marketing_batch(
             self.org,
             self._user(self.agent_user_id),
@@ -1838,8 +1842,8 @@ class MarketingIaTests(unittest.TestCase):
         )
         asset = batch["assets"][0]
         used = (asset.get("options") or {}).get("template_used") or asset.get("template")
-        self.assertEqual(used, MODERN_COMMERCIAL_V2)
-        self.assertNotIn(used, banned)
+        self.assertEqual(used, HTML_TEMPLATE)
+        self.assertEqual((asset.get("options") or {}).get("renderer_used"), "html_playwright")
 
 
 def _quality_png():

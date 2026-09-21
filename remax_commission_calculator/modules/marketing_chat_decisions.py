@@ -40,15 +40,15 @@ GENERATION_STYLE = {
 DEFAULT_CTA_SALE = "Consultame para visitarla"
 DEFAULT_CTA_RENT = "Consultame disponibilidad"
 TEMPLATE_BY_STYLE = {
-    "commercial": "modern_commercial_v2",
-    "modern": "modern_commercial_v2",
-    "dynamic": "modern_commercial_v2",
-    "premium": "modern_commercial_v2",
-    "elegant": "modern_commercial_v2",
-    "minimal": "modern_commercial_v2",
-    "corporate": "modern_commercial_v2",
+    "commercial": "modern_commercial_v3",
+    "modern": "modern_commercial_v3",
+    "dynamic": "modern_commercial_v3",
+    "premium": "modern_commercial_v3",
+    "elegant": "modern_commercial_v3",
+    "minimal": "modern_commercial_v3",
+    "corporate": "modern_commercial_v3",
 }
-DEFAULT_LAYOUT_TEMPLATE = "modern_commercial_v2"
+DEFAULT_LAYOUT_TEMPLATE = "modern_commercial_v3"
 SKIP_CLARIFY_ACTIONS = frozenset(
     {"chat", "generate_visual", "edit_existing_generation"}
 )
