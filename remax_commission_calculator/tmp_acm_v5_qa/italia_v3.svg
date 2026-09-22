@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350"
+     viewBox="0 0 1080 1350">
+  <g id="hero">
+    <text x="100" y="50" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#111c33" letter-spacing="0.6">RE/MAX DATA HOUSE</text>
+    <text x="1040" y="28" text-anchor="end" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#5b6b7c" letter-spacing="1.6">CONFIANZA</text>
+    <text x="1040" y="44" text-anchor="end" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#5b6b7c" letter-spacing="1.6">EXPERIENCIA</text>
+    <text x="1040" y="60" text-anchor="end" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="11" font-weight="700" fill="#5b6b7c" letter-spacing="1.6">RESULTADOS</text>
+    <text x="44" y="118" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="15" font-weight="700" fill="#111c33" letter-spacing="3.4">EN VENTA</text>
+    <text x="44" y="172" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="78" font-weight="800" fill="#111c33">Casa</text>
+    <text x="44" y="248" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="78" font-weight="800" fill="#111c33">moderna</text>
+    <text x="44" y="324" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="78" font-weight="800" fill="#111c33">en Martinez</text>
+    <text x="44" y="410" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="20" fill="#5b6b7c">Espacios amplios, diseno y confort en</text>
+    <text x="44" y="438" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="20" fill="#5b6b7c">una ubicacion privilegiada.</text>
+    <g id="facts">
+      <g fill="none" stroke="#111c33" stroke-width="2" stroke-linecap="round">
+        <path d="M46.2 487.2 H69.8"/>
+        <path d="M47.4 487.2 V478.8 q4.5 -6.2 9.0 0 V487.2"/>
+        <rect x="47.4" y="480.4" width="21.3" height="6.7" rx="3"/>
+      </g>
+      <text x="44" y="511" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#111c33">3</text>
+      <text x="44" y="531" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="14" fill="#5b6b7c">Dormitorios</text>
+      <g fill="none" stroke="#111c33" stroke-width="2" stroke-linecap="round">
+        <rect x="194.2" y="477.6" width="23.5" height="10.1" rx="4"/>
+        <path d="M194.2 488.8 H217.8"/>
+        <path d="M206.0 477.6 V487.7"/>
+      </g>
+      <text x="192" y="511" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#111c33">4</text>
+      <text x="192" y="531" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="14" fill="#5b6b7c">Ambientes</text>
+      <g fill="none" stroke="#111c33" stroke-width="2" stroke-linecap="round">
+        <path d="M343.4 481.6 H364.6 A6.2 6.2 0 0 1 343.4 481.6"/>
+        <path d="M361.8 481.6 V473.2"/>
+        <circle cx="361.8" cy="472.0" r="1.7"/>
+      </g>
+      <text x="340" y="511" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#111c33">2</text>
+      <text x="340" y="531" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="14" fill="#5b6b7c">Banos</text>
+      <g fill="none" stroke="#111c33" stroke-width="2">
+        <rect x="492.5" y="471.5" width="19.0" height="19.0"/>
+      </g>
+      <text x="488" y="511" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#111c33">131</text>
+      <text x="488" y="531" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="14" fill="#5b6b7c">m2</text>
+    </g>
+    <g id="price" text-anchor="end">
+      <text x="1040" y="469" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#5b6b7c" letter-spacing="2">USD</text>
+      <text x="1040" y="531" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="64" font-weight="800" fill="#111c33">320.000</text>
+    </g>
+  </g>
+  <g id="gallery" transform="translate(0,567)">
+    <rect x="0" y="0" width="1080" height="236" fill="#f4f5f7"/>
+    <text x="40" y="196" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="15" font-weight="700" fill="#111c33" letter-spacing="0.8">LIVING</text>
+    <text x="40" y="216" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="13" fill="#5b6b7c">Luz y amplitud</text>
+    <text x="378" y="196" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="15" font-weight="700" fill="#111c33" letter-spacing="0.8">COCINA</text>
+    <text x="378" y="216" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="13" fill="#5b6b7c">Diseño y funcionalidad</text>
+    <text x="716" y="196" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="15" font-weight="700" fill="#111c33" letter-spacing="0.8">JARDÍN</text>
+    <text x="716" y="216" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="13" fill="#5b6b7c">Ideal para disfrutar en familia</text>
+  </g>
+  <g id="location" transform="translate(0,803)">
+    <rect x="0" y="0" width="1080" height="135" fill="#ffffff"/>
+    <circle cx="58" cy="48" r="17.3" fill="#0e1c38"/>
+    <circle cx="58" cy="45.8" r="5.0" fill="none" stroke="#ffffff" stroke-width="2.2"/>
+    <path d="M58 48.7 L58 55.9" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
+    <text x="98" y="50" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#111c33">Italia 1341 (B1640)</text>
+    <text x="98" y="78" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="16" fill="#5b6b7c">Martinez, San Isidro</text>
+    <g fill="none" stroke="#0e1c38" stroke-width="2.2" stroke-linecap="round">
+      <circle cx="574.0" cy="46.6" r="7.8"/>
+      <path d="M574.0 54.5 V64.0"/>
+      <path d="M569.0 60.1 H579.0"/>
+    </g>
+    <text x="600" y="48" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="15" fill="#111c33">Un entorno residencial, tranquilo y</text>
+    <text x="600" y="70" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="15" fill="#111c33">con excelente conectividad. Cerca de</text>
+    <text x="600" y="92" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="15" fill="#111c33">colegios, comercios y de todo lo que</text>
+  </g>
+  <g id="agent" transform="translate(0,938)">
+    <rect x="0" y="0" width="1080" height="303" fill="#ffffff"/>
+    <text x="36" y="36" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="20" font-style="italic" fill="#c5ced8">Hablemos de tu</text>
+    <text x="36" y="62" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="20" font-style="italic" fill="#c5ced8">próximo hogar</text>
+    <text x="64" y="72" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#111c33">Jose Barreiro</text>
+    <text x="64" y="100" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="16" fill="#5b6b7c">Agente inmobiliario</text>
+    <g><circle cx="75" cy="136" r="11" fill="#25d366"/><text x="75" y="140" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff">W</text><text x="96" y="141" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="16" fill="#111c33">+54 9 11 2513-1361</text></g>
+    <g><rect x="64" y="157" width="22" height="22" rx="6" fill="#c13584"/><circle cx="75" cy="168" r="5" fill="none" stroke="#ffffff" stroke-width="2"/><text x="96" y="173" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="16" fill="#111c33">@josebarreiro_remax</text></g>
+    <g><rect x="64" y="191" width="22" height="16" rx="3" fill="none" stroke="#111c33" stroke-width="1.8"/><path d="M65 192 L75 200 L85 192" fill="none" stroke="#111c33" stroke-width="1.8"/><text x="96" y="205" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="16" fill="#111c33">jose@remaxdatahouse.com.ar</text></g>
+    <g id="cta">
+      <rect x="640" y="48" width="400" height="78" rx="39" fill="#0e1c38"/>
+      <circle cx="680" cy="87" r="18" fill="none" stroke="#ffffff" stroke-width="2"/>
+      <path d="M675.5 85.5 q1.5 -5.5 7.0 -2.0 l-1.8 2.8 q3.5 3.5 7.0 0.8 l2.0 2.8 q-5.5 3.5 -10.5 -1.5 q-4.5 -4.0 -3.7 -11.4 z" fill="#ffffff"/>
+      <text x="710" y="94" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#ffffff">Consultame para visitarla →</text>
+      <g fill="none" stroke="#0e1c38" stroke-width="1.7" stroke-linecap="round">
+        <path d="M690.0 150 q6.4 -8.8 16.0 0 q6.4 8.8 16.0 0"/>
+      </g>
+      <text x="706" y="172" text-anchor="middle" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c">Asesoramiento</text>
+      <text x="706" y="186" text-anchor="middle" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c">personalizado</text>
+      <g fill="none" stroke="#0e1c38" stroke-width="1.7">
+        <path d="M839 161.2 L823.0 150 L839 141.2 L855.0 150 Z"/>
+      </g>
+      <text x="839" y="172" text-anchor="middle" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c">Acompañamiento</text>
+      <text x="839" y="186" text-anchor="middle" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c">en todo el</text>
+      <g fill="none" stroke="#0e1c38" stroke-width="1.7">
+        <circle cx="972" cy="146.0" r="4.5"/>
+        <path d="M960.8 160.4 q11.2 -11.2 22.4 0"/>
+      </g>
+      <text x="972" y="172" text-anchor="middle" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c">Tu proyecto en</text>
+      <text x="972" y="186" text-anchor="middle" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="11" fill="#5b6b7c">manos expertas</text>
+    </g>
+  </g>
+  <g id="footer" transform="translate(0,1241)">
+    <rect x="0" y="0" width="1080" height="109" fill="#ffffff"/>
+    <text x="32" y="36" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#111c33">RE/MAX Data House</text>
+    <text x="540.0" y="36" text-anchor="middle" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="10" fill="#5b6b7c">Corredor Publico Mauro Marvisi C.U.C.I.C.B.A 1762</text>
+    <text x="1048" y="36" text-anchor="end" font-family="Segoe UI, Arial, Helvetica, DejaVu Sans, sans-serif" font-size="12" font-weight="700" fill="#111c33">JRH One</text>
+  </g>
+</svg>
