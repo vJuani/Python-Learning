@@ -1353,9 +1353,18 @@ def _attach_visual_assets(generation, batch_view):
         data["template_used"] = template_used or data.get("template_used")
         data["renderer_used"] = ready_assets[0].get("renderer_used") or data.get("renderer_used")
         logger.info(
-            "marketing_visual_storage_ok url=%s template_used=%s",
+            "marketing_visual_storage_ok url=%s template_used=%s renderer_used=%s",
             data["visual_asset_url"],
             data.get("template_used"),
+            data.get("renderer_used"),
+        )
+        logger.info(
+            "visual_status=complete generation_id=%s property_id=%s visual_asset_url=%s template_used=%s renderer_used=%s",
+            generation.get("id"),
+            generation.get("property_id"),
+            data.get("visual_asset_url"),
+            data.get("template_used"),
+            data.get("renderer_used"),
         )
         logger.info(
             "marketing_visual_complete generation_id=%s path=%s",
@@ -1444,9 +1453,15 @@ def _run_visual_for_chat(
     photos = context.get("photos") or []
     photo_count = len(photos)
     agent = context.get("agent") or {}
+    logger.info(
+        "resolved_property_id=%s organization_id=%s",
+        property_id,
+        organization_id,
+    )
     _log_property_trace(
         "marketing_visual_start",
         generation_id=generation_id,
+        organization_id=organization_id,
         resolved_property_id=property_id,
         conversation_property_id=conversation_property_id,
         generation_property_id=generation_property_id,

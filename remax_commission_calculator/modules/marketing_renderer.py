@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import re
 from collections import deque
 from functools import lru_cache
@@ -15,8 +16,9 @@ from reportlab.pdfgen import canvas as pdf_canvas
 
 from modules.marketing_branding import usable_brand_name
 from modules.marketing_visual_spec import theme_palette
-from modules.property_sync.media import resolve_media_filesystem_path
-from modules.property_sync.remote_media import fetch_allowed_image_bytes
+from modules.property_sync.media import load_original_media_bytes
+
+logger = logging.getLogger(__name__)
 
 
 NAVY = (10, 22, 51)
@@ -146,22 +148,38 @@ def fit_contain_safe(image, size, fmt=None, *, fill=IVORY):
     return canvas
 
 
-def load_property_photos(photo_rows, *, cache=None):
-    images = []
+def load_property_photo_pairs(photo_rows, *, cache=None):
+    """Load each listing photo independently so a failed fetch cannot shift later rows."""
+    pairs = []
     cache = cache if cache is not None else {}
     for item in photo_rows or []:
         try:
-            path = resolve_media_filesystem_path(item)
-            image = _open_image(path) if path else None
+            payload = load_original_media_bytes(item, cache=cache, cache_dir=True)
+            image = _open_image(payload)
             if image is None:
-                remote = fetch_allowed_image_bytes(item.get("original_url"), cache=cache)
-                image = _open_image(remote)
-            if image is None:
+                logger.error(
+                    "original_photo_fetch_failed source_type=%s original_url=%s path=%s",
+                    (item or {}).get("source_type") or (item or {}).get("source"),
+                    (item or {}).get("original_url"),
+                    (item or {}).get("storage_key") or (item or {}).get("path"),
+                )
                 continue
-            images.append(ImageEnhance.Contrast(image.convert("RGB")).enhance(1.04))
+            pairs.append(
+                (item, ImageEnhance.Contrast(image.convert("RGB")).enhance(1.04))
+            )
         except Exception:
+            logger.exception(
+                "original_photo_fetch_failed source_type=%s original_url=%s path=%s",
+                (item or {}).get("source_type") or (item or {}).get("source"),
+                (item or {}).get("original_url"),
+                (item or {}).get("storage_key") or (item or {}).get("path"),
+            )
             continue
-    return images
+    return pairs
+
+
+def load_property_photos(photo_rows, *, cache=None):
+    return [image for _row, image in load_property_photo_pairs(photo_rows, cache=cache)]
 
 
 def load_agent_photo(path):

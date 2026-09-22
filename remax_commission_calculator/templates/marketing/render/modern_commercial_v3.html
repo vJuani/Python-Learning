@@ -10,7 +10,7 @@
 <article id="poster" class="poster {{ modifiers }}">
   <section class="hero">
     {% if hero.src %}
-    <img class="hero__photo" src="{{ hero.src }}" alt="">
+    <img class="hero__photo" src="{{ hero.src }}" alt="" style="object-position: {{ hero.focus_x }}% {{ hero.focus_y }}%;">
     {% endif %}
     <div class="hero__shade" aria-hidden="true"></div>
     <header class="poster__header">
@@ -51,19 +51,11 @@
   <ul class="facts">
     {% for fact in facts %}
     <li class="fact">
-      <span class="fact__icon" data-label="{{ fact.label }}">
-        {% if 'Ambiente' in fact.label or fact.label == 'Rooms' %}
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14h16v3H4z"/><path d="M5 14V10c2-3 4-4 7-4s5 1 7 4v4"/><path d="M4 17v2M20 17v2"/></svg>
-        {% elif 'Dorm' in fact.label or fact.label == 'Bedrooms' %}
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V11h18v7"/><path d="M3 14h18"/><path d="M6 11V8a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3"/><path d="M3 18h18"/></svg>
-        {% elif 'Baño' in fact.label or fact.label == 'Baths' %}
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h16v4a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-4z"/><path d="M7 13V8a2 2 0 0 1 2-2h1"/><path d="M16 6v2M18 7h-4"/></svg>
-        {% else %}
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-6 8 6v9H4z"/><path d="M9 20v-7h6v7"/></svg>
-        {% endif %}
+      <span class="fact__icon">{{ fact.icon|safe }}</span>
+      <span class="fact__copy">
+        <span class="fact__value">{{ fact.value }}</span>
+        <span class="fact__label">{{ fact.label }}</span>
       </span>
-      <span class="fact__value">{{ fact.value }}</span>
-      <span class="fact__label">{{ fact.label }}</span>
     </li>
     {% endfor %}
   </ul>

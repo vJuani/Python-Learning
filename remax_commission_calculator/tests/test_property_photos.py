@@ -40,6 +40,7 @@ from modules.property_sync.media import (
     get_property_cover_media,
     get_property_media_for_generation,
     get_property_media_url,
+    get_property_original_media,
     media_display_src,
 )
 from modules.property_sync.public_listing import PublicListingMediaProvider
@@ -301,6 +302,37 @@ class PropertyPhotoTests(unittest.TestCase):
         row = self._import(listing)
         items = get_property_media_for_generation(row, limit=5)
         self.assertIn("photo-4.jpg", items[0]["original_url"])
+
+    def test_19b_original_media_resolver_matches_generation(self):
+        listing = load_listing(id="AR.42.27.1.319b", photo_count=6, primary_index=4)
+        row = self._import(listing)
+        records = get_property_original_media(row["id"], row["organization_id"])
+        items = get_property_media_for_generation(row, limit=5)
+        self.assertEqual([item["id"] for item in items], [record["media"]["id"] for record in records[:5]])
+        self.assertTrue(all(record["is_original"] for record in records))
+        self.assertEqual(records[0]["source_type"], "external_listing_original")
+        self.assertIn("photo-4.jpg", records[0]["url"] or "")
+        by_id_only = get_property_original_media(row["id"])
+        self.assertEqual([record["id"] for record in by_id_only], [record["id"] for record in records])
+        generated = {
+            "id": 999,
+            "source": "marketing",
+            "storage_key": "tmp/marketing_html_render/italia_1341_v3.png",
+            "is_cover": True,
+        }
+        upsert_property_media(
+            self.org,
+            row["id"],
+            source="marketing",
+            external_media_id="campaign-hero",
+            storage_key=generated["storage_key"],
+            storage_strategy=STRATEGY_COPY,
+            is_cover=True,
+            position=0,
+        )
+        after = get_property_original_media(row["id"], self.org)
+        self.assertFalse(any(item.get("source") == "marketing" for item in [r["media"] for r in after]))
+        self.assertIn("photo-4.jpg", after[0]["original_url"])
 
     def test_20_generation_limit_five(self):
         listing = load_listing(id="AR.42.27.1.320", photo_count=10, primary_index=0)

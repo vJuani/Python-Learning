@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import tempfile
 from pathlib import Path
 
 from modules.config import get_private_upload_root
@@ -15,6 +16,13 @@ from modules.database.property_media_repository import (
     list_property_media_for_properties,
     mark_media_removed_from_source,
     upsert_property_media,
+)
+from modules.listing_photo_origin import (
+    ORIGINAL_SOURCE_TYPES,
+    eligible_listing_photos,
+    is_generated_marketing_asset,
+    is_original_listing_photo,
+    photo_source_type,
 )
 from modules.property_sync.security import (
     MAX_MEDIA_BYTES,
@@ -152,7 +160,11 @@ def _is_external_source(source):
 
 def pick_cover_media(items):
     """Manual cover override, then RedREMAX primary, then first valid media."""
-    rows = [item for item in (items or []) if item]
+    rows = [
+        item
+        for item in (items or [])
+        if item and not is_generated_marketing_asset(item)
+    ]
     if not rows:
         return None
     for item in rows:
@@ -305,18 +317,57 @@ def describe_property_media(item, property_id=None):
     }
 
 
-def get_property_media_for_generation(property_row, limit=5):
-    """Cover first, then valid photos. Does not send anything to OpenAI."""
-    if not property_row:
-        return []
+def _organization_id_for_property(property_id):
+    try:
+        pid = int(property_id)
+    except (TypeError, ValueError):
+        return None
+    from modules.database.connection import get_connection
+
+    connection = get_connection()
+    try:
+        row = connection.execute(
+            "SELECT organization_id FROM properties WHERE id = ?",
+            (pid,),
+        ).fetchone()
+    finally:
+        connection.close()
+    if not row:
+        return None
+    return row[0]
+
+
+def _property_row_for_media(property_id, organization_id=None, property_row=None):
+    if isinstance(property_row, dict) and property_row.get("id") is not None:
+        return property_row
+    if property_id is None:
+        return None
+    org = organization_id
+    if org is None:
+        org = _organization_id_for_property(property_id)
+    if org is None:
+        return None
+    from modules.database.properties_repository import get_property_record
+
+    return get_property_record(property_id, org)
+
+
+def _eligible_property_media_rows(property_row):
     organization_id, property_id = _property_identity(property_row)
     if organization_id is None or property_id is None:
         return []
-    items = [
-        item
-        for item in list_property_media(organization_id, property_id)
-        if is_displayable_media(item)
-    ]
+    items = eligible_listing_photos(
+        [
+            item
+            for item in list_property_media(organization_id, property_id)
+            if is_displayable_media(item) and not is_generated_marketing_asset(item)
+        ]
+    )
+    originals = [item for item in items if is_original_listing_photo(item)]
+    return originals or items
+
+
+def _order_cover_first(items, limit=None):
     cover = pick_cover_media(items)
     ordered = []
     seen = set()
@@ -336,6 +387,121 @@ def get_property_media_for_generation(property_row, limit=5):
     return ordered
 
 
+def _media_display_url(item, property_id=None):
+    url = get_property_media_url(item, property_id or (item or {}).get("property_id"))
+    if url:
+        return url
+    return ((item or {}).get("original_url") or (item or {}).get("remote_url") or "").strip() or None
+
+
+def get_property_original_media(
+    property_id,
+    organization_id=None,
+    *,
+    limit=None,
+    property_row=None,
+):
+    """Same listing photos the property sheet and Marketing IA already show.
+
+    Returns originals (manual upload, RedREMAX remote URL, or cached copy).
+    Thumbnails only if no original remains. Never generated marketing assets.
+    """
+    row = _property_row_for_media(property_id, organization_id, property_row)
+    if not row:
+        return []
+    resolved_id = row.get("id") if property_id is None else property_id
+    ordered = _order_cover_first(_eligible_property_media_rows(row), limit=limit)
+    records = []
+    for index, item in enumerate(ordered):
+        source_type = photo_source_type(item)
+        records.append(
+            {
+                "id": item.get("id"),
+                "source_type": source_type,
+                "url": _media_display_url(item, resolved_id),
+                "path": item.get("storage_key") or item.get("path"),
+                "width": item.get("width"),
+                "height": item.get("height"),
+                "media_type": item.get("media_type") or "photo",
+                "order": index,
+                "is_original": source_type in ORIGINAL_SOURCE_TYPES,
+                "is_cover": bool(item.get("is_cover")),
+                "source": item.get("source"),
+                "original_url": item.get("original_url") or item.get("remote_url"),
+                "storage_key": item.get("storage_key"),
+                "storage_strategy": item.get("storage_strategy"),
+                "url_kind": item.get("url_kind"),
+                "position": item.get("position"),
+                "media": item,
+            }
+        )
+    return records
+
+
+def get_property_media_for_generation(property_row, limit=5):
+    """Cover first, then valid photos. Does not send anything to OpenAI."""
+    if not property_row:
+        return []
+    return [
+        record["media"]
+        for record in get_property_original_media(
+            property_row.get("id"),
+            property_row.get("organization_id"),
+            limit=limit,
+            property_row=property_row,
+        )
+    ]
+
+
+def original_media_temp_cache_dir():
+    root = Path(tempfile.gettempdir()) / "jrh_original_media"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def load_original_media_bytes(item, *, cache=None, cache_dir=None):
+    """Local managed file, else allowlisted remote original. Optional temp cache."""
+    if cache_dir is True:
+        cache_dir = original_media_temp_cache_dir()
+    path = resolve_media_filesystem_path(item)
+    if path:
+        return path.read_bytes()
+    explicit = str((item or {}).get("path") or "").strip()
+    if explicit:
+        candidate = Path(explicit)
+        if candidate.is_file():
+            return candidate.read_bytes()
+    url = ((item or {}).get("original_url") or (item or {}).get("remote_url") or "").strip()
+    if _media_source(item) == "redremax":
+        from modules.property_sync.redremax.photos import canonical_photo_url
+
+        url = canonical_photo_url(url)
+    if not url:
+        return None
+    from modules.property_sync.remote_media import fetch_allowed_image_bytes
+
+    return fetch_allowed_image_bytes(url, cache=cache, cache_dir=cache_dir)
+
+
+def write_original_media_qa_fixture(records, dest_dir, *, limit=4, names=None):
+    """QA-only copies. Not a production media store."""
+    dest = Path(dest_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    labels = names or ("hero", "secondary_1", "secondary_2", "secondary_3")
+    written = []
+    for name, record in zip(labels, (records or [])[:limit]):
+        payload = load_original_media_bytes(
+            (record or {}).get("media") or record,
+            cache_dir=True,
+        )
+        if not payload:
+            continue
+        path = dest / f"{name}.jpg"
+        path.write_bytes(payload)
+        written.append(path)
+    return written
+
+
 def list_covers_for_properties(organization_id, property_ids):
     grouped = {}
     for item in list_property_media_for_properties(organization_id, property_ids):
@@ -351,10 +517,18 @@ def list_covers_for_properties(organization_id, property_ids):
 
 
 def resolve_media_filesystem_path(item):
-    key = (item or {}).get("storage_key")
-    if not key:
-        return None
-    path = get_private_upload_root() / Path(key)
-    if path.is_file():
-        return path
+    keys = [
+        (item or {}).get("storage_key"),
+        (item or {}).get("path"),
+    ]
+    for key in keys:
+        raw = str(key or "").strip()
+        if not raw:
+            continue
+        candidate = Path(raw)
+        if candidate.is_file():
+            return candidate
+        nested = get_private_upload_root() / candidate
+        if nested.is_file():
+            return nested
     return None

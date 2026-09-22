@@ -29,9 +29,14 @@ from modules.property_features import FEATURE_KEYS
 from modules.property_inventory import decorate_property_for_display
 from modules.property_media_access import can_access_property_media
 from modules.database.property_media_repository import list_property_media
+from modules.listing_photo_origin import (
+    ORIGINAL_SOURCE_TYPES,
+    eligible_listing_photos,
+    photo_source_type,
+)
 from modules.property_sync.media import (
     get_property_media_url,
-    get_property_media_for_generation,
+    get_property_original_media,
     is_displayable_media,
 )
 from modules.property_types import normalize_listing_purpose
@@ -294,22 +299,42 @@ def _catalog_media(property_data):
         property_data.get("organization_id"),
         property_data.get("id"),
     )
-    return [item for item in items if is_displayable_media(item)]
+    return eligible_listing_photos([item for item in items if is_displayable_media(item)])
 
 
-def _serialize_photo(item):
+def _serialize_photo(item, *, order=None, property_id=None):
+    source_type = photo_source_type(item)
     return {
         "id": item.get("id"),
         "is_cover": bool(item.get("is_cover")),
         "position": item.get("position"),
+        "order": order if order is not None else item.get("position"),
+        "source": item.get("source"),
+        "url_kind": item.get("url_kind"),
+        "storage_strategy": item.get("storage_strategy"),
         "original_url": item.get("original_url"),
         "storage_key": item.get("storage_key"),
+        "path": item.get("storage_key") or item.get("path"),
+        "url": get_property_media_url(item, property_id or item.get("property_id"))
+        or item.get("original_url")
+        or item.get("remote_url"),
         "content_type": item.get("content_type"),
+        "media_type": item.get("media_type") or "photo",
+        "width": item.get("width"),
+        "height": item.get("height"),
+        "source_type": source_type,
+        "is_original": source_type in ORIGINAL_SOURCE_TYPES,
     }
 
 
 def _media_items(property_data, selected_ids=None):
-    items = get_property_media_for_generation(property_data, limit=PHOTO_LIMIT)
+    records = get_property_original_media(
+        property_data.get("id"),
+        property_data.get("organization_id"),
+        limit=PHOTO_LIMIT,
+        property_row=property_data,
+    )
+    items = [record["media"] for record in records]
     if selected_ids:
         by_id = {
             int(item["id"]): item
@@ -326,7 +351,10 @@ def _media_items(property_data, selected_ids=None):
                 ordered.append(by_id[key])
         if ordered:
             items = ordered[:PHOTO_LIMIT]
-    return [_serialize_photo(item) for item in items[:PHOTO_LIMIT]]
+    return [
+        _serialize_photo(item, order=index, property_id=property_data.get("id"))
+        for index, item in enumerate(items[:PHOTO_LIMIT])
+    ]
 
 
 def list_wizard_photos(property_data, selected_ids=None):
@@ -335,7 +363,7 @@ def list_wizard_photos(property_data, selected_ids=None):
     for item in _catalog_media(property_data):
         photos.append(
             {
-                **_serialize_photo(item),
+                **_serialize_photo(item, property_id=property_data.get("id")),
                 "selected": item.get("id") in selected,
                 "src": get_property_media_url(item, property_data.get("id")),
             }

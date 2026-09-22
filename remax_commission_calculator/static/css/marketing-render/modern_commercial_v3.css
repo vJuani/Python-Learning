@@ -34,7 +34,7 @@ img {
   height: 1350px;
   overflow: hidden;
   display: grid;
-  grid-template-rows: 590px 78px 248px 96px 298px 40px;
+  grid-template-rows: 560px 74px 218px 142px 316px 40px;
   background: #f6f7f9;
   color: #111c33;
 }
@@ -119,7 +119,7 @@ img {
   height: 100%;
   max-width: none;
   object-fit: cover;
-  object-position: 46% 40%;
+  object-position: 58% 52%;
 }
 
 .hero__shade {
@@ -128,16 +128,22 @@ img {
   background:
     linear-gradient(
       90deg,
-      rgba(8, 14, 28, 0.90) 0%,
-      rgba(8, 14, 28, 0.68) 24%,
-      rgba(8, 14, 28, 0.22) 48%,
-      rgba(8, 14, 28, 0.05) 70%,
+      rgba(8, 14, 28, 0.92) 0%,
+      rgba(8, 14, 28, 0.78) 22%,
+      rgba(8, 14, 28, 0.38) 40%,
+      rgba(8, 14, 28, 0.10) 56%,
       rgba(8, 14, 28, 0) 100%
     ),
     linear-gradient(
       180deg,
-      rgba(8, 14, 28, 0.22) 0%,
-      rgba(8, 14, 28, 0) 18%
+      rgba(8, 14, 28, 0.28) 0%,
+      rgba(8, 14, 28, 0) 16%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(8, 14, 28, 0) 68%,
+      rgba(8, 14, 28, 0.22) 86%,
+      rgba(8, 14, 28, 0.55) 100%
     );
 }
 
@@ -148,8 +154,8 @@ img {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 86px 36px 36px;
-  width: min(700px, 74%);
+  padding: 82px 40px 36px;
+  width: min(820px, 86%);
 }
 
 .poster--no-price .hero__copy {
@@ -169,9 +175,10 @@ img {
   margin: 0;
   color: #fff;
   font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 0.96;
+  letter-spacing: -0.038em;
+  line-height: 1.06;
   overflow: hidden;
+  text-shadow: 0 2px 18px rgba(8, 14, 28, 0.45);
 }
 
 .headline__line {
@@ -182,30 +189,32 @@ img {
   font-family: "Marketing Serif", Georgia, "Times New Roman", serif;
   font-style: italic;
   font-weight: 600;
-  letter-spacing: -0.025em;
-  color: #e6d09a;
-  font-size: 1.04em;
+  letter-spacing: -0.028em;
+  color: #f1d4a0;
+  font-size: 1.24em;
+  line-height: 1.02;
 }
 
 .headline--lg {
-  font-size: 66px;
+  font-size: 68px;
 }
 
 .headline--md {
-  font-size: 62px;
+  font-size: 64px;
 }
 
 .headline--sm {
-  font-size: 50px;
+  font-size: 52px;
 }
 
 .subhead {
   margin: 16px 0 0;
-  max-width: 420px;
-  color: rgba(255, 255, 255, 0.92);
+  max-width: 520px;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 17px;
-  line-height: 1.32;
+  line-height: 1.45;
   font-weight: 400;
+  letter-spacing: 0.012em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -215,33 +224,42 @@ img {
 .price {
   position: absolute;
   right: 36px;
-  bottom: 32px;
+  bottom: 28px;
   z-index: 3;
-  min-width: 252px;
-  padding: 16px 24px 14px;
-  border-radius: 12px;
-  background: rgba(12, 24, 46, 0.95);
+  min-width: 300px;
+  padding: 20px 34px 18px;
+  border-radius: 16px;
+  background: rgba(10, 20, 40, 0.96);
   color: #fff;
   text-align: right;
-  box-shadow: 0 12px 30px rgba(8, 14, 28, 0.32);
-  border: 1px solid rgba(230, 208, 154, 0.28);
+  box-shadow: 0 16px 36px rgba(8, 14, 28, 0.38);
   overflow: hidden;
+}
+
+.price::before {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(237, 214, 162, 0), #edd6a2 35%, #edd6a2 65%, rgba(237, 214, 162, 0));
 }
 
 .price__currency {
   display: block;
   font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.32em;
 }
 
 .price__amount {
   display: block;
-  margin-top: 4px;
-  font-size: 48px;
+  margin-top: 6px;
+  font-size: 56px;
   font-weight: 800;
-  letter-spacing: -0.035em;
-  line-height: 1;
+  letter-spacing: -0.045em;
+  line-height: 0.92;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -251,28 +269,30 @@ img {
   grid-template-columns: repeat(4, 1fr);
   align-items: center;
   margin: 0;
-  padding: 0 24px;
+  padding: 0 28px;
   list-style: none;
   background: #f6f7f9;
 }
 
 .fact {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 1px;
+  justify-content: center;
+  gap: 10px;
   min-width: 0;
 }
 
 .fact__icon {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
   color: #0c182e;
 }
 
 .fact__icon svg {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.85;
@@ -280,16 +300,24 @@ img {
   stroke-linejoin: round;
 }
 
+.fact__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 2px;
+}
+
 .fact__value {
-  font-size: 30px;
+  font-size: 34px;
   font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1;
+  letter-spacing: -0.045em;
+  line-height: 0.95;
   color: #0c182e;
 }
 
 .fact__label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -299,7 +327,7 @@ img {
 .gallery {
   display: grid;
   gap: 16px;
-  padding: 4px 36px 8px;
+  padding: 2px 36px 6px;
   align-items: stretch;
   background: #f6f7f9;
 }
@@ -360,35 +388,35 @@ img {
 
 .place {
   display: grid;
-  grid-template-columns: 1.1fr 1.5fr 0.9fr;
+  grid-template-columns: 1.2fr 1.3fr 0.9fr;
   gap: 12px;
   align-items: center;
-  padding: 2px 36px 0;
+  padding: 8px 36px 4px;
   background: #f6f7f9;
 }
 
 .poster--no-chips .place {
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: 1.6fr 1fr;
 }
 
 .place__addr {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 .place__pin {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  margin-top: 3px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  margin-top: 6px;
   color: #0c182e;
 }
 
 .place__pin svg {
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -400,17 +428,17 @@ img {
 }
 
 .place__addr strong {
-  font-size: 18px;
+  font-size: 28px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .place__addr span {
-  margin-top: 2px;
-  font-size: 14px;
+  margin-top: 6px;
+  font-size: 18px;
   color: #5b6b7c;
 }
 
@@ -450,18 +478,18 @@ img {
   margin: 0;
   font-family: "Marketing Serif", Georgia, serif;
   font-style: italic;
-  font-size: 21px;
-  line-height: 1.18;
+  font-size: 22px;
+  line-height: 1.2;
   color: #8a6a3b;
   text-align: right;
 }
 
 .closer {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
-  gap: 12px;
-  align-items: end;
-  padding: 0 36px 0;
+  grid-template-columns: minmax(0, 1.18fr) minmax(300px, 0.82fr);
+  gap: 20px;
+  align-items: center;
+  padding: 2px 36px 8px;
   background: #f6f7f9;
   overflow: visible;
 }
@@ -474,37 +502,37 @@ img {
 
 .agent {
   display: grid;
-  grid-template-columns: 248px 1fr;
-  align-items: end;
+  grid-template-columns: 148px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
   min-width: 0;
 }
 
 .agent__photo {
   position: relative;
-  height: 338px;
+  height: 196px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  margin-top: -40px;
 }
 
 .agent__photo::before {
   content: "";
   position: absolute;
-  width: 188px;
-  height: 188px;
+  width: 128px;
+  height: 128px;
   border-radius: 50%;
   background: #efe4d4;
-  bottom: 118px;
+  bottom: 54px;
   z-index: 0;
 }
 
 .agent__photo img {
   position: relative;
   z-index: 1;
-  max-height: 338px;
+  max-height: 196px;
   width: auto;
-  max-width: 248px;
+  max-width: 148px;
   object-fit: contain;
   object-position: bottom center;
 }
@@ -516,12 +544,12 @@ img {
 
 .agent__meta {
   min-width: 0;
-  padding: 0 8px 36px 0;
+  padding: 0 4px 0 0;
 }
 
 .agent__meta h2 {
   margin: 0;
-  font-size: 34px;
+  font-size: 30px;
   line-height: 1.05;
   letter-spacing: -0.035em;
   font-weight: 800;
@@ -531,8 +559,8 @@ img {
 }
 
 .agent__meta .role {
-  margin: 4px 0 12px;
-  font-size: 16px;
+  margin: 3px 0 10px;
+  font-size: 15px;
   color: #5b6b7c;
 }
 
@@ -572,7 +600,7 @@ img {
   justify-content: center;
   align-items: stretch;
   gap: 14px;
-  padding: 0 0 36px;
+  padding: 0;
 }
 
 .cta__btn {
@@ -580,23 +608,24 @@ img {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-height: 62px;
-  padding: 14px 22px;
+  gap: 12px;
+  min-height: 72px;
+  padding: 18px 28px;
   border-radius: 999px;
   background: #0c182e;
   color: #fff;
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  line-height: 1.15;
+  line-height: 1.1;
   text-align: center;
+  box-shadow: 0 10px 24px rgba(12, 24, 46, 0.22);
 }
 
 .cta__btn svg {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
 }
 
 .cta__btn em {

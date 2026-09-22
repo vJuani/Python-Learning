@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageStat
 
+from modules.listing_photo_origin import eligible_listing_photos, source_priority
 from modules.property_sync.media import resolve_media_filesystem_path
 
 HERO_HINTS = (
@@ -44,6 +45,8 @@ SECONDARY_LABELS = (
     ("jardin", ("jardin", "jardín", "garden", "patio", "parque")),
     ("fachada", ("fachada", "frente", "exterior", "facade")),
     ("dormitorio", ("dormitorio", "habitacion", "habitación", "bedroom")),
+    ("bano", ("baño", "bano", "bath", "toilette")),
+    ("balcon", ("balcon", "balcón", "balcony")),
 )
 
 
@@ -54,9 +57,6 @@ def _blob(photo):
         photo.get("alt"),
         photo.get("role"),
         photo.get("room"),
-        photo.get("external_media_id"),
-        photo.get("storage_key"),
-        photo.get("original_url"),
     ]
     return " ".join(str(part or "") for part in parts).casefold()
 
@@ -125,14 +125,18 @@ def score_listing_photo(photo, *, hero=False):
 
 
 def select_photos_for_item(photos, *, fmt, index, limit=None):
-    items = [item for item in (photos or []) if item]
+    items = eligible_listing_photos(photos)
     if not items:
         return []
     if limit is None:
         limit = 5 if fmt == "flyer" else (4 if fmt == "post" else 3)
     ranked = sorted(
         items,
-        key=lambda item: (score_listing_photo(item, hero=True), item.get("id") or 0),
+        key=lambda item: (
+            source_priority(item),
+            score_listing_photo(item, hero=True),
+            item.get("id") or 0,
+        ),
         reverse=True,
     )
     hero = ranked[0]

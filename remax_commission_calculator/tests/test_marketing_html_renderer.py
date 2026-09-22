@@ -67,10 +67,10 @@ def _logo_png(path):
 
 def _italia_context(*, rental=False, include_agent=True, show_price=True, long_copy=False):
     root = _PRIVATE_ROOT
-    hero = _photo(root / "hero.jpg", (86, 110, 92), label="fachada")
-    living = _photo(root / "living.jpg", (118, 84, 70), label="living")
-    cocina = _photo(root / "cocina.jpg", (70, 88, 108), label="cocina")
-    jardin = _photo(root / "jardin.jpg", (92, 122, 70), label="jardin")
+    hero = _photo(root / "hero.jpg", (18, 78, 28), label="fachada")
+    living = _photo(root / "living.jpg", (168, 46, 186), label="living")
+    cocina = _photo(root / "cocina.jpg", (28, 58, 210), label="cocina")
+    jardin = _photo(root / "jardin.jpg", (232, 198, 22), label="jardin")
     agent_path = _agent_png(root / "agent.png")
     logo_path = _logo_png(root / "logo.png")
     purpose = "rental" if rental else "sale"
@@ -284,6 +284,36 @@ class MarketingHtmlRendererTests(unittest.TestCase):
         png, metrics = screenshot_poster(html)
         self.assertEqual(Image.open(io.BytesIO(png)).size, (1080, 1350))
         self.assertEqual(metrics["width"], 1080)
+
+    def test_11_skips_marketing_asset_and_uses_gallery_2(self):
+        packed = _italia_context()
+        dorm = _photo(_PRIVATE_ROOT / "dorm.jpg", (210, 32, 28), label="dormitorio")
+        packed["photos"] = [
+            {
+                "id": 99,
+                "label": "fachada",
+                "is_cover": True,
+                "source": "marketing",
+                "storage_key": "tmp/marketing_html_render/italia_1341_v3.png",
+            },
+            packed["photos"][0],
+            packed["photos"][1],
+            {"id": 5, "label": "dormitorio", "storage_key": "dorm.jpg"},
+        ]
+        packed["files"]["dorm"] = dorm
+        ctx = build_marketing_render_context(
+            packed,
+            fmt="post",
+            options=packed["options"],
+            art=packed.get("art") or {},
+            language="es",
+        )
+        html = render_marketing_html(ctx)
+        self.assertFalse(ctx["hero_is_generated_marketing_asset"])
+        self.assertEqual(ctx["photo_origins"]["hero_photo"]["source_type"], "original_property_photo")
+        self.assertEqual(len(ctx["secondary"]), 2)
+        self.assertIn('class="gallery gallery--2"', html)
+        self.assertEqual(ctx["photo_origins"]["secondary_photos"][2]["source_type"], "missing")
 
 
 if __name__ == "__main__":

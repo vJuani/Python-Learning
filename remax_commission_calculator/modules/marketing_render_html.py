@@ -11,6 +11,7 @@ import io
 import json
 import logging
 import os
+import re
 import threading
 from pathlib import Path
 
@@ -28,14 +29,20 @@ from modules.marketing_language import (
     listing_benefit_line,
     marketing_zone_line,
 )
+from modules.listing_photo_origin import (
+    eligible_listing_photos,
+    is_generated_marketing_asset,
+    photo_origin_log,
+)
 from modules.marketing_photo_selector import photo_scene_label, select_photos_for_item
 from modules.marketing_renderer import (
     FORMAT_SIZES,
     _office_logo,
     fit_cover,
     load_agent_photo,
-    load_property_photos,
+    load_property_photo_pairs,
 )
+from modules.property_sync.media import get_property_original_media
 
 logger = logging.getLogger(__name__)
 
@@ -53,23 +60,35 @@ SCENE_CAPTIONS = {
     "jardin": ("JARDÍN", "Ideal para disfrutar en familia"),
     "fachada": ("FACHADA", "Primera impresión"),
     "dormitorio": ("DORMITORIO", "Descanso y confort"),
+    "bano": ("BAÑO", ""),
+    "balcon": ("BALCÓN", ""),
 }
 
 ICON_ROOMS = (
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/>'
-    '<path d="M3 13h18M12 6v14"/></svg>'
+    '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    '<rect x="4" y="13" width="16" height="4.2" rx="0.8"/>'
+    '<path d="M7 13V9.2h10V13"/>'
+    '<path d="M5 9.2V8h3M16 8h3v1.2"/>'
+    '<path d="M6.5 17.2V19.5M17.5 17.2V19.5"/></svg>'
 )
 ICON_BED = (
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6"/>'
-    '<path d="M3 18h18M6 10V8a3 3 0 0 1 3-3h2"/></svg>'
+    '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    '<path d="M4 17V12h16v5"/>'
+    '<path d="M4 14.2h16"/>'
+    '<path d="M7 12V8.8h6.5V12"/>'
+    '<path d="M3 17h18"/></svg>'
 )
 ICON_BATH = (
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h16v3a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-3z"/>'
-    '<path d="M7 13V8a2 2 0 0 1 2-2h1"/><path d="M4 19v1M20 19v1"/></svg>'
+    '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    '<path d="M16.5 4.5v5"/>'
+    '<path d="M15 6.2h3M14.2 8h4.6"/>'
+    '<path d="M5 13.5h14v2.8A2.7 2.7 0 0 1 16.3 19H7.7A2.7 2.7 0 0 1 5 16.3v-2.8z"/>'
+    '<path d="M4 20.2h16"/></svg>'
 )
 ICON_AREA = (
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10l8-6 8 6v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>'
-    '<path d="M9 20v-7h6v7"/></svg>'
+    '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    '<path d="M4.5 11.2L12 5.2l7.5 6V19.5h-15z"/>'
+    '<path d="M9.5 19.5v-6h5v6"/></svg>'
 )
 ICON_PIN = (
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/>'
@@ -252,6 +271,70 @@ def _photo_uri(image, size):
     return _data_uri_from_image(cropped, fmt="JPEG")
 
 
+def _hero_uri(image):
+    if image is None:
+        return ""
+    rgb = image.convert("RGB")
+    longest = max(rgb.size)
+    if longest > 1800:
+        scale = 1800 / float(longest)
+        rgb = rgb.resize(
+            (max(1, int(rgb.width * scale)), max(1, int(rgb.height * scale))),
+            Image.Resampling.LANCZOS,
+        )
+    return _data_uri_from_image(rgb, fmt="JPEG", quality=90)
+
+
+UNVERIFIED_CLAIM_RE = re.compile(
+    r"cerca de colegios|excelente conectividad|entorno residencial|"
+    r"comercios y servicios|close to schools|excellent connectivity|"
+    r"quiet residential",
+    re.I,
+)
+
+
+def _parse_focus(raw, default=(58.0, 52.0)):
+    x, y = default
+    try:
+        if isinstance(raw, dict):
+            x = float(raw.get("x", x))
+            y = float(raw.get("y", y))
+        elif isinstance(raw, (list, tuple)) and len(raw) >= 2:
+            x = float(raw[0])
+            y = float(raw[1])
+        elif isinstance(raw, str) and "," in raw:
+            left, right = raw.split(",", 1)
+            x = float(left.strip())
+            y = float(right.strip())
+    except (TypeError, ValueError):
+        return default
+    return (max(0.0, min(100.0, x)), max(0.0, min(100.0, y)))
+
+
+def _hero_focus(hero_row, options):
+    options = options or {}
+    row = hero_row or {}
+    return _parse_focus(
+        options.get("hero_focus")
+        or row.get("focal_point")
+        or row.get("focus")
+        or ((options.get("photo_focus") or {}).get("hero") if isinstance(options.get("photo_focus"), dict) else None)
+    )
+
+
+def _too_similar(left, right, *, threshold=26):
+    if left is None or right is None:
+        return False
+    sample_a = left.convert("RGB").resize((32, 32), Image.Resampling.BILINEAR)
+    sample_b = right.convert("RGB").resize((32, 32), Image.Resampling.BILINEAR)
+    pixels_a = list(sample_a.getdata())
+    pixels_b = list(sample_b.getdata())
+    acc = 0.0
+    for pa, pb in zip(pixels_a, pixels_b):
+        acc += abs(pa[0] - pb[0]) + abs(pa[1] - pb[1]) + abs(pa[2] - pb[2])
+    return (acc / (32 * 32 * 3)) < threshold
+
+
 def _format_int(value):
     if value in (None, ""):
         return ""
@@ -317,12 +400,23 @@ def _headline_size(lines):
     return "lg"
 
 
+def _grounded_copy(text):
+    line = " ".join(str(text or "").split())
+    if not line or is_placeholder_copy(line) or UNVERIFIED_CLAIM_RE.search(line):
+        return ""
+    return line
+
+
 def _subheadline(facts, planned, language):
-    raw = " ".join(str((planned or {}).get("subheadline") or "").split())
-    if raw and not is_placeholder_copy(raw) and len(raw) <= 110:
-        return raw
-    line = listing_benefit_line(language, facts) or facts.get("benefit_line") or ""
-    return " ".join(str(line).split())[:110]
+    for candidate in (
+        (planned or {}).get("subheadline"),
+        listing_benefit_line(language, facts),
+        facts.get("benefit_line"),
+    ):
+        line = _grounded_copy(candidate)
+        if line and len(line) <= 110:
+            return line
+    return ""
 
 
 def _street_line(facts):
@@ -335,32 +429,21 @@ def _street_line(facts):
 
 def _location_chips(facts, language):
     blob = " ".join(str(item).casefold() for item in (facts.get("amenities") or []))
+    es = language == "es"
     chips = []
-    if any(token in blob for token in ("jard", "garden", "patio", "parque", "resid")):
-        chips.append(
-            {
-                "label": "Entorno residencial y tranquilo"
-                if language == "es"
-                else "Quiet residential setting",
-                "icon": ICON_TREE,
-            }
-        )
-    if any(token in blob for token in ("coleg", "escuela", "school", "comercio", "shop")):
-        chips.append(
-            {
-                "label": "Cerca de colegios, comercios y servicios"
-                if language == "es"
-                else "Schools, shops and services nearby",
-                "icon": ICON_SCHOOL,
-            }
-        )
-    if any(token in blob for token in ("subte", "tren", "colectivo", "conect", "transit")):
-        chips.append(
-            {
-                "label": "Excelente conectividad" if language == "es" else "Great connectivity",
-                "icon": ICON_WIFI,
-            }
-        )
+    catalog = (
+        (("pileta", "piscina", "pool"), "Pileta" if es else "Pool", ICON_TREE),
+        (("cochera", "garage"), "Cochera" if es else "Garage", ICON_TREE),
+        (("balcon", "balcón", "balcony"), "Balcón" if es else "Balcony", ICON_TREE),
+        (("jard", "garden", "patio", "parque"), "Jardín" if es else "Garden", ICON_TREE),
+    )
+    used = set()
+    for needles, label, icon in catalog:
+        if label in used:
+            continue
+        if any(token in blob for token in needles):
+            chips.append({"label": label, "icon": icon})
+            used.add(label)
     return chips[:3]
 
 
@@ -469,6 +552,21 @@ def _dump_debug(html, png_bytes, context):
     )
 
 
+def _listing_photo_rows(context):
+    rows = eligible_listing_photos((context or {}).get("photos") or [])
+    if rows:
+        return rows
+    facts = (context or {}).get("facts") or {}
+    property_id = facts.get("property_id") or (context or {}).get("property_id")
+    organization_id = facts.get("organization_id") or (context or {}).get("organization_id")
+    if not property_id:
+        return []
+    return [
+        record["media"]
+        for record in get_property_original_media(property_id, organization_id)
+    ]
+
+
 def build_marketing_render_context(context, *, fmt="post", options=None, art=None, language="es"):
     options = options or {}
     art = art or {}
@@ -485,49 +583,73 @@ def build_marketing_render_context(context, *, fmt="post", options=None, art=Non
         language=language,
         style=options.get("style") or options.get("visual_direction"),
     )
-    if art.get("short_hook") and not is_placeholder_copy(art.get("short_hook")):
+    if art.get("short_hook") and _grounded_copy(art.get("short_hook")):
         planned["subheadline"] = art.get("short_hook")
-    photo_rows = list((context or {}).get("photos") or [])
+    photo_rows = _listing_photo_rows(context)
     selected = select_html_render_photos(photo_rows, secondary=3)
-    images = load_property_photos(photo_rows)
     by_id = {}
-    for row, image in zip(photo_rows, images):
-        key = row.get("id") or row.get("storage_key")
+    for row, image in load_property_photo_pairs(photo_rows):
+        key = row.get("id") or row.get("storage_key") or row.get("original_url")
         if key is not None:
             by_id[key] = image
     hero_row = selected.get("hero")
     hero_image = None
     if hero_row is not None:
-        hero_image = by_id.get(hero_row.get("id") or hero_row.get("storage_key"))
-        if hero_image is None and images:
-            hero_image = images[0]
+        hero_image = by_id.get(
+            hero_row.get("id") or hero_row.get("storage_key") or hero_row.get("original_url")
+        )
+    hero_generated = bool(hero_row) and is_generated_marketing_asset(hero_row)
+    logger.info(
+        "resolved_property_id=%s organization_id=%s",
+        facts.get("property_id"),
+        facts.get("organization_id"),
+    )
+    if hero_image is None or hero_generated:
+        logger.error(
+            "original_photo_fetch_failed slot=hero hero_is_generated_marketing_asset=%s hero_loaded=%s original_url=%s path=%s",
+            hero_generated,
+            hero_image is not None,
+            (hero_row or {}).get("original_url"),
+            (hero_row or {}).get("storage_key") or (hero_row or {}).get("path"),
+        )
+        raise MarketingError("marketing_ia_visual_no_photos", 400)
     secondary_views = []
     secondary_images = []
     used_labels = set()
-    preferred = ("living", "cocina", "jardin", "dormitorio", "fachada")
+    preferred = ("living", "cocina", "jardin", "dormitorio", "fachada", "bano", "balcon", "patio")
     for row in selected.get("secondary") or []:
-        image = by_id.get(row.get("id") or row.get("storage_key"))
+        image = by_id.get(row.get("id") or row.get("storage_key") or row.get("original_url"))
         if image is None:
+            logger.error(
+                "original_photo_fetch_failed slot=secondary source_type=%s original_url=%s path=%s",
+                photo_origin_log(row).get("source_type"),
+                row.get("original_url"),
+                row.get("storage_key") or row.get("path"),
+            )
             continue
-        secondary_images.append(image)
+        if _too_similar(image, hero_image) or any(_too_similar(image, other) for other in secondary_images):
+            continue
         label_key = photo_scene_label(row)
         if label_key and label_key in used_labels:
-            label_key = None
+            continue
+        secondary_images.append(image)
         if label_key:
             used_labels.add(label_key)
         caption = SCENE_CAPTIONS.get(label_key) if label_key else None
         secondary_views.append(
             {
                 "src": _photo_uri(image, (360, 248)),
-                "label": caption[0] if caption else (str(label_key or "").upper() or ""),
+                "label": caption[0] if caption else "",
                 "caption": caption[1] if caption else "",
                 "loaded": True,
                 "scene": label_key or "",
+                "_origin": photo_origin_log(row, image),
             }
         )
     secondary_views.sort(
         key=lambda item: preferred.index(item["scene"]) if item.get("scene") in preferred else 99
     )
+    secondary_origins = [item.pop("_origin") for item in secondary_views]
     currency, amount = _split_price(facts.get("price_label") if show_price else "")
     price = {"currency": currency or "USD", "amount": amount if show_price else ""}
     if not amount:
@@ -575,22 +697,23 @@ def build_marketing_render_context(context, *, fmt="post", options=None, art=Non
     street = _street_line(facts)
     city = marketing_zone_line(facts)
     qa_required = _qa_mode()
+    extra = max(0, len(photo_rows) - 1)
     asset_status = {
         "hero_photo": _qa_asset_status("hero_photo", hero_image, required=True),
         "secondary_photos[0]": _qa_asset_status(
             "secondary_photos[0]",
             secondary_images[0] if len(secondary_images) > 0 else None,
-            required=qa_required,
+            required=qa_required and extra >= 1,
         ),
         "secondary_photos[1]": _qa_asset_status(
             "secondary_photos[1]",
             secondary_images[1] if len(secondary_images) > 1 else None,
-            required=qa_required,
+            required=qa_required and extra >= 2,
         ),
         "secondary_photos[2]": _qa_asset_status(
             "secondary_photos[2]",
             secondary_images[2] if len(secondary_images) > 2 else None,
-            required=qa_required,
+            required=qa_required and extra >= 3,
         ),
         "agent.photo": _qa_asset_status(
             "agent.photo",
@@ -598,6 +721,33 @@ def build_marketing_render_context(context, *, fmt="post", options=None, art=Non
             required=qa_required and include_agent and options.get("show_agent_photo", True),
         ),
     }
+    hero_origin = photo_origin_log(hero_row, hero_image)
+    while len(secondary_origins) < 3:
+        secondary_origins.append(photo_origin_log(None, None))
+    logger.info(
+        "hero_photo source_type=%s asset_id=%s original_url/path=%s width=%s height=%s",
+        hero_origin.get("source_type"),
+        hero_origin.get("asset_id"),
+        hero_origin.get("original_url") or hero_origin.get("path"),
+        hero_origin.get("width"),
+        hero_origin.get("height"),
+    )
+    for index, origin in enumerate(secondary_origins[:3]):
+        logger.info(
+            "secondary_photos[%s] source_type=%s asset_id=%s original_url/path=%s width=%s height=%s",
+            index,
+            origin.get("source_type"),
+            origin.get("asset_id"),
+            origin.get("original_url") or origin.get("path"),
+            origin.get("width"),
+            origin.get("height"),
+        )
+    logger.info("hero_is_generated_marketing_asset=%s", bool(hero_generated))
+    logger.info(
+        "template_used=%s renderer_used=%s visual_status=complete",
+        HTML_TEMPLATE,
+        HTML_RENDERER,
+    )
     return {
         "language": language,
         "body_class": "marketing-html-render",
@@ -610,8 +760,10 @@ def build_marketing_render_context(context, *, fmt="post", options=None, art=Non
         "price": price,
         "facts": _facts_view(facts, language),
         "hero": {
-            "src": _photo_uri(hero_image, (1080, 520)) if hero_image is not None else "",
+            "src": _hero_uri(hero_image) if hero_image is not None else "",
             "loaded": hero_image is not None,
+            "focus_x": _hero_focus(hero_row, options)[0],
+            "focus_y": _hero_focus(hero_row, options)[1],
         },
         "secondary": secondary_views,
         "location": {
@@ -645,6 +797,11 @@ def build_marketing_render_context(context, *, fmt="post", options=None, art=Non
         "logo_loaded": branding.get("logo_loaded"),
         "agent_photo_loaded": bool(agent_view and agent_view.get("photo")),
         "asset_status": asset_status,
+        "photo_origins": {
+            "hero_photo": hero_origin,
+            "secondary_photos": secondary_origins[:3],
+        },
+        "hero_is_generated_marketing_asset": bool(hero_generated),
     }
 
 
