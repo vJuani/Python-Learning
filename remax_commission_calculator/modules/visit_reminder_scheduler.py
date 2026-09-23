@@ -1,11 +1,12 @@
-"""In-process visit reminder loop for the single Gunicorn worker.
+"""In-process notification loop for the single Gunicorn worker.
 
-Railway has no Cron Job in this repo. Visit reminders used to fire only
-when someone ran ``python dispatch_visit_reminders.py``. This thread is
-what actually scans on a schedule in production.
+This is the production dispatcher (``NOTIFICATION_DISPATCHER=inprocess``,
+the default). It only starts when that is the configured strategy, so a
+worker/cron/HTTP tick can never run alongside it.
 
-Safe with ``--workers 1``. Duplicate ticks are still idempotent via
-``event_key``. Disable with ``VISIT_REMINDER_SCHEDULER=0``.
+Safe with ``--workers 1``. Overlapping ticks during a deploy are still
+idempotent via ``event_key``. Disable with ``VISIT_REMINDER_SCHEDULER=0``
+or by selecting another dispatcher.
 """
 
 from __future__ import annotations
@@ -36,12 +37,17 @@ _STATE = {
 
 
 def _env_enabled():
+    from modules.notifications.dispatcher import (
+        DISPATCHER_INPROCESS,
+        dispatcher_allows,
+    )
+
     raw = (os.environ.get("VISIT_REMINDER_SCHEDULER") or "1").strip().lower()
     if raw in {"0", "false", "off", "no"}:
         return False
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return False
-    return True
+    return dispatcher_allows(DISPATCHER_INPROCESS)
 
 
 def inprocess_scheduler_state():

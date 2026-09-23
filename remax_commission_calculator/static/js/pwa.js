@@ -136,9 +136,17 @@
     show("pwa-ios-push-help", isIos() && !isStandalone());
   }
 
-  function fetchPushStatus() {
-    return jsonFetch("/api/push/status", { credentials: "same-origin" }).catch(function () {
-      return { has_active: false };
+  function fetchDeviceStatus(subscription) {
+    if (!subscription) {
+      return Promise.resolve({ device_active: false });
+    }
+    return jsonFetch("/api/push/device", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    }).catch(function () {
+      return { device_active: false };
     });
   }
 
@@ -156,10 +164,10 @@
       show("pwa-push-reset", true);
       return Promise.resolve("denied");
     }
-    return Promise.all([getCurrentPushSubscription(), fetchPushStatus()]).then(function (results) {
-      var subscription = results[0];
-      var status = results[1] || {};
-      var hasActive = Boolean(subscription) || Boolean(status.has_active);
+    return getCurrentPushSubscription().then(function (subscription) {
+      return fetchDeviceStatus(subscription);
+    }).then(function (status) {
+      var hasActive = Boolean(status && status.device_active);
       if (root) {
         root.dataset.hasActive = hasActive ? "1" : "0";
       }
@@ -355,7 +363,56 @@
     }
   }
 
+  function isLogoutLink(anchor) {
+    if (!anchor || !anchor.href) {
+      return false;
+    }
+    try {
+      var url = new URL(anchor.href, window.location.href);
+      return url.origin === window.location.origin && url.pathname === "/logout";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function bindLogout() {
+    document.addEventListener("click", function (event) {
+      var anchor = event.target && event.target.closest ? event.target.closest("a") : null;
+      if (!isLogoutLink(anchor) || event.defaultPrevented) {
+        return;
+      }
+      event.preventDefault();
+      var target = anchor.href;
+      var done = false;
+      function leave() {
+        if (!done) {
+          done = true;
+          window.location.href = target;
+        }
+      }
+      setTimeout(leave, 2000);
+      getCurrentPushSubscription()
+        .then(function (subscription) {
+          if (!subscription) {
+            return null;
+          }
+          return fetch("/api/push/unsubscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            keepalive: true,
+            body: JSON.stringify({ endpoint: subscription.endpoint }),
+          });
+        })
+        .catch(function () {
+          return null;
+        })
+        .then(leave);
+    });
+  }
+
   registerWorker();
+  bindLogout();
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
       bindInstall();

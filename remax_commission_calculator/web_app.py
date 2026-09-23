@@ -320,7 +320,8 @@ from modules.workflow import (
 from modules.notifications_service import (
     notify_agent_for_operation,
     notify_agent_for_property,
-    notify_agent_for_property_change
+    notify_agent_for_property_change,
+    status_transition_event_key,
 )
 
 from modules.pending_actions import (
@@ -2562,6 +2563,14 @@ def guest_access(token):
 @app.route("/logout")
 @login_required
 def logout():
+    from modules.pwa_routes import deactivate_current_device_push
+
+    user = get_current_user()
+    if user is not None:
+        deactivate_current_device_push(
+            user.get("organization_id"),
+            user.get("id"),
+        )
     logout_user()
 
     flash_i18n("logout_success", "success")
@@ -2775,14 +2784,13 @@ def approvals_property_approve(property_id):
     ):
         abort(404)
 
+    reviewed_at = datetime.utcnow().isoformat(timespec="seconds")
     update_property_status(
         property_id,
         organization_id,
         PROPERTY_STATUS_APPROVED,
         reviewed_by_user_id=current_user["id"],
-        reviewed_at=datetime.utcnow().isoformat(
-            timespec="seconds"
-        ),
+        reviewed_at=reviewed_at,
         rejection_reason=None
     )
 
@@ -2796,7 +2804,14 @@ def approvals_property_approve(property_id):
                 "address": property_data["address"],
                 "status": PROPERTY_STATUS_APPROVED
             },
-            actor_user_id=current_user["id"]
+            actor_user_id=current_user["id"],
+            event_key=status_transition_event_key(
+                "property",
+                property_id,
+                property_data.get("status"),
+                PROPERTY_STATUS_APPROVED,
+                reviewed_at,
+            ),
         )
 
     try:
@@ -2857,14 +2872,13 @@ def approvals_property_reject(property_id):
             ])
         )
 
+    reviewed_at = datetime.utcnow().isoformat(timespec="seconds")
     update_property_status(
         property_id,
         organization_id,
         PROPERTY_STATUS_REJECTED,
         reviewed_by_user_id=current_user["id"],
-        reviewed_at=datetime.utcnow().isoformat(
-            timespec="seconds"
-        ),
+        reviewed_at=reviewed_at,
         rejection_reason=reason
     )
 
@@ -2879,7 +2893,14 @@ def approvals_property_reject(property_id):
                 "status": PROPERTY_STATUS_REJECTED,
                 "reason": reason
             },
-            actor_user_id=current_user["id"]
+            actor_user_id=current_user["id"],
+            event_key=status_transition_event_key(
+                "property",
+                property_id,
+                property_data.get("status"),
+                PROPERTY_STATUS_REJECTED,
+                reviewed_at,
+            ),
         )
 
     flash_i18n("property_rejected", "success")
@@ -7180,14 +7201,13 @@ def operations_approve(operation_id):
             )
         )
 
+    reviewed_at = datetime.utcnow().isoformat(timespec="seconds")
     change_operation_status(
         operation_id,
         organization_id,
         STATUS_APPROVED,
         reviewed_by_user_id=current_user["id"],
-        reviewed_at=datetime.utcnow().isoformat(
-            timespec="seconds"
-        ),
+        reviewed_at=reviewed_at,
         rejection_reason=None
     )
 
@@ -7201,7 +7221,14 @@ def operations_approve(operation_id):
             "currency": operation.get("currency", "USD"),
             "status": STATUS_APPROVED
         },
-        actor_user_id=current_user["id"]
+        actor_user_id=current_user["id"],
+        event_key=status_transition_event_key(
+            "operation",
+            operation_id,
+            operation.get("status"),
+            STATUS_APPROVED,
+            reviewed_at,
+        ),
     )
 
     flash_i18n("operation_approved", "success")
@@ -7262,14 +7289,13 @@ def operations_reject(operation_id):
             )
         )
 
+    reviewed_at = datetime.utcnow().isoformat(timespec="seconds")
     change_operation_status(
         operation_id,
         organization_id,
         STATUS_REJECTED,
         reviewed_by_user_id=current_user["id"],
-        reviewed_at=datetime.utcnow().isoformat(
-            timespec="seconds"
-        ),
+        reviewed_at=reviewed_at,
         rejection_reason=reason
     )
 
@@ -7284,7 +7310,14 @@ def operations_reject(operation_id):
             "status": STATUS_REJECTED,
             "reason": reason
         },
-        actor_user_id=current_user["id"]
+        actor_user_id=current_user["id"],
+        event_key=status_transition_event_key(
+            "operation",
+            operation_id,
+            operation.get("status"),
+            STATUS_REJECTED,
+            reviewed_at,
+        ),
     )
 
     flash_i18n("operation_rejected", "success")

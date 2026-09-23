@@ -396,7 +396,7 @@ class NotificationArchitectureTests(unittest.TestCase):
         client = app.test_client()
         denied = client.post("/internal/jobs/notifications/tick")
         self.assertEqual(denied.status_code, 404)
-        with patch(
+        with patch.dict(os.environ, {"NOTIFICATION_DISPATCHER": "http"}), patch(
             "modules.notifications.jobs.run_notification_jobs",
             return_value={
                 "now": to_utc_iso(now_utc()),
@@ -410,6 +410,18 @@ class NotificationArchitectureTests(unittest.TestCase):
             )
         self.assertEqual(ok.status_code, 200)
         self.assertTrue(ok.get_json()["ok"])
+
+    def test_http_tick_refused_when_not_selected_dispatcher(self):
+        client = app.test_client()
+        with patch.dict(os.environ, {"NOTIFICATION_DISPATCHER": "inprocess"}), patch(
+            "modules.notifications.jobs.run_notification_jobs",
+        ) as runner:
+            page = client.post(
+                "/internal/jobs/notifications/tick",
+                headers={"X-Job-Secret": "job-secret"},
+            )
+        self.assertEqual(page.status_code, 404)
+        runner.assert_not_called()
 
 
 if __name__ == "__main__":

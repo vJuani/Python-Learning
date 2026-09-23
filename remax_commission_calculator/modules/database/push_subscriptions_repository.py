@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .connection import execute_insert, get_connection
 from .tenant import require_organization_id
@@ -225,6 +225,48 @@ def mark_push_subscription_success(subscription_id, organization_id):
     )
     connection.commit()
     connection.close()
+
+
+PURGE_INACTIVE_AFTER_DAYS = 30
+
+
+def purge_inactive_push_subscriptions(*, now=None, older_than_days=PURGE_INACTIVE_AFTER_DAYS):
+    """
+    Hard-delete subscriptions inactive for longer than the retention window.
+
+    Age is measured from ``last_failure_at`` (404/410 from the push
+    service). Rows deactivated without a failure, e.g. on logout, fall
+    back to ``updated_at`` so they are purged too. Active rows are never
+    touched. Cross-organization by design: this is a maintenance job.
+    """
+    instant = now or datetime.utcnow()
+    cutoff = (
+        instant.replace(tzinfo=None, microsecond=0)
+        - timedelta(days=int(older_than_days))
+    ).isoformat()
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            DELETE FROM push_subscriptions
+            WHERE is_active = 0
+                AND COALESCE(
+                    NULLIF(last_failure_at, ''),
+                    NULLIF(updated_at, ''),
+                    created_at
+                ) < ?
+            """,
+            (cutoff,),
+        )
+        deleted = cursor.rowcount or 0
+        connection.commit()
+        return max(deleted, 0)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def mark_push_subscription_failure(subscription_id, organization_id, *, deactivate=False):

@@ -1,14 +1,14 @@
-"""Dedicated notification worker. Do not run this loop inside Gunicorn.
+"""Out-of-process notification dispatcher. Do not run this loop inside Gunicorn.
 
-Railway Cron (preferred):
+Only runs when it is the configured ``NOTIFICATION_DISPATCHER``:
+
+Railway Cron (``NOTIFICATION_DISPATCHER=cron``):
     python notification_worker.py
 
-Dedicated worker service:
+Dedicated worker service (``NOTIFICATION_DISPATCHER=worker``):
     python notification_worker.py --loop
 
-HTTP alternative (same process as web, no thread):
-    POST /internal/jobs/notifications/tick
-    Header X-Job-Secret: $NOTIFICATION_JOB_SECRET
+See ``modules/notifications/dispatcher.py`` for the other strategies.
 """
 
 from __future__ import annotations
@@ -19,6 +19,12 @@ import time
 
 from modules.config import load_dotenv_file
 from modules.database import create_tables
+from modules.notifications.dispatcher import (
+    DISPATCHER_CRON,
+    DISPATCHER_WORKER,
+    configured_dispatcher,
+    dispatcher_allows,
+)
 from modules.notifications.jobs import run_notification_jobs
 
 
@@ -48,6 +54,13 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     load_dotenv_file()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    strategy = DISPATCHER_WORKER if args.loop else DISPATCHER_CRON
+    if not dispatcher_allows(strategy):
+        print(
+            f"notification_worker skipped: NOTIFICATION_DISPATCHER="
+            f"{configured_dispatcher()} (this entry point is '{strategy}')"
+        )
+        return 0
     create_tables()
     if not args.loop:
         summary = run_notification_jobs(source="worker")

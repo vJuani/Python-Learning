@@ -22,20 +22,43 @@ or concurrent executions are safe because every generated movement is
 uniquely identified by organization, recurring configuration, and billing
 period.
 
-## Notifications worker (agenda reminders + overdue tasks)
+## Notifications dispatcher (agenda reminders, overdue tasks, push cleanup)
 
-Preferred: a Railway Cron Job or a dedicated worker service. Do not add
-new loops inside Gunicorn.
+**Exactly one dispatcher runs.** `NOTIFICATION_DISPATCHER` selects it and
+every other entry point exits without scanning.
 
-| Mode | Command |
-|------|---------|
-| Railway Cron (one-shot, every 5 min) | `python notification_worker.py` or `python dispatch_visit_reminders.py` |
-| Dedicated worker | `python notification_worker.py --loop` |
-| HTTP Cron | `POST /internal/jobs/notifications/tick` with header `X-Job-Secret` |
+Production strategy: **`inprocess`** (the default, no variable needed). A
+daemon thread started by `wsgi.py` inside the single Gunicorn worker
+(`--workers 1`) scans every 5 minutes. It shares the web service's
+database and volume and needs no extra Railway service. The `Procfile`
+intentionally has no `worker:` process.
 
-Set `NOTIFICATION_JOB_SECRET` if you use the HTTP tick. Disable the
-in-process fallback with `VISIT_REMINDER_SCHEDULER=0` after Cron/worker
-is running.
+| `NOTIFICATION_DISPATCHER` | Who dispatches | Command |
+|------|---------|---------|
+| `inprocess` (default) | Gunicorn thread | none (web service) |
+| `cron` | Railway Cron, every 5 min | `python notification_worker.py` or `python dispatch_visit_reminders.py` |
+| `worker` | Dedicated worker service | `python notification_worker.py --loop` |
+| `http` | External cron | `POST /internal/jobs/notifications/tick` + header `X-Job-Secret: $NOTIFICATION_JOB_SECRET` |
+| `off` | Nobody | none |
+
+Switching strategy: set the same `NOTIFICATION_DISPATCHER` value on
+**every** service (web and cron/worker), then create the cron/worker
+service. An unknown value falls back to `off` and logs
+`notification_dispatcher_invalid`. `VISIT_REMINDER_SCHEDULER=0` still
+force-disables the thread.
+
+Overlapping ticks (for example old and new containers during a deploy)
+are safe: each notification is unique per
+`(organization_id, user_id, event_key)` and a push is sent only by the
+call that actually inserted the row.
+
+Each tick also purges push subscriptions inactive for more than 30 days
+(`last_failure_at`, or `updated_at` when deactivated without a failure,
+e.g. on logout).
+
+Admin check (JSON, no key material):
+`GET /api/push/diagnostics` → `vapid_valid`, `dispatcher`,
+`inprocess_scheduler_alive`, `inprocess_scheduler_last_tick_at`.
 
 The scanner uses each event's `reminder_minutes` (visits default to 30)
 with a ±5 minute window. Timezone: organization setting, default

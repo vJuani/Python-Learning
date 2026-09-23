@@ -64,13 +64,29 @@ def _legacy_dispatch(
     return None if not result else result.get("notification_id")
 
 
+def status_transition_event_key(entity, entity_id, from_status, to_status, occurred_at):
+    """
+    Key for a review transition that can legitimately repeat.
+
+    An operation or listing can be rejected, fixed and rejected again;
+    each review is a distinct event, so the key carries the transition
+    and the review timestamp instead of only the entity id.
+    """
+    stamp = str(occurred_at or "").replace(" ", "T")
+    return (
+        f"{entity}_{int(entity_id)}_{from_status or 'none'}_to_"
+        f"{to_status or 'none'}_{stamp}"
+    )
+
+
 def notify_agent_for_property(
     organization_id,
     agent_id,
     kind,
     property_id,
     payload,
-    actor_user_id=None
+    actor_user_id=None,
+    event_key=None,
 ):
     return _legacy_dispatch(
         organization_id=organization_id,
@@ -80,6 +96,7 @@ def notify_agent_for_property(
         entity_id=property_id,
         payload=payload,
         actor_user_id=actor_user_id,
+        event_key=event_key,
         url=f"/properties/{int(property_id)}",
     )
 
@@ -109,7 +126,8 @@ def notify_agent_for_operation(
     kind,
     operation_id,
     payload,
-    actor_user_id=None
+    actor_user_id=None,
+    event_key=None,
 ):
     return _legacy_dispatch(
         organization_id=organization_id,
@@ -119,6 +137,7 @@ def notify_agent_for_operation(
         entity_id=operation_id,
         payload=payload,
         actor_user_id=actor_user_id,
+        event_key=event_key,
         url=f"/operations/{int(operation_id)}",
     )
 

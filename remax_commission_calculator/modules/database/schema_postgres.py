@@ -1980,18 +1980,10 @@ def create_postgres_schema():
             """
         )
 
-        cursor.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS
-            idx_notifications_event_key
-            ON notifications (
-                organization_id,
-                event_key
-            )
-            WHERE event_key IS NOT NULL
-                AND event_key <> ''
-            """
-        )
+        from .notifications_migration import USER_EVENT_KEY_INDEX_STATEMENTS
+
+        for statement in USER_EVENT_KEY_INDEX_STATEMENTS:
+            cursor.execute(statement)
 
         cursor.execute(
             """

@@ -17,6 +17,26 @@ NOTIFICATION_COLUMNS = (
     ("priority", "TEXT"),
 )
 
+# Dedupe is per recipient: the same logical event_key may legitimately
+# reach several users of one organization. The new index is strictly
+# weaker than the legacy (organization_id, event_key) one, so existing
+# rows always satisfy it; it is created before the legacy index is
+# dropped so uniqueness is never absent. Valid on SQLite and Postgres.
+USER_EVENT_KEY_INDEX_STATEMENTS = (
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS
+    idx_notifications_user_event_key
+    ON notifications (
+        organization_id,
+        user_id,
+        event_key
+    )
+    WHERE event_key IS NOT NULL
+        AND event_key <> ''
+    """,
+    "DROP INDEX IF EXISTS idx_notifications_event_key",
+)
+
 
 def _table_exists(cursor, table_name):
     cursor.execute(
@@ -68,20 +88,8 @@ def migrate_notification_events_sqlite():
             """
         )
 
-        # Legacy rows have no event key, so duplicates cannot exist yet.
-        # The partial index keeps future writes idempotent per event.
-        cursor.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS
-            idx_notifications_event_key
-            ON notifications (
-                organization_id,
-                event_key
-            )
-            WHERE event_key IS NOT NULL
-                AND event_key != ''
-            """
-        )
+        for statement in USER_EVENT_KEY_INDEX_STATEMENTS:
+            cursor.execute(statement)
 
         cursor.execute(
             """

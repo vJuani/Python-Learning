@@ -101,7 +101,19 @@ def main(argv=None):
         print(f"{overdue_total} overdue pending task(s).")
         return 0
 
+    from modules.notifications.dispatcher import (
+        DISPATCHER_CRON,
+        configured_dispatcher,
+        dispatcher_allows,
+    )
     from modules.notifications.jobs import run_notification_jobs
+
+    if not dispatcher_allows(DISPATCHER_CRON):
+        print(
+            "dispatch skipped: NOTIFICATION_DISPATCHER="
+            f"{configured_dispatcher()} (this entry point is 'cron')"
+        )
+        return 0
 
     summary = run_notification_jobs(source="cron")
     print(

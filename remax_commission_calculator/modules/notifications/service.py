@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 
 from modules.database.notifications_repository import (
-    create_notification,
     find_notification_by_event_key,
+    insert_notification,
 )
 from modules.database.user_notification_preferences_repository import (
     is_push_category_enabled,
@@ -93,6 +93,25 @@ def notify_user(
             "push": empty_push,
         }
 
+    def deduped(existing_id):
+        logger.info(
+            "notification_dispatch type=%s organization_id=%s user_id=%s "
+            "event_key=%s push_targets_count=0 sent_count=0 failed_count=0 "
+            "deduped=1",
+            type,
+            organization_id,
+            resolved_user_id,
+            event_key,
+        )
+        return {
+            "notification_id": existing_id,
+            "created": False,
+            "pushed": False,
+            "deduped": True,
+            "priority": resolved_priority,
+            "push": empty_push,
+        }
+
     if event_key:
         existing = find_notification_by_event_key(
             organization_id,
@@ -100,23 +119,7 @@ def notify_user(
             user_id=resolved_user_id,
         )
         if existing is not None:
-            logger.info(
-                "notification_dispatch type=%s organization_id=%s user_id=%s "
-                "event_key=%s push_targets_count=0 sent_count=0 failed_count=0 "
-                "deduped=1",
-                type,
-                organization_id,
-                resolved_user_id,
-                event_key,
-            )
-            return {
-                "notification_id": existing,
-                "created": False,
-                "pushed": False,
-                "deduped": True,
-                "priority": resolved_priority,
-                "push": empty_push,
-            }
+            return deduped(existing)
 
     internal_url = safe_internal_url(
         resolve_url(type, entity_id=entity_id, url=url)
@@ -142,7 +145,7 @@ def notify_user(
     notification_id = None
     created = False
     if internal:
-        notification_id = create_notification(
+        inserted = insert_notification(
             organization_id,
             resolved_user_id,
             type,
@@ -153,6 +156,9 @@ def notify_user(
             event_key=event_key,
             priority=resolved_priority,
         )
+        if not inserted["created"]:
+            return deduped(inserted["id"])
+        notification_id = inserted["id"]
         created = True
 
     pref_key = pref_key_for_type(type)

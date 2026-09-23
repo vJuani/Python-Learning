@@ -17,6 +17,7 @@ Design notes:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from datetime import date, timedelta
@@ -116,6 +117,29 @@ class AgentTaskError(Exception):
         self.kwargs = kwargs
 
 
+VERSIONED_TASK_EVENTS = ("task_updated", "task_rescheduled")
+
+
+def task_event_key(type_name, event_type, task):
+    """
+    Idempotency key for an agenda notification.
+
+    Creation, completion and cancellation happen once per task, so their
+    key is stable. Edits and reschedules repeat: the key carries a digest
+    of the task version so every real change notifies once, while a
+    retried write of the same version still dedupes.
+    """
+    base = f"{type_name}_{int(task['id'])}_{event_type}"
+    if event_type not in VERSIONED_TASK_EVENTS:
+        return base
+    version = "|".join(
+        str(task.get(field) or "")
+        for field in ("updated_at", "due_at", "title", "status", "agent_id")
+    )
+    digest = hashlib.sha1(version.encode("utf-8")).hexdigest()[:12]
+    return f"{base}_{digest}"
+
+
 def emit_task_event(event_type, task, *, actor_user_id=None, **extra):
     """
     Lightweight hook point for future automations.
@@ -179,7 +203,7 @@ def emit_task_event(event_type, task, *, actor_user_id=None, **extra):
                     "title": translate(title_key, language),
                     "body": title,
                     "url": f"/agenda/{int(task_id)}/edit",
-                    "event_key": f"{type_name}_{int(task_id)}_{event_type}",
+                    "event_key": task_event_key(type_name, event_type, task),
                     "entity_type": "agent_task",
                     "entity_id": task_id,
                     "actor_user_id": actor_id,

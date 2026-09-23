@@ -27,11 +27,43 @@ def create_notification(
     priority="info",
 ):
     """
-    Insert an informational notification event.
+    Insert an informational notification event and return its id.
 
-    When ``event_key`` is given the write is idempotent: a repeated
-    logical event returns the existing notification id instead of
-    creating a duplicate.
+    When ``event_key`` is given the write is idempotent per user: a
+    repeated logical event returns the existing notification id instead
+    of creating a duplicate.
+    """
+    return insert_notification(
+        organization_id,
+        user_id,
+        kind,
+        entity_type,
+        entity_id,
+        payload=payload,
+        actor_user_id=actor_user_id,
+        event_key=event_key,
+        priority=priority,
+    )["id"]
+
+
+def insert_notification(
+    organization_id,
+    user_id,
+    kind,
+    entity_type,
+    entity_id,
+    payload=None,
+    actor_user_id=None,
+    event_key=None,
+    priority="info",
+):
+    """
+    Same as ``create_notification`` but returns ``{"id", "created"}``.
+
+    ``created`` is True only when this call inserted the row. A dedupe
+    hit, including losing a concurrent insert race on the unique index,
+    returns the existing id with ``created=False`` so callers never push
+    twice for one notification.
     """
     organization_id = require_organization_id(
         organization_id
@@ -45,11 +77,12 @@ def create_notification(
             existing = _find_id_by_event_key(
                 cursor,
                 organization_id,
-                event_key
+                event_key,
+                user_id=user_id,
             )
 
             if existing is not None:
-                return existing
+                return {"id": existing, "created": False}
 
         try:
             notification_id = execute_insert(
@@ -84,7 +117,7 @@ def create_notification(
                 )
             )
             connection.commit()
-            return notification_id
+            return {"id": notification_id, "created": True}
         except IntegrityError:
             connection.rollback()
 
@@ -94,13 +127,14 @@ def create_notification(
             existing = _find_id_by_event_key(
                 cursor,
                 organization_id,
-                event_key
+                event_key,
+                user_id=user_id,
             )
 
             if existing is None:
                 raise
 
-            return existing
+            return {"id": existing, "created": False}
     finally:
         connection.close()
 

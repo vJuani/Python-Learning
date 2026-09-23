@@ -5,12 +5,15 @@ from __future__ import annotations
 import re
 from functools import wraps
 
-from flask import jsonify, redirect, render_template, request, url_for
+import logging
 
-from modules.auth import get_current_user, is_guest_session, login_required
+from flask import jsonify, redirect, render_template, request, session, url_for
+
+from modules.auth import get_current_user, is_admin, is_guest_session, login_required
 from modules.database.push_subscriptions_repository import (
     deactivate_all_push_subscriptions,
     deactivate_push_subscription,
+    get_push_subscription_by_endpoint,
     list_active_push_subscriptions,
     upsert_push_subscription,
 )
@@ -19,11 +22,52 @@ from modules.database.user_notification_preferences_repository import (
     save_user_notification_preferences,
 )
 from modules.notifications.catalog import PREF_GROUPS, PREF_KEYS, PREF_LABEL_KEYS
-from modules.web_push import WebPushError, require_vapid, send_test_push
+from modules.web_push import (
+    WebPushError,
+    push_diagnostics,
+    require_vapid,
+    send_test_push,
+)
 
 
 ENDPOINT_RE = re.compile(r"^https://", re.I)
 KEY_RE = re.compile(r"^[A-Za-z0-9_\-+/=]{10,}$")
+PUSH_DEVICE_SESSION_KEY = "push_device_endpoint"
+
+logger = logging.getLogger(__name__)
+
+
+def _owned_subscription(organization_id, user_id, endpoint):
+    row = get_push_subscription_by_endpoint(endpoint) if endpoint else None
+    if row is None:
+        return None
+    if int(row["organization_id"]) != int(organization_id):
+        return None
+    if int(row["user_id"]) != int(user_id):
+        return None
+    return row
+
+
+def deactivate_current_device_push(organization_id, user_id):
+    """
+    Logout hook: stop pushes to the browser that owns this session.
+
+    Only the endpoint bound to the session is touched, so the user's
+    other devices keep receiving. Never raises: logout must not fail.
+    """
+    endpoint = session.pop(PUSH_DEVICE_SESSION_KEY, None)
+    if not endpoint or organization_id is None or user_id is None:
+        return False
+    try:
+        return deactivate_push_subscription(organization_id, user_id, endpoint)
+    except Exception:
+        logger.warning(
+            "push_logout_deactivate_failed organization_id=%s user_id=%s",
+            organization_id,
+            user_id,
+            exc_info=True,
+        )
+        return False
 
 
 def _json_error(message_key, status_code):
@@ -156,6 +200,7 @@ def register_pwa_routes(app, helpers):
             user_agent=subscription["user_agent"],
             device_label=subscription["device_label"],
         )
+        session[PUSH_DEVICE_SESSION_KEY] = subscription["endpoint"]
         return jsonify(
             {
                 "ok": True,
@@ -175,6 +220,8 @@ def register_pwa_routes(app, helpers):
         if not endpoint:
             return jsonify({"ok": True, "deactivated": False})
         changed = deactivate_push_subscription(organization_id, user["id"], endpoint)
+        if session.get(PUSH_DEVICE_SESSION_KEY) == endpoint:
+            session.pop(PUSH_DEVICE_SESSION_KEY, None)
         return jsonify({"ok": True, "deactivated": changed})
 
     @app.get("/api/push/status")
@@ -185,6 +232,22 @@ def register_pwa_routes(app, helpers):
         active = list_active_push_subscriptions(organization_id, user["id"])
         return jsonify({"ok": True, "has_active": bool(active), "count": len(active)})
 
+    @app.post("/api/push/device")
+    @json_login_required
+    def api_push_device():
+        """Bind this browser's subscription to the session, read-only otherwise."""
+        user = get_current_user()
+        organization_id = require_user_organization()
+        payload = request.get_json(silent=True) or {}
+        endpoint = _clean(payload.get("endpoint"))
+        row = _owned_subscription(organization_id, user["id"], endpoint)
+        if row is None:
+            return jsonify({"ok": True, "known": False, "device_active": False})
+        session[PUSH_DEVICE_SESSION_KEY] = endpoint
+        return jsonify(
+            {"ok": True, "known": True, "device_active": bool(row["is_active"])}
+        )
+
     @app.post("/api/push/reset")
     @json_login_required
     def api_push_reset():
@@ -192,6 +255,15 @@ def register_pwa_routes(app, helpers):
         organization_id = require_user_organization()
         deactivated = deactivate_all_push_subscriptions(organization_id, user["id"])
         return jsonify({"ok": True, "deactivated": deactivated})
+
+    @app.get("/api/push/diagnostics")
+    @json_login_required
+    def api_push_diagnostics():
+        """Admin-only production check. Reports booleans, never key material."""
+        user = get_current_user()
+        if not is_admin(user):
+            return _json_error("forbidden", 403)
+        return jsonify({"ok": True, **push_diagnostics()})
 
     @app.post("/api/push/test")
     @json_login_required

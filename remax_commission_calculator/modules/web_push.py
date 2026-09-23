@@ -151,6 +151,42 @@ def require_vapid():
     }
 
 
+def push_diagnostics():
+    """Configuration health without exposing any key material."""
+    from modules.notifications.dispatcher import configured_dispatcher
+    from modules.visit_reminder_scheduler import inprocess_scheduler_state
+
+    public_key = vapid_public_key()
+    subject_raw = _env_value("WEB_PUSH_VAPID_SUBJECT")
+    vapid_error = None
+    if vapid_configured():
+        try:
+            load_vapid_private_key()
+        except WebPushError as error:
+            vapid_error = error.message_key
+    else:
+        vapid_error = "pwa_push_err_vapid_missing"
+    scheduler = inprocess_scheduler_state()
+    return {
+        "vapid_public_key_present": bool(public_key),
+        "vapid_private_key_present": _private_key_source_present(),
+        "vapid_private_key_source": (
+            "b64"
+            if _env_value("WEB_PUSH_VAPID_PRIVATE_KEY_B64")
+            else ("pem_or_raw" if _env_value("WEB_PUSH_VAPID_PRIVATE_KEY") else None)
+        ),
+        "vapid_subject_set": bool(subject_raw),
+        "vapid_subject_scheme": (vapid_subject().split(":", 1)[0] or None),
+        "vapid_valid": vapid_error is None,
+        "vapid_error": vapid_error,
+        "dispatcher": configured_dispatcher(),
+        "inprocess_scheduler_alive": bool(scheduler.get("alive")),
+        "inprocess_scheduler_started_at": scheduler.get("started_at"),
+        "inprocess_scheduler_last_tick_at": scheduler.get("last_tick_at"),
+        "inprocess_scheduler_last_error": bool(scheduler.get("last_error")),
+    }
+
+
 def safe_internal_url(raw):
     value = " ".join(str(raw or "").split()) or "/"
     if not value.startswith("/") or value.startswith("//"):
