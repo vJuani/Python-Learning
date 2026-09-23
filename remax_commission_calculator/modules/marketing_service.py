@@ -54,6 +54,10 @@ from modules.marketing_render_html import (
     uses_html_renderer,
 )
 from modules.property_marketing import (
+    assert_property_route,
+    is_legacy_design,
+    log_render_route,
+    normalize_property_design,
     render_property_marketing,
     resolve_property_template,
     uses_property_marketing_renderer,
@@ -509,8 +513,22 @@ def _update_options(asset, **fields):
     return get_marketing_asset(asset["id"], asset["organization_id"])
 
 
+def _is_property_render(context, options):
+    facts = (context or {}).get("facts") or {}
+    return bool((options or {}).get("property_marketing") or facts.get("property_id"))
+
+
 def _render_local_visual(context, fmt, *, options, art, language):
-    if uses_property_marketing_renderer(fmt, options):
+    property_id = ((context or {}).get("facts") or {}).get("property_id")
+    if _is_property_render(context, options) or uses_property_marketing_renderer(fmt, options):
+        assert_property_route(
+            resolve_property_template(options),
+            renderer=HTML_RENDERER,
+            requested=options.get("design_requested") or options.get("layout_template"),
+            kind=fmt,
+            property_id=property_id,
+            callsite="marketing_service._render_local_visual",
+        )
         overlay_meta = render_property_marketing(
             context,
             fmt,
@@ -524,7 +542,7 @@ def _render_local_visual(context, fmt, *, options, art, language):
             overlay_meta.get("renderer_used"),
         )
         logger.info("template_used=%s", overlay_meta.get("template_used"))
-        return overlay_meta
+        return assert_rendered_property(overlay_meta, options, kind=fmt, property_id=property_id)
     if uses_html_renderer(fmt, options):
         overlay_meta = render_html_visual(
             context,
@@ -564,6 +582,18 @@ def _render_local_visual(context, fmt, *, options, art, language):
     return overlay_meta
 
 
+def assert_rendered_property(overlay_meta, options, *, kind, property_id):
+    assert_property_route(
+        overlay_meta.get("template_used"),
+        renderer=overlay_meta.get("renderer_used") or "missing",
+        requested=(options or {}).get("design_requested") or (options or {}).get("layout_template"),
+        kind=kind,
+        property_id=property_id,
+        callsite="marketing_service._render_local_visual.after_render",
+    )
+    return overlay_meta
+
+
 def _process_item(organization_id, asset_id, *, retry=False):
     stage = "asset_loading"
     asset = get_marketing_asset(asset_id, organization_id)
@@ -575,8 +605,39 @@ def _process_item(organization_id, asset_id, *, retry=False):
         stage = "references"
         context = _context_from_asset(asset)
         options = dict(asset.get("options") or {})
-        if uses_property_marketing_renderer(asset["format"], options):
-            options["layout_template"] = resolve_property_template(options)
+        property_render = bool(asset.get("property_id")) or uses_property_marketing_renderer(
+            asset["format"], options
+        )
+        if property_render:
+            requested = (
+                options.get("design_requested") or options.get("layout_template") or options.get("template")
+            )
+            design = normalize_property_design(requested)
+            options.update(
+                property_marketing=True,
+                design_requested=design,
+                layout_template=design,
+                template=design,
+            )
+            log_render_route(
+                "process_item",
+                generation_id=batch_id,
+                kind=asset["format"],
+                property_id=asset.get("property_id"),
+                requested_design=requested,
+                resolved_design=design,
+                template_before_render=design,
+                renderer_before_render=HTML_RENDERER,
+                legacy_fallback_reason="legacy_design_migrated" if is_legacy_design(requested) else None,
+            )
+            assert_property_route(
+                design,
+                renderer=HTML_RENDERER,
+                requested=requested,
+                kind=asset["format"],
+                property_id=asset.get("property_id"),
+                callsite="marketing_service._process_item",
+            )
         else:
             options["layout_template"] = resolve_html_layout_template(asset["format"], options)
         selected = select_photos_for_item(
@@ -625,9 +686,7 @@ def _process_item(organization_id, asset_id, *, retry=False):
         art = _art_from_asset(asset)
         fmt = asset["format"]
         size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
-        html_render = uses_property_marketing_renderer(fmt, options) or uses_html_renderer(
-            fmt, options
-        )
+        html_render = property_render or uses_html_renderer(fmt, options)
         if html_render or options.get("local_render"):
             if not photos:
                 raise MarketingError("marketing_ia_visual_no_photos", 400)
@@ -905,8 +964,6 @@ def start_marketing_batch(
 ):
     organization_id = require_organization_id(organization_id)
     cleanup_expired_marketing_assets(organization_id)
-    if not local_render:
-        assert_openai_configured()
     token = (idempotency_key or "").strip() or None
     if token:
         existing = find_batch_by_idempotency(organization_id, token)
@@ -986,20 +1043,36 @@ def start_marketing_batch(
     options = _options_from_request(parsed, context)
     if creative_style:
         options["creative_style"] = creative_style
-    if uses_property_marketing_renderer("post", {"layout_template": layout_template}):
-        resolved = resolve_property_template({"layout_template": layout_template or "automatic"})
-        options["layout_template"] = resolved
-        options["template"] = resolved
-    elif layout_template:
-        options["layout_template"] = layout_template
-        options["template"] = layout_template
-    elif creative_style:
-        from modules.marketing_flyer_modern import STYLE_TO_V2
-
-        mapped = STYLE_TO_V2.get(creative_style)
-        if mapped:
-            options["layout_template"] = mapped
-            options["template"] = mapped
+    requested_design = layout_template
+    legacy_reason = None
+    if not str(requested_design or "").strip() and reference:
+        ref_options = reference.get("options") or {}
+        requested_design = (
+            ref_options.get("design_requested")
+            or ref_options.get("layout_template")
+            or reference.get("template")
+        )
+        if is_legacy_design(requested_design):
+            legacy_reason = "legacy_reference_migrated"
+    elif is_legacy_design(requested_design):
+        legacy_reason = "legacy_design_migrated"
+    design = normalize_property_design(requested_design)
+    options.update(
+        property_marketing=True,
+        design_requested=design,
+        layout_template=design,
+        template=design,
+    )
+    log_render_route(
+        "start_marketing_batch",
+        kind=",".join(item["format"] for item in items),
+        property_id=property_data["id"],
+        requested_design=requested_design,
+        resolved_design=design,
+        template_before_render=design,
+        renderer_before_render=HTML_RENDERER,
+        legacy_fallback_reason=legacy_reason,
+    )
     if reference:
         ref_opts = dict(reference.get("options") or {})
         if parsed.get("with_agent") is False:
@@ -1090,10 +1163,14 @@ def start_marketing_batch(
                 fmt=item["format"],
                 index=max(0, int(item["index"]) - 1),
             )
-            if uses_property_marketing_renderer(item["format"], item_options):
-                layout_template = resolve_property_template(item_options)
-            else:
-                layout_template = resolve_html_layout_template(item["format"], item_options)
+            layout_template = assert_property_route(
+                resolve_property_template(item_options),
+                renderer=HTML_RENDERER,
+                requested=requested_design,
+                kind=item["format"],
+                property_id=property_data["id"],
+                callsite="marketing_service.start_marketing_batch",
+            )
             logger.info(
                 "template_used=%s format=%s local_render=%s",
                 layout_template,
@@ -1114,11 +1191,7 @@ def start_marketing_batch(
                     "format_index": item["index"],
                     "prompt": parsed.get("prompt") or prompt,
                     "reference_asset_id": reference_asset_id,
-                    "source": (
-                        HTML_RENDERER
-                        if uses_html_renderer(item["format"], item_options)
-                        else ("pillow_modern_renderer" if local_render else get_marketing_image_provider_name())
-                    ),
+                    "source": HTML_RENDERER,
                     "temporary": True,
                     "expires_at": expires_at,
                     "photo_ids": [photo.get("id") for photo in selected_photos if photo.get("id")],

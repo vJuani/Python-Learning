@@ -118,11 +118,34 @@ LEGACY_POST_TEMPLATES = frozenset(
     {
         "modern_commercial_v3",
         "modern_commercial_v2",
+        "modern_commercial_v1",
         "modern_premium_v1",
         "marketing_post_v2",
         "post",
     }
 )
+LEGACY_RENDERERS = frozenset(
+    {
+        "pillow_commercial_v2",
+        "pillow_modern_renderer",
+        "openai_images",
+    }
+)
+LEGACY_ROUTE_BLOCKED = "PROPERTY_MARKETING_LEGACY_ROUTE_BLOCKED"
+DESIGN_ALIASES = {
+    "automatic": TEMPLATE_AUTOMATIC,
+    "automatico": TEMPLATE_AUTOMATIC,
+    "auto": TEMPLATE_AUTOMATIC,
+    "clean grid": TEMPLATE_CLEAN_GRID,
+    "clean_grid": TEMPLATE_CLEAN_GRID,
+    "clean-grid": TEMPLATE_CLEAN_GRID,
+    "lifestyle dark": TEMPLATE_LIFESTYLE_DARK,
+    "lifestyle_dark": TEMPLATE_LIFESTYLE_DARK,
+    "lifestyle-dark": TEMPLATE_LIFESTYLE_DARK,
+    "premium hero": TEMPLATE_PREMIUM_HERO,
+    "premium_hero": TEMPLATE_PREMIUM_HERO,
+    "premium-hero": TEMPLATE_PREMIUM_HERO,
+}
 ICON_ROOMS = (
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11V6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5V11"/>'
     '<path d="M3 12.5a1.8 1.8 0 0 1 3.6 0V15h10.8v-2.5a1.8 1.8 0 0 1 3.6 0V19H3z"/>'
@@ -168,21 +191,90 @@ def is_property_marketing_template(name):
     return raw in PROPERTY_TEMPLATES or raw == TEMPLATE_AUTOMATIC
 
 
+class PropertyMarketingRouteBlocked(PropertyMarketingError):
+    def __init__(self):
+        super().__init__(LEGACY_ROUTE_BLOCKED, 500)
+
+
 def uses_property_marketing_renderer(fmt, options=None):
-    if str(fmt or "").strip().lower() != "post":
-        return False
-    options = options or {}
-    requested = str(
-        options.get("layout_template")
-        or options.get("template")
-        or options.get("template_used")
-        or ""
-    ).strip()
-    if is_property_marketing_template(requested) or not requested:
-        return True
-    if requested in LEGACY_POST_TEMPLATES:
-        return True
-    return True
+    """Every listing visual (post, story, flyer, carousel...) renders with property_* templates."""
+    del fmt
+    return (options or {}).get("property_marketing") is not False
+
+
+def _fold_design(value):
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+    return " ".join(text.strip().lower().split())
+
+
+def is_legacy_design(value):
+    raw = str(value or "").strip()
+    return bool(raw) and (raw in LEGACY_POST_TEMPLATES or raw.startswith("modern_") or raw in LEGACY_RENDERERS)
+
+
+def normalize_property_design(value):
+    """Design selection -> "automatic" or one property_* id. Legacy/unknown names migrate to automatic."""
+    raw = str(value or "").strip()
+    if raw in PROPERTY_TEMPLATES:
+        return raw
+    return DESIGN_ALIASES.get(_fold_design(raw), TEMPLATE_AUTOMATIC)
+
+
+def resolve_property_marketing_template(requested, photos, facts=None):
+    """Always returns one of the three property_* ids."""
+    return select_property_template(normalize_property_design(requested), photos, facts)
+
+
+def log_render_route(
+    step,
+    *,
+    conversation_id=None,
+    generation_id=None,
+    kind=None,
+    property_id=None,
+    requested_design=None,
+    resolved_design=None,
+    template_before_render=None,
+    renderer_before_render=None,
+    legacy_fallback_reason=None,
+):
+    logger.info(
+        "[MARKETING_RENDER_ROUTE] step=%s conversation_id=%s generation_id=%s kind=%s property_id=%s "
+        "requested_design=%s resolved_design=%s template_before_render=%s renderer_before_render=%s "
+        "legacy_fallback_reason=%s",
+        step,
+        conversation_id if conversation_id is not None else "",
+        generation_id if generation_id is not None else "",
+        kind or "",
+        property_id if property_id is not None else "",
+        requested_design or "",
+        resolved_design or "",
+        template_before_render or "",
+        renderer_before_render or "",
+        legacy_fallback_reason or "none",
+    )
+
+
+def assert_property_route(template, *, renderer=None, requested=None, kind=None, property_id=None, callsite=""):
+    template = str(template or "").strip()
+    renderer = str(renderer or "").strip()
+    template_ok = template in PROPERTY_TEMPLATES or template == TEMPLATE_AUTOMATIC
+    renderer_ok = not renderer or renderer == HTML_RENDERER
+    if template_ok and renderer_ok:
+        return template
+    logger.error(
+        "[%s] requested=%s resolved=%s renderer=%s kind=%s property_id=%s callsite=%s",
+        LEGACY_ROUTE_BLOCKED,
+        requested or "",
+        template,
+        renderer,
+        kind or "",
+        property_id if property_id is not None else "",
+        callsite,
+    )
+    raise PropertyMarketingRouteBlocked()
 
 
 def _clean(value):
@@ -830,16 +922,14 @@ def select_property_template(requested, photos, facts=None):
 
 
 def resolve_property_template(options=None):
+    """Requested design before photos are known: "automatic" or a property_* id."""
     options = options or {}
-    requested = str(
-        options.get("layout_template")
+    return normalize_property_design(
+        options.get("design_requested")
+        or options.get("layout_template")
         or options.get("template")
         or options.get("template_used")
-        or TEMPLATE_AUTOMATIC
-    ).strip()
-    if requested in LEGACY_POST_TEMPLATES or requested in {"", "auto"}:
-        requested = TEMPLATE_AUTOMATIC
-    return requested
+    )
 
 
 def _log_media(property_id, organization_id, records, hero, secondaries):

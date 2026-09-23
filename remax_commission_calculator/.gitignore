@@ -41,6 +41,7 @@ ms-playwright/
 # HTML renderer debug dumps
 tmp/marketing_html_render/
 tmp/property_marketing_qa/e2e/
+tmp/property_marketing_qa/chat_e2e/
 
 # Excel temporary lock files
 ~$*

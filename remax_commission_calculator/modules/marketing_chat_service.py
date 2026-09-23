@@ -31,6 +31,7 @@ from modules.database.tenant import require_organization_id
 from modules.i18n import translate
 from modules.marketing_context import MarketingError, assert_marketing_access
 from modules.marketing_chat_decisions import (
+    PROPERTY_LAYOUT_TEMPLATES,
     action_from_channel,
     apply_intelligent_defaults,
     content_type_from_channel,
@@ -105,14 +106,11 @@ TONE_ALIASES = (
     ("aspiracional", "aspirational"),
     ("exclusivo", "exclusive"),
 )
+# Old style names never pick a legacy layout: listing visuals only use property_* templates.
 TEMPLATE_ALIASES = (
-    ("modern commercial", "modern_commercial_v2"),
-    ("comercial moderno", "modern_commercial_v2"),
-    ("premium editorial", "modern_commercial_v2"),
-    ("social punch", "modern_commercial_v2"),
-    ("modern premium", "modern_commercial_v2"),
-    ("moderno premium", "modern_commercial_v2"),
-    ("minimal", "modern_commercial_v2"),
+    ("clean grid", "property_clean_grid"),
+    ("lifestyle dark", "property_lifestyle_dark"),
+    ("premium hero", "property_premium_hero"),
 )
 REVISION_RE = re.compile(
     r"\b("
@@ -1010,7 +1008,9 @@ def interpret_prompt(
         tone = tone or last_generation.get("tone")
         objective = objective or last_generation.get("objective")
         origin = origin or last_generation.get("origin")
-        template = template or last_generation.get("format")
+        inherited_format = last_generation.get("format")
+        if inherited_format in PROPERTY_LAYOUT_TEMPLATES:
+            template = template or inherited_format
         if not property_id and resolution.get("status") != "ambiguous" and not (
             resolution.get("status") == "none" and explicit_listing_ref
         ):
@@ -1338,7 +1338,19 @@ def _attach_visual_assets(generation, batch_view):
                 "template_used": item.get("template_used")
                 or ((item.get("options") or {}).get("template_used")),
                 "renderer_used": (item.get("options") or {}).get("renderer_used"),
+                "layout_version": (item.get("options") or {}).get("layout_version"),
+                "design_requested": (item.get("options") or {}).get("design_requested"),
             }
+        )
+        from modules.property_marketing import assert_property_route
+
+        assert_property_route(
+            ready_assets[-1]["template_used"],
+            renderer=ready_assets[-1]["renderer_used"] or "missing",
+            requested=(item.get("options") or {}).get("design_requested"),
+            kind=item.get("format"),
+            property_id=generation.get("property_id"),
+            callsite="marketing_chat_service._attach_visual_assets",
         )
         template_used = template_used or ready_assets[-1]["template_used"]
         storage_key = storage_key or item.get("storage_key")
@@ -1354,6 +1366,8 @@ def _attach_visual_assets(generation, batch_view):
         data["visual_error"] = None
         data["template_used"] = template_used or data.get("template_used")
         data["renderer_used"] = ready_assets[0].get("renderer_used") or data.get("renderer_used")
+        data["layout_version"] = ready_assets[0].get("layout_version") or data["template_used"]
+        data["layout_template"] = ready_assets[0].get("design_requested") or data.get("layout_template")
         logger.info(
             "marketing_visual_storage_ok url=%s template_used=%s renderer_used=%s",
             data["visual_asset_url"],
@@ -1476,6 +1490,23 @@ def _run_visual_for_chat(
 
     formats = _visual_formats(intent, generation or last_generation)
     copy_override = _copy_override_from_generation(generation or last_generation)
+    from modules.marketing_render_html import HTML_RENDERER
+    from modules.property_marketing import is_legacy_design, log_render_route, normalize_property_design
+
+    requested_design = intent.get("layout_template")
+    design = normalize_property_design(requested_design)
+    log_render_route(
+        "run_visual_for_chat",
+        conversation_id=(conversation or {}).get("id"),
+        generation_id=generation_id,
+        kind=",".join(formats),
+        property_id=property_id,
+        requested_design=requested_design,
+        resolved_design=design,
+        template_before_render=design,
+        renderer_before_render=HTML_RENDERER,
+        legacy_fallback_reason="legacy_design_migrated" if is_legacy_design(requested_design) else None,
+    )
     previous = os.environ.get("MARKETING_SYNC")
     os.environ["MARKETING_SYNC"] = "1"
     try:
@@ -1493,7 +1524,7 @@ def _run_visual_for_chat(
             include_price=True,
             local_render=True,
             copy_override=copy_override,
-            layout_template=intent.get("layout_template") or "automatic",
+            layout_template=design,
             cta=intent.get("cta"),
         )
         _log_property_trace(
@@ -1710,7 +1741,21 @@ def send_chat_message(
         preferred_mode=preferred_mode,
     )
     if layout_template:
-        intent["layout_template"] = str(layout_template).strip() or None
+        from modules.property_marketing import is_legacy_design, log_render_route, normalize_property_design
+
+        design = normalize_property_design(layout_template)
+        intent["layout_template"] = design
+        log_render_route(
+            "send_chat_message",
+            conversation_id=(conversation or {}).get("id"),
+            generation_id=(last or {}).get("id"),
+            kind=intent.get("requested_format") or intent.get("content_type"),
+            property_id=intent.get("property_id"),
+            requested_design=layout_template,
+            resolved_design=design,
+            template_before_render=design,
+            legacy_fallback_reason="legacy_design_migrated" if is_legacy_design(layout_template) else None,
+        )
     property_row = None
     if intent.get("property_id"):
         property_row = _resolve_property(organization_id, user, intent["property_id"])
@@ -2071,6 +2116,21 @@ def regenerate_in_conversation(
     stored = conversation_context(conversation)
     # Retry must reuse the generation property_id — never re-resolve by text.
     retry_property_id = _as_property_id(source.get("property_id"))
+    from modules.property_marketing import is_legacy_design, log_render_route, normalize_property_design
+
+    stored_design = stored.get("layout_template") or source_data.get("layout_template")
+    retry_design = normalize_property_design(stored_design)
+    log_render_route(
+        "regenerate_in_conversation",
+        conversation_id=conversation_id,
+        generation_id=generation_id,
+        kind=requested_format,
+        property_id=retry_property_id,
+        requested_design=stored_design,
+        resolved_design=retry_design,
+        template_before_render=retry_design,
+        legacy_fallback_reason="legacy_design_migrated" if is_legacy_design(stored_design) else None,
+    )
     intent = {
         "action": "generate_visual" if retry_visual_only else source_action,
         "content_type": source.get("content_type"),
@@ -2078,7 +2138,7 @@ def regenerate_in_conversation(
         "property_id": retry_property_id,
         "style": source.get("style"),
         "include_agent": stored.get("include_agent"),
-        "layout_template": stored.get("layout_template") or "automatic",
+        "layout_template": retry_design,
     }
     _log_property_trace(
         "marketing_visual_retry",
