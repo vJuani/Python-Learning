@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import tempfile
 from pathlib import Path
 
@@ -23,7 +24,11 @@ from modules.listing_photo_origin import (
     is_generated_marketing_asset,
     is_original_listing_photo,
     photo_source_type,
+    prefer_highest_resolution_media,
+    source_variant,
 )
+
+logger = logging.getLogger(__name__)
 from modules.property_sync.security import (
     MAX_MEDIA_BYTES,
     assert_safe_media_url,
@@ -363,6 +368,7 @@ def _eligible_property_media_rows(property_row):
             if is_displayable_media(item) and not is_generated_marketing_asset(item)
         ]
     )
+    items = prefer_highest_resolution_media(items)
     originals = [item for item in items if is_original_listing_photo(item)]
     return originals or items
 
@@ -414,6 +420,7 @@ def get_property_original_media(
     records = []
     for index, item in enumerate(ordered):
         source_type = photo_source_type(item)
+        variant = source_variant(item)
         records.append(
             {
                 "id": item.get("id"),
@@ -431,9 +438,21 @@ def get_property_original_media(
                 "storage_key": item.get("storage_key"),
                 "storage_strategy": item.get("storage_strategy"),
                 "url_kind": item.get("url_kind"),
+                "source_variant": variant,
                 "position": item.get("position"),
                 "media": item,
             }
+        )
+        logger.info(
+            "[PROPERTY_ORIGINAL_MEDIA] index=%s id=%s url_kind=%s source_variant=%s width=%s height=%s is_original=%s source=%s",
+            index,
+            item.get("id"),
+            item.get("url_kind") or "",
+            variant,
+            item.get("width"),
+            item.get("height"),
+            str(source_type in ORIGINAL_SOURCE_TYPES).lower(),
+            item.get("original_url") or item.get("storage_key") or item.get("path") or "",
         )
     return records
 

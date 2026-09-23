@@ -1,0 +1,5 @@
+{% if photo and photo.src %}
+<div class="photo-original" data-original="{{ photo.width }}x{{ photo.height }}" data-display="{{ photo.display_width }}x{{ photo.display_height }}" data-scale="{{ photo.scale_factor }}" data-transform="{{ photo.visual_transform }}" data-variant="{{ photo.source_variant }}">
+  <img class="photo-original__image {{ photo_class or '' }}" src="{{ photo.src }}" alt="" width="{{ photo.display_width }}" height="{{ photo.display_height }}" style="width: {{ photo.display_width }}px; height: {{ photo.display_height }}px;">
+</div>
+{% endif %}

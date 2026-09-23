@@ -143,6 +143,27 @@ _FONT_FILES = {
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf"),
         Path("/usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf"),
     ),
+    "sans-light": (
+        Path(r"C:\Windows\Fonts\segoeuil.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-ExtraLight.ttf"),
+        Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
+    ),
+    "sans-semibold": (
+        Path(r"C:\Windows\Fonts\seguisb.ttf"),
+        Path(r"C:\Windows\Fonts\segoeuib.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ),
+    "serif": (
+        Path(r"C:\Windows\Fonts\georgia.ttf"),
+        Path(r"C:\Windows\Fonts\times.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"),
+        Path("/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf"),
+    ),
+    "script": (
+        Path(r"C:\Windows\Fonts\segoesc.ttf"),
+        Path(r"C:\Windows\Fonts\Inkfree.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf"),
+    ),
 }
 
 _lock = threading.Lock()
@@ -192,14 +213,22 @@ def _read_css():
     return path.read_text(encoding="utf-8")
 
 
-def _font_face_css():
+_BASE_FONT_MAPPING = (
+    ("Marketing Sans", "sans", "normal", 400),
+    ("Marketing Sans", "sans-bold", "normal", 700),
+    ("Marketing Sans", "sans-bold", "normal", 800),
+    ("Marketing Serif", "serif-italic", "italic", 600),
+)
+EDITORIAL_FONT_MAPPING = _BASE_FONT_MAPPING + (
+    ("Marketing Sans", "sans-light", "normal", 300),
+    ("Marketing Sans", "sans-semibold", "normal", 600),
+    ("Marketing Display Serif", "serif", "normal", 400),
+    ("Marketing Script", "script", "normal", 400),
+)
+
+
+def _font_face_css(mapping=_BASE_FONT_MAPPING):
     rules = []
-    mapping = (
-        ("Marketing Sans", "sans", "normal", 400),
-        ("Marketing Sans", "sans-bold", "normal", 700),
-        ("Marketing Sans", "sans-bold", "normal", 800),
-        ("Marketing Serif", "serif-italic", "italic", 600),
-    )
     for family, key, style, weight in mapping:
         path = next((item for item in _FONT_FILES[key] if item.is_file()), None)
         if path is None:
@@ -877,8 +906,8 @@ def close_html_renderer():
 atexit.register(close_html_renderer)
 
 
-def screenshot_poster(html, *, timeout_ms=30000):
-    width, height = POSTER_SIZE
+def screenshot_poster(html, *, size=None, timeout_ms=30000):
+    width, height = size or POSTER_SIZE
     browser = _get_browser()
     with _lock:
         context = browser.new_context(
@@ -896,11 +925,49 @@ def screenshot_poster(html, *, timeout_ms=30000):
             )
             page.set_content(html, wait_until="load", timeout=timeout_ms)
             page.evaluate("() => document.fonts.ready")
+            image_status = page.evaluate(
+                """async () => {
+                    const images = Array.from(document.images);
+                    await Promise.all(images.map((img) => {
+                      if (img.complete) return Promise.resolve();
+                      return new Promise((resolve) => {
+                        const done = () => resolve();
+                        img.addEventListener('load', done, { once: true });
+                        img.addEventListener('error', done, { once: true });
+                        setTimeout(done, 8000);
+                      });
+                    }));
+                    return images.map((img) => {
+                      const src = img.currentSrc || img.getAttribute('src') || '';
+                      let kind = src.slice(0, 48);
+                      if (src.startsWith('data:')) {
+                        const cut = src.indexOf(';');
+                        kind = src.slice(0, cut > 0 ? cut : 32);
+                      }
+                      return {
+                        className: img.className || '',
+                        src_kind: kind,
+                        complete: img.complete,
+                        loaded: Boolean(img.complete && img.naturalWidth > 0),
+                        natural_width: img.naturalWidth,
+                        natural_height: img.naturalHeight,
+                      };
+                    });
+                }"""
+            )
             poster = page.locator("#poster")
             box = poster.bounding_box()
             if not box:
                 raise MarketingError("marketing_err_html_render_failed", 500)
             png = poster.screenshot(type="png", omit_background=False, timeout=timeout_ms)
+            logger.info(
+                "[PROPERTY_MARKETING_SCREENSHOT] viewport=%sx%s device_scale_factor=1 poster_box=%.0fx%.0f png_bytes=%s resize=false",
+                width,
+                height,
+                box.get("width") or 0,
+                box.get("height") or 0,
+                len(png),
+            )
             metrics = page.evaluate(
                 """() => {
                     const el = document.getElementById('poster');
@@ -925,6 +992,7 @@ def screenshot_poster(html, *, timeout_ms=30000):
                     };
                 }"""
             )
+            metrics["images"] = image_status
         except MarketingError:
             raise
         except Exception as exc:

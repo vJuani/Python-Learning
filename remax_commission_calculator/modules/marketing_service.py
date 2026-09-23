@@ -53,6 +53,11 @@ from modules.marketing_render_html import (
     resolve_html_layout_template,
     uses_html_renderer,
 )
+from modules.property_marketing import (
+    render_property_marketing,
+    resolve_property_template,
+    uses_property_marketing_renderer,
+)
 from modules.marketing_quality import validate_creative
 from modules.marketing_references import collect_reference_images
 from modules.marketing_photo_selector import select_photos_for_item
@@ -505,6 +510,21 @@ def _update_options(asset, **fields):
 
 
 def _render_local_visual(context, fmt, *, options, art, language):
+    if uses_property_marketing_renderer(fmt, options):
+        overlay_meta = render_property_marketing(
+            context,
+            fmt,
+            options=options,
+            art=art,
+            language=language,
+        )
+        logger.info(
+            "marketing_visual_renderer template=%s renderer=%s",
+            overlay_meta.get("template_used"),
+            overlay_meta.get("renderer_used"),
+        )
+        logger.info("template_used=%s", overlay_meta.get("template_used"))
+        return overlay_meta
     if uses_html_renderer(fmt, options):
         overlay_meta = render_html_visual(
             context,
@@ -555,7 +575,10 @@ def _process_item(organization_id, asset_id, *, retry=False):
         stage = "references"
         context = _context_from_asset(asset)
         options = dict(asset.get("options") or {})
-        options["layout_template"] = resolve_html_layout_template(asset["format"], options)
+        if uses_property_marketing_renderer(asset["format"], options):
+            options["layout_template"] = resolve_property_template(options)
+        else:
+            options["layout_template"] = resolve_html_layout_template(asset["format"], options)
         selected = select_photos_for_item(
             context.get("photos") or [],
             fmt=asset["format"],
@@ -602,7 +625,9 @@ def _process_item(organization_id, asset_id, *, retry=False):
         art = _art_from_asset(asset)
         fmt = asset["format"]
         size = FORMAT_SIZES.get(fmt) or FORMAT_SIZES["story"]
-        html_render = uses_html_renderer(fmt, options)
+        html_render = uses_property_marketing_renderer(fmt, options) or uses_html_renderer(
+            fmt, options
+        )
         if html_render or options.get("local_render"):
             if not photos:
                 raise MarketingError("marketing_ia_visual_no_photos", 400)
@@ -961,7 +986,11 @@ def start_marketing_batch(
     options = _options_from_request(parsed, context)
     if creative_style:
         options["creative_style"] = creative_style
-    if layout_template:
+    if uses_property_marketing_renderer("post", {"layout_template": layout_template}):
+        resolved = resolve_property_template({"layout_template": layout_template or "automatic"})
+        options["layout_template"] = resolved
+        options["template"] = resolved
+    elif layout_template:
         options["layout_template"] = layout_template
         options["template"] = layout_template
     elif creative_style:
@@ -1061,7 +1090,10 @@ def start_marketing_batch(
                 fmt=item["format"],
                 index=max(0, int(item["index"]) - 1),
             )
-            layout_template = resolve_html_layout_template(item["format"], item_options)
+            if uses_property_marketing_renderer(item["format"], item_options):
+                layout_template = resolve_property_template(item_options)
+            else:
+                layout_template = resolve_html_layout_template(item["format"], item_options)
             logger.info(
                 "template_used=%s format=%s local_render=%s",
                 layout_template,

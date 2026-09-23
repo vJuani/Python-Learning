@@ -204,6 +204,9 @@ class MarketingHtmlRendererTests(unittest.TestCase):
             "modules.marketing_render_html.screenshot_poster",
             side_effect=MarketingError("marketing_err_html_render_failed", 500),
         ), mock.patch(
+            "modules.property_marketing.screenshot_poster",
+            side_effect=MarketingError("marketing_err_html_render_failed", 500),
+        ), mock.patch(
             "modules.marketing_service.stamp_branding_overlay",
             side_effect=AssertionError("pillow fallback is forbidden"),
         ):

@@ -1238,6 +1238,8 @@ def build_chat_workspace(
         "messages": messages,
         "properties": properties,
         "selected_property": selected_property,
+        "layout_template": ((conversation or {}).get("context") or {}).get("layout_template")
+        or "automatic",
         "language": language,
         "is_admin": is_admin(user),
     }
@@ -1491,7 +1493,7 @@ def _run_visual_for_chat(
             include_price=True,
             local_render=True,
             copy_override=copy_override,
-            layout_template=intent.get("layout_template") or intent.get("format"),
+            layout_template=intent.get("layout_template") or "automatic",
             cta=intent.get("cta"),
         )
         _log_property_trace(
@@ -1675,6 +1677,7 @@ def send_chat_message(
     preferred_mode="auto",
     decision_key=None,
     decision_value=None,
+    layout_template=None,
 ):
     organization_id = require_organization_id(organization_id)
     prompt = (prompt or "").strip()
@@ -1706,6 +1709,8 @@ def send_chat_message(
         properties=properties,
         preferred_mode=preferred_mode,
     )
+    if layout_template:
+        intent["layout_template"] = str(layout_template).strip() or None
     property_row = None
     if intent.get("property_id"):
         property_row = _resolve_property(organization_id, user, intent["property_id"])
@@ -2073,6 +2078,7 @@ def regenerate_in_conversation(
         "property_id": retry_property_id,
         "style": source.get("style"),
         "include_agent": stored.get("include_agent"),
+        "layout_template": stored.get("layout_template") or "automatic",
     }
     _log_property_trace(
         "marketing_visual_retry",

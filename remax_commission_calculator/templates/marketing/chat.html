@@ -115,6 +115,16 @@
                     <button type="button" class="mkt-mode__btn" data-mkt-mode="create">{{ t('marketing_ia_mode_create') }}</button>
                     <button type="button" class="mkt-mode__btn" data-mkt-mode="chat">{{ t('marketing_ia_mode_chat') }}</button>
                 </div>
+                <label class="mkt-design">
+                    <span>{{ t('marketing_ia_design') }}</span>
+                    <select name="layout_template" data-mkt-layout>
+                        {% set current_layout = view.layout_template or 'automatic' %}
+                        <option value="automatic"{% if current_layout == 'automatic' %} selected{% endif %}>{{ t('marketing_ia_design_auto') }}</option>
+                        <option value="property_clean_grid"{% if current_layout == 'property_clean_grid' %} selected{% endif %}>{{ t('marketing_ia_design_clean_grid') }}</option>
+                        <option value="property_lifestyle_dark"{% if current_layout == 'property_lifestyle_dark' %} selected{% endif %}>{{ t('marketing_ia_design_lifestyle_dark') }}</option>
+                        <option value="property_premium_hero"{% if current_layout == 'property_premium_hero' %} selected{% endif %}>{{ t('marketing_ia_design_premium_hero') }}</option>
+                    </select>
+                </label>
                 <label class="visually-hidden" for="mkt-chat-prompt">{{ t('marketing_ia_composer_ph') }}</label>
                 <textarea
                     id="mkt-chat-prompt"

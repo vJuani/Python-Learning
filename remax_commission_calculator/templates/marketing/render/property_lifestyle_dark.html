@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="{{ language or 'es' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width={{ canvas.width }}">
+  <title>property_lifestyle_dark</title>
+  <style>{{ font_css|safe }}{{ css|safe }}</style>
+  {% include "_layout_vars.html" %}
+</head>
+<body>
+<article id="poster" class="poster poster--dark {{ modifiers }}">
+  <div class="hero-media" style="left: {{ layout.hero.left }}px; top: {{ layout.hero.top }}px; width: {{ layout.hero.width }}px; height: {{ layout.hero.height }}px;">
+    {% with photo=hero, photo_class="hero__photo" %}{% include "_photo_original.html" %}{% endwith %}
+  </div>
+
+  <header class="brand">
+    {% if branding.logo %}<img class="brand__logo" src="{{ branding.logo }}" alt="">{% endif %}
+    <div class="brand__name">
+      {% if branding.mark %}<span class="brand__mark">{{ branding.mark }}</span>{% endif %}
+      {% if branding.submark %}<span class="brand__sub">{{ branding.submark }}</span>{% endif %}
+    </div>
+  </header>
+
+  {% if zone %}<p class="zone-top">{{ zone|replace(', ', '<br>')|safe }}</p>{% endif %}
+  <div class="info" data-stack data-stack-limit=".agent__photo,.agent__meta,.legal" data-stack-edge="top" data-stack-gap="30">
+    {% if zone %}<p class="zone" data-fit="line" data-fit-min="0.7" data-fit-tracking="0.1">{{ zone }}</p>{% endif %}
+    {% if address %}<h1 class="address" data-fit="line" data-fit-min="0.62" data-fit-lines="2" data-fit-wrap-min="0.5">{{ address }}</h1>{% endif %}
+    {% if copy %}<p class="copy" data-fit="block" data-fit-lines="3" data-fit-min="0.82" data-stack-shrink>{{ copy }}</p>{% endif %}
+    {% if facts %}
+    <ul class="facts">
+      {% for fact in facts %}
+      <li class="fact">
+        <span class="fact__icon">{{ fact.icon|safe }}</span>
+        <span class="fact__text">{{ fact.value }} {{ fact.label }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <span class="rule" aria-hidden="true"></span>
+    {% if price.amount %}
+    <p class="price" data-fit="line" data-fit-min="0.6">{% if price.currency %}<span class="price__currency">{{ price.currency }}</span>{% endif %}<span class="price__amount">{{ price.amount }}</span></p>
+    {% endif %}
+    {% if cta %}<a class="cta" href="#"><em data-fit="line" data-fit-width="parent" data-fit-min="0.7" data-fit-lines="2">{{ cta }}</em><span class="cta__arrow">→</span></a>{% endif %}
+  </div>
+
+  {% if quote_lines %}
+  <p class="quote">{% for line in quote_lines %}<span>{{ line }}</span>{% endfor %}</p>
+  {% endif %}
+
+  {% if agent %}
+  {% if agent.photo %}<span class="agent__photo"><img src="{{ agent.photo }}" alt=""></span>{% endif %}
+  <div class="agent__meta">
+    {% if agent.name %}<h2 data-fit="line" data-fit-min="0.7" data-fit-lines="2" data-fit-wrap-min="0.62">{{ agent.name }}</h2>{% endif %}
+    {% if agent.title %}<p data-fit="line" data-fit-min="0.75">{{ agent.title }}</p>{% endif %}
+  </div>
+  {% include "_agent_contacts.html" %}
+  {% endif %}
+
+  {% if broker.line %}
+  <p class="legal" data-fit="block" data-fit-lines="3" data-fit-min="0.8">{% if legal.label %}<span>{{ legal.label }}</span><br>{% endif %}{{ legal.rest }}</p>
+  {% endif %}
+</article>
+{% include "_text_fit.html" %}
+</body>
+</html>

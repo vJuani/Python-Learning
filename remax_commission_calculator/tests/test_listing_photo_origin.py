@@ -92,6 +92,33 @@ class ListingPhotoOriginTests(unittest.TestCase):
         eligible = eligible_listing_photos(rows)
         self.assertEqual([item["id"] for item in eligible], [2])
 
+    def test_prefers_original_over_thumbnail_variant(self):
+        from modules.listing_photo_origin import prefer_highest_resolution_media, source_variant
+
+        thumb = {
+            "id": 1,
+            "external_media_id": "photo-a",
+            "url_kind": "thumbnail",
+            "width": 400,
+            "height": 300,
+            "original_url": "https://cdn.example/listings/thumb/a.jpg",
+        }
+        original = {
+            "id": 2,
+            "external_media_id": "photo-a",
+            "url_kind": "original",
+            "source": "manual",
+            "storage_key": "organizations/1/properties/2/media/a.jpg",
+            "storage_strategy": "managed_copy",
+            "width": 2400,
+            "height": 1800,
+            "original_url": "https://cdn.example/listings/a.jpg",
+        }
+        chosen = prefer_highest_resolution_media([thumb, original])
+        self.assertEqual(len(chosen), 1)
+        self.assertEqual(chosen[0]["id"], 2)
+        self.assertEqual(source_variant(chosen[0]), "original")
+
 
 if __name__ == "__main__":
     unittest.main()

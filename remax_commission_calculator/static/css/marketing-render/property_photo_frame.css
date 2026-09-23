@@ -1,0 +1,97 @@
+/* Shared photo box + agent contacts for official property templates.
+   Listing photos are shown as-is: one <img>, complete, never cropped, never
+   enlarged, no blur, no mask, no overlay, no background derived from the photo. */
+
+.photo-original {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--photo-neutral, #0f1a2c);
+}
+
+.photo-original__image {
+  display: block;
+  flex: 0 0 auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+  image-rendering: auto;
+  filter: none;
+  transform: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.hero-media {
+  position: absolute;
+  overflow: hidden;
+  z-index: 0;
+}
+
+/* Agent contacts: icon badges, same visual language as the references. */
+.agent-contact {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--contact-gap);
+  margin: 0;
+  padding: 0;
+}
+
+.agent-contact__item {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--contact-size) * 0.42);
+  color: var(--contact-color, #fff);
+  text-decoration: none;
+}
+
+.agent-contact__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--contact-size);
+  height: var(--contact-size);
+  border-radius: 50%;
+  color: #fff;
+  box-shadow: 0 0 0 calc(var(--contact-size) * 0.06) rgba(255, 255, 255, 0.92);
+}
+
+.agent-contact__value {
+  font-size: calc(var(--contact-text) * var(--contact-scale, 1) * var(--fit-scale, 1));
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.agent-contact__icon svg {
+  width: 58%;
+  height: 58%;
+}
+
+.agent-contact__item--whatsapp .agent-contact__icon {
+  background: #25d366;
+}
+
+.agent-contact__item--whatsapp .agent-contact__icon svg path:first-child {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.7;
+}
+
+.agent-contact__item--instagram .agent-contact__icon {
+  background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285aeb 90%);
+}
+
+.agent-contact__item--email .agent-contact__icon {
+  background: #1f3558;
+}
+

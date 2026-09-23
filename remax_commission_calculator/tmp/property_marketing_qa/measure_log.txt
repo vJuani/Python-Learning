@@ -1,0 +1,273 @@
+﻿{
+ "_fit": {
+  "property_premium_hero": [
+   {
+    "role": "hero",
+    "original_dimensions": [
+     1920,
+     1440
+    ],
+    "max_available_dimensions": [
+     990,
+     800
+    ],
+    "scale_factor": 0.5156,
+    "rendered_dimensions": [
+     990,
+     742
+    ],
+    "crop": false,
+    "upscale": false
+   }
+  ],
+  "property_lifestyle_dark": [
+   {
+    "role": "hero",
+    "original_dimensions": [
+     1920,
+     1440
+    ],
+    "max_available_dimensions": [
+     990,
+     800
+    ],
+    "scale_factor": 0.5156,
+    "rendered_dimensions": [
+     990,
+     742
+    ],
+    "crop": false,
+    "upscale": false
+   }
+  ],
+  "property_clean_grid": [
+   {
+    "role": "hero",
+    "original_dimensions": [
+     1920,
+     1440
+    ],
+    "max_available_dimensions": [
+     611,
+     700
+    ],
+    "scale_factor": 0.3182,
+    "rendered_dimensions": [
+     611,
+     458
+    ],
+    "crop": false,
+    "upscale": false
+   },
+   {
+    "role": "thumb_1",
+    "original_dimensions": [
+     306,
+     140
+    ],
+    "max_available_dimensions": [
+     395,
+     520
+    ],
+    "scale_factor": 1.0,
+    "rendered_dimensions": [
+     306,
+     140
+    ],
+    "crop": false,
+    "upscale": false
+   },
+   {
+    "role": "thumb_2",
+    "original_dimensions": [
+     310,
+     140
+    ],
+    "max_available_dimensions": [
+     395,
+     520
+    ],
+    "scale_factor": 1.0,
+    "rendered_dimensions": [
+     310,
+     140
+    ],
+    "crop": false,
+    "upscale": false
+   },
+   {
+    "role": "thumb_3",
+    "original_dimensions": [
+     330,
+     140
+    ],
+    "max_available_dimensions": [
+     395,
+     520
+    ],
+    "scale_factor": 1.0,
+    "rendered_dimensions": [
+     330,
+     140
+    ],
+    "crop": false,
+    "upscale": false
+   }
+  ]
+ },
+ "_photos": {
+  "property_premium_hero": {
+   "background_images_from_data_uri": 0,
+   "photos": [
+    {
+     "cls": "photo-original__image hero__photo",
+     "natural": [
+      1920,
+      1440
+     ],
+     "rendered": [
+      990,
+      742
+     ],
+     "box": [
+      990,
+      742
+     ],
+     "fully_visible": true,
+     "filter": "none",
+     "transform": "none",
+     "mask": "none",
+     "object_fit": "contain",
+     "object_position": "50% 50%",
+     "opacity": "1",
+     "same_src_in_document": 1
+    }
+   ]
+  },
+  "property_lifestyle_dark": {
+   "background_images_from_data_uri": 0,
+   "photos": [
+    {
+     "cls": "photo-original__image hero__photo",
+     "natural": [
+      1920,
+      1440
+     ],
+     "rendered": [
+      990,
+      742
+     ],
+     "box": [
+      990,
+      742
+     ],
+     "fully_visible": true,
+     "filter": "none",
+     "transform": "none",
+     "mask": "none",
+     "object_fit": "contain",
+     "object_position": "50% 50%",
+     "opacity": "1",
+     "same_src_in_document": 1
+    }
+   ]
+  },
+  "property_clean_grid": {
+   "background_images_from_data_uri": 0,
+   "photos": [
+    {
+     "cls": "photo-original__image hero__photo",
+     "natural": [
+      1920,
+      1440
+     ],
+     "rendered": [
+      611,
+      458
+     ],
+     "box": [
+      611,
+      458
+     ],
+     "fully_visible": true,
+     "filter": "none",
+     "transform": "none",
+     "mask": "none",
+     "object_fit": "contain",
+     "object_position": "50% 50%",
+     "opacity": "1",
+     "same_src_in_document": 1
+    },
+    {
+     "cls": "photo-original__image ",
+     "natural": [
+      306,
+      140
+     ],
+     "rendered": [
+      306,
+      140
+     ],
+     "box": [
+      306,
+      140
+     ],
+     "fully_visible": true,
+     "filter": "none",
+     "transform": "none",
+     "mask": "none",
+     "object_fit": "contain",
+     "object_position": "50% 50%",
+     "opacity": "1",
+     "same_src_in_document": 1
+    },
+    {
+     "cls": "photo-original__image ",
+     "natural": [
+      310,
+      140
+     ],
+     "rendered": [
+      310,
+      140
+     ],
+     "box": [
+      310,
+      140
+     ],
+     "fully_visible": true,
+     "filter": "none",
+     "transform": "none",
+     "mask": "none",
+     "object_fit": "contain",
+     "object_position": "50% 50%",
+     "opacity": "1",
+     "same_src_in_document": 1
+    },
+    {
+     "cls": "photo-original__image ",
+     "natural": [
+      330,
+      140
+     ],
+     "rendered": [
+      330,
+      140
+     ],
+     "box": [
+      330,
+      140
+     ],
+     "fully_visible": true,
+     "filter": "none",
+     "transform": "none",
+     "mask": "none",
+     "object_fit": "contain",
+     "object_position": "50% 50%",
+     "opacity": "1",
+     "same_src_in_document": 1
+    }
+   ]
+  }
+ }
+}

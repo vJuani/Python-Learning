@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="{{ language or 'es' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width={{ canvas.width }}">
+  <title>property_clean_grid</title>
+  <style>{{ font_css|safe }}{{ css|safe }}</style>
+  {% include "_layout_vars.html" %}
+</head>
+<body>
+<article id="poster" class="poster poster--clean {{ modifiers }}">
+  <header class="brand">
+    {% if branding.logo %}<img class="brand__logo" src="{{ branding.logo }}" alt="">{% endif %}
+    <div class="brand__name">
+      {% if branding.mark %}<span class="brand__mark">{{ branding.mark }}</span>{% endif %}
+      {% if branding.submark %}<span class="brand__sub">{{ branding.submark }}</span>{% endif %}
+    </div>
+  </header>
+  {% if branding.tagline %}<p class="brand__tagline">{{ branding.tagline|replace(' · ', '<br>')|safe }}</p>{% endif %}
+
+  <figure class="hero" style="height: {{ layout.card_height }}px;">
+    <div class="hero__media" style="left: {{ layout.hero.left }}px; width: {{ layout.hero.width }}px; height: {{ layout.hero.height }}px;">
+      {% with photo=hero, photo_class="hero__photo" %}{% include "_photo_original.html" %}{% endwith %}
+    </div>
+  </figure>
+  {% for photo in secondary %}
+  {% set box = layout.thumbs[loop.index0] %}
+  <figure class="thumb thumb--{{ loop.index }}" style="left: {{ box.left }}px; top: {{ box.top }}px; width: {{ box.width }}px; height: {{ box.height }}px;">
+    {% with photo=photo, photo_class="" %}{% include "_photo_original.html" %}{% endwith %}
+  </figure>
+  {% endfor %}
+
+  <div class="card-copy" data-stack data-stack-limit=".hero" data-stack-edge="bottom" data-stack-gap="24">
+    {% if operation %}<p class="kicker">{{ operation }}</p>{% endif %}
+    {% if address %}<h1 class="address" data-fit="line" data-fit-min="0.62" data-fit-lines="2" data-fit-wrap-min="0.45">{{ address }}</h1>{% endif %}
+    {% if zone %}<p class="zone" data-fit="line" data-fit-min="0.7" data-fit-tracking="0.1">{{ zone }}</p>{% endif %}
+    <span class="rule" aria-hidden="true"></span>
+    {% if copy %}<p class="copy" data-fit="block" data-fit-lines="3" data-fit-min="0.8" data-stack-shrink>{{ copy }}</p>{% endif %}
+  </div>
+
+  {% if facts %}
+  <ul class="facts">
+    {% for fact in facts %}
+    <li class="fact">
+      <span class="fact__icon">{{ fact.icon|safe }}</span>
+      <span class="fact__copy">
+        <strong>{{ fact.value }}</strong>
+        <span>{{ fact.label }}</span>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if price.amount %}
+  <p class="price" data-fit="line" data-fit-min="0.6">{% if price.currency %}<span class="price__currency">{{ price.currency }}</span>{% endif %}<span class="price__amount">{{ price.amount }}</span></p>
+  {% endif %}
+
+  <span class="divider divider--agent" aria-hidden="true"></span>
+  <span class="divider divider--legal" aria-hidden="true"></span>
+  {% if agent %}
+  {% if agent.photo %}<span class="agent__photo"><img src="{{ agent.photo }}" alt=""></span>{% endif %}
+  <div class="agent__meta">
+    {% if agent.name %}<h2 data-fit="line" data-fit-min="0.72" data-fit-lines="2" data-fit-wrap-min="0.62">{{ agent.name }}</h2>{% endif %}
+    {% if agent.title %}<p data-fit="line" data-fit-min="0.75">{{ agent.title }}</p>{% endif %}
+  </div>
+  {% include "_agent_contacts.html" %}
+  {% endif %}
+  {% if cta %}<a class="cta" href="#"><em data-fit="line" data-fit-width="parent" data-fit-min="0.7" data-fit-lines="2">{{ cta }}</em><span class="cta__arrow">→</span></a>{% endif %}
+
+  {% if broker.line %}
+  <p class="legal" data-fit="line" data-fit-min="0.75" data-fit-lines="2">{{ broker.line }}</p>
+  {% endif %}
+</article>
+{% include "_text_fit.html" %}
+</body>
+</html>

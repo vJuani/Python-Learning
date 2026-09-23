@@ -1,0 +1,232 @@
+<script>
+/* Text auto-fit for property templates. Measures real glyph boxes (Range rects),
+   shrinks font-size (and tracking) down to a minimum, then allows a controlled wrap.
+   Never clips, never ellipsizes, never breaks words.
+
+   data-fit="line"   single line first; data-fit-lines="2" allows wrapping afterwards
+   data-fit="block"  multi-line copy; shrinks until it uses <= data-fit-lines lines
+   data-fit="group"  scales every child together through --fit-scale (agent contacts)
+   data-fit-min            min font-size ratio (default 0.6)
+   data-fit-wrap-min       min ratio once wrapping (default = data-fit-min)
+   data-fit-tracking       min letter-spacing in em (default = current tracking)
+   data-fit-width="parent" available width = parent content box minus siblings
+   data-stack              vertical stack guarded against data-stack-limit
+                           (selectors, first match wins) on data-stack-edge minus data-stack-gap px;
+                           reduces --stack-scale, then shrinks [data-stack-shrink] children */
+(function () {
+  "use strict";
+  var poster = document.getElementById("poster");
+  if (!poster) { return; }
+  var STYLE_KEYS = ["fontSize", "letterSpacing", "lineHeight", "whiteSpace", "textIndent", "maxWidth"];
+  var VAR_KEYS = ["--fit-scale", "--stack-scale"];
+
+  function px(value) {
+    var number = parseFloat(value);
+    return isNaN(number) ? 0 : number;
+  }
+
+  function textRects(el) {
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    return Array.prototype.filter.call(range.getClientRects(), function (rect) {
+      return rect.width > 0.5 && rect.height > 0.5;
+    });
+  }
+
+  function textBox(el) {
+    var rects = textRects(el);
+    if (!rects.length) { return null; }
+    var box = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+    rects.forEach(function (rect) {
+      box.left = Math.min(box.left, rect.left);
+      box.right = Math.max(box.right, rect.right);
+      box.top = Math.min(box.top, rect.top);
+      box.bottom = Math.max(box.bottom, rect.bottom);
+    });
+    box.width = box.right - box.left;
+    box.height = box.bottom - box.top;
+    return box;
+  }
+
+  function lineCount(el) {
+    var style = getComputedStyle(el);
+    var lineHeight = style.lineHeight === "normal" ? px(style.fontSize) * 1.2 : px(style.lineHeight);
+    var centers = [];
+    textRects(el).forEach(function (rect) {
+      var mid = (rect.top + rect.bottom) / 2;
+      var known = centers.some(function (value) { return Math.abs(value - mid) < lineHeight * 0.5; });
+      if (!known) { centers.push(mid); }
+    });
+    return centers.length;
+  }
+
+  function available(el) {
+    var style = getComputedStyle(el);
+    if (el.dataset.fitWidth === "parent") {
+      var parent = el.parentElement;
+      var parentStyle = getComputedStyle(parent);
+      var gap = px(parentStyle.columnGap);
+      var width = parent.clientWidth - px(parentStyle.paddingLeft) - px(parentStyle.paddingRight);
+      Array.prototype.forEach.call(parent.children, function (child) {
+        if (child !== el) { width -= child.getBoundingClientRect().width + gap; }
+      });
+      return width;
+    }
+    var max = style.maxWidth;
+    var base = max && max !== "none" ? px(max) : el.getBoundingClientRect().width;
+    return base - px(style.paddingLeft) - px(style.paddingRight);
+  }
+
+  function usedWidth(el) {
+    var box = textBox(el);
+    if (!box) { return 0; }
+    return box.width + Math.abs(px(getComputedStyle(el).textIndent));
+  }
+
+  function fitText(el) {
+    var style = getComputedStyle(el);
+    var base = px(style.fontSize);
+    if (!base) { return; }
+    var mode = el.dataset.fit;
+    var minRatio = parseFloat(el.dataset.fitMin || "0.6");
+    var wrapMin = parseFloat(el.dataset.fitWrapMin || minRatio);
+    var maxLines = parseInt(el.dataset.fitLines || (mode === "block" ? "3" : "1"), 10);
+    var tracking = style.letterSpacing === "normal" ? 0 : px(style.letterSpacing) / base;
+    var trackingMin = el.dataset.fitTracking != null ? parseFloat(el.dataset.fitTracking) : tracking;
+    var indented = px(style.textIndent) > 0;
+    var lineRatio = style.lineHeight === "normal" ? 1.2 : px(style.lineHeight) / base;
+    var avail = available(el);
+    if (el.dataset.fitWidth === "parent") { el.style.maxWidth = avail + "px"; }
+
+    function apply(size, spacing, ratio) {
+      el.style.fontSize = size.toFixed(2) + "px";
+      el.style.letterSpacing = spacing.toFixed(3) + "em";
+      if (indented) { el.style.textIndent = spacing.toFixed(3) + "em"; }
+      if (ratio) { el.style.lineHeight = (size * ratio).toFixed(2) + "px"; }
+    }
+
+    var steps = 60;
+    var i;
+    var t;
+    if (mode === "line") {
+      el.style.whiteSpace = "nowrap";
+      for (i = 0; i <= steps; i += 1) {
+        t = i / steps;
+        apply(base * (1 - (1 - minRatio) * t), tracking - (tracking - trackingMin) * Math.min(1, t * 2), null);
+        if (usedWidth(el) <= avail + 0.5) { el.dataset.fitResult = "line"; return; }
+      }
+      if (maxLines < 2) { el.dataset.fitResult = "min"; return; }
+      el.style.whiteSpace = "normal";
+      for (i = 0; i <= steps; i += 1) {
+        t = i / steps;
+        apply(base * (1 - (1 - wrapMin) * t), trackingMin, Math.max(1.05, lineRatio));
+        if (lineCount(el) <= maxLines && usedWidth(el) <= avail + 0.5) { el.dataset.fitResult = "wrap"; return; }
+      }
+      el.dataset.fitResult = "min";
+      return;
+    }
+    if (mode === "block") {
+      el.style.whiteSpace = "normal";
+      for (i = 0; i <= steps; i += 1) {
+        t = i / steps;
+        var size = base * (1 - (1 - minRatio) * t);
+        apply(size, tracking, lineRatio * (1 - 0.08 * t));
+        if (lineCount(el) <= maxLines && usedWidth(el) <= avail + 0.5) { el.dataset.fitResult = "block"; return; }
+      }
+      el.dataset.fitResult = "min";
+    }
+  }
+
+  function fitGroup(el) {
+    var minRatio = parseFloat(el.dataset.fitMin || "0.7");
+    var maxLines = parseInt(el.dataset.fitLines || "1", 10);
+    var avail = available(el);
+    var values = el.querySelectorAll(el.dataset.fitTarget || ".agent-contact__value");
+    function widest() {
+      var left = el.getBoundingClientRect().left;
+      var right = left;
+      values.forEach(function (value) {
+        var box = textBox(value);
+        if (box) { right = Math.max(right, box.right); }
+      });
+      return right - left;
+    }
+    var scale;
+    for (scale = 1; scale >= minRatio - 0.0001; scale -= 0.02) {
+      el.style.setProperty("--fit-scale", scale.toFixed(3));
+      if (widest() <= avail + 0.5) { el.dataset.fitResult = "line"; return; }
+    }
+    if (maxLines < 2) { el.dataset.fitResult = "min"; return; }
+    values.forEach(function (value) {
+      var room = avail - (value.getBoundingClientRect().left - el.getBoundingClientRect().left);
+      value.style.whiteSpace = "normal";
+      value.style.maxWidth = room + "px";
+    });
+    for (scale = 1; scale >= minRatio - 0.0001; scale -= 0.02) {
+      el.style.setProperty("--fit-scale", scale.toFixed(3));
+      var ok = widest() <= avail + 0.5;
+      values.forEach(function (value) { ok = ok && lineCount(value) <= maxLines; });
+      if (ok) { el.dataset.fitResult = "wrap"; return; }
+    }
+    el.dataset.fitResult = "min";
+  }
+
+  function limitY(stack) {
+    var edge = stack.dataset.stackEdge || "top";
+    var gap = px(stack.dataset.stackGap);
+    var selectors = String(stack.dataset.stackLimit || "").split(",");
+    for (var i = 0; i < selectors.length; i += 1) {
+      var target = selectors[i].trim() ? poster.querySelector(selectors[i].trim()) : null;
+      if (target && target.getBoundingClientRect().height > 0) {
+        return target.getBoundingClientRect()[edge] - gap;
+      }
+    }
+    return poster.getBoundingClientRect().bottom - gap;
+  }
+
+  function guardStack(stack) {
+    var limit = limitY(stack);
+    var minScale = parseFloat(stack.dataset.stackMin || "0.45");
+    var scale;
+    for (scale = 1; scale >= minScale - 0.0001; scale -= 0.05) {
+      stack.style.setProperty("--stack-scale", scale.toFixed(3));
+      if (stack.getBoundingClientRect().bottom <= limit + 0.5) { stack.dataset.stackResult = "gap"; return; }
+    }
+    var shrinkers = stack.querySelectorAll("[data-stack-shrink]");
+    for (var round = 0; round < 12; round += 1) {
+      shrinkers.forEach(function (el) {
+        var size = px(getComputedStyle(el).fontSize) * 0.96;
+        var line = px(getComputedStyle(el).lineHeight) * 0.96;
+        el.style.fontSize = size.toFixed(2) + "px";
+        if (line) { el.style.lineHeight = line.toFixed(2) + "px"; }
+      });
+      if (stack.getBoundingClientRect().bottom <= limit + 0.5) { stack.dataset.stackResult = "shrink"; return; }
+    }
+    stack.dataset.stackResult = "overflow";
+  }
+
+  function reset() {
+    poster.querySelectorAll("[data-fit], [data-fit] *, [data-stack], [data-stack-shrink]").forEach(function (el) {
+      STYLE_KEYS.forEach(function (key) { el.style[key] = ""; });
+      VAR_KEYS.forEach(function (key) { el.style.removeProperty(key); });
+      delete el.dataset.fitResult;
+      delete el.dataset.stackResult;
+    });
+  }
+
+  function run() {
+    reset();
+    poster.querySelectorAll("[data-fit]").forEach(function (el) {
+      if (el.dataset.fit === "group") { fitGroup(el); } else { fitText(el); }
+    });
+    poster.querySelectorAll("[data-stack]").forEach(guardStack);
+    poster.dataset.textFit = "done";
+  }
+
+  window.__propertyTextFit = run;
+  run();
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(run);
+  }
+})();
+</script>

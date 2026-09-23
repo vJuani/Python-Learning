@@ -269,9 +269,12 @@ def _agent_snapshot(property_data, language):
         return None
     whatsapp = branding.get("whatsapp") if branding.get("whatsapp_enabled") else None
     instagram = branding.get("instagram") if branding.get("instagram_enabled") else None
-    if not whatsapp and not instagram:
+    email = branding.get("email") or None
+    if isinstance(email, str) and not email.strip():
+        email = None
+    if not whatsapp and not instagram and not email:
         logger.warning(
-            "marketing agent contact missing whatsapp and instagram agent=%s",
+            "marketing agent contact missing whatsapp, instagram and email agent=%s",
             branding.get("agent_id"),
         )
     return {
@@ -281,9 +284,14 @@ def _agent_snapshot(property_data, language):
         "phone": branding.get("phone"),
         "whatsapp": whatsapp,
         "whatsapp_enabled": bool(branding.get("whatsapp_enabled") and whatsapp),
-        "email": branding.get("email"),
+        "email": email,
         "instagram": instagram,
         "instagram_enabled": bool(branding.get("instagram_enabled") and instagram),
+        "agent_contact": {
+            "whatsapp": whatsapp,
+            "instagram": instagram,
+            "email": email,
+        },
         "linkedin": branding.get("linkedin"),
         "title": branding.get("title"),
         "has_photo": bool(branding.get("has_photo")),

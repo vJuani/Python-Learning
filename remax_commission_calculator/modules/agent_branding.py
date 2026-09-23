@@ -57,6 +57,29 @@ def format_instagram_handle(raw):
     return f"@{value}"
 
 
+def whatsapp_url(raw):
+    digits = re.sub(r"\D", "", str(raw or ""))
+    if len(digits) < 8:
+        return ""
+    return f"https://wa.me/{digits}"
+
+
+def instagram_profile_url(raw):
+    handle = format_instagram_handle(raw)
+    if not handle:
+        return ""
+    return f"https://www.instagram.com/{handle.lstrip('@')}/"
+
+
+def email_mailto(raw):
+    value = " ".join(str(raw or "").split())
+    if not value or "@" not in value or " " in value:
+        return ""
+    if value.casefold() in {"none", "null", "n/a", "undefined", "-"}:
+        return ""
+    return f"mailto:{value}"
+
+
 def _full_name(user, agent):
     if user:
         joined = " ".join(

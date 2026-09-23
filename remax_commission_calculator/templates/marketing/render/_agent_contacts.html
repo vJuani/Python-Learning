@@ -1,0 +1,10 @@
+{% if agent and agent.contacts %}
+<nav class="agent-contact" aria-label="Contacto" style="--contact-scale: {{ agent.contact_scale or 1 }};" data-fit="group" data-fit-min="0.72" data-fit-lines="2">
+  {% for item in agent.contacts %}
+  <a class="agent-contact__item agent-contact__item--{{ item.kind }}" href="{{ item.href }}" aria-label="{{ item.label }}">
+    <span class="agent-contact__icon">{{ item.icon|safe }}</span>
+    <span class="agent-contact__value">{% if item.kind == "email" %}{% for part in item.value.split("@") %}{% if not loop.first %}@<wbr>{% endif %}{{ part }}{% endfor %}{% else %}{{ item.value }}{% endif %}</span>
+  </a>
+  {% endfor %}
+</nav>
+{% endif %}

@@ -608,7 +608,7 @@ class MarketingGenerationsTests(unittest.TestCase):
         data = first.get("generated_data") or {}
         self.assertEqual(data.get("copy_status"), "completed")
         self.assertEqual(data.get("visual_status"), "completed")
-        self.assertEqual(data.get("template_used"), "modern_commercial_v3")
+        self.assertEqual(data.get("template_used"), "property_clean_grid")
         self.assertEqual(data.get("renderer_used"), "html_playwright")
         self.assertTrue(data.get("visual_asset_url"))
         before = len(list_marketing_generations(self.org))
@@ -1199,7 +1199,7 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(auto["style"], "commercial")
         self.assertEqual(auto["channel"], "instagram_post")
         self.assertTrue(auto["include_agent"])
-        self.assertEqual(auto["layout_template"], "modern_commercial_v3")
+        self.assertEqual(auto["layout_template"], "automatic")
         switched = resolve_context(
             {
                 "action": "generate_story_image",
@@ -1256,10 +1256,10 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(conversation["property_id"], self.italia_id)
         self.assertTrue(context.get("include_agent"))
         self.assertEqual(context.get("style"), "commercial")
-        self.assertEqual(context.get("layout_template"), "modern_commercial_v3")
+        self.assertEqual(context.get("layout_template"), "automatic")
         first_id = last_generation_id_for_conversation(conversation_id, self.org)
         first = get_marketing_generation(first_id, self.org)
-        self.assertEqual((first.get("generated_data") or {}).get("template_used"), "modern_commercial_v3")
+        self.assertEqual((first.get("generated_data") or {}).get("template_used"), "property_clean_grid")
 
         premium = client.post(
             location,
@@ -1274,10 +1274,10 @@ class MarketingGenerationsTests(unittest.TestCase):
         context = conversation.get("context") or {}
         self.assertEqual(conversation["property_id"], self.italia_id)
         self.assertEqual(context.get("style"), "premium")
-        self.assertEqual(context.get("layout_template"), "modern_commercial_v3")
+        self.assertEqual(context.get("layout_template"), "automatic")
         premium_id = last_generation_id_for_conversation(conversation_id, self.org)
         premium_gen = get_marketing_generation(premium_id, self.org)
-        self.assertEqual((premium_gen.get("generated_data") or {}).get("template_used"), "modern_commercial_v3")
+        self.assertEqual((premium_gen.get("generated_data") or {}).get("template_used"), "property_clean_grid")
 
         again = client.post(
             location,
@@ -1428,7 +1428,7 @@ class MarketingGenerationsTests(unittest.TestCase):
         self.assertEqual(conversation["property_id"], self.italia_id)
         last_id = last_generation_id_for_conversation(conversation["id"], self.org)
         generation = get_marketing_generation(last_id, self.org)
-        self.assertEqual((generation.get("generated_data") or {}).get("template_used"), "modern_commercial_v3")
+        self.assertEqual((generation.get("generated_data") or {}).get("template_used"), "property_clean_grid")
 
 
 

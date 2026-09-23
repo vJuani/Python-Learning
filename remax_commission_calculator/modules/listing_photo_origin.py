@@ -34,7 +34,24 @@ THUMB_URL_MARKERS = (
     "/preview",
     "/w_200",
     "/w_400",
+    "/resized",
+    "_resized",
+    "/optimized",
+    "/medium/",
 )
+
+REDUCED_URL_KINDS = frozenset(
+    {
+        "thumbnail",
+        "thumb",
+        "preview",
+        "small",
+        "resized",
+        "optimized",
+        "medium",
+    }
+)
+PREFERRED_URL_KINDS = ("original", "full", "large", "stable", "local_fixture")
 
 SOURCE_PRIORITY = {
     "original_property_photo": 400,
@@ -85,19 +102,71 @@ def is_generated_marketing_asset(photo):
 def _is_thumbnail(photo):
     photo = photo or {}
     kind = str(photo.get("url_kind") or "").strip().lower()
-    if kind in {"thumbnail", "thumb", "preview"}:
+    if kind in REDUCED_URL_KINDS:
         return True
     blob = _blob(photo)
     if any(marker in blob for marker in THUMB_URL_MARKERS):
         return True
-    try:
-        width = int(photo.get("width") or 0)
-        height = int(photo.get("height") or 0)
-    except (TypeError, ValueError):
-        width = height = 0
-    if width and height and min(width, height) < 400:
-        return True
     return False
+
+
+def url_kind_rank(photo):
+    kind = str((photo or {}).get("url_kind") or "").strip().lower()
+    if kind in REDUCED_URL_KINDS:
+        return 0
+    try:
+        return 100 - PREFERRED_URL_KINDS.index(kind)
+    except ValueError:
+        return 40
+
+
+def pixel_area(photo):
+    try:
+        width = int((photo or {}).get("width") or 0)
+        height = int((photo or {}).get("height") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, width) * max(0, height)
+
+
+def media_identity(photo):
+    photo = photo or {}
+    return (
+        photo.get("external_media_id")
+        or photo.get("id")
+        or photo.get("original_url")
+        or photo.get("remote_url")
+        or photo.get("storage_key")
+        or photo.get("path")
+        or id(photo)
+    )
+
+
+def source_variant(photo):
+    kind = str((photo or {}).get("url_kind") or "").strip().lower()
+    if kind:
+        return kind
+    if photo_source_type(photo) == "thumbnail":
+        return "thumbnail"
+    return "original"
+
+
+def prefer_highest_resolution_media(photos):
+    """Keep one row per photo identity, preferring original/full/large over thumbs."""
+    groups = {}
+    order = []
+    for item in photos or []:
+        identity = media_identity(item)
+        if identity not in groups:
+            groups[identity] = item
+            order.append(identity)
+            continue
+        current = groups[identity]
+        new_key = (source_priority(item), url_kind_rank(item), pixel_area(item))
+        old_key = (source_priority(current), url_kind_rank(current), pixel_area(current))
+        if new_key > old_key:
+            groups[identity] = item
+    return [groups[identity] for identity in order]
 
 
 def photo_source_type(photo):
@@ -140,10 +209,12 @@ def eligible_listing_photos(photos):
         if not item or is_generated_marketing_asset(item):
             continue
         eligible.append(item)
+    eligible = prefer_highest_resolution_media(eligible)
     eligible.sort(
         key=lambda item: (
             -source_priority(item),
             0 if item.get("is_cover") else 1,
+            -pixel_area(item),
             int(item.get("position") or 0),
             int(item.get("id") or 0),
         )

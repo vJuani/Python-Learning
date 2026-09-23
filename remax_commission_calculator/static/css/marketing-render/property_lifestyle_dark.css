@@ -1,0 +1,389 @@
+/* Master replica of JRH_template_03_lifestyle_dark.png (390x612).
+   Every position/size is expressed in reference pixels times --u. */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 1080px;
+  background: #0b1422;
+  overflow: hidden;
+}
+
+.poster {
+  --u: calc(1080px / 390);
+  --title-size: calc(41 * var(--u));
+  --subtitle-size: calc(16.5 * var(--u));
+  --price-size: calc(26.8 * var(--u));
+  --feature-value-size: calc(13.3 * var(--u));
+  --feature-label-size: calc(14.5 * var(--u));
+  --agent-name-size: calc(13.9 * var(--u));
+  --legal-size: calc(10.5 * var(--u));
+  --gold: #d4b47c;
+  --photo-neutral: #0f1a2c;
+  background:
+    radial-gradient(80% 30% at 100% 0%, rgba(52, 84, 136, 0.4) 0%, rgba(15, 26, 44, 0) 70%),
+    radial-gradient(90% 35% at 100% 70%, rgba(36, 60, 102, 0.35) 0%, rgba(15, 26, 44, 0) 70%),
+    linear-gradient(180deg, #111f37 0%, #0c1628 100%);
+  --contact-size: calc(14 * var(--u));
+  --contact-gap: calc(3.5 * var(--u));
+  --contact-text: calc(10 * var(--u));
+  box-sizing: border-box;
+  position: relative;
+  width: 1080px;
+  color: #fff;
+  font-family: "Marketing Sans", "Segoe UI", Arial, sans-serif;
+  overflow: hidden;
+}
+
+.poster *,
+.poster *::before,
+.poster *::after {
+  box-sizing: border-box;
+}
+
+.poster > * {
+  position: absolute;
+  margin: 0;
+  z-index: 1;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* contour line art on the right, behind the copy (never over the photo box) */
+.poster::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='620' height='760' fill='none' stroke='rgba(255,255,255,0.07)' stroke-width='1.2'><path d='M620 60 C 420 180 300 360 420 520 C 500 630 600 680 620 760'/><path d='M620 100 C 450 210 340 370 450 520 C 525 625 610 680 620 740'/><path d='M620 140 C 480 240 380 380 480 520 C 550 620 615 670 620 720'/><path d='M620 180 C 510 270 420 390 510 520 C 575 615 620 660 620 700'/><path d='M620 220 C 540 300 460 400 540 520 C 595 605 620 640 620 680'/></svg>") right calc(18% ) / 620px 760px no-repeat,
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='520' height='220' fill='none' stroke='rgba(255,255,255,0.05)' stroke-width='1.4'><path d='M0 200 C 160 90 340 40 520 60'/><path d='M0 150 C 180 60 360 10 520 20'/></svg>") right top / 520px 220px no-repeat;
+}
+
+.poster > .hero-media {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 calc(8 * var(--u)) calc(24 * var(--u)) rgba(0, 0, 0, 0.45);
+}
+
+/* location, top right: caps + gold rule */
+.zone-top {
+  right: calc(29 * var(--u));
+  top: calc(16 * var(--u));
+  font-size: calc(10.5 * var(--u));
+  line-height: calc(16 * var(--u));
+  letter-spacing: 0.22em;
+  margin-right: -0.22em;
+  text-align: right;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.zone-top::after {
+  content: "";
+  display: block;
+  width: calc(22 * var(--u));
+  height: 1px;
+  margin: calc(6 * var(--u)) calc(-0.22em) 0 auto;
+  background: var(--gold);
+}
+
+/* logo: x27 y11 w42 h52 · wordmark x83, RE/MAX cap 22, DATA HOUSE cap 44 */
+.brand {
+  left: calc(27 * var(--u));
+  top: calc(11 * var(--u));
+  display: flex;
+  align-items: flex-start;
+}
+
+.brand__logo {
+  width: calc(42 * var(--u));
+  height: calc(52 * var(--u));
+  object-fit: contain;
+}
+
+.brand__name {
+  display: flex;
+  flex-direction: column;
+  margin-left: calc(14 * var(--u));
+  padding-top: calc(6.7 * var(--u));
+}
+
+.brand__mark {
+  font-size: calc(20 * var(--u));
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.brand__sub {
+  margin-top: calc(2 * var(--u));
+  font-size: calc(13.6 * var(--u));
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* info column: zone, title, subtitle, features, rule, price and CTA flow vertically from y96;
+   the gaps are the reference distances, so a taller subtitle pushes the rest down */
+.info {
+  left: calc(29 * var(--u));
+  top: calc(96 * var(--u) + var(--shift));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.info > * {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+/* zone: x29, cap 102-111 */
+.info > .zone {
+  position: relative;
+  max-width: calc(333 * var(--u));
+  white-space: nowrap;
+  font-size: calc(10.5 * var(--u));
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.zone::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(100% + 7 * var(--u));
+  width: calc(24 * var(--u));
+  height: 1.5px;
+  background: var(--gold);
+}
+
+/* title (serif): x28, cap 129-161, width 182 (47% canvas); max 333 inside the canvas */
+.info > .address {
+  margin: calc(16 * var(--u) * var(--stack-scale, 1)) 0 0 calc(-1 * var(--u));
+  max-width: calc(333 * var(--u));
+  font-family: "Marketing Display Serif", Georgia, serif;
+  font-size: var(--title-size);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  white-space: nowrap;
+}
+
+/* subtitle: x29, caps 174 / 192, width ~115-185, up to 3 lines */
+.info > .copy {
+  margin-top: calc(6 * var(--u) * var(--stack-scale, 1));
+  width: calc(190 * var(--u));
+  max-width: calc(190 * var(--u));
+  font-size: var(--subtitle-size);
+  font-weight: 400;
+  line-height: calc(18.5 * var(--u));
+  color: rgba(255, 255, 255, 0.96);
+  text-wrap: balance;
+}
+
+/* features column: x30, rows every 34.5 starting y215, text x63 */
+.info > .facts {
+  margin: calc(8.5 * var(--u) * var(--stack-scale, 1)) 0 0 calc(1 * var(--u));
+  padding: 0;
+  list-style: none;
+}
+
+.fact {
+  display: flex;
+  align-items: center;
+  height: calc(34.5 * var(--u) * (0.7 + 0.3 * var(--stack-scale, 1)));
+}
+
+.fact__icon {
+  width: calc(20 * var(--u));
+  height: calc(20 * var(--u));
+  margin-right: calc(11 * var(--u));
+}
+
+.fact__icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fact__text {
+  padding: calc(3 * var(--u)) 0 calc(3 * var(--u)) calc(12 * var(--u));
+  border-left: 1px solid rgba(255, 255, 255, 0.24);
+  font-size: var(--feature-value-size);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* gold rule above the price */
+.info > .rule {
+  margin-top: calc(11 * var(--u) * var(--stack-scale, 1));
+  width: calc(26 * var(--u));
+  height: 1.5px;
+  background: var(--gold);
+}
+
+/* price (serif): x30, cap 378-399, width 164 (42% canvas) */
+.info > .price {
+  margin-top: calc(10.5 * var(--u) * var(--stack-scale, 1) - 1.5px);
+  max-width: calc(220 * var(--u));
+  display: flex;
+  align-items: baseline;
+  font-family: "Marketing Display Serif", Georgia, serif;
+  font-size: var(--price-size);
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.price__currency {
+  margin-right: 0.24em;
+}
+
+/* CTA: x27 y421 w194 h32 */
+.info > .cta {
+  margin: calc(19.7 * var(--u) * var(--stack-scale, 1)) 0 0 calc(-2 * var(--u));
+  width: calc(194 * var(--u));
+  height: calc(32 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(10 * var(--u));
+  padding: 0 calc(12 * var(--u));
+  border-radius: calc(16 * var(--u));
+  background: #fff;
+  color: #14213a;
+  text-decoration: none;
+  font-size: calc(11.4 * var(--u));
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  box-shadow: 0 calc(4 * var(--u)) calc(14 * var(--u)) rgba(0, 0, 0, 0.35);
+}
+
+.cta,
+.agent-contact__icon {
+  text-shadow: none;
+}
+
+.cta em {
+  font-style: normal;
+  line-height: 1.05;
+  text-align: center;
+}
+
+.cta__arrow {
+  flex: 0 0 auto;
+  font-size: 1.35em;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+/* handwritten quote: x263-375 y338-468, rotated */
+.quote {
+  left: calc(262 * var(--u));
+  top: calc(338 * var(--u) + var(--shift));
+  width: calc(122 * var(--u));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: "Marketing Script", "Segoe Script", cursive;
+  font-size: calc(18.5 * var(--u));
+  line-height: calc(32 * var(--u));
+  color: #fff;
+  transform: rotate(-9deg);
+  transform-origin: center center;
+  text-shadow: 0 calc(1 * var(--u)) calc(4 * var(--u)) rgba(0, 0, 0, 0.35);
+}
+
+.quote span {
+  white-space: nowrap;
+}
+
+.quote span:last-child {
+  margin-left: calc(-18 * var(--u));
+}
+
+/* gold brush swash under the quote */
+.quote::after {
+  content: "";
+  width: calc(96 * var(--u));
+  height: calc(10 * var(--u));
+  margin: calc(2 * var(--u)) 0 0 calc(-10 * var(--u));
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='20' viewBox='0 0 200 20' fill='none'><path d='M4 15 C 60 4 130 3 196 6' stroke='rgb(212,180,124)' stroke-width='3.2' stroke-linecap='round'/></svg>") center / 100% 100% no-repeat;
+}
+
+/* agent photo: x24 y491 d61 · name x93 cap 507 · title cap 525 */
+.agent__photo {
+  left: calc(24 * var(--u));
+  top: calc(491 * var(--u) + var(--shift));
+  width: calc(61 * var(--u));
+  height: calc(61 * var(--u));
+  overflow: hidden;
+  border-radius: 50%;
+  border: calc(2.2 * var(--u)) solid #fff;
+  box-shadow: 0 0 0 calc(3 * var(--u)) rgba(212, 180, 124, 0.28);
+  background: #dfe5ec;
+}
+
+.agent__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 18%;
+}
+
+.agent__meta {
+  left: calc(93 * var(--u));
+  top: calc(505 * var(--u) + var(--shift));
+}
+
+.agent__meta h2 {
+  margin: 0;
+  max-width: calc(110 * var(--u));
+  font-size: var(--agent-name-size);
+  font-weight: 600;
+  line-height: 1;
+  text-wrap: balance;
+  white-space: nowrap;
+}
+
+.agent__meta p {
+  margin: calc(4 * var(--u)) 0 0;
+  max-width: calc(110 * var(--u));
+  font-size: calc(11 * var(--u));
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* contacts: same slot as the reference badges, x209 y497-552 */
+.agent-contact {
+  left: calc(209 * var(--u));
+  top: calc(497 * var(--u) + var(--shift));
+  max-width: calc(169 * var(--u));
+}
+
+/* legal: x29, caps 573 / 587 */
+.legal {
+  left: calc(29 * var(--u));
+  top: calc(568.7 * var(--u) + var(--shift));
+  max-width: calc(330 * var(--u));
+  padding-top: calc(8 * var(--u));
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  width: calc(332 * var(--u));
+  font-size: var(--legal-size);
+  line-height: calc(14.5 * var(--u));
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.poster--no-broker .legal,
+.poster--no-price .price {
+  display: none;
+}

@@ -40,15 +40,23 @@ GENERATION_STYLE = {
 DEFAULT_CTA_SALE = "Consultame para visitarla"
 DEFAULT_CTA_RENT = "Consultame disponibilidad"
 TEMPLATE_BY_STYLE = {
-    "commercial": "modern_commercial_v3",
-    "modern": "modern_commercial_v3",
-    "dynamic": "modern_commercial_v3",
-    "premium": "modern_commercial_v3",
-    "elegant": "modern_commercial_v3",
-    "minimal": "modern_commercial_v3",
-    "corporate": "modern_commercial_v3",
+    "commercial": "automatic",
+    "modern": "automatic",
+    "dynamic": "automatic",
+    "premium": "automatic",
+    "elegant": "automatic",
+    "minimal": "automatic",
+    "corporate": "automatic",
 }
-DEFAULT_LAYOUT_TEMPLATE = "modern_commercial_v3"
+DEFAULT_LAYOUT_TEMPLATE = "automatic"
+PROPERTY_LAYOUT_TEMPLATES = frozenset(
+    {
+        "automatic",
+        "property_clean_grid",
+        "property_lifestyle_dark",
+        "property_premium_hero",
+    }
+)
 SKIP_CLARIFY_ACTIONS = frozenset(
     {"chat", "generate_visual", "edit_existing_generation"}
 )
@@ -360,6 +368,8 @@ def resolve_context(intent, conversation, prompt, listing=None, *, form_key=None
         context["_work_prompt"] = prompt
     if intent.get("property_id"):
         context["property_id"] = intent["property_id"]
+    if intent.get("layout_template") in PROPERTY_LAYOUT_TEMPLATES:
+        context["layout_template"] = intent["layout_template"]
     if intent.get("tone") and not context.get("tone"):
         context["tone"] = intent["tone"]
     creative = intent.get("creative_style") or intent.get("style")
@@ -388,9 +398,10 @@ def resolve_context(intent, conversation, prompt, listing=None, *, form_key=None
         context = _mark_asked(context, "channel")
     if latest.get("style") and latest.get("style") != "auto":
         context["style"] = latest["style"]
-        context["layout_template"] = TEMPLATE_BY_STYLE.get(
-            latest["style"], DEFAULT_LAYOUT_TEMPLATE
-        )
+        if context.get("layout_template") not in PROPERTY_LAYOUT_TEMPLATES:
+            context["layout_template"] = TEMPLATE_BY_STYLE.get(
+                latest["style"], DEFAULT_LAYOUT_TEMPLATE
+            )
         context = _mark_asked(context, "style")
     if latest.get("include_agent") is not None:
         context["include_agent"] = latest["include_agent"]
@@ -415,9 +426,9 @@ def apply_intelligent_defaults(context, listing=None):
         context["include_agent"] = bool(agent.get("name") or agent.get("has_photo"))
     if context.get("hero_photo_id") in (None, "auto", "pick"):
         context["hero_photo_id"] = "auto"
-    context["layout_template"] = TEMPLATE_BY_STYLE.get(
-        context.get("style"), DEFAULT_LAYOUT_TEMPLATE
-    )
+    requested = str(context.get("layout_template") or "").strip()
+    if requested not in PROPERTY_LAYOUT_TEMPLATES:
+        context["layout_template"] = DEFAULT_LAYOUT_TEMPLATE
     return context
 
 

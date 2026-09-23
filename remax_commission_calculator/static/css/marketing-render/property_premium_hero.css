@@ -1,0 +1,407 @@
+/* Master replica of JRH_template_05_premium_hero.png (390x612).
+   Every position/size is expressed in reference pixels times --u. */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 1080px;
+  background: #0b1422;
+  overflow: hidden;
+}
+
+.poster {
+  --u: calc(1080px / 390);
+  --title-size: calc(32 * var(--u));
+  --subtitle-size: calc(11.5 * var(--u));
+  --price-size: calc(30.5 * var(--u));
+  --feature-value-size: calc(16 * var(--u));
+  --feature-label-size: calc(10.5 * var(--u));
+  --agent-name-size: calc(12.8 * var(--u));
+  --legal-size: calc(10.5 * var(--u));
+  --gold: #d4b47c;
+  --gold-soft: rgba(212, 180, 124, 0.55);
+  --photo-neutral: #0f1a2c;
+  background:
+    radial-gradient(90% 40% at 88% 4%, rgba(52, 84, 136, 0.42) 0%, rgba(15, 26, 44, 0) 70%),
+    radial-gradient(70% 30% at 0% 100%, rgba(40, 66, 110, 0.35) 0%, rgba(15, 26, 44, 0) 70%),
+    linear-gradient(180deg, #111f37 0%, #0c1628 100%);
+  --contact-size: calc(10.5 * var(--u));
+  --contact-gap: calc(2.2 * var(--u));
+  --contact-text: calc(8.8 * var(--u));
+  box-sizing: border-box;
+  position: relative;
+  width: 1080px;
+  color: #fff;
+  font-family: "Marketing Sans", "Segoe UI", Arial, sans-serif;
+  overflow: hidden;
+}
+
+.poster *,
+.poster *::before,
+.poster *::after {
+  box-sizing: border-box;
+}
+
+.poster > * {
+  position: absolute;
+  margin: 0;
+  z-index: 1;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* line art behind everything (never over the photo box) */
+.poster::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='520' fill='none' stroke='rgba(255,255,255,0.06)' stroke-width='1.4'><path d='M-40 250 L330 -40'/><path d='M-40 330 L430 -40'/><path d='M-40 410 L530 -40'/><path d='M-40 470 C 160 330 300 250 640 120'/></svg>") left top / 640px 520px no-repeat,
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='560' height='420' fill='none' stroke='rgba(212,180,124,0.14)' stroke-width='1.2'><path d='M0 420 C 160 300 330 380 560 180'/><path d='M40 420 C 190 310 350 390 560 214'/><path d='M80 420 C 220 320 370 400 560 248'/><path d='M120 420 C 250 330 390 410 560 282'/><path d='M160 420 C 280 340 410 418 560 316'/></svg>") right bottom / 560px 420px no-repeat;
+}
+
+.poster > .hero-media {
+  box-shadow: 0 0 0 1px rgba(212, 180, 124, 0.32), 0 calc(8 * var(--u)) calc(24 * var(--u)) rgba(0, 0, 0, 0.45);
+}
+
+/* logo: x27 y13 w42 h52 · wordmark x84, RE/MAX cap 24, DATA HOUSE cap 44 */
+.brand {
+  left: calc(27 * var(--u));
+  top: calc(13 * var(--u));
+  display: flex;
+  align-items: flex-start;
+}
+
+.brand__logo {
+  width: calc(42 * var(--u));
+  height: calc(52 * var(--u));
+  object-fit: contain;
+}
+
+.brand__name {
+  display: flex;
+  flex-direction: column;
+  margin-left: calc(15 * var(--u));
+  padding-top: calc(6.7 * var(--u));
+}
+
+.brand__mark {
+  font-size: calc(20 * var(--u));
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.brand__sub {
+  margin-top: calc(1 * var(--u));
+  font-size: calc(13.6 * var(--u));
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* zone: right edge x361, caps 23 / 40 */
+.zone {
+  right: calc(29 * var(--u));
+  top: calc(18.5 * var(--u));
+  font-size: calc(11 * var(--u));
+  font-weight: 400;
+  line-height: calc(17 * var(--u));
+  letter-spacing: 0.2em;
+  margin-right: -0.2em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.zone::after {
+  content: "";
+  display: block;
+  width: calc(24 * var(--u));
+  height: 1px;
+  margin: calc(7 * var(--u)) calc(-0.2em) 0 auto;
+  background: var(--gold);
+}
+
+/* title + rule + subtitle flow vertically from y95; the stack never reaches the features row */
+.headline {
+  left: 0;
+  right: 0;
+  top: calc(95 * var(--u));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.headline > * {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+/* title: centered, cap 102-125, width 238 (61% canvas); max 352 inside the canvas */
+.address {
+  max-width: calc(352 * var(--u));
+  font-size: var(--title-size);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: 0.24em;
+  text-indent: 0.24em;
+  text-align: center;
+  text-transform: uppercase;
+  text-wrap: balance;
+  white-space: nowrap;
+}
+
+/* subtitle: centered, caps 139 / 155, width 177 */
+.headline > .copy {
+  width: calc(230 * var(--u));
+  max-width: calc(230 * var(--u));
+  margin-top: calc(9 * var(--u) * var(--stack-scale, 1) - 1px);
+  font-size: calc(10.5 * var(--u));
+  font-weight: 400;
+  line-height: calc(16.5 * var(--u));
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  text-align: center;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.94);
+  text-wrap: balance;
+}
+
+/* gold divider between title and subtitle (5u under the title) */
+.headline > .rule {
+  margin-top: calc(5 * var(--u) * var(--stack-scale, 1));
+  width: calc(40 * var(--u));
+  height: 1px;
+  background: linear-gradient(90deg, rgba(212, 180, 124, 0), var(--gold) 20%, var(--gold) 80%, rgba(212, 180, 124, 0));
+}
+
+/* features: x34-360, y202-234, 4 cells with dividers */
+.facts {
+  left: calc(34 * var(--u));
+  width: calc(326 * var(--u));
+  top: calc(202 * var(--u));
+  height: calc(33 * var(--u));
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 0;
+  list-style: none;
+}
+
+.fact {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: calc(22 * var(--u)) auto;
+  column-gap: calc(5 * var(--u));
+  justify-content: center;
+  align-content: start;
+  padding-top: calc(2 * var(--u));
+}
+
+.fact + .fact {
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.fact__icon {
+  width: calc(24 * var(--u));
+  height: calc(24 * var(--u));
+}
+
+.fact__icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fact__value {
+  align-self: center;
+  font-size: var(--feature-value-size);
+  font-weight: 400;
+  line-height: 1;
+}
+
+.fact__label {
+  grid-column: 1 / 3;
+  margin-top: calc(0.8 * var(--u));
+  font-size: var(--feature-label-size);
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* price: centered, cap 256-280, width 177 (45% canvas) */
+/* price: serif inside a gold pill, flanked by fading gold rules */
+.price {
+  left: 0;
+  right: 0;
+  top: calc(244 * var(--u));
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  font-family: "Marketing Display Serif", Georgia, serif;
+  font-size: calc(25 * var(--u));
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-shadow: 0 calc(1 * var(--u)) calc(6 * var(--u)) rgba(0, 0, 0, 0.25);
+}
+
+.price::before,
+.price::after {
+  content: "";
+  width: calc(46 * var(--u));
+  height: 1px;
+  background: linear-gradient(90deg, rgba(212, 180, 124, 0), var(--gold));
+}
+
+.price::after {
+  background: linear-gradient(90deg, var(--gold), rgba(212, 180, 124, 0));
+}
+
+.price__pill {
+  display: inline-flex;
+  align-items: baseline;
+  max-width: calc(236 * var(--u));
+  white-space: nowrap;
+  padding: calc(6 * var(--u)) calc(20 * var(--u)) calc(7 * var(--u));
+  border: 1.5px solid var(--gold-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.price__currency {
+  margin-right: 0.26em;
+}
+
+/* agent photo: x17 y481 d48 · name x76 cap 494 · title cap 512 */
+.agent__photo {
+  left: calc(17 * var(--u));
+  top: calc(481 * var(--u) + var(--shift));
+  width: calc(48 * var(--u));
+  height: calc(48 * var(--u));
+  overflow: hidden;
+  border-radius: 50%;
+  border: calc(1.6 * var(--u)) solid var(--gold);
+  box-shadow: 0 0 0 calc(3 * var(--u)) rgba(212, 180, 124, 0.16);
+  background: #dfe5ec;
+}
+
+.agent__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 18%;
+}
+
+.agent__meta {
+  left: calc(74 * var(--u));
+  top: calc(492.5 * var(--u) + var(--shift));
+  max-width: calc(165 * var(--u));
+}
+
+.agent__meta h2 {
+  margin: 0;
+  max-width: calc(165 * var(--u));
+  font-size: var(--agent-name-size);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.agent__meta p {
+  margin: calc(5.5 * var(--u)) 0 0;
+  font-size: calc(9.8 * var(--u));
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* contacts: stacked under the agent name/title, x74 y525-558 */
+.agent-contact {
+  left: calc(74 * var(--u));
+  top: calc(525 * var(--u) + var(--shift));
+  max-width: calc(224 * var(--u));
+}
+
+/* CTA: x245 y490 w129 h32 */
+.cta {
+  left: calc(245 * var(--u));
+  top: calc(490 * var(--u) + var(--shift));
+  width: calc(129 * var(--u));
+  height: calc(32 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(6 * var(--u));
+  padding: 0 calc(10 * var(--u));
+  border-radius: calc(16 * var(--u));
+  background: #fff;
+  color: #14213a;
+  text-decoration: none;
+  font-size: calc(9.2 * var(--u));
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 calc(4 * var(--u)) calc(12 * var(--u)) rgba(0, 0, 0, 0.3);
+}
+
+.cta__arrow {
+  color: #b08a4c;
+}
+
+.cta,
+.agent-contact__icon {
+  text-shadow: none;
+}
+
+.cta em {
+  font-style: normal;
+  line-height: 1.05;
+  text-align: center;
+}
+
+.cta__arrow {
+  flex: 0 0 auto;
+}
+
+.cta__arrow {
+  font-size: 1.3em;
+  line-height: 1;
+}
+
+/* aside: x304, caps 544 / 558 / 572 */
+.aside {
+  left: calc(304 * var(--u));
+  top: calc(540.5 * var(--u) + var(--shift));
+  font-size: calc(8 * var(--u));
+  line-height: calc(14.5 * var(--u));
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.aside::after {
+  content: "";
+  display: block;
+  width: calc(22 * var(--u));
+  height: 1px;
+  margin-top: calc(5 * var(--u));
+  background: var(--gold);
+}
+
+/* legal: x17, caps 569 / 583 */
+.legal {
+  left: calc(17 * var(--u));
+  top: calc(565 * var(--u) + var(--shift));
+  max-width: calc(280 * var(--u));
+  font-size: var(--legal-size);
+  line-height: calc(14 * var(--u));
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.poster--no-broker .legal,
+.poster--no-price .price {
+  display: none;
+}

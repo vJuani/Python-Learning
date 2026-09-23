@@ -148,6 +148,7 @@ def register_marketing_routes(app, helpers):
                     preferred_mode=request.form.get("intent_mode") or "auto",
                     decision_key=request.form.get("decision_key"),
                     decision_value=request.form.get("decision_value"),
+                    layout_template=request.form.get("layout_template"),
                 )
             except MarketingError as error:
                 return _handle(error, fallback_endpoint="marketing_home")
@@ -178,6 +179,7 @@ def register_marketing_routes(app, helpers):
                 preferred_mode=request.form.get("intent_mode") or "auto",
                 decision_key=request.form.get("decision_key"),
                 decision_value=request.form.get("decision_value"),
+                layout_template=request.form.get("layout_template"),
             )
         except MarketingError as error:
             return _handle(error, fallback_endpoint="marketing_home")

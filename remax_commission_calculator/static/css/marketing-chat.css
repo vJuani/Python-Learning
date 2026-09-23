@@ -958,6 +958,27 @@ body.is-marketing-chat-page .mkt-chat {
     box-shadow: 0 4px 10px rgba(14, 32, 24, 0.06);
 }
 
+.mkt-design {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--muted, #5b6b7c);
+}
+
+.mkt-design select {
+    max-width: 100%;
+    border: 0;
+    border-radius: 999px;
+    padding: 0.32rem 0.75rem;
+    background: color-mix(in srgb, var(--color-bg, #f5f8f6) 88%, #fff);
+    font: inherit;
+    font-weight: 700;
+    color: var(--text, #122018);
+}
+
 .mkt-composer textarea {
     width: 100%;
     resize: none;
