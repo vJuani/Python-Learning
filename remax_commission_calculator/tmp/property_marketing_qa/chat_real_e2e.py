@@ -21,12 +21,15 @@ ROOT = HERE.parents[1]
 SNAPSHOT = HERE / "production_snapshot.db"
 OUT = HERE / "chat_e2e"
 WORKING_DB = OUT / "chat_working_copy.db"
-LEGACY_MARKERS = ("modern_commercial_v2", "pillow_commercial_v2", "modern_commercial_v3", "stamp_branding_overlay")
-PROPERTY_TEMPLATES = {"property_clean_grid", "property_lifestyle_dark", "property_premium_hero"}
-CASES = (
-    ("post_automatic", "Haceme un post de Santamarina 1335", "automatic"),
-    ("story_automatic", "Haceme una historia de Santamarina 1335", "automatic"),
+LEGACY_MARKERS = (
+    "modern_commercial_v1",
+    "modern_commercial_v2",
+    "modern_commercial_v3",
+    "pillow_commercial_v2",
+    "stamp_branding_overlay",
 )
+VARIANTS = ["property_clean_grid", "property_lifestyle_dark", "property_premium_hero"]
+PROMPT = "Haceme un post de Santamarina 1335"
 
 
 def _sha256(path):
@@ -63,12 +66,30 @@ def main(property_id=70, organization_id=1):
     logging.basicConfig(level=logging.INFO, handlers=[handler])
 
     sys.path.insert(0, str(ROOT))
+    import modules.marketing_chat_service as chat_service
+    import modules.property_marketing as property_marketing
     from modules.auth import ROLE_AGENT
     from modules.config import apply_config, get_private_upload_root
     from modules.database.marketing_conversations_repository import last_generation_id_for_conversation
     from modules.database.marketing_generations_repository import get_marketing_generation
-    from modules.database.marketing_repository import get_marketing_asset
+    from modules.database.marketing_repository import get_marketing_asset, list_generation_assets
     from web_app import app
+
+    copy_calls = []
+    photo_loads = []
+    real_copy = chat_service.create_and_run_generation
+    real_load = property_marketing.load_original_media_bytes
+
+    def _count_copy(*args, **kwargs):
+        copy_calls.append(kwargs.get("content_type"))
+        return real_copy(*args, **kwargs)
+
+    def _count_load(item, **kwargs):
+        photo_loads.append((item or {}).get("storage_key") or (item or {}).get("original_url"))
+        return real_load(item, **kwargs)
+
+    chat_service.create_and_run_generation = _count_copy
+    property_marketing.load_original_media_bytes = _count_load
 
     apply_config(app)
     app.config.update(TESTING=True, SESSION_COOKIE_SECURE=False)
@@ -88,65 +109,125 @@ def main(property_id=70, organization_id=1):
         session["organization_id"] = organization_id
         session["agent_id"] = row[1]
 
-    report = {"property_id": property_id, "organization_id": organization_id, "cases": []}
-    for name, prompt, design in CASES:
-        response = client.post(
-            "/marketing/chat",
-            data={"prompt": prompt, "layout_template": design},
-            follow_redirects=False,
-        )
-        location = response.headers.get("Location") or ""
-        conversation_id = int(location.rstrip("/").split("/")[-1]) if "/marketing/c/" in location else None
-        generation = (
-            get_marketing_generation(last_generation_id_for_conversation(conversation_id, organization_id), organization_id)
-            if conversation_id
-            else None
+    def _last(conversation_id):
+        return get_marketing_generation(
+            last_generation_id_for_conversation(conversation_id, organization_id), organization_id
         ) or {}
+
+    def _step(name, response, generation, expected):
         data = generation.get("generated_data") or {}
-        assets = [get_marketing_asset(asset_id, organization_id) for asset_id in data.get("visual_asset_ids") or []]
+        rows = data.get("visual_variants") or []
+        assets = list_generation_assets(organization_id, data.get("generation_group_id")) if data.get("generation_group_id") else []
         pngs = []
-        for asset in assets:
-            source = Path(get_private_upload_root()) / asset["storage_key"]
-            target = OUT / f"chat_{name}_{asset['format']}_{(asset.get('options') or {}).get('template_used')}.png"
-            shutil.copyfile(source, target)
+        for row in rows:
+            if row.get("status") != "ready":
+                continue
+            asset = get_marketing_asset(row["asset_id"], organization_id)
+            target = OUT / f"chat_{name}_{row['template_used']}.png"
+            shutil.copyfile(Path(get_private_upload_root()) / asset["storage_key"], target)
             pngs.append(str(target.relative_to(ROOT)))
         blob = json.dumps({"data": data, "assets": [a.get("options") for a in assets]}, ensure_ascii=False)
-        case = {
-            "case": name,
-            "prompt": prompt,
-            "design": design,
+        step = {
+            "step": name,
             "http_status": response.status_code,
-            "conversation_id": conversation_id,
             "generation_id": generation.get("id"),
+            "generation_group_id": data.get("generation_group_id"),
             "resolved_property_id": generation.get("property_id"),
-            "visual_status": data.get("visual_status"),
-            "template_used": data.get("template_used"),
-            "renderer_used": data.get("renderer_used"),
-            "layout_version": data.get("layout_version"),
-            "formats": [a["format"] for a in assets],
-            "asset_template_used": [(a.get("options") or {}).get("template_used") for a in assets],
-            "asset_renderer_used": [(a.get("options") or {}).get("renderer_used") for a in assets],
+            "selected_template": data.get("selected_template"),
+            "variant_count": len(rows),
+            "group_asset_count": len(assets),
+            "variants": [
+                {
+                    key: row.get(key)
+                    for key in ("variant_id", "template_used", "renderer_used", "layout_version", "property_id", "generation_group_id", "status")
+                }
+                for row in rows
+            ],
+            "same_copy": len({json.dumps(a.get("copy_snapshot"), sort_keys=True) for a in assets}) == 1,
+            "same_photos": len({tuple((a.get("options") or {}).get("photo_ids") or []) for a in assets}) == 1,
             "legacy_markers_found": [m for m in LEGACY_MARKERS if m in blob],
             "pngs": pngs,
         }
-        case["ok"] = bool(
-            case["http_status"] == 302
-            and case["resolved_property_id"] == property_id
-            and case["visual_status"] == "completed"
-            and case["template_used"] in PROPERTY_TEMPLATES
-            and case["renderer_used"] == "html_playwright"
-            and case["layout_version"] == case["template_used"]
-            and all(t in PROPERTY_TEMPLATES for t in case["asset_template_used"])
-            and all(r == "html_playwright" for r in case["asset_renderer_used"])
-            and not case["legacy_markers_found"]
+        step["ok"] = bool(
+            step["http_status"] == 302
+            and step["resolved_property_id"] == property_id
+            and [row["template_used"] for row in step["variants"]] == expected
+            and step["group_asset_count"] == len(expected)
+            and all(row["renderer_used"] == "html_playwright" for row in step["variants"])
+            and all(row["layout_version"] == row["template_used"] for row in step["variants"])
+            and all(row["property_id"] == property_id for row in step["variants"])
+            and step["same_copy"]
+            and step["same_photos"]
+            and not step["legacy_markers_found"]
         )
-        report["cases"].append(case)
+        return step
+
+    report = {"property_id": property_id, "organization_id": organization_id, "steps": []}
+    response = client.post("/marketing/chat", data={"prompt": PROMPT}, follow_redirects=False)
+    location = response.headers.get("Location") or ""
+    conversation_id = int(location.rstrip("/").split("/")[-1])
+    report["conversation_id"] = conversation_id
+    first = _last(conversation_id)
+    report["copy_calls_first_post"] = len(copy_calls)
+    report["photo_reads_first_post"] = len(photo_loads)
+    report["photo_reads_unique_first_post"] = len(set(photo_loads))
+    report["steps"].append(_step("post", response, first, VARIANTS))
+    page = client.get(location).get_data(as_text=True)
+    (OUT / "chat_page.html").write_text(page, encoding="utf-8")
+    report["page_choose_buttons"] = page.count("Elegir este diseño")
+
+    premium = next(
+        row for row in (first.get("generated_data") or {}).get("visual_variants") or []
+        if row["template_used"] == "property_premium_hero"
+    )
+    response = client.post(
+        f"/marketing/c/{conversation_id}/select-variant",
+        data={"generation_id": first["id"], "asset_id": premium["asset_id"]},
+        follow_redirects=False,
+    )
+    chosen = get_marketing_generation(first["id"], organization_id)
+    report["selected_template"] = (chosen.get("generated_data") or {}).get("selected_template")
+
+    response = client.post(
+        f"/marketing/c/{conversation_id}/regenerate",
+        data={"generation_id": first["id"]},
+        follow_redirects=False,
+    )
+    report["steps"].append(_step("regenerate_selected", response, _last(conversation_id), ["property_premium_hero"]))
+
+    response = client.post(
+        f"/marketing/c/{conversation_id}", data={"prompt": "Mostrame las tres de nuevo"}, follow_redirects=False
+    )
+    report["steps"].append(_step("show_all_again", response, _last(conversation_id), VARIANTS))
+
+    from PIL import Image
+
+    sheet_sources = [OUT / f"chat_post_{name}.png" for name in VARIANTS]
+    if all(path.is_file() for path in sheet_sources):
+        images = [Image.open(path).convert("RGB") for path in sheet_sources]
+        height = 900
+        scaled = [image.resize((round(image.width * height / image.height), height)) for image in images]
+        sheet = Image.new("RGB", (sum(image.width for image in scaled) + 40 * 4, height + 80), (238, 242, 239))
+        left = 40
+        for image in scaled:
+            sheet.paste(image, (left, 40))
+            left += image.width + 40
+        sheet.save(OUT / "chat_post_three_variants.png")
+        report["contact_sheet"] = str((OUT / "chat_post_three_variants.png").relative_to(ROOT))
     after = _sha256(SNAPSHOT)
     report["snapshot_unchanged"] = before == after
     report["snapshot_sha256"] = after
     report["route_log_lines"] = sum(1 for line in log_path.read_text(encoding="utf-8").splitlines() if "[MARKETING_RENDER_ROUTE]" in line)
     report["blocked_lines"] = sum(1 for line in log_path.read_text(encoding="utf-8").splitlines() if "LEGACY_ROUTE_BLOCKED" in line)
-    report["ok"] = report["snapshot_unchanged"] and all(case["ok"] for case in report["cases"])
+    report["ok"] = bool(
+        report["snapshot_unchanged"]
+        and all(step["ok"] for step in report["steps"])
+        and report["copy_calls_first_post"] == 1
+        and report["photo_reads_first_post"] == report["photo_reads_unique_first_post"]
+        and report["page_choose_buttons"] == 3
+        and report["selected_template"] == "property_premium_hero"
+        and not report["blocked_lines"]
+    )
     (OUT / "chat_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["ok"] else 1

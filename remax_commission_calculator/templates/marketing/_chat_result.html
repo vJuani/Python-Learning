@@ -1,8 +1,71 @@
 {% set data = generation.generated_data or {} %}
 {% set visuals = generation.visual_assets or [] %}
+{% set variants = generation.visual_variants or [] %}
+{% set selected = generation.selected_variant %}
+{% set choosing = variants|length > 1 and not selected %}
 {% set visual_failed = (data.visual_failed or data.visual_status == 'failed') and not visuals %}
-<article class="mkt-result{% if visuals %} mkt-result--visual{% endif %}" data-mkt-result>
-    {% if visuals %}
+{% set regenerate_url = url_for('marketing_conversation_regenerate', conversation_id=view.conversation.id) %}
+<article class="mkt-result{% if visuals or variants %} mkt-result--visual{% endif %}" data-mkt-result>
+    {% if choosing %}
+    <div class="mkt-variants" data-mkt-variants>
+        {% for card in variants %}
+        <figure class="mkt-variant{% if not card.ready %} is-failed{% endif %}" data-template="{{ card.template_used }}" data-variant-id="{{ card.variant_id }}">
+            {% if card.ready %}
+            <a class="mkt-variant__preview" href="{{ card.preview_url }}" target="_blank" rel="noopener" data-mkt-zoom data-title="{{ t(card.label_key) }}">
+                <img src="{{ card.preview_url }}" alt="{{ t(card.label_key) }}" loading="lazy">
+            </a>
+            {% else %}
+            <div class="mkt-variant__preview mkt-variant__preview--failed">
+                <p>{{ t('marketing_ia_variant_failed') }}</p>
+            </div>
+            {% endif %}
+            <figcaption class="mkt-variant__label">{{ t(card.label_key) }}</figcaption>
+            {% if card.ready %}
+            <div class="mkt-variant__actions">
+                <form method="post" action="{{ url_for('marketing_conversation_select_variant', conversation_id=view.conversation.id) }}">
+                    <input type="hidden" name="generation_id" value="{{ generation.id }}">
+                    <input type="hidden" name="asset_id" value="{{ card.asset_id }}">
+                    <button type="submit" class="btn btn-primary">{{ t('marketing_ia_variant_choose') }}</button>
+                </form>
+                <a class="mkt-variant__zoom" href="{{ card.preview_url }}" target="_blank" rel="noopener" data-mkt-zoom data-title="{{ t(card.label_key) }}">{{ t('marketing_ia_variant_zoom') }}</a>
+            </div>
+            {% endif %}
+        </figure>
+        {% endfor %}
+    </div>
+    {% elif selected %}
+    <figure class="mkt-variant mkt-variant--selected" data-template="{{ selected.template_used }}" data-variant-id="{{ selected.variant_id }}">
+        <a class="mkt-variant__preview" href="{{ selected.preview_url }}" target="_blank" rel="noopener" data-mkt-zoom data-title="{{ t(selected.label_key) }}">
+            <img src="{{ selected.preview_url }}" alt="{{ t(selected.label_key) }}">
+        </a>
+        <figcaption class="mkt-variant__label">
+            {{ t(selected.label_key) }}
+            <span class="mkt-variant__badge">{{ t('marketing_ia_variant_selected_badge') }}</span>
+        </figcaption>
+    </figure>
+    {% set others = variants|rejectattr('is_selected')|list %}
+    {% if others %}
+    <div class="mkt-variants mkt-variants--compact">
+        {% for card in others %}
+        <figure class="mkt-variant{% if not card.ready %} is-failed{% endif %}" data-template="{{ card.template_used }}">
+            {% if card.ready %}
+            <a class="mkt-variant__preview" href="{{ card.preview_url }}" target="_blank" rel="noopener" data-mkt-zoom data-title="{{ t(card.label_key) }}">
+                <img src="{{ card.preview_url }}" alt="{{ t(card.label_key) }}" loading="lazy">
+            </a>
+            <figcaption class="mkt-variant__label">{{ t(card.label_key) }}</figcaption>
+            <form method="post" action="{{ url_for('marketing_conversation_select_variant', conversation_id=view.conversation.id) }}">
+                <input type="hidden" name="generation_id" value="{{ generation.id }}">
+                <input type="hidden" name="asset_id" value="{{ card.asset_id }}">
+                <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_variant_choose') }}</button>
+            </form>
+            {% else %}
+            <figcaption class="mkt-variant__label">{{ t(card.label_key) }} · {{ t('marketing_ia_variant_failed') }}</figcaption>
+            {% endif %}
+        </figure>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% elif visuals %}
     <div class="mkt-result__gallery">
         {% for asset in visuals %}
         <a class="mkt-result__visual" href="{{ asset.download_url or asset.preview_url }}" target="_blank" rel="noopener">
@@ -24,7 +87,7 @@
             {{ t('marketing_ia_visual_error') }}
         {% endif %}
     </p>
-    <form method="post" action="{{ url_for('marketing_conversation_regenerate', conversation_id=view.conversation.id) }}" class="mkt-result__retry">
+    <form method="post" action="{{ regenerate_url }}" class="mkt-result__retry">
         <input type="hidden" name="generation_id" value="{{ generation.id }}">
         <input type="hidden" name="visual_only" value="1">
         <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_visual_retry') }}</button>
@@ -33,7 +96,7 @@
     <p class="mkt-debug">{{ data.visual_stage }} · {{ data.visual_error }}</p>
     {% endif %}
     {% endif %}
-    {% if visuals %}
+    {% if visuals or variants %}
     <details class="mkt-result__copy-panel">
         <summary>{{ t('marketing_ia_view_copy') }}</summary>
         <div class="mkt-result__copy">
@@ -77,19 +140,49 @@
             <p class="mkt-warn">{{ generation.error_message }}</p>
             {% endif %}
         </div>
-    {% if visuals %}
+    {% if visuals or variants %}
     </details>
     {% endif %}
+    {% if choosing %}
+    <div class="mkt-result__actions">
+        <a class="mkt-result__library" href="{{ url_for('marketing_generation_detail', generation_id=generation.id) }}">{{ t('marketing_ia_open_library') }}</a>
+    </div>
+    {% elif selected %}
+    <div class="mkt-result__actions">
+        <a class="btn btn-primary" href="{{ selected.download_url }}">{{ t('marketing_download_png') }}</a>
+        <form method="post" action="{{ regenerate_url }}">
+            <input type="hidden" name="generation_id" value="{{ generation.id }}">
+            <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_regenerate') }}</button>
+        </form>
+        <button type="button" class="btn btn-secondary" data-mkt-starter data-prompt="{{ t('marketing_ia_change_text_prompt') }}">{{ t('marketing_ia_change_text') }}</button>
+        <button type="button" class="btn btn-secondary" data-mkt-starter data-prompt="{{ t('marketing_ia_change_cta_prompt') }}">{{ t('marketing_ia_change_cta') }}</button>
+        <form method="post" action="{{ regenerate_url }}">
+            <input type="hidden" name="generation_id" value="{{ generation.id }}">
+            <input type="hidden" name="change_photos" value="1">
+            <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_change_photos') }}</button>
+        </form>
+        <form method="post" action="{{ regenerate_url }}">
+            <input type="hidden" name="generation_id" value="{{ generation.id }}">
+            <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_another_version') }}</button>
+        </form>
+        <form method="post" action="{{ regenerate_url }}">
+            <input type="hidden" name="generation_id" value="{{ generation.id }}">
+            <input type="hidden" name="show_all" value="1">
+            <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_show_all_again') }}</button>
+        </form>
+        <a class="mkt-result__library" href="{{ url_for('marketing_generation_detail', generation_id=generation.id) }}">{{ t('marketing_ia_open_library') }}</a>
+    </div>
+    {% else %}
     <div class="mkt-result__actions">
         <button type="button" class="btn btn-secondary" data-mkt-edit>{{ t('marketing_ia_edit') }}</button>
-        <form method="post" action="{{ url_for('marketing_conversation_regenerate', conversation_id=view.conversation.id) }}">
+        <form method="post" action="{{ regenerate_url }}">
             <input type="hidden" name="generation_id" value="{{ generation.id }}">
             {% if visual_failed or not visuals %}
             <input type="hidden" name="visual_only" value="1">
             {% endif %}
             <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_regenerate') }}</button>
         </form>
-        <form method="post" action="{{ url_for('marketing_conversation_regenerate', conversation_id=view.conversation.id) }}">
+        <form method="post" action="{{ regenerate_url }}">
             <input type="hidden" name="generation_id" value="{{ generation.id }}">
             <button type="submit" class="btn btn-secondary">{{ t('marketing_ia_another_version') }}</button>
         </form>
@@ -112,5 +205,6 @@
         >{{ t('marketing_share') }}</button>
         <a class="mkt-result__library" href="{{ url_for('marketing_generation_detail', generation_id=generation.id) }}">{{ t('marketing_ia_open_library') }}</a>
     </div>
+    {% endif %}
     <div id="mkt-copy-{{ generation.id }}" hidden>{{ generation.generated_copy or data.caption or data.message or data.headline or '' }}</div>
 </article>

@@ -23,6 +23,7 @@ from modules.database.marketing_conversations_repository import (
     update_marketing_conversation,
 )
 from modules.database.marketing_generations_repository import (
+    create_marketing_generation,
     get_marketing_generation,
     update_marketing_generation,
 )
@@ -166,6 +167,18 @@ ACTION_FORMATS = {
     "generate_visual": ["post"],
 }
 VISUAL_ACTIONS = frozenset(ACTION_FORMATS) - {"generate_visual"}
+SHOW_ALL_VARIANTS_RE = re.compile(
+    r"\b("
+    r"mostra(?:me)? (?:las|los) (?:3|tres)|"
+    r"(?:las|los) (?:3|tres) (?:de nuevo|otra vez|opciones|propuestas|disenos)|"
+    r"(?:3|tres) propuestas|todas las (?:opciones|propuestas)"
+    r")\b"
+)
+VARIANT_LABELS = {
+    "property_clean_grid": "marketing_ia_design_clean_grid",
+    "property_lifestyle_dark": "marketing_ia_design_lifestyle_dark",
+    "property_premium_hero": "marketing_ia_design_premium_hero",
+}
 CHAT_SYSTEM_PROMPT = (
     "Sos JRH IA, el asistente creativo de un agente inmobiliario. "
     "Respondé en el idioma del usuario, con ideas concretas y accionables. "
@@ -1156,6 +1169,24 @@ def _resolve_property(organization_id, user, property_id):
     return record
 
 
+def _variant_cards(data):
+    cards = []
+    for row in (data or {}).get("visual_variants") or []:
+        asset_id = row.get("asset_id")
+        ready = row.get("status") == "ready" and asset_id
+        cards.append(
+            {
+                **row,
+                "label_key": VARIANT_LABELS.get(row.get("template_used"), "marketing_ia_format_post"),
+                "ready": bool(ready),
+                "preview_url": f"/marketing/assets/{asset_id}/preview" if ready else None,
+                "download_url": f"/marketing/assets/{asset_id}/download.png" if ready else None,
+                "is_selected": bool(ready) and asset_id == data.get("selected_asset_id"),
+            }
+        )
+    return cards
+
+
 def _hydrate_messages(organization_id, messages, *, properties=None):
     covers = {
         item.get("id"): item.get("cover_url")
@@ -1192,6 +1223,16 @@ def _hydrate_messages(organization_id, messages, *, properties=None):
             ]
             generation["visual_preview_url"] = (
                 generation["visual_assets"][0]["preview_url"] if generation["visual_assets"] else None
+            )
+            generation["visual_variants"] = _variant_cards(data)
+            generation["selected_template"] = _selected_template(generation)
+            generation["selected_variant"] = next(
+                (
+                    card
+                    for card in generation["visual_variants"]
+                    if card["asset_id"] == data.get("selected_asset_id")
+                ),
+                None,
             )
         item["generation"] = generation
         hydrated.append(item)
@@ -1243,6 +1284,27 @@ def build_chat_workspace(
         "language": language,
         "is_admin": is_admin(user),
     }
+
+
+def _selected_template(generation):
+    value = ((generation or {}).get("generated_data") or {}).get("selected_template")
+    return value if value in VARIANT_LABELS else None
+
+
+def _variant_templates_for(intent, generation=None, last_generation=None):
+    """New listing visuals always get the 3 designs; work on a chosen design keeps only that one."""
+    from modules.property_marketing import VARIANT_TEMPLATES
+
+    if intent.get("show_all_variants"):
+        return list(VARIANT_TEMPLATES)
+    explicit = [item for item in intent.get("variant_templates") or [] if item]
+    if explicit:
+        return explicit
+    if intent.get("action") in {"edit_existing_generation", "generate_visual"}:
+        selected = _selected_template(generation) or _selected_template(last_generation)
+        if selected:
+            return [selected]
+    return list(VARIANT_TEMPLATES)
 
 
 def _visual_formats(intent, last_generation=None):
@@ -1313,61 +1375,97 @@ def _mark_visual_failed(generation, *, stage, error):
         visual_asset_id=None,
         visual_asset_ids=[],
         visual_asset_url=None,
+        visual_variants=[],
     )
 
 
-def _attach_visual_assets(generation, batch_view):
+def _variant_order(template):
+    names = list(VARIANT_LABELS)
+    return names.index(template) if template in names else len(names)
+
+
+def _attach_visual_assets(generation, batch_view, *, variants=None, photo_offset=0):
+    from modules.property_marketing import assert_property_route
+
     ready_assets = []
-    template_used = None
+    variant_rows = []
     storage_key = None
+    group_id = (batch_view or {}).get("generation_id") or (batch_view or {}).get("id")
     for item in (batch_view or {}).get("assets") or []:
         if not item.get("id"):
             continue
+        options = item.get("options") or {}
         ready = bool(item.get("ready") or item.get("storage_key"))
+        template = options.get("variant_template") or item.get("template_used") or options.get("template_used")
+        row = {
+            "variant_id": options.get("variant_id"),
+            "asset_id": item["id"],
+            "generation_group_id": options.get("generation_group_id") or group_id,
+            "property_id": options.get("property_id") or item.get("property_id") or generation.get("property_id"),
+            "format": item.get("format"),
+            "template_used": template,
+            "renderer_used": options.get("renderer_used") if ready else None,
+            "layout_version": options.get("layout_version") if ready else None,
+            "status": "ready" if ready else "failed",
+            "error": None if ready else (options.get("error") or "marketing_err_item_failed"),
+        }
+        variant_rows.append(row)
         if not ready:
             continue
-        preview = f"/marketing/assets/{item['id']}/preview"
         ready_assets.append(
             {
                 "id": item["id"],
                 "format": item.get("format"),
                 "ready": True,
-                "preview_url": preview,
+                "preview_url": f"/marketing/assets/{item['id']}/preview",
                 "download_url": f"/marketing/assets/{item['id']}/download.png",
                 "storage_key": item.get("storage_key"),
-                "template_used": item.get("template_used")
-                or ((item.get("options") or {}).get("template_used")),
-                "renderer_used": (item.get("options") or {}).get("renderer_used"),
-                "layout_version": (item.get("options") or {}).get("layout_version"),
-                "design_requested": (item.get("options") or {}).get("design_requested"),
+                "template_used": item.get("template_used") or options.get("template_used"),
+                "renderer_used": options.get("renderer_used"),
+                "layout_version": options.get("layout_version"),
+                "design_requested": options.get("design_requested"),
             }
         )
-        from modules.property_marketing import assert_property_route
-
         assert_property_route(
             ready_assets[-1]["template_used"],
             renderer=ready_assets[-1]["renderer_used"] or "missing",
-            requested=(item.get("options") or {}).get("design_requested"),
+            requested=options.get("design_requested"),
             kind=item.get("format"),
             property_id=generation.get("property_id"),
             callsite="marketing_chat_service._attach_visual_assets",
         )
-        template_used = template_used or ready_assets[-1]["template_used"]
         storage_key = storage_key or item.get("storage_key")
+    variant_rows.sort(key=lambda row: _variant_order(row["template_used"]))
+    ready_assets.sort(key=lambda asset: _variant_order(asset["template_used"]))
+    selected_template = variants[0] if variants and len(variants) == 1 else None
+    selected_asset = next(
+        (asset for asset in ready_assets if asset["template_used"] == selected_template),
+        None,
+    )
+    primary = selected_asset or (ready_assets[0] if ready_assets else None)
     data = dict(generation.get("generated_data") or {})
-    data["visual_batch_id"] = (batch_view or {}).get("generation_id") or (batch_view or {}).get("id")
+    data["visual_batch_id"] = group_id
+    data["generation_group_id"] = group_id
+    data["visual_variants"] = variant_rows
+    data["variant_templates"] = list(variants or [])
+    data["visual_failed_variants"] = [
+        row["template_used"] for row in variant_rows if row["status"] == "failed"
+    ]
+    data["selected_template"] = selected_template if selected_asset else None
+    data["selected_asset_id"] = selected_asset["id"] if selected_asset else None
+    data["photo_offset"] = max(0, int(photo_offset or 0))
     if ready_assets:
         data["visual_asset_ids"] = [item["id"] for item in ready_assets]
-        data["visual_asset_id"] = ready_assets[0]["id"]
-        data["visual_asset_url"] = ready_assets[0]["preview_url"]
+        data["visual_asset_id"] = primary["id"]
+        data["visual_asset_url"] = primary["preview_url"]
         data["visual_status"] = "completed"
         data["visual_failed"] = False
         data["visual_stage"] = "complete"
         data["visual_error"] = None
-        data["template_used"] = template_used or data.get("template_used")
-        data["renderer_used"] = ready_assets[0].get("renderer_used") or data.get("renderer_used")
-        data["layout_version"] = ready_assets[0].get("layout_version") or data["template_used"]
-        data["layout_template"] = ready_assets[0].get("design_requested") or data.get("layout_template")
+        data["template_used"] = primary["template_used"] or data.get("template_used")
+        data["renderer_used"] = primary.get("renderer_used") or data.get("renderer_used")
+        data["layout_version"] = primary.get("layout_version") or data["template_used"]
+        data["layout_template"] = primary.get("design_requested") or data.get("layout_template")
         logger.info(
             "marketing_visual_storage_ok url=%s template_used=%s renderer_used=%s",
             data["visual_asset_url"],
@@ -1491,10 +1589,13 @@ def _run_visual_for_chat(
     formats = _visual_formats(intent, generation or last_generation)
     copy_override = _copy_override_from_generation(generation or last_generation)
     from modules.marketing_render_html import HTML_RENDERER
-    from modules.property_marketing import is_legacy_design, log_render_route, normalize_property_design
+    from modules.property_marketing import is_legacy_design, log_render_route
 
     requested_design = intent.get("layout_template")
-    design = normalize_property_design(requested_design)
+    variants = _variant_templates_for(intent, generation, last_generation)
+    if len(variants) > 1:
+        # Property templates render the same canvas for every format: one piece per design.
+        formats = formats[:1]
     log_render_route(
         "run_visual_for_chat",
         conversation_id=(conversation or {}).get("id"),
@@ -1502,8 +1603,8 @@ def _run_visual_for_chat(
         kind=",".join(formats),
         property_id=property_id,
         requested_design=requested_design,
-        resolved_design=design,
-        template_before_render=design,
+        resolved_design=",".join(variants),
+        template_before_render=",".join(variants),
         renderer_before_render=HTML_RENDERER,
         legacy_fallback_reason="legacy_design_migrated" if is_legacy_design(requested_design) else None,
     )
@@ -1524,7 +1625,9 @@ def _run_visual_for_chat(
             include_price=True,
             local_render=True,
             copy_override=copy_override,
-            layout_template=design,
+            layout_template=variants[0],
+            design_variants=variants,
+            photo_offset=intent.get("photo_offset") or 0,
             cta=intent.get("cta"),
         )
         _log_property_trace(
@@ -1533,7 +1636,13 @@ def _run_visual_for_chat(
             property_id=property_id,
             photo_count=photo_count,
         )
-        return {"ok": True, "stage": "complete", "error": None, "batch": batch}
+        return {
+            "ok": True,
+            "stage": "complete",
+            "error": None,
+            "batch": batch,
+            "variants": variants,
+        }
     finally:
         if previous is None:
             os.environ.pop("MARKETING_SYNC", None)
@@ -1580,7 +1689,71 @@ def _apply_visual_to_generation(
         stage = (result or {}).get("stage") or "render"
         error = (result or {}).get("error") or "not_ready"
         return _mark_visual_failed(generation, stage=stage, error=error)
-    return _attach_visual_assets(generation, result["batch"])
+    return _attach_visual_assets(
+        generation,
+        result["batch"],
+        variants=result.get("variants"),
+        photo_offset=intent.get("photo_offset") or 0,
+    )
+
+
+_VISUAL_DATA_KEYS = (
+    "visual_asset_id",
+    "visual_asset_ids",
+    "visual_asset_url",
+    "visual_variants",
+    "visual_failed_variants",
+    "visual_batch_id",
+    "generation_group_id",
+    "selected_template",
+    "selected_asset_id",
+)
+
+
+def _fork_generation(source, organization_id):
+    """New row with the same copy (no AI call), so earlier proposals stay visible in the thread."""
+    fork = create_marketing_generation(
+        organization_id,
+        created_by_user_id=source.get("created_by_user_id"),
+        content_type=source.get("content_type") or "post",
+        origin=source.get("origin") or "property",
+        agent_id=source.get("agent_id"),
+        property_id=source.get("property_id"),
+        parent_generation_id=source.get("id"),
+        objective=source.get("objective"),
+        style=source.get("style"),
+        tone=source.get("tone"),
+        format=source.get("format"),
+        prompt_input=source.get("prompt_input"),
+    )
+    data = {
+        key: value
+        for key, value in (source.get("generated_data") or {}).items()
+        if key not in _VISUAL_DATA_KEYS
+    }
+    return update_marketing_generation(
+        fork["id"],
+        organization_id,
+        status=source.get("status") or "completed",
+        generated_copy=source.get("generated_copy"),
+        generated_data=data,
+        provider=source.get("provider"),
+        model_name=source.get("model_name"),
+        completed_at=source.get("completed_at"),
+    )
+
+
+def _variants_lead(generation, language):
+    data = (generation or {}).get("generated_data") or {}
+    rows = data.get("visual_variants") or []
+    ready = sum(1 for row in rows if row.get("status") == "ready")
+    if len(rows) < 2 or not ready:
+        return None
+    record = None
+    if generation.get("property_id"):
+        record = get_property_record(generation["property_id"], generation.get("organization_id"))
+    address = (record or {}).get("address") or (record or {}).get("title") or ""
+    return _t("marketing_ia_variants_ready", language, count=ready, address=address)
 
 
 def _wants_visual(intent):
@@ -1740,6 +1913,12 @@ def send_chat_message(
         properties=properties,
         preferred_mode=preferred_mode,
     )
+    if last and SHOW_ALL_VARIANTS_RE.search(_fold(work_prompt)) and _has_usable_copy(last):
+        intent["action"] = "generate_visual"
+        intent["show_all_variants"] = True
+        intent["property_id"] = _as_property_id(last.get("property_id")) or intent.get("property_id")
+        intent["needs_property"] = False
+        intent.pop("property_status", None)
     if layout_template:
         from modules.property_marketing import is_legacy_design, log_render_route, normalize_property_design
 
@@ -1921,7 +2100,11 @@ def send_chat_message(
             property_id=intent.get("property_id"),
         )
         intent = _apply_context_to_intent(intent, context)
-        generation = last
+        generation = (
+            _fork_generation(last, organization_id)
+            if (last.get("generated_data") or {}).get("visual_variants")
+            else last
+        )
         data = dict(generation.get("generated_data") or {})
         data["action"] = "generate_visual"
         data["requested_format"] = (
@@ -1959,7 +2142,7 @@ def send_chat_message(
             "visual_asset_ids": (generation.get("generated_data") or {}).get("visual_asset_ids") or [],
             "visual_status": (generation.get("generated_data") or {}).get("visual_status"),
         }
-        lead = _t("marketing_ia_ack_visual", language)
+        lead = _variants_lead(generation, language) or _t("marketing_ia_ack_visual", language)
         add_marketing_message(
             conversation["id"],
             organization_id,
@@ -2051,7 +2234,9 @@ def send_chat_message(
             "visual_status": (generation.get("generated_data") or {}).get("visual_status"),
             "include_agent": data.get("include_agent"),
         }
-        lead = _t(_ack_key(intent) or "marketing_ia_ack_visual", language)
+        lead = _variants_lead(generation, language) or _t(
+            _ack_key(intent) or "marketing_ia_ack_visual", language
+        )
         if intent.get("property_auto_picked"):
             label = listing_label(property_row, intent)
             lead = (
@@ -2090,6 +2275,8 @@ def regenerate_in_conversation(
     *,
     language="es",
     visual_only=False,
+    change_photos=False,
+    show_all=False,
 ):
     organization_id = require_organization_id(organization_id)
     require_conversation(organization_id, user, conversation_id)
@@ -2098,13 +2285,19 @@ def regenerate_in_conversation(
         raise MarketingError("marketing_ia_err_missing", 404)
     source_data = source.get("generated_data") or {}
     copy_ok = _has_usable_copy(source)
-    retry_visual_only = bool(visual_only) and copy_ok
+    retry_visual_only = (bool(visual_only) or change_photos or show_all) and copy_ok
+    if show_all:
+        label_key = "marketing_ia_show_all_again"
+    elif change_photos:
+        label_key = "marketing_ia_change_photos"
+    else:
+        label_key = "marketing_ia_regenerate"
     add_marketing_message(
         conversation_id,
         organization_id,
         role="user",
         message_type="text",
-        content=_t("marketing_ia_regenerate", language),
+        content=_t(label_key, language),
         metadata={
             "action": "regenerate_visual" if retry_visual_only else "regenerate",
             "generation_id": generation_id,
@@ -2140,6 +2333,15 @@ def regenerate_in_conversation(
         "include_agent": stored.get("include_agent"),
         "layout_template": retry_design,
     }
+    selected = _selected_template(source)
+    if show_all:
+        intent["show_all_variants"] = True
+    elif selected:
+        intent["variant_templates"] = [selected]
+    if change_photos:
+        intent["photo_offset"] = int(source_data.get("photo_offset") or 0) + 1
+    elif selected:
+        intent["photo_offset"] = int(source_data.get("photo_offset") or 0)
     _log_property_trace(
         "marketing_visual_retry",
         generation_id=generation_id,
@@ -2148,13 +2350,14 @@ def regenerate_in_conversation(
         visual_only=int(bool(retry_visual_only)),
     )
     if retry_visual_only and copy_ok:
+        target = _fork_generation(source, organization_id) if source_data.get("visual_variants") else source
         generation = _apply_visual_to_generation(
             organization_id,
             user,
             intent,
             source.get("prompt_input") or "",
             language,
-            source,
+            target,
             last_generation=source,
             conversation=conversation,
         )
@@ -2193,7 +2396,7 @@ def regenerate_in_conversation(
         organization_id,
         role="assistant",
         message_type="generation",
-        content=_t(ack_key, language),
+        content=_variants_lead(generation, language) or _t(ack_key, language),
         generation_id=generation["id"],
         metadata={
             "action": intent.get("action"),
@@ -2208,3 +2411,83 @@ def regenerate_in_conversation(
         "conversation": get_marketing_conversation(conversation_id, organization_id),
         "generation": generation,
     }
+
+
+def select_variant_in_conversation(
+    organization_id,
+    user,
+    conversation_id,
+    generation_id,
+    asset_id,
+    *,
+    language="es",
+):
+    from modules.marketing_service import select_marketing_asset
+
+    organization_id = require_organization_id(organization_id)
+    conversation = require_conversation(organization_id, user, conversation_id)
+    in_thread = any(
+        message.get("generation_id") == generation_id
+        for message in list_marketing_messages(conversation_id, organization_id)
+    )
+    generation = get_marketing_generation(generation_id, organization_id) if in_thread else None
+    if generation is None:
+        raise MarketingError("marketing_ia_err_missing", 404)
+    data = dict(generation.get("generated_data") or {})
+    variant = next(
+        (
+            row
+            for row in data.get("visual_variants") or []
+            if row.get("asset_id") == asset_id and row.get("status") == "ready"
+        ),
+        None,
+    )
+    if variant is None or variant.get("template_used") not in VARIANT_LABELS:
+        raise MarketingError("marketing_ia_err_missing", 404)
+    select_marketing_asset(organization_id, user, asset_id)
+    template = variant["template_used"]
+    data.update(
+        selected_template=template,
+        selected_asset_id=asset_id,
+        selected_variant_id=variant.get("variant_id"),
+        visual_asset_id=asset_id,
+        visual_asset_url=f"/marketing/assets/{asset_id}/preview",
+        template_used=template,
+        renderer_used=variant.get("renderer_used"),
+        layout_version=variant.get("layout_version") or template,
+        layout_template=template,
+    )
+    generation = update_marketing_generation(generation_id, organization_id, generated_data=data)
+    context = conversation_context(conversation)
+    context.update(
+        selected_template=template,
+        primary_generation_id=generation_id,
+        layout_template=template,
+    )
+    conversation = _persist_chat_context(conversation, organization_id, context)
+    logger.info(
+        "marketing_variant_selected conversation_id=%s generation_id=%s asset_id=%s selected_template=%s",
+        conversation_id,
+        generation_id,
+        asset_id,
+        template,
+    )
+    add_marketing_message(
+        conversation_id,
+        organization_id,
+        role="assistant",
+        message_type="text",
+        content=_t(
+            "marketing_ia_variant_selected",
+            language,
+            design=_t(VARIANT_LABELS[template], language),
+        ),
+        generation_id=generation_id,
+        metadata={
+            "action": "select_variant",
+            "generation_id": generation_id,
+            "selected_template": template,
+            "selected_asset_id": asset_id,
+        },
+    )
+    return {"conversation": conversation, "generation": generation}

@@ -131,6 +131,8 @@ def empty_context():
         "cta": None,
         "hero_photo_id": None,
         "layout_template": None,
+        "selected_template": None,
+        "primary_generation_id": None,
         "asked": [],
         "pending_decision": None,
         "pending_prompt": None,

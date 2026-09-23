@@ -48,6 +48,7 @@ from modules.marketing_chat_service import (
     regenerate_in_conversation,
     rename_conversation,
     rename_folder,
+    select_variant_in_conversation,
     send_chat_message,
 )
 from modules.marketing_generation_service import (
@@ -201,6 +202,27 @@ def register_marketing_routes(app, helpers):
                 request.form.get("generation_id", type=int),
                 language=get_current_language(),
                 visual_only=request.form.get("visual_only") in {"1", "true", "on"},
+                change_photos=request.form.get("change_photos") in {"1", "true", "on"},
+                show_all=request.form.get("show_all") in {"1", "true", "on"},
+            )
+        except MarketingError as error:
+            return _handle(error, fallback_endpoint="marketing_home")
+        return redirect(url_for("marketing_conversation", conversation_id=conversation_id))
+
+    @app.route("/marketing/c/<int:conversation_id>/select-variant", methods=["POST"])
+    def marketing_conversation_select_variant(conversation_id):
+        user = _marketing_user()
+        if user is None:
+            return _forbidden()
+        organization_id = require_user_organization()
+        try:
+            select_variant_in_conversation(
+                organization_id,
+                user,
+                conversation_id,
+                request.form.get("generation_id", type=int),
+                request.form.get("asset_id", type=int),
+                language=get_current_language(),
             )
         except MarketingError as error:
             return _handle(error, fallback_endpoint="marketing_home")

@@ -335,6 +335,25 @@
     });
   });
 
+  var zoomDialog = root.querySelector("[data-mkt-zoom-dialog]");
+  var zoomImg = zoomDialog && zoomDialog.querySelector("[data-mkt-zoom-img]");
+  var zoomTitle = zoomDialog && zoomDialog.querySelector("[data-mkt-zoom-title]");
+  if (zoomDialog && zoomImg && typeof zoomDialog.showModal === "function") {
+    root.querySelectorAll("[data-mkt-zoom]").forEach(function (link) {
+      link.addEventListener("click", function (event) {
+        event.preventDefault();
+        var title = link.getAttribute("data-title") || "";
+        zoomImg.src = link.getAttribute("href") || "";
+        zoomImg.alt = title;
+        if (zoomTitle) zoomTitle.textContent = title;
+        zoomDialog.showModal();
+      });
+    });
+    zoomDialog.addEventListener("click", function (event) {
+      if (event.target === zoomDialog) zoomDialog.close();
+    });
+  }
+
   root.querySelectorAll("[data-mkt-download]").forEach(function (button) {
     button.addEventListener("click", function () {
       var card = button.closest("[data-mkt-result]");

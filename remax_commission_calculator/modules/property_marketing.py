@@ -6,10 +6,12 @@ JRH One never appears on the creative. Layout is deterministic.
 from __future__ import annotations
 
 import base64
+import contextvars
 import hashlib
 import io
 import logging
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -84,6 +86,8 @@ PROPERTY_TEMPLATES = (
     TEMPLATE_LIFESTYLE_DARK,
     TEMPLATE_PREMIUM_HERO,
 )
+VARIANT_TEMPLATES = PROPERTY_TEMPLATES
+_PHOTO_BYTES_CACHE = contextvars.ContextVar("property_marketing_photo_bytes", default=None)
 TEMPLATE_FILES = {
     TEMPLATE_CLEAN_GRID: "property_clean_grid.html",
     TEMPLATE_LIFESTYLE_DARK: "property_lifestyle_dark.html",
@@ -350,6 +354,45 @@ def _sha256(payload):
     return hashlib.sha256(payload).hexdigest() if payload else ""
 
 
+@contextmanager
+def shared_photo_cache():
+    """Each original photo is read once for every variant rendered inside this block."""
+    current = _PHOTO_BYTES_CACHE.get()
+    if current is not None:
+        yield current
+        return
+    token = _PHOTO_BYTES_CACHE.set({})
+    try:
+        yield _PHOTO_BYTES_CACHE.get()
+    finally:
+        _PHOTO_BYTES_CACHE.reset(token)
+
+
+def _cached_bytes(key, loader):
+    shared = _PHOTO_BYTES_CACHE.get()
+    if shared is None:
+        return loader()
+    if key not in shared:
+        payload = loader()
+        if not payload:
+            return payload
+        shared[key] = payload
+    return shared[key]
+
+
+def _original_photo_bytes(item, remote_cache):
+    item = item or {}
+    key = (
+        "media",
+        item.get("id"),
+        item.get("storage_key") or item.get("path") or "",
+        item.get("original_url") or item.get("remote_url") or "",
+    )
+    return _cached_bytes(
+        key, lambda: load_original_media_bytes(item, cache=remote_cache, cache_dir=True)
+    )
+
+
 def _source_audit(item, payload, meta):
     """Source file/URL vs bytes handed to the renderer. Must be byte-identical."""
     item = item or {}
@@ -358,7 +401,9 @@ def _source_audit(item, payload, meta):
     if not source_path:
         explicit = str(item.get("path") or "").strip()
         source_path = Path(explicit) if explicit and Path(explicit).is_file() else None
-    source_bytes = source_path.read_bytes() if source_path else payload
+    source_bytes = (
+        _cached_bytes(("path", str(source_path)), source_path.read_bytes) if source_path else payload
+    )
     source_size = (None, None)
     if source_bytes:
         with Image.open(io.BytesIO(source_bytes)) as image:
@@ -403,7 +448,7 @@ def _load_listing_photos(photo_rows):
     cache = {}
     for index, item in enumerate(photo_rows or []):
         try:
-            payload = load_original_media_bytes(item, cache=cache, cache_dir=True)
+            payload = _original_photo_bytes(item, cache)
             if not payload:
                 logger.error(
                     "original_photo_fetch_failed source_type=%s original_url=%s path=%s",

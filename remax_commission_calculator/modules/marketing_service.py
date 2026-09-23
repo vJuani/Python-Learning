@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import os
 import re
@@ -54,12 +55,14 @@ from modules.marketing_render_html import (
     uses_html_renderer,
 )
 from modules.property_marketing import (
+    VARIANT_TEMPLATES,
     assert_property_route,
     is_legacy_design,
     log_render_route,
     normalize_property_design,
     render_property_marketing,
     resolve_property_template,
+    shared_photo_cache,
     uses_property_marketing_renderer,
 )
 from modules.marketing_quality import validate_creative
@@ -643,7 +646,8 @@ def _process_item(organization_id, asset_id, *, retry=False):
         selected = select_photos_for_item(
             context.get("photos") or [],
             fmt=asset["format"],
-            index=max(0, int(options.get("format_index") or 1) - 1),
+            index=max(0, int(options.get("format_index") or 1) - 1)
+            + max(0, int(options.get("photo_offset") or 0)),
         )
         if selected:
             context["photos"] = selected
@@ -905,6 +909,11 @@ def _refresh_batch_status(organization_id, batch_id):
 
 
 def _run_batch(organization_id, batch_id):
+    with shared_photo_cache():
+        _run_batch_items(organization_id, batch_id)
+
+
+def _run_batch_items(organization_id, batch_id):
     assets = list_generation_assets(organization_id, batch_id)
     update_marketing_batch(batch_id, organization_id, status="generating")
     limit = _concurrency()
@@ -928,8 +937,8 @@ def _run_batch(organization_id, batch_id):
         if _pipeline_status(asset) == PIPELINE_FAILED:
             continue
         thread = threading.Thread(
-            target=_worker,
-            args=(asset["id"],),
+            target=contextvars.copy_context().run,
+            args=(_worker, asset["id"]),
             daemon=True,
             name=f"mkt-item-{asset['id']}",
         )
@@ -938,6 +947,24 @@ def _run_batch(organization_id, batch_id):
     for thread in threads:
         thread.join(timeout=180)
     _refresh_batch_status(organization_id, batch_id)
+
+
+def _resolve_variant_templates(design_variants, *, kind, property_id):
+    resolved = []
+    for value in design_variants or ():
+        template = assert_property_route(
+            value,
+            renderer=HTML_RENDERER,
+            requested=value,
+            kind=kind,
+            property_id=property_id,
+            callsite="marketing_service.start_marketing_batch.variants",
+        )
+        if template not in VARIANT_TEMPLATES:
+            raise MarketingError("marketing_err_item_failed", 400)
+        if template not in resolved:
+            resolved.append(template)
+    return resolved
 
 
 def start_marketing_batch(
@@ -961,6 +988,8 @@ def start_marketing_batch(
     copy_override=None,
     local_render=False,
     layout_template=None,
+    design_variants=None,
+    photo_offset=0,
 ):
     organization_id = require_organization_id(organization_id)
     cleanup_expired_marketing_assets(organization_id)
@@ -1057,19 +1086,26 @@ def start_marketing_batch(
     elif is_legacy_design(requested_design):
         legacy_reason = "legacy_design_migrated"
     design = normalize_property_design(requested_design)
+    variant_templates = _resolve_variant_templates(
+        design_variants,
+        kind=",".join(item["format"] for item in items),
+        property_id=property_data["id"],
+    )
     options.update(
         property_marketing=True,
         design_requested=design,
         layout_template=design,
         template=design,
     )
+    if photo_offset:
+        options["photo_offset"] = max(0, int(photo_offset))
     log_render_route(
         "start_marketing_batch",
         kind=",".join(item["format"] for item in items),
         property_id=property_data["id"],
-        requested_design=requested_design,
-        resolved_design=design,
-        template_before_render=design,
+        requested_design=",".join(variant_templates) if variant_templates else requested_design,
+        resolved_design=",".join(variant_templates) if variant_templates else design,
+        template_before_render=",".join(variant_templates) if variant_templates else design,
         renderer_before_render=HTML_RENDERER,
         legacy_fallback_reason=legacy_reason,
     )
@@ -1117,9 +1153,9 @@ def start_marketing_batch(
         used.add(((reference.get("options") or {}).get("visual_direction")) or "")
     sort_index = 0
     for item in items:
-        sort_index += 1
+        art = copy = None
+        selected_photos = []
         try:
-            item_options = dict(options)
             if copy_override:
                 art = {
                     "visual_direction": parsed.get("style") or style or "premium",
@@ -1161,68 +1197,7 @@ def start_marketing_batch(
             selected_photos = select_photos_for_item(
                 context.get("photos") or [],
                 fmt=item["format"],
-                index=max(0, int(item["index"]) - 1),
-            )
-            layout_template = assert_property_route(
-                resolve_property_template(item_options),
-                renderer=HTML_RENDERER,
-                requested=requested_design,
-                kind=item["format"],
-                property_id=property_data["id"],
-                callsite="marketing_service.start_marketing_batch",
-            )
-            logger.info(
-                "template_used=%s format=%s local_render=%s",
-                layout_template,
-                item["format"],
-                str(bool(local_render)).lower(),
-            )
-            item_options.update(
-                {
-                    "pipeline_status": PIPELINE_QUEUED,
-                    "visual_direction": art.get("visual_direction"),
-                    "creative_brief": art.get("creative_brief"),
-                    "background_style": art.get("background_style"),
-                    "layout": art.get("layout") or {},
-                    "layout_template": layout_template,
-                    "template_used": layout_template,
-                    "layout_version": layout_template,
-                    "sort_index": sort_index,
-                    "format_index": item["index"],
-                    "prompt": parsed.get("prompt") or prompt,
-                    "reference_asset_id": reference_asset_id,
-                    "source": HTML_RENDERER,
-                    "temporary": True,
-                    "expires_at": expires_at,
-                    "photo_ids": [photo.get("id") for photo in selected_photos if photo.get("id")],
-                    "local_render": bool(local_render),
-                    "include_agent": parsed.get("with_agent") is not False,
-                    "show_agent_photo": parsed.get("with_agent_photo") is not False,
-                    "show_price": parsed.get("show_price") is not False,
-                    "cta": copy.get("cta") or parsed.get("cta") or "",
-                    "language": language,
-                    "format": item["format"],
-                }
-            )
-            create_marketing_asset(
-                organization_id,
-                property_id=property_data["id"],
-                generation_id=batch_id,
-                format=item["format"],
-                style=art.get("visual_direction") or "light",
-                tone=parsed.get("visual_direction") or "premium varied",
-                template=layout_template,
-                copy_snapshot=ensure_json_serializable(copy, path="copy_snapshot"),
-                property_snapshot=ensure_json_serializable(snapshot, path="property_snapshot"),
-                agent_branding_snapshot=ensure_json_serializable(
-                    context.get("agent") or {}, path="agent_branding_snapshot"
-                ),
-                options=ensure_json_serializable(item_options, path="options"),
-                agent_id=property_data.get("agent_id"),
-                created_by_user_id=(user or {}).get("id"),
-                status=STATUS_GENERATED,
-                temporary=True,
-                expires_at=expires_at,
+                index=max(0, int(item["index"]) - 1) + int(options.get("photo_offset") or 0),
             )
         except Exception:
             logger.exception(
@@ -1231,35 +1206,127 @@ def start_marketing_batch(
                 None,
                 "art_direction",
             )
-            create_marketing_asset(
-                organization_id,
-                property_id=property_data["id"],
-                generation_id=batch_id,
-                format=item["format"],
-                style="premium",
-                tone="premium varied",
-                template="direction",
-                copy_snapshot={},
-                property_snapshot=ensure_json_serializable(snapshot, path="property_snapshot"),
-                agent_branding_snapshot=ensure_json_serializable(
-                    context.get("agent") or {}, path="agent_branding_snapshot"
-                ),
-                options=ensure_json_serializable(
+            art = None
+        # Same copy, art and photos for every variant: only the template changes.
+        for variant_index, variant_template in enumerate(variant_templates or [None], start=1):
+            sort_index += 1
+            variant_fields = {}
+            if variant_template:
+                variant_fields = {
+                    "design_requested": variant_template,
+                    "layout_template": variant_template,
+                    "template": variant_template,
+                    "generation_group_id": batch_id,
+                    "variant_id": uuid.uuid4().hex[:16],
+                    "variant_template": variant_template,
+                    "variant_index": variant_index,
+                    "variant_count": len(variant_templates),
+                    "property_id": property_data["id"],
+                }
+            try:
+                if art is None:
+                    raise MarketingError("marketing_err_item_failed", 500)
+                item_options = {**options, **variant_fields}
+                layout_template = assert_property_route(
+                    resolve_property_template(item_options),
+                    renderer=HTML_RENDERER,
+                    requested=variant_template or requested_design,
+                    kind=item["format"],
+                    property_id=property_data["id"],
+                    callsite="marketing_service.start_marketing_batch",
+                )
+                logger.info(
+                    "template_used=%s format=%s local_render=%s variant_id=%s",
+                    layout_template,
+                    item["format"],
+                    str(bool(local_render)).lower(),
+                    variant_fields.get("variant_id"),
+                )
+                item_options.update(
                     {
-                        **options,
-                        "pipeline_status": PIPELINE_FAILED,
-                        "error": "marketing_err_item_failed",
+                        "pipeline_status": PIPELINE_QUEUED,
+                        "visual_direction": art.get("visual_direction"),
+                        "creative_brief": art.get("creative_brief"),
+                        "background_style": art.get("background_style"),
+                        "layout": art.get("layout") or {},
+                        "layout_template": layout_template,
+                        "template_used": layout_template,
+                        "layout_version": layout_template,
                         "sort_index": sort_index,
                         "format_index": item["index"],
-                    },
-                    path="options",
-                ),
-                agent_id=property_data.get("agent_id"),
-                created_by_user_id=(user or {}).get("id"),
-                status=STATUS_GENERATED,
-                temporary=True,
-                expires_at=expires_at,
-            )
+                        "prompt": parsed.get("prompt") or prompt,
+                        "reference_asset_id": reference_asset_id,
+                        "source": HTML_RENDERER,
+                        "temporary": True,
+                        "expires_at": expires_at,
+                        "photo_ids": [photo.get("id") for photo in selected_photos if photo.get("id")],
+                        "local_render": bool(local_render),
+                        "include_agent": parsed.get("with_agent") is not False,
+                        "show_agent_photo": parsed.get("with_agent_photo") is not False,
+                        "show_price": parsed.get("show_price") is not False,
+                        "cta": copy.get("cta") or parsed.get("cta") or "",
+                        "language": language,
+                        "format": item["format"],
+                    }
+                )
+                create_marketing_asset(
+                    organization_id,
+                    property_id=property_data["id"],
+                    generation_id=batch_id,
+                    format=item["format"],
+                    style=art.get("visual_direction") or "light",
+                    tone=parsed.get("visual_direction") or "premium varied",
+                    template=layout_template,
+                    copy_snapshot=ensure_json_serializable(copy, path="copy_snapshot"),
+                    property_snapshot=ensure_json_serializable(snapshot, path="property_snapshot"),
+                    agent_branding_snapshot=ensure_json_serializable(
+                        context.get("agent") or {}, path="agent_branding_snapshot"
+                    ),
+                    options=ensure_json_serializable(item_options, path="options"),
+                    agent_id=property_data.get("agent_id"),
+                    created_by_user_id=(user or {}).get("id"),
+                    status=STATUS_GENERATED,
+                    temporary=True,
+                    expires_at=expires_at,
+                )
+            except Exception:
+                logger.exception(
+                    "Marketing generation item failed batch_id=%s item_id=%s stage=%s variant=%s",
+                    batch_id,
+                    None,
+                    "asset_create",
+                    variant_template,
+                )
+                create_marketing_asset(
+                    organization_id,
+                    property_id=property_data["id"],
+                    generation_id=batch_id,
+                    format=item["format"],
+                    style="premium",
+                    tone="premium varied",
+                    template=variant_template or "direction",
+                    copy_snapshot={},
+                    property_snapshot=ensure_json_serializable(snapshot, path="property_snapshot"),
+                    agent_branding_snapshot=ensure_json_serializable(
+                        context.get("agent") or {}, path="agent_branding_snapshot"
+                    ),
+                    options=ensure_json_serializable(
+                        {
+                            **options,
+                            **variant_fields,
+                            "pipeline_status": PIPELINE_FAILED,
+                            "error": "marketing_err_item_failed",
+                            "sort_index": sort_index,
+                            "format_index": item["index"],
+                        },
+                        path="options",
+                    ),
+                    agent_id=property_data.get("agent_id"),
+                    created_by_user_id=(user or {}).get("id"),
+                    status=STATUS_GENERATED,
+                    temporary=True,
+                    expires_at=expires_at,
+                )
     logger.info(
         "marketing_visual_start generation_id=%s property_id=%s local_render=%s items=%s",
         batch_id,
