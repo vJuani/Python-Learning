@@ -153,8 +153,26 @@ def normalize_preferences(raw):
         prefs["rooms"] = rooms
     if bedrooms is not None and bedrooms < 30:
         prefs["bedrooms"] = bedrooms
+    bathrooms = _small_int(raw.get("bathrooms"))
+    if bathrooms is not None and bathrooms < 30:
+        prefs["bathrooms"] = bathrooms
+    observations = str(raw.get("observations") or "").strip()
+    if observations:
+        prefs["observations"] = observations[:500]
     if features:
         prefs["features"] = features
+    required_features = _as_list(raw.get("required_features"))
+    preferred_features = _as_list(raw.get("preferred_features"))
+    if required_features:
+        prefs["required_features"] = required_features
+    if preferred_features:
+        prefs["preferred_features"] = preferred_features
+    rooms_min = _small_int(raw.get("rooms_min"))
+    bedrooms_min = _small_int(raw.get("bedrooms_min"))
+    if rooms_min is not None and rooms_min < 30:
+        prefs["rooms_min"] = rooms_min
+    if bedrooms_min is not None and bedrooms_min < 30:
+        prefs["bedrooms_min"] = bedrooms_min
     if purpose:
         prefs["purpose"] = purpose
     client_name = str(raw.get("client_name") or "").strip()
@@ -191,13 +209,63 @@ def normalize_preferences(raw):
     return prefs
 
 
+def _preferences_dict(raw):
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def contact_need_facts(contact):
+    """Stored search need only. Missing keys stay empty."""
+    raw = _preferences_dict(
+        (contact or {}).get("preferences_json")
+        or (contact or {}).get("preferences")
+    )
+    prefs = normalize_preferences(raw)
+    observations = str(raw.get("observations") or "").strip()
+    facts = {
+        "purpose": prefs.get("purpose") or "",
+        "property_types": list(prefs.get("property_types") or []),
+        "areas": list(prefs.get("areas") or []),
+        "budget": dict(prefs.get("budget") or {}),
+        "rooms": prefs.get("rooms"),
+        "bedrooms": prefs.get("bedrooms"),
+        "bathrooms": _small_int(raw.get("bathrooms")),
+        "features": list(prefs.get("features") or []),
+        "observations": observations,
+    }
+    facts["loaded"] = any(
+        (
+            facts["purpose"],
+            facts["property_types"],
+            facts["areas"],
+            facts["budget"],
+            facts["rooms"],
+            facts["bedrooms"],
+            facts["bathrooms"],
+            facts["features"],
+            facts["observations"],
+        )
+    )
+    return facts
+
+
 def merge_contact_preferences(existing, incoming):
     """Union lists and fill missing scalars. Never wipe stored values."""
     current = normalize_preferences(existing)
     extra = normalize_preferences(incoming)
     merged = dict(current)
 
-    for key in ("areas", "features", "property_types"):
+    for key in (
+        "areas",
+        "features",
+        "property_types",
+        "required_features",
+        "preferred_features",
+    ):
         values = []
         seen = set()
         for item in (current.get(key) or []) + (extra.get(key) or []):
@@ -217,9 +285,11 @@ def merge_contact_preferences(existing, incoming):
     if current_budget:
         merged["budget"] = current_budget
 
-    for key in ("rooms", "bedrooms", "purpose"):
+    for key in ("rooms", "bedrooms", "bathrooms", "rooms_min", "bedrooms_min", "purpose"):
         if merged.get(key) is None and extra.get(key) is not None:
             merged[key] = extra[key]
+    if extra.get("observations") and not merged.get("observations"):
+        merged["observations"] = extra["observations"]
 
     for key in (
         "center_latitude",
@@ -512,7 +582,16 @@ def diff_preference_update(existing, incoming):
                 payload["incoming_label"] = str(incoming_value)
             conflicts.append(payload)
 
-    for key in ("rooms", "bedrooms"):
+    if extra.get("observations") and not (current.get("observations") or "").strip():
+        fills.append(
+            {
+                "key": "observations",
+                "field": "observations",
+                "value": extra["observations"],
+            }
+        )
+
+    for key in ("rooms", "bedrooms", "bathrooms"):
         incoming_value = extra.get(key)
         stored = current.get(key)
         if incoming_value is None:
@@ -569,7 +648,7 @@ def apply_preference_update(existing, incoming, *, accepted_conflicts=None):
     if budget:
         merged["budget"] = budget
 
-    for key in ("rooms", "bedrooms"):
+    for key in ("rooms", "bedrooms", "bathrooms"):
         incoming_value = extra.get(key)
         stored = current.get(key)
         if incoming_value is None or stored is None:
@@ -649,6 +728,8 @@ def preferences_from_form(form, organization_id=None):
         "property_types": types,
         "rooms": form.get("rooms"),
         "bedrooms": form.get("bedrooms"),
+        "bathrooms": form.get("bathrooms"),
+        "observations": form.get("observations"),
         "purpose": form.get("purpose") or form.get("listing_purpose"),
         "budget": {
             "min": form.get("budget_min"),
@@ -766,6 +847,20 @@ def create_agent_contact(
         prefs = dict(prefs)
         prefs["client_name"] = validated["name"]
 
+    from modules.contact_follow_up import (
+        FollowUpInputError,
+        follow_up_columns_from_payload,
+    )
+
+    try:
+        follow_up = follow_up_columns_from_payload(
+            payload,
+            organization_id=organization_id,
+            creating=True,
+        )
+    except FollowUpInputError as error:
+        raise ContactError("contacts_err_invalid_follow_up") from error
+
     return create_contact(
         organization_id,
         agent_id,
@@ -784,6 +879,7 @@ def create_agent_contact(
         phone_normalized=validated.get("phone_normalized"),
         email_normalized=validated.get("email_normalized"),
         source_type=validated.get("source_type"),
+        **follow_up,
     )
 
 
@@ -825,6 +921,20 @@ def update_agent_contact(
             prefs,
         )
 
+    from modules.contact_follow_up import (
+        FollowUpInputError,
+        follow_up_columns_from_payload,
+    )
+
+    try:
+        follow_up = follow_up_columns_from_payload(
+            payload,
+            organization_id=organization_id,
+            creating=False,
+        )
+    except FollowUpInputError as error:
+        raise ContactError("contacts_err_invalid_follow_up") from error
+
     return update_contact(
         contact_id,
         organization_id,
@@ -842,6 +952,7 @@ def update_agent_contact(
         phone_normalized=validated.get("phone_normalized"),
         email_normalized=validated.get("email_normalized"),
         source_type=validated.get("source_type"),
+        **follow_up,
     )
 
 
@@ -1028,6 +1139,29 @@ def _join_areas(values, language):
     return f"{', '.join(values[:-1])} y {values[-1]}"
 
 
+def _follow_up_labels(contact, language, tz):
+    from modules.contact_follow_up import cadence_form_value
+    from modules.organization_time import format_local_date_iso
+
+    stage = contact.get("commercial_stage") or ""
+    priority = contact.get("follow_up_priority") or ""
+    choice = cadence_form_value(contact)
+    return {
+        "commercial_stage_label": (
+            translate(f"followup_stage_{stage}", language) if stage else ""
+        ),
+        "follow_up_priority_label": (
+            translate(f"followup_priority_{priority}", language) if priority else ""
+        ),
+        "follow_up_cadence_label": (
+            translate(f"followup_cadence_{choice}", language) if choice else ""
+        ),
+        "next_follow_up_label": format_local_date_iso(
+            contact.get("next_follow_up_at"), tz
+        ),
+    }
+
+
 def decorate_contact(
     contact,
     *,
@@ -1099,6 +1233,7 @@ def decorate_contact(
         "last_interaction_task": last_task,
         "recommendation": recommendation,
         "linked_task_count": len(linked),
+        **_follow_up_labels(contact, language, tz),
     }
 
 
@@ -1144,6 +1279,11 @@ def _next_action_label(task, tz, language):
     return f"{when} · {title}" if when else title
 
 
+_NOTE_LINE_RE = re.compile(
+    r"^\[(\d{4}-\d{2}-\d{2})(?:\|([a-z_]+))?\]\s*(.*)$"
+)
+
+
 def _history_events(contact, tasks, *, tz, language):
     events = [
         {
@@ -1178,6 +1318,24 @@ def _history_events(contact, tasks, *, tz, language):
                 "status": task.get("status"),
                 "task_id": task.get("id"),
                 "outcome": outcome,
+            }
+        )
+
+    for line in (contact.get("notes") or "").splitlines():
+        match = _NOTE_LINE_RE.match(line.strip())
+        if not match:
+            continue
+        day, kind, body = match.group(1), match.group(2) or "note", match.group(3)
+        events.append(
+            {
+                "at": f"{day}T12:00:00+00:00",
+                "kind": kind,
+                "title": translate(
+                    f"contacts_history_{kind}",
+                    language,
+                ),
+                "detail": body,
+                "outcome": None,
             }
         )
 

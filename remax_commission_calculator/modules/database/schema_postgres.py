@@ -1953,6 +1953,10 @@ def create_postgres_schema():
 
         migrate_visit_reminder_runs_postgres(cursor)
 
+        from .public_share_migration import migrate_public_share_postgres
+
+        migrate_public_share_postgres(cursor)
+
         for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),
             ("snapshot_parking", "INTEGER"),
@@ -2846,6 +2850,12 @@ def create_postgres_schema():
             ("phone_normalized", "TEXT"),
             ("email_normalized", "TEXT"),
             ("source_type", "TEXT"),
+            ("commercial_stage", "TEXT"),
+            ("follow_up_priority", "TEXT"),
+            ("follow_up_cadence", "TEXT"),
+            ("follow_up_interval_days", "INTEGER"),
+            ("next_follow_up_at", "TEXT"),
+            ("follow_up_reason", "TEXT"),
         ):
             cursor.execute(
                 f"""
@@ -2854,6 +2864,12 @@ def create_postgres_schema():
                 {column_name} {column_sql}
                 """
             )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_contacts_next_follow_up
+            ON contacts (organization_id, agent_id, next_follow_up_at)
+            """
+        )
 
         cursor.execute(
             f"""

@@ -14,7 +14,16 @@ os.environ.pop("OPENAI_API_KEY", None)
 
 from modules.agent_account import create_movement
 from modules.agent_tasks import create_task
-from modules.auth import ROLE_ADMIN, ROLE_AGENT, hash_password
+from flask import g
+
+from modules.auth import (
+    ROLE_ADMIN,
+    ROLE_AGENT,
+    can_use_agent_workspace,
+    get_current_user,
+    get_guest_access,
+    hash_password,
+)
 from modules.config import apply_config
 from modules.contacts import create_agent_contact
 from modules.database import (
@@ -30,6 +39,7 @@ from modules.jrh_ai_intents import (
     FALLBACK,
     QUERY_AGENDA,
     QUERY_AGENT_ACCOUNT,
+    QUERY_CONTACT_NEED,
     QUERY_PENDINGS,
     QUERY_PROPERTIES,
     QUERY_PROPERTY_NEEDS,
@@ -39,7 +49,11 @@ from modules.jrh_ai_intents import (
 from datetime import datetime, timezone
 
 from modules.jrh_ai_classify import (
+    _extract_street_address,
+    _has_location_signal,
     extract_entities,
+    extract_property_entities,
+    fold_text,
     normalize_location,
     parse_price_amount,
     resolve_agenda_date,
@@ -51,7 +65,7 @@ from modules.jrh_ai_provider import (
     interpret_with_rules,
 )
 from modules.jrh_ai_resolver import resolve_agents
-from modules.jrh_ai_service import ask_jrh, confirm_jrh_action
+from modules.jrh_ai_service import _acm_query_from_prompt, ask_jrh, confirm_jrh_action
 from modules.organization_time import now_utc, organization_timezone
 from web_app import app
 
@@ -412,6 +426,43 @@ class JrhAiTests(unittest.TestCase):
         self.assertIn("Martín", result["summary"])
         hrefs = [action.get("href_name") for action in result["actions"]]
         self.assertIn("contacts_property_matches", hrefs)
+        self.assertIn("compatibilidad", result["summary"])
+        self.assertNotIn("mejor propiedad", result["summary"].casefold())
+        self.assertTrue(result["cards"])
+        self.assertIn("%", result["cards"][0]["subtitle"])
+        self.assertTrue(result["cards"][0]["detail"])
+
+    def test_property_need_phrases_and_homonyms(self):
+        phrases = (
+            "Propiedades para Lucía",
+            "Qué opciones le puedo mandar a Juan?",
+            "Qué encaja con Sofía?",
+            "Qué propiedades coinciden más con Martín?",
+            "Mostrame algo para Laura con cochera",
+        )
+        for phrase in phrases:
+            parsed = interpret_with_rules(phrase)
+            self.assertEqual(parsed["intent"], QUERY_PROPERTY_NEEDS, phrase)
+        self.assertEqual(
+            interpret_with_rules("Qué buscaba Martín?")["intent"],
+            QUERY_CONTACT_NEED,
+        )
+        create_agent_contact(
+            self.org,
+            self.own_agent,
+            {"name": "Sofía Uno", "preferences": {"areas": ["Belgrano"]}},
+        )
+        create_agent_contact(
+            self.org,
+            self.own_agent,
+            {"name": "Sofía Dos", "preferences": {"areas": ["Palermo"]}},
+        )
+        ambiguous = self._ask(
+            "Qué encaja con Sofía?",
+            user=self.agent_record,
+            agent_id=self.own_agent,
+        )
+        self.assertEqual(ambiguous["status"], "needs_attention")
 
     def test_09_invoice_fee_resolves_charge(self):
         result = self._ask("quiero facturar el fee de Barreiro")
@@ -709,6 +760,58 @@ class JrhAiTests(unittest.TestCase):
         self.assertIn("Libertador", titles)
         self.assertNotIn("Foreign Capital", titles)
 
+    def test_25b_buscaba_is_not_caba(self):
+        self.assertFalse(_has_location_signal(fold_text("que buscaba martin")))
+        self.assertFalse(_has_location_signal("buscaba"))
+        parsed = interpret_with_rules("Qué buscaba Martín?")
+        self.assertNotEqual(parsed["entities"].get("jurisdiction"), "CABA")
+        self.assertNotEqual(parsed["entities"].get("location"), "caba")
+        entities = extract_property_entities("buscaba un depto en palermo")
+        self.assertEqual(entities.get("neighborhood"), "Palermo")
+        self.assertNotEqual(entities.get("jurisdiction"), "CABA")
+        capital = extract_property_entities("deptos en capital")
+        self.assertEqual(capital.get("jurisdiction"), "CABA")
+
+    def test_25c_acm_address_drops_command_words(self):
+        for prompt in (
+            "Haceme un ACM de Martin 2268",
+            "crear un acm de Martin 2268",
+            "generar acm de Martin 2268",
+        ):
+            query = _acm_query_from_prompt(prompt, {})
+            self.assertEqual(fold_text(query), "martin 2268", prompt)
+            self.assertNotIn("acm", fold_text(query))
+            self.assertNotIn("haceme", fold_text(query))
+        self.assertEqual(
+            _extract_street_address("haceme un acm de martin 2268"),
+            "martin 2268",
+        )
+        self.assertEqual(
+            _extract_street_address("avenida de mayo 1200"),
+            "avenida de mayo 1200",
+        )
+
+    def test_25d_ask_jrh_runs_outside_flask_context(self):
+        agent = {
+            "id": self.agent_user,
+            "role": ROLE_AGENT,
+            "organization_id": self.org,
+            "agent_id": self.own_agent,
+        }
+        self.assertIsNone(get_current_user())
+        self.assertIsNone(get_guest_access())
+        self.assertTrue(can_use_agent_workspace(agent))
+        self.assertFalse(can_use_agent_workspace(None))
+        result = self._ask(
+            "qué tengo hoy",
+            user=agent,
+            agent_id=self.own_agent,
+        )
+        self.assertEqual(result["intent"], QUERY_AGENDA)
+        with app.test_request_context():
+            g.guest_access = {"id": 1, "organization_id": self.org}
+            self.assertFalse(can_use_agent_workspace(agent))
+
     def test_26_price_aliases_and_agent_scope(self):
         self.assertEqual(parse_price_amount("hasta 250 mil"), 250000)
         self.assertEqual(parse_price_amount("250k"), 250000)
@@ -828,6 +931,7 @@ class JrhAiTests(unittest.TestCase):
             "tengo algo el jueves?",
             user=self.agent_record,
             agent_id=self.own_agent,
+            now=datetime(2026, 9, 7, 15, 0, tzinfo=timezone.utc),
         )
         self.assertEqual(result["intent"], QUERY_AGENDA)
         self.assertIn("nada agendado", result["message"])

@@ -114,7 +114,7 @@
     {% if not matches %}
     <p class="contact-panel__muted">{{ t('matches_none') }}</p>
     {% else %}
-    <form method="get" action="{{ url_for('contacts_property_matches_share', contact_id=contact.id) }}" class="matches-list" data-matches-share>
+    <form method="post" action="{{ url_for('contacts_property_shortlist', contact_id=contact.id) }}" class="matches-list" data-matches-share>
         {% for match in matches %}
         {% set listing = match.listing %}
         {% set display = match.display %}
@@ -134,11 +134,10 @@
             {% if match.source_label %}
             <p class="matches-badge matches-source">{{ match.source_label }}</p>
             {% endif %}
-            {% if match.discarded %}
-            <p class="matches-badge">{{ t('matches_discarded') }}</p>
-            {% elif match.visited %}
-            <p class="matches-badge">{{ t('matches_visited') }}</p>
+            {% if match.photo_url %}
+            <img class="matches-photo" src="{{ match.photo_url }}" alt="{{ listing.address }}">
             {% endif %}
+            <p class="matches-badge">{{ match.history_label }}</p>
             <h2>{{ listing.address }}</h2>
             {% if listing.neighborhood %}
             <p class="matches-hood">{{ listing.neighborhood }}</p>
@@ -173,21 +172,50 @@
                 <a class="btn btn-small btn-primary" href="{{ match.brochure_url }}">{{ t('property_brochure_download') }}</a>
                 {% endif %}
                 {% endif %}
-                {% if contact.whatsapp_url %}
-                <a class="btn btn-small btn-secondary" href="{{ match.share_url }}">{{ t('matches_share') }}</a>
+                {% if contact.whatsapp_url and match.property_id %}
+                <button type="submit" class="btn btn-small btn-secondary" name="property_id" value="{{ match.property_id }}" form="match-one-{{ match.property_id }}">{{ t('matches_whatsapp') }}</button>
                 {% endif %}
                 {% if can_manage %}
                 <a class="btn btn-small btn-primary" href="{{ match.agenda_url }}">{{ t('matches_schedule') }}</a>
+                {% endif %}
+                {% if can_manage and match.shared_url %}
+                <button type="submit" class="btn btn-small btn-secondary" form="match-shared-{{ match.property_id }}">{{ t('matches_mark_shared') }}</button>
+                {% endif %}
+                {% if can_manage and match.discard_url %}
+                <select name="reason" form="match-discard-{{ match.property_id }}" aria-label="{{ t('matches_discard_reason') }}">
+                    <option value="">{{ t('matches_discard_reason') }}</option>
+                    {% for reason in discard_reasons %}
+                    <option value="{{ reason }}">{{ t('matches_discard_' ~ reason) }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-small btn-secondary" form="match-discard-{{ match.property_id }}">{{ t('matches_discard') }}</button>
                 {% endif %}
             </div>
         </article>
         {% endfor %}
         {% if contact.whatsapp_url %}
         <div class="matches-sharebar">
-            <button type="submit" class="btn btn-primary" data-share-submit hidden>{{ t('matches_share_n', count=0) }}</button>
+            <button type="submit" class="btn btn-primary" data-share-submit data-label="{{ t('shortlist_selected', count='{count}') }}" hidden>{{ t('shortlist_send') }}</button>
         </div>
         {% endif %}
     </form>
+    {% if can_manage %}
+    {% for match in matches if match.property_id %}
+    {% if contact.whatsapp_url %}
+    <form id="match-one-{{ match.property_id }}" method="post" action="{{ url_for('contacts_property_shortlist', contact_id=contact.id) }}" hidden></form>
+    {% endif %}
+    {% if match.shared_url %}
+    <form id="match-shared-{{ match.property_id }}" method="post" action="{{ match.shared_url }}" hidden>
+        <input type="hidden" name="next" value="{{ request.path }}">
+    </form>
+    {% endif %}
+    {% if match.discard_url %}
+    <form id="match-discard-{{ match.property_id }}" method="post" action="{{ match.discard_url }}" hidden>
+        <input type="hidden" name="next" value="{{ request.path }}">
+    </form>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
     {% endif %}
 
     {% if hidden_count and not show_more %}

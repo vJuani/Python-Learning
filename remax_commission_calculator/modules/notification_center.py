@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from modules.i18n import translate
-from modules.notifications.catalog import get_type
+from modules.notifications.catalog import get_type, resolve_url
 from modules.organization_time import (
     format_local_datetime,
     now_utc,
@@ -80,14 +80,88 @@ def fallback_url(notification):
     return "/notifications"
 
 
+PROPERTY_CHANGE_KINDS = ("property_change_approved", "property_change_rejected")
+
+
+def _route_exists(url):
+    """True when ``url`` matches a GET route of the running app."""
+    try:
+        from flask import current_app
+        from werkzeug.exceptions import MethodNotAllowed, NotFound
+        from werkzeug.routing import RequestRedirect
+
+        adapter = current_app.url_map.bind("localhost")
+    except (ImportError, RuntimeError):
+        return True
+    path = url.split("?", 1)[0].split("#", 1)[0] or "/"
+    try:
+        adapter.match(path, method="GET")
+    except RequestRedirect:
+        return True
+    except (NotFound, MethodNotAllowed):
+        return False
+    return True
+
+
+def _property_change_url(notification):
+    """Change requests carry their own id; the useful place is the listing."""
+    from modules.database.property_change_requests_repository import (
+        get_property_change_request,
+    )
+
+    request_id = notification.get("entity_id")
+    organization_id = notification.get("organization_id")
+    if not request_id or not organization_id:
+        return None
+    try:
+        change = get_property_change_request(int(request_id), organization_id)
+    except Exception:
+        return None
+    property_id = (change or {}).get("property_id")
+    return f"/properties/{int(property_id)}" if property_id else None
+
+
 def notification_open_url(notification):
+    """Destination when the user taps a notification. Never a dead route."""
+    if notification.get("kind") in PROPERTY_CHANGE_KINDS:
+        return _property_change_url(notification) or "/notifications"
     payload = notification.get("payload") or {}
     raw = payload.get("url")
     if raw and is_safe_internal_url(raw):
         cleaned = safe_internal_url(raw)
-        if cleaned != "/":
+        if cleaned != "/" and _route_exists(cleaned):
             return cleaned
-    return fallback_url(notification)
+    candidate = resolve_url(
+        notification.get("kind"),
+        entity_id=notification.get("entity_id") or None,
+    )
+    if candidate and candidate != "/notifications" and _route_exists(candidate):
+        return candidate
+    fallback = fallback_url(notification)
+    return fallback if _route_exists(fallback) else "/notifications"
+
+
+def notification_to_json(notification, language, tz):
+    """API shape of one decorated notification. Only the owner ever sees it."""
+    item = decorate_notification(notification, language, tz)
+    payload = item.get("payload") or {}
+    return {
+        "id": item["id"],
+        "kind": item.get("kind"),
+        "category": get_type(item.get("kind")).get("category"),
+        "ui_type": item.get("ui_type"),
+        "icon": item.get("icon"),
+        "title": item.get("title") or "",
+        "body": item.get("body") or "",
+        "reason": payload.get("reason") or "",
+        "priority": item.get("priority") or "info",
+        "is_read": bool(item.get("is_read")),
+        "created_at": item.get("created_at"),
+        "when_label": item.get("when_label") or "",
+        "time_label": item.get("time_label") or "",
+        "day_bucket": item.get("day_bucket"),
+        "open_url": f"/notifications/{int(item['id'])}/open",
+    }
 
 
 def _day_bucket(created_at, tz):
@@ -114,18 +188,33 @@ def decorate_notification(notification, language, tz):
     )
     body = payload.get("body") or payload.get("address") or ""
     priority = notification.get("priority") or payload.get("priority") or spec["priority"]
+    day_bucket = _day_bucket(notification.get("created_at"), tz)
     return {
         **notification,
         "ui_type": ui_type,
+        "category": spec.get("category"),
         "icon": spec.get("icon") or UI_ICONS.get(ui_type, DEFAULT_ICON),
         "title": title,
         "body": body,
         "priority": priority,
-        "day_bucket": _day_bucket(notification.get("created_at"), tz),
-        "open_url": notification_open_url(notification),
+        "day_bucket": day_bucket,
+        "open_url": f"/notifications/{int(notification['id'])}/open"
+        if notification.get("id")
+        else "/notifications",
         "when_label": format_local_datetime(notification.get("created_at"), tz)
         or (notification.get("created_at") or ""),
+        "time_label": _time_label(notification.get("created_at"), tz, day_bucket),
     }
+
+
+def _time_label(created_at, tz, day_bucket):
+    parsed = parse_utc_iso(created_at)
+    if parsed is None:
+        return created_at or ""
+    local = parsed.astimezone(tz)
+    if day_bucket in ("today", "yesterday"):
+        return local.strftime("%H:%M")
+    return local.strftime("%d/%m %H:%M")
 
 
 def group_notifications(items, language):

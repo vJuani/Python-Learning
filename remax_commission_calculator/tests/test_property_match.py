@@ -38,6 +38,7 @@ from modules.property_match import (
     CONFLICT,
     MATCH,
     UNKNOWN,
+    explain_dimensions,
     build_whatsapp_message,
     match_properties,
     normalize_score,
@@ -190,7 +191,8 @@ class PropertyMatchScoringTests(unittest.TestCase):
         )
         self.assertEqual(dims["type"]["state"], MATCH)
         self.assertEqual(dims["rooms"]["state"], MATCH)
-        self.assertEqual(dims["bedrooms"]["state"], CONFLICT)
+        self.assertEqual(dims["bedrooms"]["state"], MATCH)
+        self.assertEqual(dims["bedrooms"]["ratio"], 0.3)
         features = {item["key"]: item["state"] for item in dims["features"]["items"]}
         self.assertEqual(features["balcony"], MATCH)
         self.assertEqual(features["pool"], UNKNOWN)
@@ -212,7 +214,7 @@ class PropertyMatchScoringTests(unittest.TestCase):
             "bedrooms": {"state": UNKNOWN, "ratio": 0},
             "features": {"state": UNKNOWN, "ratio": 0},
         }
-        self.assertEqual(normalize_score(only_known), 100)
+        self.assertEqual(normalize_score(only_known), 55)
 
     def test_conflict_lowers_normalized_score(self):
         mixed = {
@@ -223,7 +225,7 @@ class PropertyMatchScoringTests(unittest.TestCase):
             "bedrooms": {"state": UNKNOWN, "ratio": 0},
             "features": {"state": UNKNOWN, "ratio": 0},
         }
-        self.assertEqual(normalize_score(mixed), 55)
+        self.assertEqual(normalize_score(mixed), 30)
 
     def test_order_is_deterministic(self):
         contact = _contact({"areas": ["Belgrano"]})
@@ -266,8 +268,180 @@ class PropertyMatchScoringTests(unittest.TestCase):
         )
         self.assertEqual(
             [row["listing"]["address"] for row in ranked],
-            ["New", "Seen", "Discarded"],
+            ["Seen", "New"],
         )
+
+    def test_score_stays_between_0_and_100_and_unknown_keeps_weight(self):
+        criteria = {
+            "areas": ["Martínez"],
+            "budget": {"max": 200000, "currency": "USD"},
+            "rooms": 3,
+            "features": ["cochera"],
+        }
+        ranked = match_properties(
+            _contact(criteria),
+            [
+                _listing(
+                    neighborhood="Martinez",
+                    price=200000,
+                    currency="USD",
+                    rooms=3,
+                    parking_spaces=None,
+                    features={},
+                )
+            ],
+        )
+        score = ranked[0]["score"]
+        self.assertGreaterEqual(score, 0)
+        self.assertLessEqual(score, 100)
+        self.assertLess(score, 100)
+        self.assertEqual(ranked[0]["dimensions"]["features"]["state"], UNKNOWN)
+        only_zone = match_properties(
+            _contact({"areas": ["Belgrano"]}),
+            [_listing(neighborhood="Belgrano", rooms=None, bedrooms=None)],
+        )
+        self.assertEqual(only_zone[0]["score"], 100)
+
+    def test_budget_tolerance_bands_and_currency_gap(self):
+        criteria = {"budget": {"max": 200000, "currency": "USD"}}
+        inside = score_dimensions(criteria, _listing(price=200000, currency="USD"))
+        plus_3 = score_dimensions(criteria, _listing(price=206000, currency="USD"))
+        plus_7 = score_dimensions(criteria, _listing(price=214000, currency="USD"))
+        self.assertEqual(inside["budget"]["ratio"], 1.0)
+        self.assertAlmostEqual(plus_3["budget"]["ratio"], 21 / 30)
+        self.assertAlmostEqual(plus_7["budget"]["ratio"], 9 / 30)
+        self.assertEqual(
+            match_properties(
+                _contact(criteria),
+                [_listing(price=222000, currency="USD")],
+            ),
+            [],
+        )
+        gap = score_dimensions(criteria, _listing(price=200000, currency="ARS"))
+        self.assertEqual(gap["budget"]["state"], UNKNOWN)
+        self.assertTrue(gap["budget"]["currency_gap"])
+        reasons = explain_dimensions({"budget": gap["budget"], "zone": {"state": "skip", "requested": False}})
+        self.assertTrue(reasons["missing"])
+
+    def test_zone_aliases_and_no_substring(self):
+        self.assertEqual(
+            score_dimensions({"areas": ["Martinez"]}, _listing(neighborhood="Martínez"))["zone"]["state"],
+            MATCH,
+        )
+        self.assertEqual(
+            score_dimensions(
+                {"areas": ["CABA"]},
+                _listing(neighborhood="", jurisdiction="Capital Federal"),
+            )["zone"]["state"],
+            MATCH,
+        )
+        self.assertEqual(
+            score_dimensions(
+                {"areas": ["CABA"]},
+                _listing(neighborhood="buscaba"),
+            )["zone"]["state"],
+            CONFLICT,
+        )
+
+    def test_incompatible_type_is_excluded(self):
+        ranked = match_properties(
+            _contact({"property_types": ["casa"]}),
+            [_listing(property_type="apartment")],
+        )
+        self.assertEqual(ranked, [])
+
+    def test_rooms_delta_and_bedroom_minimum(self):
+        exact = score_dimensions({"rooms": 3}, _listing(rooms=3))
+        plus = score_dimensions({"rooms": 3}, _listing(rooms=4))
+        minus = score_dimensions({"rooms": 3}, _listing(rooms=2))
+        self.assertEqual(exact["rooms"]["ratio"], 1.0)
+        self.assertEqual(plus["rooms"]["ratio"], 0.8)
+        self.assertEqual(minus["rooms"]["ratio"], 0.3)
+        self.assertFalse(
+            passes_hard_filters(
+                {"bedrooms_min": 2},
+                _listing(bedrooms=1),
+            )
+        )
+        at_min = score_dimensions({"bedrooms_min": 2}, _listing(bedrooms=2))
+        above = score_dimensions({"bedrooms_min": 2}, _listing(bedrooms=3))
+        self.assertEqual(at_min["bedrooms"]["ratio"], 1.0)
+        self.assertEqual(above["bedrooms"]["ratio"], 0.9)
+
+    def test_required_and_preferred_features_and_parking(self):
+        preferred = score_dimensions(
+            {"features": ["balcony", "pool"]},
+            _listing(features={"balcony": True, "pool": False}),
+        )
+        self.assertAlmostEqual(preferred["features"]["ratio"], 0.5)
+        parking = score_dimensions(
+            {"features": ["cochera"]},
+            _listing(parking_spaces=1, features={}),
+        )
+        self.assertEqual(parking["features"]["items"][0]["state"], MATCH)
+        self.assertFalse(
+            passes_hard_filters(
+                {"required_features": ["cochera"]},
+                _listing(parking_spaces=0),
+            )
+        )
+        unknown = score_dimensions(
+            {"required_features": ["cochera"]},
+            _listing(parking_spaces=None, features={}),
+        )
+        self.assertEqual(unknown["features"]["items"][0]["state"], UNKNOWN)
+        self.assertTrue(
+            passes_hard_filters(
+                {"required_features": ["cochera"]},
+                _listing(parking_spaces=None, features={}),
+            )
+        )
+
+    def test_history_priority_and_discard_exclusion(self):
+        listings = []
+        for index, address in enumerate(("New", "Shared", "Visited", "Interested", "Negotiation", "Discarded"), start=1):
+            item = _listing(neighborhood="Belgrano", address=address)
+            item["id"] = index
+            listings.append(item)
+        interactions = {
+            2: {"status": "shared"},
+            3: {"status": "visited"},
+            4: {"status": "interested"},
+            5: {"status": "negotiation"},
+            6: {"status": "discarded", "discarded": True},
+        }
+        ranked = match_properties(
+            _contact({"areas": ["Belgrano"]}),
+            listings,
+            interactions=interactions,
+        )
+        self.assertNotIn("Discarded", [row["listing"]["address"] for row in ranked])
+        shown = {
+            row["listing"]["address"]: row["history"]
+            for row in ranked
+        }
+        self.assertEqual(shown["New"], "new")
+        self.assertEqual(shown["Shared"], "shared")
+        self.assertEqual(shown["Visited"], "visited")
+        self.assertEqual(shown["Interested"], "interested")
+        self.assertEqual(shown["Negotiation"], "negotiation")
+        again = match_properties(
+            _contact({"areas": ["Belgrano"]}),
+            listings,
+            interactions=interactions,
+            include_discarded=True,
+        )
+        self.assertIn("Discarded", [row["listing"]["address"] for row in again])
+        high = _listing(neighborhood="Belgrano", address="High")
+        high["id"] = 9
+        low = _listing(neighborhood="Palermo", address="Low")
+        low["id"] = 8
+        ordered = match_properties(
+            _contact({"areas": ["Belgrano"]}),
+            [low, high],
+            interactions={9: {"status": "visited"}},
+        )
+        self.assertEqual(ordered[0]["listing"]["address"], "High")
 
 
 class PropertyMatchRoutesTests(unittest.TestCase):
@@ -486,8 +660,8 @@ class PropertyMatchRoutesTests(unittest.TestCase):
         self.assertIn("100% MATCH", body)
         self.assertNotIn("Palermo 99", body)
         self.assertIn("Ver más opciones", body)
-        self.assertIn("Ya visitada", body)
-        self.assertIn("Descartada anteriormente", body)
+        self.assertIn("Visitada", body)
+        self.assertNotIn("Descartada 12", body)
         self.assertNotIn("Quesada 1800", body)
         self.assertNotIn("Libertador 4100", body)
         self.assertNotIn("Sold 100", body)
@@ -639,6 +813,112 @@ class PropertyMatchRoutesTests(unittest.TestCase):
         )
         self.assertIn("Hola Carolina", message)
         self.assertIn("Av. Cabildo 3200", message)
+
+    def test_contact_detail_shows_top_matches_and_discard_removes_them(self):
+        contact = create_agent_contact(
+            self.org_a,
+            self.agent_a,
+            {
+                "name": "Laura Gómez",
+                "phone": "5491199988877",
+                "preferences": self.prefs,
+            },
+        )
+        own = add_property(
+            "Olazabal 900",
+            "CABA",
+            self.org_a,
+            agent_id=self.agent_a,
+            status="approved",
+            property_type="apartment",
+            listing_price=180000,
+            listing_currency="USD",
+            listing_purpose="sale",
+            neighborhood="Belgrano",
+            rooms=3,
+            bedrooms=2,
+            features={"balcony": True},
+        )
+        self._login("match_agent_user")
+        detail = self.client.get(f"/contacts/{contact['id']}")
+        body = detail.get_data(as_text=True)
+        self.assertIn("Propiedades recomendadas", body)
+        self.assertIn("Olazabal 900", body)
+        self.assertIn("Ver todas las coincidencias", body)
+        self.assertLessEqual(body.count('class="recommend-card"'), 5)
+        self.assertNotIn("Quesada 1800", body)
+        self.assertNotIn("Libertador 4100", body)
+
+        discarded = self.client.post(
+            f"/contacts/{contact['id']}/property-matches/{own}/discard",
+            data={"reason": "precio", "next": f"/contacts/{contact['id']}"},
+            follow_redirects=True,
+        )
+        self.assertNotIn("Olazabal 900", discarded.get_data(as_text=True))
+
+        shared_property = add_property(
+            "Mendoza 400",
+            "CABA",
+            self.org_a,
+            agent_id=self.agent_a,
+            status="approved",
+            property_type="apartment",
+            listing_price=182000,
+            listing_currency="USD",
+            listing_purpose="sale",
+            neighborhood="Belgrano",
+            rooms=3,
+            bedrooms=2,
+            features={"balcony": True},
+        )
+        shared = self.client.post(
+            f"/contacts/{contact['id']}/property-matches/{shared_property}/shared",
+            data={"next": f"/contacts/{contact['id']}/property-matches"},
+            follow_redirects=True,
+        )
+        page = shared.get_data(as_text=True)
+        self.assertIn("Mendoza 400", page)
+        self.assertIn("Ya enviada", page)
+
+    def test_budget_band_reaches_sql_candidates(self):
+        stretch = add_property(
+            "Stretch 7",
+            "CABA",
+            self.org_a,
+            agent_id=self.agent_a,
+            status="approved",
+            property_type="apartment",
+            listing_price=203300,
+            listing_currency="USD",
+            listing_purpose="sale",
+            neighborhood="Belgrano",
+            rooms=3,
+            bedrooms=2,
+            features={"balcony": True},
+        )
+        too_far = add_property(
+            "Stretch 11",
+            "CABA",
+            self.org_a,
+            agent_id=self.agent_a,
+            status="approved",
+            property_type="apartment",
+            listing_price=210900,
+            listing_currency="USD",
+            listing_purpose="sale",
+            neighborhood="Belgrano",
+            rooms=3,
+            bedrooms=2,
+            features={"balcony": True},
+        )
+        self._login("match_agent_user")
+        response = self.client.get(
+            f"/contacts/{self.contact['id']}/property-matches"
+        )
+        body = response.get_data(as_text=True)
+        self.assertIn("Stretch 7", body)
+        self.assertNotIn("Stretch 11", body)
+        self.assertNotEqual(stretch, too_far)
 
 
 if __name__ == "__main__":

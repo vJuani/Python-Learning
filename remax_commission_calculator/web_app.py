@@ -411,6 +411,13 @@ PUBLIC_ENDPOINTS = (
     "set_language",
     "static",
     "web_manifest",
+    # Service worker rotation; authorized by the old subscription's secret.
+    "api_push_resubscribe",
+    "public_property",
+    "public_property_photo",
+    "public_property_agent",
+    "public_property_logo",
+    "public_shortlist",
 )
 
 
@@ -427,7 +434,7 @@ def require_authenticated_user():
     if request.path.startswith("/internal/jobs/"):
         return None
 
-    if request.path.startswith("/api/push/"):
+    if request.path.startswith(("/api/push/", "/api/notifications")):
         if get_current_user() is None and get_guest_access() is None:
             return jsonify({"ok": False, "error": "login_required"}), 401
         return None
@@ -3048,11 +3055,22 @@ def notifications_list():
     organization_id = require_user_organization()
     language = get_current_language()
 
+    from modules.database.notifications_repository import list_notifications_page
+    from modules.notification_api import DEFAULT_PAGE_LIMIT
     from modules.notification_center import decorate_notification_feed
+    from modules.notifications.catalog import CATEGORY_ORDER, kinds_for_category
 
-    notifications = list_notifications(
+    unread_only = request.args.get("filter") == "unread"
+    category = (request.args.get("category") or "").strip()
+    if category not in CATEGORY_ORDER:
+        category = ""
+
+    notifications, has_more = list_notifications_page(
         user["id"],
-        organization_id
+        organization_id,
+        limit=DEFAULT_PAGE_LIMIT,
+        unread_only=unread_only,
+        kinds=kinds_for_category(category),
     )
     groups = decorate_notification_feed(
         notifications,
@@ -3064,6 +3082,12 @@ def notifications_list():
         "notifications/list.html",
         notifications=notifications,
         notification_groups=groups,
+        notifications_has_more=has_more,
+        notifications_next_before=notifications[-1]["id"] if notifications else None,
+        notifications_page_limit=DEFAULT_PAGE_LIMIT,
+        notifications_filter="unread" if unread_only else "all",
+        notifications_category=category,
+        notification_categories=CATEGORY_ORDER,
         unread_count=count_unread_notifications(
             user["id"],
             organization_id,
@@ -8523,6 +8547,17 @@ register_contact_routes(
     },
 )
 
+from modules.public_share_routes import register_public_share_routes
+
+register_public_share_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+        "flash_i18n": flash_i18n,
+    },
+)
+
 register_property_media_routes(
     app,
     helpers={
@@ -8631,6 +8666,16 @@ from modules.notification_job_routes import register_notification_job_routes
 from modules.visit_reminder_qa_routes import register_visit_reminder_qa_routes
 
 register_notification_job_routes(app)
+
+from modules.notification_api import register_notification_api
+
+register_notification_api(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "get_current_language": get_current_language,
+    },
+)
 
 register_visit_reminder_qa_routes(
     app,

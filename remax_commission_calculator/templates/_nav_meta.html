@@ -2,7 +2,6 @@
 <div class="main-nav-meta header-nav-meta">
     {% set notifications_active = request.endpoint in ('notifications_list', 'notifications_mark_read', 'notifications_mark_all_read', 'notifications_open') %}
     {% set bell_active = request.endpoint == 'pendings_center' or notifications_active %}
-    {% set bell_count = (pending_badge_count if pending_center_enabled and pending_badge_count else 0) + (unread_notifications or 0) %}
     {% if pending_center_enabled %}
     <details class="nav-dropdown nav-bell-dropdown{% if bell_active %} is-active{% endif %}">
         <summary
@@ -10,9 +9,7 @@
             aria-label="{{ t('nav_notifications') }}"
         >
             {% include "_jrh_bell.html" %}
-            {% if bell_count %}
-            <span class="badge badge-pending">{{ bell_count }}</span>
-            {% endif %}
+            {% include "_unread_badge.html" %}
         </summary>
 
         <div class="nav-dropdown-menu nav-bell-menu" role="menu">
@@ -48,9 +45,7 @@
                 role="menuitem"
             >
                 {{ t('nav_notifications') }}
-                {% if unread_notifications %}
-                <span class="badge badge-pending">{{ unread_notifications }}</span>
-                {% endif %}
+                {% include "_unread_badge.html" %}
             </a>
             {% if can_manage_users() %}
             <a
@@ -68,9 +63,7 @@
         aria-label="{{ t('nav_notifications') }}"
     >
         {% include "_jrh_bell.html" %}
-        {% if unread_notifications %}
-        <span class="badge badge-pending">{{ unread_notifications }}</span>
-        {% endif %}
+        {% include "_unread_badge.html" %}
     </a>
     {% endif %}
 

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-contacts-page is-shortlist-page {% endblock %}
+
+{% block title %}{{ t('shortlist_title', name=first_name) }} | {{ t('contacts_title') }}{% endblock %}
+
+{% block content %}
+<article class="shortlist-page">
+    <p class="contacts-back"><a href="{{ url_for('contacts_detail', contact_id=contact.id) }}">{{ contact.name }}</a></p>
+    <header class="matches-hero">
+        <h1>{{ contact.name }}</h1>
+        <p>
+            {% if items|length == 1 %}
+            {{ t('shortlist_count_one') }}
+            {% else %}
+            {{ t('shortlist_count', count=items|length) }}
+            {% endif %}
+        </p>
+    </header>
+
+    <form method="post" action="{{ url_for('contacts_property_shortlist_open', contact_id=contact.id) }}" class="shortlist-draft">
+        <ol class="shortlist-items">
+            {% for item in items %}
+            <li class="shortlist-item">
+                <input type="hidden" name="property_id" value="{{ item.property_id }}">
+                <div>
+                    <strong>{{ loop.index }}. {{ item.address }}</strong>
+                    {% if item.price_label %}<p>{{ item.price_label }}</p>{% endif %}
+                    {% if item.score is not none %}
+                    <p>{{ t('shortlist_score', score=item.score) }}</p>
+                    {% endif %}
+                    {% if not item.public_url %}
+                    <p class="contact-panel__muted">{{ t('shortlist_no_public_link') }}</p>
+                    {% endif %}
+                </div>
+                <div class="shortlist-item__actions">
+                    <button type="submit" name="action" value="up:{{ loop.index0 }}" formaction="{{ url_for('contacts_property_shortlist_update', contact_id=contact.id) }}" class="btn btn-small btn-secondary" {% if loop.first %}disabled{% endif %}>{{ t('shortlist_up') }}</button>
+                    <button type="submit" name="action" value="down:{{ loop.index0 }}" formaction="{{ url_for('contacts_property_shortlist_update', contact_id=contact.id) }}" class="btn btn-small btn-secondary" {% if loop.last %}disabled{% endif %}>{{ t('shortlist_down') }}</button>
+                    <button type="submit" name="action" value="remove:{{ loop.index0 }}" formaction="{{ url_for('contacts_property_shortlist_update', contact_id=contact.id) }}" class="btn btn-small btn-secondary">{{ t('shortlist_remove') }}</button>
+                    {% if item.share_kind == 'jrh' %}
+                    <button type="submit" name="revoke_property_id" value="{{ item.property_id }}" formaction="{{ url_for('contacts_property_shortlist_revoke_property', contact_id=contact.id) }}" class="btn btn-small btn-secondary">{{ t('public_revoke') }}</button>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ol>
+        <p>
+            <a class="btn btn-small btn-secondary" href="{{ url_for('contacts_property_matches', contact_id=contact.id) }}">{{ t('shortlist_add') }}</a>
+        </p>
+        <fieldset class="shortlist-mode">
+            <legend>{{ t('public_share_how') }}</legend>
+            <button type="submit" name="action" value="mode:individual" formaction="{{ url_for('contacts_property_shortlist_update', contact_id=contact.id) }}" class="btn btn-small {% if share_mode != 'collection' %}btn-primary{% else %}btn-secondary{% endif %}">{{ t('public_share_individual') }}</button>
+            <button type="submit" name="action" value="mode:collection" formaction="{{ url_for('contacts_property_shortlist_update', contact_id=contact.id) }}" class="btn btn-small {% if share_mode == 'collection' %}btn-primary{% else %}btn-secondary{% endif %}">{{ t('public_share_collection') }}</button>
+            <label>
+                {{ t('public_share_days') }}
+                <select name="share_days">
+                    {% for days in (7, 30, 90) %}
+                    <option value="{{ days }}" {% if share_days == days %}selected{% endif %}>{{ days }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </fieldset>
+        <input type="hidden" name="share_mode" value="{{ share_mode or 'individual' }}">
+        <label for="shortlist-message">{{ t('shortlist_message') }}</label>
+        <textarea id="shortlist-message" name="message" rows="14">{{ message }}</textarea>
+        <div class="shortlist-bar">
+            <button type="submit" class="btn btn-primary">{{ t('shortlist_open_whatsapp') }}</button>
+        </div>
+    </form>
+</article>
+{% endblock %}

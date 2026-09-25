@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('visit_need_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agenda-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="visit-close visit-close--page">
+    <header class="visit-close__header">
+        <h1>{{ t('visit_need_title') }}</h1>
+        <p>{{ contact.name if contact else '' }}</p>
+    </header>
+    <ul class="visit-close__changes">
+        {% for line in change_lines %}
+        <li>{{ line }}</li>
+        {% endfor %}
+    </ul>
+    <form method="post" class="visit-close__actions">
+        <button type="submit" class="btn btn-primary" name="intent" value="apply">{{ t('visit_need_save') }}</button>
+        <button type="submit" class="btn btn-secondary" name="intent" value="skip">{{ t('visit_need_skip') }}</button>
+    </form>
+</section>
+{% endblock %}

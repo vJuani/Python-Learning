@@ -66,6 +66,15 @@ PREF_COLUMNS = (
     ("push_system", "INTEGER NOT NULL DEFAULT 1", "SMALLINT NOT NULL DEFAULT 1"),
 )
 
+SCHEDULE_COLUMNS = (
+    ("follow_up_digest_time", "TEXT", "TEXT"),
+    (
+        "follow_up_individual_alerts",
+        "INTEGER NOT NULL DEFAULT 1",
+        "SMALLINT NOT NULL DEFAULT 1",
+    ),
+)
+
 
 def _column_exists_sqlite(cursor, table_name, column_name):
     rows = cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
@@ -79,7 +88,10 @@ def migrate_user_notification_preferences_sqlite():
         cursor.execute(SQLITE_DDL)
         for statement in SQLITE_INDEXES:
             cursor.execute(statement)
-        for column_name, sqlite_sql, _postgres_sql in PREF_COLUMNS:
+        for column_name, sqlite_sql, _postgres_sql in (
+            *PREF_COLUMNS,
+            *SCHEDULE_COLUMNS,
+        ):
             if not _column_exists_sqlite(
                 cursor, "user_notification_preferences", column_name
             ):
@@ -99,7 +111,10 @@ def migrate_user_notification_preferences_postgres(cursor):
     cursor.execute(POSTGRES_DDL)
     for statement in POSTGRES_INDEXES:
         cursor.execute(statement)
-    for column_name, _sqlite_sql, postgres_sql in PREF_COLUMNS:
+    for column_name, _sqlite_sql, postgres_sql in (
+        *PREF_COLUMNS,
+        *SCHEDULE_COLUMNS,
+    ):
         cursor.execute(
             "ALTER TABLE user_notification_preferences "
             f"ADD COLUMN IF NOT EXISTS {column_name} {postgres_sql}"

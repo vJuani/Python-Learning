@@ -2,6 +2,10 @@
 
 {% block body_class %}is-contacts-page {% endblock %}
 
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/contacts.js') }}" defer></script>
+{% endblock %}
+
 {% block title %}{{ contact.name }} | {{ t('contacts_title') }}{% endblock %}
 
 {% block content %}
@@ -34,6 +38,23 @@
             {% endif %}
         </div>
     </header>
+
+    {% if contact.commercial_stage_label or contact.follow_up_priority_label or contact.next_follow_up_label or contact.follow_up_reason %}
+    <section class="contact-panel followup-panel">
+        <p class="contacts-kicker">{{ t('followup_today') }}</p>
+        {% if contact.commercial_stage_label %}<p>{{ t('followup_stage') }}: {{ contact.commercial_stage_label }}</p>{% endif %}
+        {% if contact.follow_up_priority_label %}<p>{{ t('followup_priority') }}: {{ contact.follow_up_priority_label }}</p>{% endif %}
+        {% if contact.follow_up_cadence_label %}<p>{{ t('followup_cadence') }}: {{ contact.follow_up_cadence_label }}</p>{% endif %}
+        {% if contact.next_follow_up_label %}<p>{{ t('followup_next') }}: {{ contact.next_follow_up_label }}</p>{% endif %}
+        {% if contact.follow_up_reason %}<p>{{ contact.follow_up_reason }}</p>{% endif %}
+        {% if can_manage %}
+        <form method="post" action="{{ url_for('contacts_follow_up_contacted', contact_id=contact.id) }}">
+            <input type="hidden" name="next" value="detail">
+            <button type="submit" class="btn btn-secondary">{{ t('followup_action_contacted') }}</button>
+        </form>
+        {% endif %}
+    </section>
+    {% endif %}
 
     <section class="contact-kpis">
         <article>
@@ -77,6 +98,94 @@
             <p>{{ contact.budget_range_label }}</p>
             {% endif %}
             <a class="btn btn-small btn-secondary" href="{{ url_for('contacts_property_matches', contact_id=contact.id) }}">{{ t('matches_search') }}</a>
+        </section>
+        {% endif %}
+
+        {% if recommendations %}
+        <section class="contact-panel recommend-panel">
+            <h2 class="recommend-panel__title">{{ t('contacts_recommended_title') }}</h2>
+            <form method="post" action="{{ url_for('contacts_property_shortlist', contact_id=contact.id) }}" class="recommend-list" data-matches-share>
+                {% for match in recommendations %}
+                {% set listing = match.listing %}
+                {% set display = match.display %}
+                <article class="recommend-card">
+                    {% if match.property_id and match.history != 'discarded' %}
+                    <label class="recommend-pick">
+                        <input type="checkbox" name="property_id" value="{{ match.property_id }}" data-match-check>
+                        <span class="visually-hidden">{{ listing.address }}</span>
+                    </label>
+                    {% endif %}
+                    {% if match.photo_url %}
+                    <img src="{{ match.photo_url }}" alt="{{ listing.address }}">
+                    {% endif %}
+                    <div class="recommend-card__body">
+                        <div class="recommend-card__top">
+                            <strong>{{ match.score }}%</strong>
+                            <span class="matches-badge">{{ match.history_label }}</span>
+                        </div>
+                        <h2>{{ listing.address }}</h2>
+                        {% if display.price_display %}
+                        <p class="matches-price">{{ display.price_display }}</p>
+                        {% endif %}
+                        <p class="matches-facts">
+                            {% if listing.rooms is not none %}{{ t('property_rooms_n', n=listing.rooms) }}{% endif %}
+                            {% if listing.bedrooms is not none %} · {{ t('property_bedrooms_n', n=listing.bedrooms) }}{% endif %}
+                        </p>
+                        {% if match.reason_labels %}
+                        <ul class="recommend-reasons">
+                            {% for label in match.reason_labels %}
+                            <li>{{ label }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                        <div class="recommend-card__actions">
+                            {% if match.view_url %}
+                            <a class="btn btn-small btn-secondary" href="{{ match.view_url }}">{{ t('matches_view') }}</a>
+                            {% endif %}
+                            {% if contact.whatsapp_url and match.property_id %}
+                            <button type="submit" class="btn btn-small btn-secondary" name="property_id" value="{{ match.property_id }}" form="recommend-one-{{ match.property_id }}">{{ t('matches_whatsapp') }}</button>
+                            {% endif %}
+                            {% if can_manage and match.shared_url %}
+                            <button type="submit" class="btn btn-small btn-secondary" form="recommend-shared-{{ match.property_id }}">{{ t('matches_mark_shared') }}</button>
+                            {% endif %}
+                            {% if can_manage and match.agenda_url %}
+                            <a class="btn btn-small btn-primary" href="{{ match.agenda_url }}">{{ t('matches_schedule') }}</a>
+                            {% endif %}
+                            {% if can_manage and match.discard_url %}
+                            <select name="reason" form="recommend-discard-{{ match.property_id }}" aria-label="{{ t('matches_discard_reason') }}">
+                                <option value="">{{ t('matches_discard_reason') }}</option>
+                                {% for reason in discard_reasons %}
+                                <option value="{{ reason }}">{{ t('matches_discard_' ~ reason) }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-small btn-secondary" form="recommend-discard-{{ match.property_id }}">{{ t('matches_discard') }}</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </article>
+                {% endfor %}
+                <div class="shortlist-bar">
+                    <button type="submit" class="btn btn-primary" data-share-submit data-label="{{ t('shortlist_selected', count='{count}') }}" hidden>{{ t('shortlist_send') }}</button>
+                </div>
+            </form>
+            {% if can_manage %}
+            {% for match in recommendations if match.property_id %}
+            {% if contact.whatsapp_url %}
+            <form id="recommend-one-{{ match.property_id }}" method="post" action="{{ url_for('contacts_property_shortlist', contact_id=contact.id) }}" hidden></form>
+            {% endif %}
+            {% if match.shared_url %}
+            <form id="recommend-shared-{{ match.property_id }}" method="post" action="{{ match.shared_url }}" hidden>
+                <input type="hidden" name="next" value="{{ request.path }}">
+            </form>
+            {% endif %}
+            {% if match.discard_url %}
+            <form id="recommend-discard-{{ match.property_id }}" method="post" action="{{ match.discard_url }}" hidden>
+                <input type="hidden" name="next" value="{{ request.path }}">
+            </form>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+            <a class="btn btn-small btn-secondary" href="{{ url_for('contacts_property_matches', contact_id=contact.id) }}">{{ t('matches_see_all') }}</a>
         </section>
         {% endif %}
 

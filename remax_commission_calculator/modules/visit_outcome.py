@@ -15,6 +15,46 @@ import unicodedata
 INTERESTS = ("positive", "neutral", "negative")
 SEARCH_ACTIONS = ("buscar alternativas", "buscar propiedades")
 CURRENCIES = ("USD", "ARS")
+VISIT_RESULTS = (
+    "liked",
+    "interested",
+    "negotiate",
+    "second_visit",
+    "disliked",
+    "no_show",
+    "other",
+)
+NEXT_STEPS = (
+    "call",
+    "whatsapp",
+    "send_properties",
+    "second_visit",
+    "negotiate",
+    "none",
+    "custom",
+)
+_RESULT_INTEREST = {
+    "liked": "positive",
+    "interested": "positive",
+    "negotiate": "positive",
+    "second_visit": "positive",
+    "disliked": "negative",
+    "no_show": "neutral",
+}
+_INTEREST_RESULT = {
+    "positive": "liked",
+    "neutral": "other",
+    "negative": "disliked",
+}
+_NEXT_STEP_FROM_ACTION = (
+    ("whatsapp", "whatsapp"),
+    ("segunda visita", "second_visit"),
+    ("negoci", "negotiate"),
+    ("enviar", "send_properties"),
+    ("propiedad", "send_properties"),
+    ("llamar", "call"),
+    ("sin seguimiento", "none"),
+)
 
 
 def _fold(text):
@@ -150,10 +190,22 @@ def normalize_visit_outcome(raw):
     next_action = str(raw.get("next_action") or "").strip()
     suggested = _normalize_suggested_task(raw.get("suggested_task"))
     note = str(raw.get("note") or "").strip()
+    result = str(raw.get("result") or "").strip()
+    if result not in VISIT_RESULTS:
+        result = _INTEREST_RESULT.get(interest, "")
+    if result in _RESULT_INTEREST and not interest:
+        interest = _RESULT_INTEREST[result]
+    next_step = str(raw.get("next_step") or "").strip()
+    if next_step not in NEXT_STEPS:
+        next_step = _next_step_from_action(next_action)
+    next_step_at = str(raw.get("next_step_at") or "").strip()
+    next_step_note = str(raw.get("next_step_note") or "").strip()
 
     outcome = {}
     if note:
         outcome["note"] = note
+    if result:
+        outcome["result"] = result
     if interest:
         outcome["interest"] = interest
     if objections:
@@ -168,10 +220,26 @@ def normalize_visit_outcome(raw):
         outcome["budget"] = budget
     if next_action:
         outcome["next_action"] = next_action
+    if next_step:
+        outcome["next_step"] = next_step
+    if next_step_at:
+        outcome["next_step_at"] = next_step_at
+    if next_step_note:
+        outcome["next_step_note"] = next_step_note
     if suggested:
         outcome["suggested_task"] = suggested
 
     return outcome
+
+
+def _next_step_from_action(next_action):
+    folded = _fold(next_action)
+    if not folded:
+        return ""
+    for needle, step in _NEXT_STEP_FROM_ACTION:
+        if needle in folded:
+            return step
+    return ""
 
 
 def outcome_is_present(raw):
@@ -231,6 +299,14 @@ def outcome_from_form(form):
             "max": form.get("budget_max") or form.get("budget"),
             "currency": form.get("budget_currency"),
         }
+    if form.get("result"):
+        base["result"] = form.get("result")
+    if form.get("next_step"):
+        base["next_step"] = form.get("next_step")
+    if form.get("next_step_at"):
+        base["next_step_at"] = form.get("next_step_at")
+    if form.get("next_step_note") is not None:
+        base["next_step_note"] = form.get("next_step_note")
     if form.get("next_action") is not None:
         base["next_action"] = form.get("next_action")
     if form.get("suggested_task_prompt"):

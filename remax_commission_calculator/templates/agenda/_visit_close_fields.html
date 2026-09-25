@@ -1,0 +1,42 @@
+<fieldset class="visit-close__results">
+    <legend>{{ t('visit_close_result') }}</legend>
+    <div class="visit-close__choices">
+        {% for key in results %}
+        <label class="visit-close__choice">
+            <input type="radio" name="result" value="{{ key }}" {% if key == 'liked' %}required{% endif %}>
+            <span>{{ t('visit_result_' ~ key) }}</span>
+        </label>
+        {% endfor %}
+    </div>
+</fieldset>
+<label class="visit-close__field">
+    <span>{{ t('visit_close_note') }}</span>
+    <textarea name="note" rows="3" maxlength="500"></textarea>
+</label>
+<label class="visit-close__field">
+    <span>{{ t('visit_close_objections') }}</span>
+    <textarea name="objections" rows="2" maxlength="500"></textarea>
+</label>
+<label class="visit-close__field">
+    <span>{{ t('visit_close_step') }}</span>
+    <select name="next_step">
+        <option value="">{{ t('followup_unset') }}</option>
+        {% for key in steps %}
+        <option value="{{ key }}">{{ t('visit_step_' ~ key) }}</option>
+        {% endfor %}
+    </select>
+</label>
+<div class="visit-close__when">
+    <label>
+        <span>{{ t('visit_close_when') }}</span>
+        <input type="date" name="next_step_date">
+    </label>
+    <label>
+        <span>{{ t('agent_task_field_time') }}</span>
+        <input type="time" name="next_step_time">
+    </label>
+</div>
+<label class="visit-close__field">
+    <span>{{ t('visit_close_step_note') }}</span>
+    <input type="text" name="next_step_note" maxlength="200">
+</label>

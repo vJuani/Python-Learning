@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from modules.notifications.catalog import PREF_KEYS
@@ -123,3 +124,83 @@ def save_user_notification_preferences(organization_id, user_id, **kwargs):
         connection.close()
 
     return get_user_notification_preferences(organization_id, user_id)
+
+
+DEFAULT_FOLLOW_UP_DIGEST_TIME = "09:00"
+_DIGEST_TIME_RE = re.compile(r"^(\d{1,2}):(\d{2})$")
+
+
+def normalize_follow_up_digest_time(value):
+    match = _DIGEST_TIME_RE.match((value or "").strip())
+    if match is None:
+        return DEFAULT_FOLLOW_UP_DIGEST_TIME
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if hour > 23 or minute > 59:
+        return DEFAULT_FOLLOW_UP_DIGEST_TIME
+    return f"{hour:02d}:{minute:02d}"
+
+
+def get_follow_up_notification_settings(organization_id, user_id):
+    """Digest clock and whether urgent contacts also get their own push."""
+    organization_id = require_organization_id(organization_id)
+    settings = {
+        "follow_up_digest_time": DEFAULT_FOLLOW_UP_DIGEST_TIME,
+        "follow_up_individual_alerts": True,
+    }
+    if user_id is None:
+        return settings
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT follow_up_digest_time, follow_up_individual_alerts
+            FROM user_notification_preferences
+            WHERE organization_id = ?
+                AND user_id = ?
+            """,
+            (organization_id, user_id),
+        )
+        row = cursor.fetchone()
+    finally:
+        connection.close()
+    if row is None:
+        return settings
+    settings["follow_up_digest_time"] = normalize_follow_up_digest_time(row[0])
+    settings["follow_up_individual_alerts"] = _as_bool(row[1], True)
+    return settings
+
+
+def save_follow_up_notification_settings(
+    organization_id,
+    user_id,
+    *,
+    digest_time,
+    individual_alerts,
+):
+    organization_id = require_organization_id(organization_id)
+    save_user_notification_preferences(organization_id, user_id)
+    when = normalize_follow_up_digest_time(digest_time)
+    flag = 1 if _as_bool(individual_alerts, True) else 0
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE user_notification_preferences
+            SET follow_up_digest_time = ?,
+                follow_up_individual_alerts = ?,
+                updated_at = ?
+            WHERE organization_id = ?
+                AND user_id = ?
+            """,
+            (when, flag, _now_iso(), organization_id, user_id),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return get_follow_up_notification_settings(organization_id, user_id)

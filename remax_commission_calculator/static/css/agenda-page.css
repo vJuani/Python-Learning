@@ -1436,3 +1436,107 @@ html[data-theme="dark"] .agenda-reschedule input {
     border-color: var(--border);
     color: var(--text);
 }
+
+.visit-close {
+    border: 0;
+    padding: 0;
+    width: min(32rem, calc(100vw - 1.5rem));
+    max-height: min(40rem, calc(100vh - 1.5rem));
+    overflow: auto;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 1rem 1rem 0 0;
+}
+
+.visit-close--page {
+    width: min(32rem, 100%);
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.visit-close::backdrop {
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.visit-close form,
+.visit-close--page {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1rem;
+}
+
+.visit-close__header h1,
+.visit-close__header h2,
+.visit-close__header p {
+    margin: 0;
+}
+
+.visit-close__choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.visit-close__choice {
+    display: inline-flex;
+}
+
+.visit-close__choice input {
+    position: absolute;
+    opacity: 0;
+}
+
+.visit-close__choice span {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.45rem 0.75rem;
+}
+
+.visit-close__choice input:checked + span,
+.visit-close__choice input:focus-visible + span {
+    border-color: var(--accent, #1d4ed8);
+    background: color-mix(in srgb, var(--accent, #1d4ed8) 12%, transparent);
+}
+
+.visit-close__field,
+.visit-close__when label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.visit-close__when {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.visit-close__actions {
+    display: flex;
+    gap: 0.5rem;
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    padding-top: 0.75rem;
+}
+
+.visit-close__changes {
+    margin: 0;
+    padding-left: 1.1rem;
+}
+
+@media (max-width: 720px) {
+    .visit-close {
+        margin: auto 0 0;
+        width: 100vw;
+        max-width: 100vw;
+    }
+}
+
+@media (min-width: 721px) {
+    .visit-close {
+        border-radius: 1rem;
+        margin: auto;
+    }
+}

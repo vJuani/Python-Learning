@@ -111,6 +111,7 @@
     {% block extra_css %}{% endblock %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-logo.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/notifications-live.css') }}?v=live-1">
 </head>
 <body class="{% block body_class %}{% endblock %}{% if current_user or guest_access %} has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password', 'privacy', 'terms') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
@@ -358,9 +359,7 @@
                     aria-label="{{ t('nav_notifications') }}"
                 >
                     {% include "_jrh_bell.html" %}
-                    {% if unread_notifications %}
-                    <span class="badge badge-pending">{{ unread_notifications }}</span>
-                    {% endif %}
+                    {% include "_unread_badge.html" %}
                 </a>
                 {% endif %}
                 {% if current_user %}
@@ -641,11 +640,17 @@
     {% include "_mobile_bottom_nav.html" %}
     {% include "_mobile_more.html" %}
     {% include "_m_sheets.html" %}
+    {% if current_user and not is_guest_session() and (can_manage_users() or is_agent()) %}
+    {% include "_push_soft_prompt.html" %}
+    {% endif %}
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ds.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/pwa.js') }}?v=push-device-3"></script>
+    <script src="{{ url_for('static', filename='js/pwa.js') }}?v=push-device-4"></script>
+    {% if current_user and not is_guest_session() and (can_manage_users() or is_agent()) %}
+    <script src="{{ url_for('static', filename='js/notifications-live.js') }}?v=live-1"></script>
+    {% endif %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>

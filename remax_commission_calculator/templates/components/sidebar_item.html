@@ -11,7 +11,9 @@
     {% if item.chip %}
     <span class="jrh-sidebar__chip">{{ item.chip }}</span>
     {% endif %}
-    {% if item.badge %}
+    {% if item.live_badge %}
+    <span class="jrh-sidebar__badge" data-unread-badge {% if not item.badge %}hidden{% endif %}>{{ '99+' if (item.badge or 0) > 99 else (item.badge or 0) }}</span>
+    {% elif item.badge %}
     <span class="jrh-sidebar__badge" aria-label="{{ item.badge }}">{{ item.badge }}</span>
     {% endif %}
 </a>

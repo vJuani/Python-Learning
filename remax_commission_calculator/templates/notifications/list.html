@@ -7,78 +7,129 @@
 {% block title %}{{ t('notifications_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/notifications-center.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notifications-center.css') }}?v=center-2">
 {% endblock %}
 
+{% macro notification_card(notification) %}
+<article
+    class="notif-card{% if not notification.is_read %} is-unread{% endif %} notif-card--{{ notification.priority or 'info' }}"
+    data-notification-id="{{ notification.id }}"
+>
+    <a class="notif-card__link" href="{{ notification.open_url }}">
+        <span class="notif-card__icon" aria-hidden="true">{{ notification.icon }}</span>
+        <span class="notif-card__copy">
+            <span class="notif-card__top">
+                <span class="notif-card__title">{{ notification.title }}</span>
+                <time class="notif-card__time" datetime="{{ notification.created_at }}" title="{{ notification.when_label }}">{{ notification.time_label }}</time>
+            </span>
+            {% if notification.body %}
+            <span class="notif-card__body">{{ notification.body }}</span>
+            {% endif %}
+            {% if notification.payload and notification.payload.reason %}
+            <span class="notif-card__meta">{{ t('rejection_reason') }}: {{ notification.payload.reason }}</span>
+            {% endif %}
+            {% if notification.priority in ('important', 'urgent') %}
+            <span class="notif-card__priority notif-card__priority--{{ notification.priority }}">{{ t('notifications_priority_' ~ notification.priority) }}</span>
+            {% endif %}
+        </span>
+        <span class="notif-card__dot" aria-label="{{ t('notifications_unread_label') }}"{% if notification.is_read %} hidden{% endif %}></span>
+    </a>
+    {% if not notification.is_read %}
+    <form class="notif-card__read" method="post" action="{{ url_for('notifications_mark_read', notification_id=notification.id) }}" data-mark-read>
+        <button type="submit" class="notif-card__read-btn" aria-label="{{ t('mark_read') }}" title="{{ t('mark_read') }}">✓</button>
+    </form>
+    {% endif %}
+</article>
+{% endmacro %}
+
 {% block content %}
-<section class="page-header">
+<section class="page-header notif-header">
     <div class="page-header-text">
         <h2>
             {{ t('notifications_title') }}
-            {% if unread_count %}
-            <span class="badge badge-pending">{{ unread_count }}</span>
-            {% endif %}
+            {% include "_unread_badge.html" %}
         </h2>
         <p>{{ t('notifications_subtitle') }}</p>
     </div>
-
-    <div class="page-actions">
-        {% if notifications %}
-        <form method="post" action="{{ url_for('notifications_mark_all_read') }}">
-            <button type="submit" class="btn btn-secondary">{{ t('notifications_mark_all_read') }}</button>
-        </form>
-        {% endif %}
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">{{ t('back') }}</a>
-    </div>
 </section>
 
-<section class="panel">
-    {% if notification_groups %}
-    <div class="notification-feed">
+<section class="panel notif-center"
+    id="notification-center"
+    data-filter="{{ notifications_filter }}"
+    data-category="{{ notifications_category }}"
+    data-limit="{{ notifications_page_limit }}"
+    data-label-today="{{ t('notifications_group_today') }}"
+    data-label-yesterday="{{ t('notifications_group_yesterday') }}"
+    data-label-older="{{ t('notifications_group_older') }}"
+    data-label-reason="{{ t('rejection_reason') }}"
+    data-label-important="{{ t('notifications_priority_important') }}"
+    data-label-urgent="{{ t('notifications_priority_urgent') }}"
+    data-label-unread="{{ t('notifications_unread_label') }}"
+    data-label-mark-read="{{ t('mark_read') }}"
+    data-label-new="{{ t('notifications_new_available') }}"
+    data-label-failed="{{ t('notifications_load_failed') }}"
+>
+    <nav class="notif-toolbar" aria-label="{{ t('notifications_filters_label') }}">
+        <div class="notif-tabs" role="tablist">
+            <a role="tab" class="notif-tab{% if notifications_filter == 'all' %} is-active{% endif %}"
+               aria-selected="{{ 'true' if notifications_filter == 'all' else 'false' }}"
+               href="{{ url_for('notifications_list', category=notifications_category or None) }}">{{ t('notifications_filter_all') }}</a>
+            <a role="tab" class="notif-tab{% if notifications_filter == 'unread' %} is-active{% endif %}"
+               aria-selected="{{ 'true' if notifications_filter == 'unread' else 'false' }}"
+               href="{{ url_for('notifications_list', filter='unread', category=notifications_category or None) }}">{{ t('notifications_filter_unread') }}</a>
+        </div>
+        <form method="get" action="{{ url_for('notifications_list') }}" class="notif-category" data-category-form>
+            {% if notifications_filter == 'unread' %}<input type="hidden" name="filter" value="unread">{% endif %}
+            <label class="visually-hidden" for="notif-category-select">{{ t('notifications_category_label') }}</label>
+            <select id="notif-category-select" name="category" class="notif-category__select">
+                <option value="">{{ t('notifications_category_all') }}</option>
+                {% for category in notification_categories %}
+                <option value="{{ category }}"{% if category == notifications_category %} selected{% endif %}>{{ t('settings_push_group_' ~ category) }}</option>
+                {% endfor %}
+            </select>
+            <noscript><button type="submit" class="btn btn-small btn-secondary">{{ t('apply_filters') }}</button></noscript>
+        </form>
+        <form method="post" action="{{ url_for('notifications_mark_all_read') }}" class="notif-mark-all" data-mark-all{% if not unread_count %} hidden{% endif %}>
+            <button type="submit" class="notif-mark-all__btn">{{ t('notifications_mark_all_read') }}</button>
+        </form>
+    </nav>
+
+    <p class="notif-live-banner" id="notif-live-banner" hidden>
+        <a href="{{ request.full_path }}">{{ t('notifications_new_available') }}</a>
+    </p>
+
+    <div class="notif-feed" id="notif-feed">
         {% for group in notification_groups %}
-        <div class="notification-group">
-            {% if group.heading %}
-            <p class="notification-group__heading">{{ group.heading }}</p>
-            {% endif %}
-            {% for notification in group['items'] %}
-            <article class="notification-item{% if not notification.is_read %} notification-item--unread{% endif %} notification-item--{{ notification.priority or 'info' }}">
-                <a
-                    class="notification-item__main"
-                    href="{{ url_for('notifications_open', notification_id=notification.id) }}"
-                >
-                    <span class="notification-item__icon" aria-hidden="true">{{ notification.icon }}</span>
-                    <span class="notification-item__copy">
-                        <h3>{{ notification.title }}</h3>
-                        {% if notification.body %}
-                        <p class="notification-item__body">{{ notification.body }}</p>
-                        {% endif %}
-                        {% if notification.payload.reason %}
-                        <p class="notification-item__meta">{{ t('rejection_reason') }}: {{ notification.payload.reason }}</p>
-                        {% endif %}
-                        <p class="notification-item__meta">{{ notification.when_label }}</p>
-                    </span>
-                </a>
-                {% if not notification.is_read %}
-                <form
-                    class="notification-item__read"
-                    method="post"
-                    action="{{ url_for('notifications_mark_read', notification_id=notification.id) }}"
-                >
-                    <button type="submit" class="btn btn-small btn-secondary">{{ t('mark_read') }}</button>
-                </form>
-                {% endif %}
-            </article>
-            {% endfor %}
+        <div class="notif-group" data-day-bucket="{{ group.ui_type }}">
+            <p class="notif-group__heading">{{ group.heading }}</p>
+            <div class="notif-group__items">
+                {% for notification in group['items'] %}
+                {{ notification_card(notification) }}
+                {% endfor %}
+            </div>
         </div>
         {% endfor %}
     </div>
-    {% else %}
-    <div class="m-notify-empty hide-desktop">
-        <span class="m-notify-empty__icon" aria-hidden="true">{% include "_jrh_bell.html" %}</span>
-        <p>{{ t('m_notifications_caught_up') }}</p>
-        <p>{{ t('notifications_empty') }}</p>
+
+    <div class="notif-empty" id="notif-empty"{% if notification_groups %} hidden{% endif %}>
+        <span class="notif-empty__icon" aria-hidden="true">{% include "_jrh_bell.html" %}</span>
+        <p class="notif-empty__title">{{ t('m_notifications_caught_up') }}</p>
+        <p>{{ t('notifications_empty_unread') if notifications_filter == 'unread' else t('notifications_empty') }}</p>
     </div>
-    <p class="hide-mobile">{{ t('notifications_empty') }}</p>
-    {% endif %}
+
+    <div class="notif-more">
+        <button
+            type="button"
+            class="btn btn-secondary notif-more__btn"
+            id="notif-load-more"
+            data-before="{{ notifications_next_before or '' }}"
+            {% if not notifications_has_more %}hidden{% endif %}
+        >{{ t('notifications_load_more') }}</button>
+        <p class="notif-more__message" id="notif-more-message" aria-live="polite"></p>
+    </div>
 </section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/notifications-center.js') }}?v=center-1"></script>
 {% endblock %}

@@ -3929,6 +3929,10 @@ def migrate_schema(create_backup=True):
 
     migrate_visit_reminder_runs_sqlite()
 
+    from .public_share_migration import migrate_public_share_sqlite
+
+    migrate_public_share_sqlite()
+
     return backup_path
 
 

@@ -36,10 +36,7 @@
         }
         button.hidden = false;
         var label = button.getAttribute("data-label") || button.textContent;
-        button.textContent = label.replace(/\d+/, String(checks.length));
-        if (button.textContent.indexOf(String(checks.length)) < 0) {
-            button.textContent = checks.length + " · " + label;
-        }
+        button.textContent = label.split("{count}").join(String(checks.length));
     }
 
     document.querySelectorAll("[data-matches-share]").forEach(function (form) {
@@ -47,7 +44,11 @@
         if (button && !button.getAttribute("data-label")) {
             button.setAttribute("data-label", button.textContent);
         }
-        form.addEventListener("change", function () {
+        form.addEventListener("change", function (event) {
+            var checked = form.querySelectorAll("[data-match-check]:checked");
+            if (checked.length > 5 && event.target && event.target.checked) {
+                event.target.checked = false;
+            }
             updateShareBar(form);
         });
         updateShareBar(form);

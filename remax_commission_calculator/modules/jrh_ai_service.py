@@ -43,10 +43,15 @@ from modules.jrh_ai_intents import (
     QUERY_CONTACT,
     QUERY_CONTACT_HISTORY,
     QUERY_CONTACT_PROPERTIES,
+    QUERY_CONTACT_NEED,
     START_CONTACT_NEED,
+    RESCHEDULE_TASK,
     QUERY_NEXT_VISIT,
     QUERY_DAILY_ROUTE,
     BUILD_DAILY_ROUTE,
+    LOG_CONTACT_FOLLOW_UP,
+    LOG_VISIT_OUTCOME,
+    SHARE_PROPERTY_SHORTLIST,
     WRITE_ACTIONS,
 )
 from modules.jrh_ai_provider import interpret_prompt
@@ -235,10 +240,15 @@ def ask_jrh(
         QUERY_CONTACT: _handle_contact,
         QUERY_CONTACT_HISTORY: _handle_contact_history,
         QUERY_CONTACT_PROPERTIES: _handle_contact_properties,
+        QUERY_CONTACT_NEED: _handle_contact_need,
         START_CONTACT_NEED: _handle_start_contact_need,
+        RESCHEDULE_TASK: _handle_reschedule_task,
         QUERY_NEXT_VISIT: _handle_next_visit,
         QUERY_DAILY_ROUTE: _handle_daily_route,
         BUILD_DAILY_ROUTE: _handle_daily_route,
+        LOG_CONTACT_FOLLOW_UP: _handle_log_contact_follow_up,
+        LOG_VISIT_OUTCOME: _handle_log_visit_outcome,
+        SHARE_PROPERTY_SHORTLIST: _handle_shortlist,
     }
     handler = handlers.get(intent, lambda **_kwargs: _fallback(language, confidence))
     result = handler(
@@ -1181,6 +1191,179 @@ def _handle_properties(
     )
 
 
+def _handle_shortlist(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    confidence,
+    prompt="",
+    session=None,
+    **_kwargs,
+):
+    from modules.contacts import ContactError, load_contact
+    from modules.branding import get_app_base_url
+    from modules.property_shortlist import (
+        ShortlistError,
+        draft_whatsapp_message,
+        find_properties_by_name,
+        parse_shortlist_request,
+        select_properties,
+        top_matches,
+        attach_match_scores,
+    )
+    from modules.public_share import collection_requested, prepare_client_links
+
+    query = entities.get("contact_name") or entities.get("agent_name") or ""
+    if collection_requested(prompt) or not query:
+        import re
+
+        named = re.search(
+            r"\bpara\s+([A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,}(?:\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,}){0,2})",
+            prompt or "",
+        )
+        if named:
+            query = named.group(1).strip(" .")
+    matches = resolve_contacts(
+        organization_id,
+        query,
+        user=user,
+        agent_id=agent_id,
+    )
+    status, chosen, matches = pick_unique(matches, confidence=confidence)
+    if status != "unique":
+        return _result(
+            SHARE_PROPERTY_SHORTLIST,
+            "needs_attention",
+            language=language,
+            message_key=(
+                "jrh_ai_contact_ambiguous"
+                if status == "ambiguous"
+                else "jrh_ai_contact_missing"
+            ),
+            candidates=matches,
+            data={"name": query},
+            confidence=confidence,
+        )
+    scoped_agent = agent_id if is_agent(user) else None
+    try:
+        contact = load_contact(
+            organization_id,
+            chosen["id"],
+            agent_id=scoped_agent,
+        )
+    except ContactError:
+        contact = chosen
+    parsed = parse_shortlist_request(prompt)
+    first = ((contact.get("name") or "").split() or [query])[0]
+    items = []
+    try:
+        if parsed["queries"]:
+            ids, missing = find_properties_by_name(
+                organization_id,
+                parsed["queries"],
+                agent_id=scoped_agent,
+            )
+            if missing or not ids:
+                return _result(
+                    SHARE_PROPERTY_SHORTLIST,
+                    "needs_attention",
+                    language=language,
+                    message_key="jrh_shortlist_missing_properties",
+                    data={"name": first},
+                    confidence=confidence,
+                )
+            items = attach_match_scores(
+                organization_id,
+                contact,
+                select_properties(
+                    organization_id,
+                    contact["id"],
+                    ids,
+                    agent_id=scoped_agent,
+                ),
+                agent_id=scoped_agent,
+            )
+        else:
+            items = top_matches(
+                organization_id,
+                contact,
+                agent_id=scoped_agent,
+                limit=parsed["limit"],
+            )
+    except ShortlistError:
+        items = []
+    if not items:
+        return _result(
+            SHARE_PROPERTY_SHORTLIST,
+            "needs_attention",
+            language=language,
+            message_key="jrh_property_needs_none",
+            data={"name": first},
+            confidence=confidence,
+        )
+    mode = "collection" if collection_requested(prompt) else "individual"
+    collection_url, token = prepare_client_links(
+        organization_id,
+        items,
+        agent_id=scoped_agent,
+        base_url=get_app_base_url(),
+        mode=mode,
+        contact_id=contact["id"],
+    )
+    message = draft_whatsapp_message(
+        contact,
+        items,
+        language=language,
+        collection_url=collection_url if mode == "collection" else "",
+    )
+    draft = {
+        "intent": SHARE_PROPERTY_SHORTLIST,
+        "contact_id": contact["id"],
+        "contact_name": first,
+        "property_ids": [item["property_id"] for item in items],
+        "message": message,
+        "mode": mode,
+        "collection_token": token,
+    }
+    if session is not None:
+        session[SESSION_DRAFT_KEY] = draft
+    cards = [
+        {
+            "title": _t("shortlist_message", language),
+            "detail": message,
+        }
+    ]
+    for item in items:
+        cards.append(
+            {
+                "title": item.get("address") or "",
+                "subtitle": " · ".join(
+                    part
+                    for part in (
+                        item.get("price_label"),
+                        f"{item['score']}%" if item.get("score") is not None else "",
+                    )
+                    if part
+                ),
+                "property_id": item.get("property_id"),
+            }
+        )
+    return _result(
+        SHARE_PROPERTY_SHORTLIST,
+        "ready",
+        language=language,
+        summary=_t("jrh_shortlist_preview", language, name=first),
+        cards=cards,
+        confirm_required=True,
+        confidence=confidence,
+        entity={"kind": "contact", "id": contact["id"], "label": contact.get("name")},
+        data=draft,
+    )
+
+
 def _handle_needs(
     *,
     organization_id,
@@ -1189,9 +1372,13 @@ def _handle_needs(
     language,
     entities,
     confidence,
+    prompt="",
     **_kwargs,
 ):
-    from modules.property_match import rank_contact_properties
+    from modules.contacts import ContactError, load_contact, normalize_preferences
+    from modules.jrh_ai_classify import fold_text
+    from modules.property_inventory import format_listing_money
+    from modules.property_match import decorate_match, rank_contact_properties
 
     query = entities.get("contact_name") or entities.get("agent_name") or ""
     matches = resolve_contacts(
@@ -1215,28 +1402,112 @@ def _handle_needs(
             data={"name": query},
             confidence=confidence,
         )
-    ranked = rank_contact_properties(
-        organization_id,
-        {"id": chosen["id"], "name": chosen["name"]},
-        agent_id=agent_id if is_agent(user) else None,
+    scoped_agent = agent_id if is_agent(user) else None
+    try:
+        contact = load_contact(
+            organization_id,
+            chosen["id"],
+            agent_id=scoped_agent,
+        )
+    except ContactError:
+        contact = chosen
+
+    folded = fold_text(prompt or "")
+    prefs = normalize_preferences(
+        contact.get("preferences_json") or contact.get("preferences")
     )
-    items = ranked if isinstance(ranked, list) else []
+    override = None
+    if any(token in folded for token in ("cochera", "garage", "garaje", "estacionamiento")):
+        override = dict(prefs)
+        features = list(override.get("features") or [])
+        if "cochera" not in {str(item).casefold() for item in features}:
+            features.append("cochera")
+        override["features"] = features
+        prefs = override
+    include_discarded = "descart" in folded and any(
+        word in folded for word in ("tambien", "incluye", "mostrame")
+    )
+    has_need = any(
+        prefs.get(key)
+        for key in (
+            "areas",
+            "budget",
+            "property_types",
+            "rooms",
+            "bedrooms",
+            "rooms_min",
+            "bedrooms_min",
+            "features",
+            "required_features",
+            "preferred_features",
+            "purpose",
+            "center_latitude",
+        )
+    )
+    first_name = ((contact.get("name") or chosen.get("name") or "").split() or [query])[0]
+    ranked = []
+    if has_need:
+        ranked = rank_contact_properties(
+            organization_id,
+            contact,
+            agent_id=scoped_agent,
+            criteria_override=override,
+            include_discarded=include_discarded,
+        )
+    shown = [item for item in ranked if int(item.get("score") or 0) > 0][:5]
     cards = []
-    for item in list(items)[:5]:
-        listing = item.get("listing") or item
+    for item in shown:
+        decorated = decorate_match(item, language=language)
+        listing = decorated.get("listing") or {}
+        reasons = decorated.get("reasons") or {}
+        reason_bits = [
+            entry.get("label")
+            for bucket in ("matched", "warnings", "missing")
+            for entry in (reasons.get(bucket) or [])[:2]
+            if entry.get("label")
+        ]
+        price = format_listing_money(
+            listing.get("price"),
+            listing.get("currency"),
+            language=language,
+        )
+        facts = []
+        if listing.get("rooms") is not None:
+            facts.append(_t("property_rooms_n", language, n=listing["rooms"]))
+        if listing.get("bedrooms") is not None:
+            facts.append(_t("property_bedrooms_n", language, n=listing["bedrooms"]))
+        property_id = decorated.get("property_id")
         cards.append(
             {
-                "title": listing.get("address") or listing.get("title") or chosen["name"],
-                "subtitle": listing.get("neighborhood") or "",
-                "property_id": listing.get("id"),
+                "title": listing.get("address") or first_name,
+                "subtitle": " · ".join(
+                    part
+                    for part in (
+                        price,
+                        f"{decorated.get('score')}%",
+                        decorated.get("history_label"),
+                    )
+                    if part
+                ),
+                "meta": " · ".join(facts),
+                "detail": " · ".join(reason_bits[:4]),
+                "property_id": property_id,
+                "href": f"/properties/{property_id}" if property_id else "",
             }
         )
     cards = _attach_property_card_covers(organization_id, cards)
+    if not has_need:
+        message_key = "jrh_property_needs_empty"
+    elif cards:
+        message_key = "jrh_property_needs_found"
+    else:
+        message_key = "jrh_property_needs_none"
+    summary = _t(message_key, language, name=first_name)
     return _result(
         QUERY_PROPERTY_NEEDS,
         "ready",
         language=language,
-        summary=chosen["name"],
+        summary=summary,
         cards=cards,
         actions=[
             {
@@ -1705,6 +1976,15 @@ def _operation_db_id(value):
 def _acm_query_from_prompt(prompt, entities):
     import re
 
+    from modules.jrh_ai_classify import (
+        _extract_street_address,
+        fold_text,
+        strip_address_command_prefix,
+    )
+
+    street = _extract_street_address(fold_text(prompt or ""))
+    if street:
+        return street
     query = (
         entities.get("operation_reference")
         or entities.get("address")
@@ -1713,7 +1993,7 @@ def _acm_query_from_prompt(prompt, entities):
         or ""
     )
     if query:
-        return " ".join(str(query).split())
+        return strip_address_command_prefix(query)
     cleaned = re.sub(
         r"(haceme un acm de la operacion de|haceme un acm de la operación de|"
         r"haceme el acm de la operacion de|haceme el acm de la operación de|"
@@ -1726,7 +2006,7 @@ def _acm_query_from_prompt(prompt, entities):
         prompt or "",
         flags=re.IGNORECASE,
     )
-    return " ".join(cleaned.split())
+    return strip_address_command_prefix(cleaned)
 
 
 def _owned_property_match(organization_id, property_id, agent_id):
@@ -2371,6 +2651,625 @@ def _contact_attention(intent, status, language, query, matches, confidence):
     )
 
 
+def _day_label(value, tz):
+    from modules.organization_time import to_local
+
+    local = to_local(value, tz)
+    return local.strftime("%d/%m/%Y") if local else ""
+
+
+def _follow_up_change_lines(fields, language, tz):
+    from modules.contact_follow_up import CADENCE_NONE
+
+    lines = []
+    if fields.get("follow_up_reason"):
+        lines.append(
+            _t(
+                "jrh_followup_change_note",
+                language,
+                text=fields["follow_up_reason"],
+            )
+        )
+    stage = fields.get("commercial_stage") or ""
+    if stage:
+        lines.append(
+            _t(
+                "jrh_followup_change_stage",
+                language,
+                text=_t(f"followup_stage_{stage}", language),
+            )
+        )
+    priority = fields.get("follow_up_priority") or ""
+    if priority:
+        lines.append(
+            _t(
+                "jrh_followup_change_priority",
+                language,
+                text=_t(f"followup_priority_{priority}", language),
+            )
+        )
+    if fields.get("follow_up_cadence") == CADENCE_NONE:
+        lines.append(_t("jrh_followup_change_cadence_none", language))
+    when = _day_label(fields.get("next_follow_up_at"), tz)
+    if when:
+        lines.append(_t("jrh_followup_change_when", language, text=when))
+    return lines
+
+
+def _property_relation_kind(prompt):
+    folded = fold_text(prompt or "")
+    if "descart" in folded:
+        return "discarded"
+    if "gusto" in folded or "intereso" in folded:
+        return "interested"
+    if "negoci" in folded:
+        return "negotiation"
+    if "visito" in folded or "visite" in folded:
+        return "visited"
+    return "shared"
+
+
+def _handle_log_visit_outcome(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    prompt,
+    confidence,
+    session,
+    now=None,
+    **_kwargs,
+):
+    from modules.database.agent_tasks_repository import list_agent_tasks
+    from modules.organization_time import organization_timezone, to_utc_iso
+    from modules.visit_close import (
+        describe_need_changes,
+        need_changes_for_outcome,
+        parse_visit_close_prompt,
+    )
+
+    if not can_use_agent_workspace(user) or not agent_id:
+        return _result(
+            LOG_VISIT_OUTCOME,
+            "needs_attention",
+            language=language,
+            message_key="access_denied",
+            confidence=confidence,
+        )
+    instant = now or now_utc()
+    tz = organization_timezone(organization_id)
+    local_now = instant.astimezone(tz)
+    parsed = parse_visit_close_prompt(
+        prompt,
+        today=local_now.date(),
+        now_local=local_now,
+    )
+    if not parsed or not parsed.get("contact_name"):
+        return _result(
+            LOG_VISIT_OUTCOME,
+            "needs_attention",
+            language=language,
+            message_key="jrh_visit_close_missing",
+            confidence=confidence,
+        )
+    status, chosen, matches = _resolve_prompt_contact(
+        organization_id,
+        user,
+        agent_id,
+        {"contact_name": parsed["contact_name"]},
+        confidence,
+    )
+    if status != "unique":
+        return _contact_attention(
+            LOG_VISIT_OUTCOME,
+            status,
+            language,
+            parsed["contact_name"],
+            matches,
+            confidence,
+        )
+    from modules.contacts import load_contact
+
+    contact = load_contact(
+        organization_id,
+        chosen["id"],
+        agent_id=agent_id if is_agent(user) else None,
+    )
+    visits = [
+        item
+        for item in list_agent_tasks(
+            organization_id,
+            agent_id=agent_id,
+            contact_id=contact["id"],
+            task_type="visit",
+            order="desc",
+            limit=10,
+        )
+        if item.get("status") in ("pending", "completed")
+    ]
+    from modules.visit_outcome import normalize_visit_outcome
+
+    visit = next(
+        (
+            item
+            for item in visits
+            if not normalize_visit_outcome(item.get("outcome_json")).get("result")
+        ),
+        visits[0] if visits else None,
+    )
+    if visit is None:
+        return _result(
+            LOG_VISIT_OUTCOME,
+            "needs_attention",
+            language=language,
+            message_key="jrh_visit_close_missing",
+            confidence=confidence,
+        )
+    preview = need_changes_for_outcome(contact, parsed)
+    lines = [
+        _t(f"visit_result_{parsed['result']}", language),
+    ]
+    if parsed.get("next_step"):
+        lines.append(_t(f"visit_step_{parsed['next_step']}", language))
+    lines.extend(describe_need_changes(preview, language))
+    draft = {
+        "intent": LOG_VISIT_OUTCOME,
+        "task_id": visit["id"],
+        "contact_id": contact["id"],
+        "contact_name": contact.get("name") or "",
+        "outcome": parsed,
+        "source_prompt": prompt,
+        "preview_at": to_utc_iso(instant),
+    }
+    if session is not None:
+        session[SESSION_DRAFT_KEY] = draft
+    cards = [
+        {
+            "title": contact.get("name") or "",
+            "subtitle": visit.get("property_address") or visit.get("title") or "",
+        }
+    ]
+    cards.extend({"title": line, "subtitle": ""} for line in lines)
+    return _result(
+        LOG_VISIT_OUTCOME,
+        "ready",
+        language=language,
+        message_key="jrh_visit_close_preview",
+        wrote=False,
+        confirm_required=True,
+        confidence=confidence,
+        data={"name": draft["contact_name"], "source_prompt": prompt},
+        cards=cards,
+        entity={"kind": "task", "id": visit["id"], "label": visit.get("title") or ""},
+    )
+
+
+def _handle_log_contact_follow_up(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    prompt,
+    confidence,
+    session,
+    now=None,
+    **_kwargs,
+):
+    from modules.contact_follow_up import (
+        detect_follow_up_command,
+        follow_up_updates,
+    )
+    from modules.contacts import load_contact
+    from modules.organization_time import organization_timezone, to_utc_iso
+
+    if not can_use_agent_workspace(user) or not agent_id:
+        return _result(
+            LOG_CONTACT_FOLLOW_UP,
+            "needs_attention",
+            language=language,
+            message_key="access_denied",
+            confidence=confidence,
+        )
+    plan = detect_follow_up_command(prompt)
+    if not plan:
+        return _result(
+            LOG_CONTACT_FOLLOW_UP,
+            "needs_attention",
+            language=language,
+            message_key="jrh_followup_unclear",
+            confidence=confidence,
+        )
+    merged = dict(entities or {})
+    merged["contact_name"] = plan["contact_name"]
+    status, chosen, matches = _resolve_prompt_contact(
+        organization_id, user, agent_id, merged, confidence
+    )
+    if status != "unique":
+        return _contact_attention(
+            LOG_CONTACT_FOLLOW_UP,
+            status,
+            language,
+            plan["contact_name"],
+            matches,
+            confidence,
+        )
+    contact = load_contact(
+        organization_id,
+        chosen["id"],
+        agent_id=agent_id if is_agent(user) else None,
+    )
+    instant = now or now_utc()
+    tz = organization_timezone(organization_id)
+    _resolved, fields = follow_up_updates(contact, plan, now=instant, tz=tz)
+    draft = {
+        "intent": LOG_CONTACT_FOLLOW_UP,
+        "contact_id": contact["id"],
+        "contact_name": contact.get("name") or plan["contact_name"],
+        "source_prompt": prompt,
+        "preview_at": to_utc_iso(instant),
+    }
+    if session is not None:
+        session[SESSION_DRAFT_KEY] = draft
+    lines = _follow_up_change_lines(fields, language, tz)
+    return _result(
+        LOG_CONTACT_FOLLOW_UP,
+        "ready",
+        language=language,
+        message_key="jrh_followup_preview",
+        wrote=False,
+        confirm_required=True,
+        confidence=confidence,
+        data={"name": draft["contact_name"], "source_prompt": prompt},
+        cards=[{"title": line, "subtitle": ""} for line in lines],
+        entity={
+            "kind": "contact",
+            "id": contact["id"],
+            "label": draft["contact_name"],
+        },
+    )
+
+
+def _need_focus(prompt):
+    folded = fold_text(prompt or "")
+    if "presupuesto" in folded:
+        return "budget"
+    if "zona" in folded:
+        return "areas"
+    if "ambiente" in folded:
+        return "rooms"
+    if "dormitorio" in folded:
+        return "bedrooms"
+    if "bano" in folded:
+        return "bathrooms"
+    return ""
+
+
+def _need_lines(facts, language):
+    from modules.visit_outcome import format_budget_label
+
+    lines = []
+    if facts.get("purpose"):
+        lines.append(
+            _t(
+                "jrh_need_purpose",
+                language,
+                value=_t(f"listing_purpose_{facts['purpose']}", language),
+            )
+        )
+    if facts.get("property_types"):
+        lines.append(
+            _t(
+                "jrh_need_type",
+                language,
+                value=", ".join(facts["property_types"]),
+            )
+        )
+    if facts.get("areas"):
+        lines.append(
+            _t("jrh_need_areas", language, value=", ".join(facts["areas"]))
+        )
+    budget = facts.get("budget") or {}
+    if budget.get("max") or budget.get("min"):
+        lines.append(
+            _t(
+                "jrh_need_budget",
+                language,
+                value=format_budget_label(budget),
+            )
+        )
+    elif budget.get("currency"):
+        lines.append(
+            _t("jrh_need_budget", language, value=budget["currency"])
+        )
+    if facts.get("rooms"):
+        lines.append(
+            _t("jrh_need_rooms", language, value=facts["rooms"])
+        )
+    if facts.get("bedrooms"):
+        lines.append(
+            _t("jrh_need_bedrooms", language, value=facts["bedrooms"])
+        )
+    if facts.get("bathrooms"):
+        lines.append(
+            _t("jrh_need_bathrooms", language, value=facts["bathrooms"])
+        )
+    if facts.get("features"):
+        lines.append(
+            _t(
+                "jrh_need_features",
+                language,
+                value=", ".join(facts["features"]),
+            )
+        )
+    if facts.get("observations"):
+        lines.append(
+            _t(
+                "jrh_need_observations",
+                language,
+                value=facts["observations"],
+            )
+        )
+    return lines
+
+
+def _need_focus_missing(facts, focus):
+    if not focus:
+        return False
+    if focus == "budget":
+        budget = facts.get("budget") or {}
+        return not (budget.get("max") or budget.get("min") or budget.get("currency"))
+    value = facts.get(focus)
+    if isinstance(value, list):
+        return not value
+    return not value
+
+
+def _handle_contact_need(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    prompt,
+    confidence,
+    **_kwargs,
+):
+    from modules.contacts import contact_need_facts, load_contact
+
+    if not can_use_agent_workspace(user) or not agent_id:
+        return _result(
+            QUERY_CONTACT_NEED,
+            "needs_attention",
+            language=language,
+            message_key="access_denied",
+            confidence=confidence,
+        )
+    query = entities.get("contact_name") or entities.get("agent_name") or ""
+    status, chosen, matches = _resolve_prompt_contact(
+        organization_id, user, agent_id, entities, confidence
+    )
+    if status != "unique":
+        return _contact_attention(
+            QUERY_CONTACT_NEED,
+            status,
+            language,
+            query,
+            matches,
+            confidence,
+        )
+    contact = load_contact(
+        organization_id,
+        chosen["id"],
+        agent_id=agent_id if is_agent(user) else None,
+    )
+    facts = contact_need_facts(contact)
+    name = contact.get("name") or query
+    if not facts.get("loaded"):
+        return _result(
+            QUERY_CONTACT_NEED,
+            "ready",
+            language=language,
+            message_key="jrh_contact_need_empty",
+            confidence=confidence,
+            data={"name": name},
+            entity={"kind": "contact", "id": contact["id"], "label": name},
+        )
+    lines = _need_lines(facts, language)
+    if _need_focus_missing(facts, _need_focus(prompt)):
+        lines.insert(0, _t("jrh_contact_need_missing", language))
+    return _result(
+        QUERY_CONTACT_NEED,
+        "ready",
+        language=language,
+        summary="\n".join(lines),
+        cards=[{"title": line, "subtitle": ""} for line in lines],
+        confidence=confidence,
+        data={"need": facts, "source_prompt": prompt},
+        entity={"kind": "contact", "id": contact["id"], "label": name},
+        actions=[
+            {
+                "label_key": "jrh_cta_view",
+                "href_name": "contacts_detail",
+                "href_args": {"contact_id": contact["id"]},
+            }
+        ],
+    )
+
+
+def _task_candidates(tasks, tz):
+    from modules.organization_time import to_local
+
+    rows = []
+    for task in tasks:
+        local = to_local(task.get("due_at"), tz)
+        when = local.strftime("%d/%m/%Y %H:%M") if local else ""
+        rows.append(
+            {
+                "id": task.get("id"),
+                "name": task.get("title") or task.get("contact_name") or "",
+                "kind": "task",
+                "subtitle": when,
+            }
+        )
+    return rows
+
+
+def _matching_tasks(tasks, task_type):
+    if task_type and task_type != "other":
+        typed = [task for task in tasks if task.get("task_type") == task_type]
+        if typed:
+            return typed
+    return list(tasks)
+
+
+def _handle_reschedule_task(
+    *,
+    organization_id,
+    user,
+    agent_id,
+    language,
+    entities,
+    prompt,
+    confidence,
+    session,
+    now=None,
+    **_kwargs,
+):
+    from modules.agenda_nlp import parse_agenda_prompt
+    from modules.database.agent_tasks_repository import (
+        STATUS_PENDING,
+        list_agent_tasks,
+    )
+    from modules.organization_time import organization_timezone, to_local
+
+    if not can_use_agent_workspace(user) or not agent_id:
+        return _result(
+            RESCHEDULE_TASK,
+            "needs_attention",
+            language=language,
+            message_key="access_denied",
+            confidence=confidence,
+        )
+    instant = now or now_utc()
+    tz = organization_timezone(organization_id)
+    local_now = instant.astimezone(tz)
+    parsed = parse_agenda_prompt(
+        prompt,
+        today=local_now.date(),
+        now_local=local_now,
+    )
+    contact_name = (
+        parsed.get("contact_name")
+        or (entities or {}).get("contact_name")
+        or ""
+    )
+    scoped = agent_id if is_agent(user) else agent_id
+    tasks = []
+    if contact_name:
+        status, chosen, matches = _resolve_prompt_contact(
+            organization_id,
+            user,
+            agent_id,
+            {"contact_name": contact_name},
+            confidence,
+        )
+        if status == "ambiguous":
+            return _contact_attention(
+                RESCHEDULE_TASK,
+                status,
+                language,
+                contact_name,
+                matches,
+                confidence,
+            )
+        if status == "unique" and chosen:
+            tasks = list_agent_tasks(
+                organization_id,
+                agent_id=scoped,
+                statuses=(STATUS_PENDING,),
+                contact_id=chosen["id"],
+                limit=20,
+            )
+    if not tasks:
+        needle = parsed.get("property_query") or contact_name
+        if needle:
+            tasks = list_agent_tasks(
+                organization_id,
+                agent_id=scoped,
+                statuses=(STATUS_PENDING,),
+                search=needle,
+                limit=20,
+            )
+    tasks = _matching_tasks(tasks, parsed.get("task_type"))
+    if not tasks:
+        return _result(
+            RESCHEDULE_TASK,
+            "needs_attention",
+            language=language,
+            message_key="jrh_reschedule_missing_task",
+            confidence=confidence,
+        )
+    if len(tasks) > 1:
+        return _result(
+            RESCHEDULE_TASK,
+            "needs_attention",
+            language=language,
+            message_key="jrh_reschedule_ambiguous",
+            candidates=_task_candidates(tasks, tz),
+            confidence=confidence,
+        )
+    if not parsed.get("date_found"):
+        return _result(
+            RESCHEDULE_TASK,
+            "needs_attention",
+            language=language,
+            message_key="jrh_reschedule_when",
+            confidence=confidence,
+        )
+    task = tasks[0]
+    current = to_local(task.get("due_at"), tz)
+    due_time = parsed.get("due_time") or (
+        current.strftime("%H:%M") if current else "09:00"
+    )
+    draft = {
+        "intent": RESCHEDULE_TASK,
+        "task_id": task["id"],
+        "task_type": task.get("task_type") or "",
+        "title": task.get("title") or "",
+        "contact_id": task.get("contact_id"),
+        "contact_name": task.get("contact_name") or contact_name,
+        "due_date": parsed.get("due_date"),
+        "due_time": due_time,
+        "google_event_id": task.get("google_event_id") or "",
+        "source_prompt": prompt,
+    }
+    if session is not None:
+        session[SESSION_DRAFT_KEY] = draft
+    previous = current.strftime("%d/%m/%Y %H:%M") if current else ""
+    return _result(
+        RESCHEDULE_TASK,
+        "ready",
+        language=language,
+        message_key="jrh_reschedule_preview",
+        wrote=False,
+        confirm_required=True,
+        confidence=confidence,
+        data={"title": draft["title"], "source_prompt": prompt},
+        cards=[
+            {"title": draft["contact_name"] or draft["title"], "subtitle": previous},
+            {
+                "title": f"{draft['due_date']} {due_time}",
+                "subtitle": draft.get("google_event_id") or "",
+            },
+        ],
+        entity={"kind": "task", "id": task["id"], "label": draft["title"]},
+    )
+
+
 def _handle_contact(
     *,
     organization_id,
@@ -2535,7 +3434,17 @@ def _handle_contact_properties(
         organization_id=organization_id,
         language=language,
     )
-    shared = card.get("shared_properties") or []
+    relation = _property_relation_kind(_kwargs.get("prompt") or "")
+    if relation == "shared":
+        shared = card.get("shared_properties") or []
+    else:
+        from modules.database.contacts_repository import list_property_interactions
+
+        shared = [
+            row
+            for row in list_property_interactions(organization_id, contact["id"])
+            if row.get("interaction_type") == relation
+        ]
     if not shared:
         summary = _t("jrh_ai_contact_shared_empty", language, name=contact.get("name") or "")
     else:
@@ -3186,6 +4095,255 @@ def confirm_jrh_action(
                     "href_args": {"contact_id": contact_id},
                 }
             ],
+        )
+    if intent == LOG_CONTACT_FOLLOW_UP:
+        from modules.contact_follow_up import (
+            apply_follow_up_plan,
+            detect_follow_up_command,
+        )
+        from modules.contacts import decorate_contact, load_contact
+        from modules.organization_time import organization_timezone, parse_utc_iso
+
+        contact_id = draft.get("contact_id")
+        plan = detect_follow_up_command(draft.get("source_prompt") or "")
+        if not contact_id or not plan:
+            return _result(
+                LOG_CONTACT_FOLLOW_UP,
+                "needs_attention",
+                language=language,
+                message_key="jrh_followup_unclear",
+            )
+        contact = load_contact(
+            organization_id,
+            int(contact_id),
+            agent_id=agent_id if is_agent(user) else None,
+        )
+        updated = apply_follow_up_plan(
+            contact,
+            plan,
+            now=parse_utc_iso(draft.get("preview_at")) or now_utc(),
+            tz=organization_timezone(organization_id),
+        )
+        history = decorate_contact(
+            updated,
+            organization_id=organization_id,
+            language=language,
+        ).get("history") or []
+        kinds = [
+            event.get("kind")
+            for group in history
+            for event in group.get("events") or []
+        ]
+        if session is not None:
+            session.pop(SESSION_DRAFT_KEY, None)
+        when = _day_label(
+            updated.get("next_follow_up_at"),
+            organization_timezone(organization_id),
+        )
+        if plan.get("bought"):
+            message_key = "jrh_followup_converted"
+        elif when:
+            message_key = "jrh_followup_updated"
+        else:
+            message_key = "jrh_followup_noted"
+        return _result(
+            LOG_CONTACT_FOLLOW_UP,
+            "ready",
+            language=language,
+            message_key=message_key,
+            wrote=True,
+            data={"name": updated.get("name") or "", "when": when},
+            entity={
+                "kind": "contact",
+                "id": updated["id"],
+                "label": updated.get("name") or "",
+            },
+            actions=[
+                {
+                    "label_key": "jrh_cta_view",
+                    "href_name": "contacts_detail",
+                    "href_args": {"contact_id": updated["id"]},
+                }
+            ],
+            cards=[{"title": kind, "subtitle": ""} for kind in kinds if kind == "follow_up"],
+        )
+    if intent == LOG_VISIT_OUTCOME:
+        from modules.agent_tasks import complete_task
+        from modules.database.agent_tasks_repository import get_agent_task
+        from modules.organization_time import organization_timezone, parse_utc_iso
+        from modules.visit_close import apply_visit_close
+
+        task = get_agent_task(int(draft.get("task_id") or 0), organization_id)
+        if task is None:
+            return _result(
+                LOG_VISIT_OUTCOME,
+                "needs_attention",
+                language=language,
+                message_key="jrh_visit_close_missing",
+            )
+        if task.get("status") == "pending":
+            task = complete_task(
+                organization_id,
+                task["id"],
+                agent_id=agent_id,
+                actor_user_id=(user or {}).get("id"),
+            )
+        closed = apply_visit_close(
+            task,
+            draft.get("outcome") or {},
+            organization_id=organization_id,
+            agent_id=agent_id,
+            actor_user_id=(user or {}).get("id"),
+            now=parse_utc_iso(draft.get("preview_at")) or now_utc(),
+            tz=organization_timezone(organization_id),
+            language=language,
+            save_need=True,
+        )
+        if session is not None:
+            session.pop(SESSION_DRAFT_KEY, None)
+        contact = closed.get("contact") or {}
+        return _result(
+            LOG_VISIT_OUTCOME,
+            "ready",
+            language=language,
+            message_key="jrh_visit_close_saved",
+            wrote=True,
+            data={"name": contact.get("name") or draft.get("contact_name") or ""},
+            entity={
+                "kind": "contact",
+                "id": contact.get("id"),
+                "label": contact.get("name") or "",
+            },
+        )
+    if intent == RESCHEDULE_TASK:
+        from modules.agent_tasks import reschedule_task
+        from modules.contact_follow_up import record_timeline_note
+        from modules.contacts import load_contact
+        from modules.organization_time import organization_timezone
+
+        task_id = draft.get("task_id")
+        if not task_id or not draft.get("due_date"):
+            return _result(
+                RESCHEDULE_TASK,
+                "needs_attention",
+                language=language,
+                message_key="jrh_reschedule_when",
+            )
+        updated = reschedule_task(
+            organization_id,
+            int(task_id),
+            due_date=draft.get("due_date"),
+            due_time=draft.get("due_time") or "09:00",
+            agent_id=agent_id,
+            actor_user_id=(user or {}).get("id"),
+        )
+        kind = (
+            "visit_rescheduled"
+            if (updated.get("task_type") or draft.get("task_type")) == "visit"
+            else "agenda_rescheduled"
+        )
+        contact_id = updated.get("contact_id") or draft.get("contact_id")
+        if contact_id:
+            contact = load_contact(
+                organization_id,
+                int(contact_id),
+                agent_id=agent_id if is_agent(user) else None,
+            )
+            record_timeline_note(
+                contact,
+                f"{updated.get('title') or ''} {draft.get('due_date')} {draft.get('due_time')}".strip(),
+                kind=kind,
+                now=now_utc(),
+                tz=organization_timezone(organization_id),
+            )
+        if session is not None:
+            session.pop(SESSION_DRAFT_KEY, None)
+        return _result(
+            RESCHEDULE_TASK,
+            "ready",
+            language=language,
+            message_key="jrh_reschedule_done",
+            wrote=True,
+            data={
+                "title": updated.get("title") or "",
+                "task_id": updated.get("id"),
+                "google_event_id": updated.get("google_event_id") or "",
+            },
+            entity={
+                "kind": "task",
+                "id": updated.get("id"),
+                "label": updated.get("title") or "",
+            },
+            actions=[
+                {
+                    "label_key": "jrh_cta_view",
+                    "href_name": "agenda_index",
+                }
+            ],
+        )
+    if intent == SHARE_PROPERTY_SHORTLIST:
+        from modules.contacts import load_contact
+        from modules.organization_time import organization_timezone
+        from modules.property_match import whatsapp_share_url
+        from modules.branding import get_app_base_url
+        from modules.property_shortlist import (
+            attach_match_scores,
+            record_shortlist_share,
+            select_properties,
+        )
+        from modules.public_share import prepare_client_links
+
+        contact = load_contact(
+            organization_id,
+            int(draft.get("contact_id")),
+            agent_id=agent_id if is_agent(user) else None,
+        )
+        items = attach_match_scores(
+            organization_id,
+            contact,
+            select_properties(
+                organization_id,
+                contact["id"],
+                draft.get("property_ids") or [],
+                agent_id=agent_id if is_agent(user) else None,
+            ),
+            agent_id=agent_id if is_agent(user) else None,
+        )
+        message = draft.get("message") or ""
+        prepare_client_links(
+            organization_id,
+            items,
+            agent_id=agent_id if is_agent(user) else None,
+            base_url=get_app_base_url(),
+            mode=draft.get("mode") or "individual",
+            contact_id=contact["id"],
+            collection_token=draft.get("collection_token") or None,
+        )
+        record_shortlist_share(
+            organization_id,
+            contact,
+            items,
+            agent_id=agent_id,
+            now=now_utc(),
+            tz=organization_timezone(organization_id),
+            language=language,
+        )
+        if session is not None:
+            session.pop(SESSION_DRAFT_KEY, None)
+        url = whatsapp_share_url(contact.get("phone"), message)
+        return _result(
+            SHARE_PROPERTY_SHORTLIST,
+            "ready",
+            language=language,
+            message_key="jrh_shortlist_opened",
+            wrote=True,
+            data={"name": draft.get("contact_name") or contact.get("name")},
+            actions=[
+                {
+                    "label_key": "shortlist_open_whatsapp",
+                    "href": url or "",
+                }
+            ] if url else [],
         )
     return _result(
         intent,

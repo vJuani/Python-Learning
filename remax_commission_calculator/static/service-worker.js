@@ -1,5 +1,5 @@
 /* JRH One PWA service worker. Caches static assets only. Never caches private data. */
-const CACHE_NAME = "jrh-one-static-v6";
+const CACHE_NAME = "jrh-one-static-v7";
 const STATIC_PREFIXES = [
   "/static/css/",
   "/static/js/",
@@ -174,23 +174,145 @@ self.addEventListener("push", function (event) {
       payload.type = parsed.type || "";
       payload.priority = parsed.priority || "info";
       payload.notification_id = parsed.notification_id || null;
+      payload.unread_count = unreadCountFrom(parsed.unread_count);
     } catch (error) {
       payload.body = event.data.text() || "";
     }
   }
+  // iOS revokes subscriptions whose pushes do not show a notification, so
+  // showNotification always runs, even if badge or postMessage fail.
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: payload.icon,
-      badge: payload.badge,
-      tag: payload.tag,
-      data: {
-        url: payload.url,
-        type: payload.type,
-        priority: payload.priority,
-        notification_id: payload.notification_id,
-      },
+    Promise.all([
+      self.registration.showNotification(payload.title, {
+        body: payload.body,
+        icon: payload.icon,
+        badge: payload.badge,
+        tag: payload.tag,
+        data: {
+          url: payload.url,
+          type: payload.type,
+          priority: payload.priority,
+          notification_id: payload.notification_id,
+        },
+      }),
+      updateAppBadge(payload.unread_count),
+      broadcastToClients(notificationReceivedMessage(payload)),
+    ])
+  );
+});
+
+function unreadCountFrom(raw) {
+  var value = parseInt(raw, 10);
+  return isNaN(value) || value < 0 ? null : value;
+}
+
+function notificationReceivedMessage(payload) {
+  return {
+    type: "notification-received",
+    unread_count: payload.unread_count === undefined ? null : payload.unread_count,
+    notification_id: payload.notification_id || null,
+    notification_type: payload.type || "",
+  };
+}
+
+function updateAppBadge(count) {
+  var nav = self.navigator;
+  if (count === null || count === undefined || !nav) {
+    return Promise.resolve();
+  }
+  try {
+    if (count > 0 && nav.setAppBadge) {
+      return Promise.resolve(nav.setAppBadge(count)).catch(function () {
+        return undefined;
+      });
+    }
+    if (count === 0 && nav.clearAppBadge) {
+      return Promise.resolve(nav.clearAppBadge()).catch(function () {
+        return undefined;
+      });
+    }
+  } catch (error) {
+    return Promise.resolve();
+  }
+  return Promise.resolve();
+}
+
+function broadcastToClients(message) {
+  return self.clients
+    .matchAll({ type: "window", includeUncontrolled: true })
+    .then(function (clients) {
+      clients.forEach(function (client) {
+        client.postMessage(message);
+      });
     })
+    .catch(function () {
+      return undefined;
+    });
+}
+
+function urlBase64ToUint8Array(base64String) {
+  var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  var raw = self.atob(base64);
+  var output = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i += 1) {
+    output[i] = raw.charCodeAt(i);
+  }
+  return output;
+}
+
+function applicationServerKeyFor(oldSubscription) {
+  var options = oldSubscription && oldSubscription.options;
+  if (options && options.applicationServerKey) {
+    return Promise.resolve(options.applicationServerKey);
+  }
+  return fetch("/api/push/public-key", { credentials: "include" })
+    .then(function (response) {
+      return response.ok ? response.json() : null;
+    })
+    .then(function (data) {
+      return data && data.public_key ? urlBase64ToUint8Array(data.public_key) : null;
+    });
+}
+
+// Chrome/Firefox rotate subscriptions and announce it here; Safari does not
+// fire this event, so pwa.js also resyncs whenever the app is opened.
+self.addEventListener("pushsubscriptionchange", function (event) {
+  var oldSubscription = event.oldSubscription || null;
+  var oldJson = oldSubscription && oldSubscription.toJSON ? oldSubscription.toJSON() : {};
+  var oldEndpoint = (oldSubscription && oldSubscription.endpoint) || "";
+  var oldAuth = (oldJson.keys && oldJson.keys.auth) || "";
+  var resubscribe = event.newSubscription
+    ? Promise.resolve(event.newSubscription)
+    : applicationServerKeyFor(oldSubscription).then(function (key) {
+        if (!key) {
+          return null;
+        }
+        return self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: key,
+        });
+      });
+  event.waitUntil(
+    resubscribe
+      .then(function (subscription) {
+        if (!subscription || !oldEndpoint) {
+          return undefined;
+        }
+        return fetch("/api/push/resubscribe", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            old_endpoint: oldEndpoint,
+            old_auth: oldAuth,
+            subscription: subscription.toJSON(),
+          }),
+        });
+      })
+      .catch(function () {
+        return undefined;
+      })
   );
 });
 

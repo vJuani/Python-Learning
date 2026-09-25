@@ -1,0 +1,24 @@
+<span data-push-eligible hidden></span>
+{% if request.endpoint not in ('settings_notifications', 'notifications_settings') %}
+<section
+    id="push-soft-prompt"
+    class="push-soft-prompt"
+    role="dialog"
+    aria-live="polite"
+    aria-labelledby="push-soft-prompt-title"
+    data-label-ios="{{ t('push_prompt_ios_body') }}"
+    data-label-failed="{{ t('push_prompt_failed') }}"
+    hidden
+>
+    <div class="push-soft-prompt__icon" aria-hidden="true">{% include "_jrh_bell.html" %}</div>
+    <div class="push-soft-prompt__body">
+        <p id="push-soft-prompt-title" class="push-soft-prompt__title">{{ t('push_prompt_title') }}</p>
+        <p id="push-soft-prompt-text" class="push-soft-prompt__text">{{ t('push_prompt_body') }}</p>
+        <p id="push-soft-prompt-message" class="push-soft-prompt__message" hidden></p>
+    </div>
+    <div class="push-soft-prompt__actions">
+        <button type="button" id="push-soft-prompt-later" class="btn btn-secondary btn-small">{{ t('push_prompt_later') }}</button>
+        <button type="button" id="push-soft-prompt-accept" class="btn btn-primary btn-small">{{ t('push_prompt_accept') }}</button>
+    </div>
+</section>
+{% endif %}

@@ -109,6 +109,12 @@ def notify_agent_for_property_change(
     payload,
     actor_user_id=None
 ):
+    from modules.database.property_change_requests_repository import (
+        get_property_change_request,
+    )
+
+    change = get_property_change_request(change_request_id, organization_id) or {}
+    property_id = change.get("property_id")
     return _legacy_dispatch(
         organization_id=organization_id,
         agent_id=agent_id,
@@ -117,6 +123,7 @@ def notify_agent_for_property_change(
         entity_id=change_request_id,
         payload=payload,
         actor_user_id=actor_user_id,
+        url=f"/properties/{int(property_id)}" if property_id else None,
     )
 
 

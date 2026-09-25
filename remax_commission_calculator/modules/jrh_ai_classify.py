@@ -36,10 +36,15 @@ from modules.jrh_ai_intents import (
     QUERY_CONTACT,
     QUERY_CONTACT_HISTORY,
     QUERY_CONTACT_PROPERTIES,
+    QUERY_CONTACT_NEED,
     START_CONTACT_NEED,
+    RESCHEDULE_TASK,
     QUERY_NEXT_VISIT,
     QUERY_DAILY_ROUTE,
     BUILD_DAILY_ROUTE,
+    LOG_CONTACT_FOLLOW_UP,
+    LOG_VISIT_OUTCOME,
+    SHARE_PROPERTY_SHORTLIST,
 )
 
 ORIGIN_CHARGE = "agent_account_charge"
@@ -185,7 +190,10 @@ EXPLICIT_NEW_INTENTS = frozenset(
         QUERY_CONTACT,
         QUERY_CONTACT_HISTORY,
         QUERY_CONTACT_PROPERTIES,
+        QUERY_CONTACT_NEED,
         START_CONTACT_NEED,
+        RESCHEDULE_TASK,
+        LOG_VISIT_OUTCOME,
         QUERY_NEXT_VISIT,
         QUERY_DAILY_ROUTE,
         BUILD_DAILY_ROUTE,
@@ -334,13 +342,27 @@ def extract_person_name(text):
     return ""
 
 
+def _alias_in_text(alias, folded):
+    """Whole-token match. ``caba`` must not hit inside ``buscaba``."""
+    if not alias or not folded:
+        return False
+    return re.search(rf"\b{re.escape(alias)}\b", folded) is not None
+
+
+def _matching_location_alias(folded, aliases):
+    hits = [alias for alias in aliases if _alias_in_text(alias, folded)]
+    if not hits:
+        return None
+    return max(hits, key=len)
+
+
 def _has_location_signal(folded):
-    if any(alias in folded for alias in CABA_ALIASES):
+    if _matching_location_alias(folded, CABA_ALIASES):
         return True
-    if any(alias in folded for alias in ZONA_NORTE_ALIASES):
+    if _matching_location_alias(folded, ZONA_NORTE_ALIASES):
         return True
     return any(
-        re.search(rf"\b{re.escape(alias)}\b", folded)
+        _alias_in_text(alias, folded)
         for alias in NEIGHBORHOOD_ALIASES
     )
 
@@ -404,11 +426,37 @@ def has_property_inventory_signal(text):
     return False
 
 
+def has_shortlist_signal(text):
+    folded = fold_text(text)
+    if any(word in folded for word in ("armame", "generame", "preparame")) and (
+        "link" in folded or "seleccion" in folded
+    ):
+        return True
+    send = any(
+        token in folded
+        for token in ("mandale", "enviale", "preparame", "armame", "whatsapp")
+    )
+    if not send:
+        return False
+    return any(
+        token in folded
+        for token in ("primeras", "mejores opciones", "propiedades", "whatsapp")
+    ) or (" y " in folded and any(token in folded for token in ("mandale", "enviale")))
+
+
 def has_property_need_signal(text):
     folded = fold_text(text)
     return any(
         phrase in folded
-        for phrase in ("que tengo para", "propiedades para", "algo para")
+        for phrase in (
+            "que tengo para",
+            "propiedades para",
+            "algo para",
+            "opciones le puedo",
+            "encaja con",
+            "coinciden mas",
+            "coinciden con",
+        )
     ) and not has_create_task_signal(text)
 
 
@@ -501,6 +549,51 @@ def has_agenda_query_signal(text):
     )
 
 
+def has_contact_need_query_signal(text):
+    folded = fold_text(text)
+    if has_contact_need_create_signal(text):
+        return False
+    return any(
+        phrase in folded
+        for phrase in (
+            "que estaba buscando",
+            "que buscaba",
+            "que busca",
+            "cual era el presupuesto",
+            "cual es el presupuesto",
+            "presupuesto de",
+            "en que zonas",
+            "en que zona",
+            "cuantos ambientes",
+            "cuantos dormitorios",
+            "cuantos banos",
+        )
+    )
+
+
+def _need_contact_name(text):
+    match = re.search(
+        r"(?:buscaba|buscando|quer[ií]a|presupuesto de)\s+"
+        r"([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'’\-]+"
+        r"(?:\s+[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'’\-]+)?)",
+        text or "",
+        re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    return _usable_person_name(match.group(1).strip())
+
+
+def has_reschedule_signal(text):
+    folded = fold_text(text)
+    return bool(
+        re.search(
+            r"\b(pasame|move|reprograma|reprogramar|cambiala|cambialo)\b",
+            folded,
+        )
+    )
+
+
 def has_contact_need_create_signal(text):
     folded = fold_text(text)
     return any(
@@ -558,6 +651,12 @@ def has_contact_shared_signal(text):
             "propiedades le mande",
             "propiedades le comparti",
             "propiedades le compartí",
+            "propiedades le mostre",
+            "propiedades le mostré",
+            "cual le gusto",
+            "cuál le gustó",
+            "que propiedades descarto",
+            "qué propiedades descartó",
         )
     )
 
@@ -628,11 +727,10 @@ def extract_property_entities(text):
     elif "ph" in _tokens(folded):
         entities["property_type"] = "ph"
 
-    location_text = None
-    for alias in list(CABA_ALIASES) + list(ZONA_NORTE_ALIASES):
-        if alias in folded:
-            location_text = alias
-            break
+    location_text = _matching_location_alias(
+        folded,
+        list(CABA_ALIASES) + list(ZONA_NORTE_ALIASES),
+    )
     if location_text is None:
         for alias, label in NEIGHBORHOOD_ALIASES.items():
             if re.search(rf"\b{re.escape(alias)}\b", folded):
@@ -698,6 +796,14 @@ _STREET_NAME_STOP = frozenset(
     {
         "de",
         "del",
+        "acm",
+        "haceme",
+        "armame",
+        "crear",
+        "generar",
+        "genera",
+        "tasame",
+        "comparativo",
         "a",
         "en",
         "la",
@@ -745,13 +851,21 @@ _PROPERTY_PREFIX_RE = re.compile(
 )
 
 
+def strip_address_command_prefix(text):
+    """Drop leading command words. ``de`` only goes when it is a prefix."""
+    tokens = [part for part in str(text or "").split() if part]
+    while tokens and fold_text(tokens[0]) in _STREET_NAME_STOP:
+        tokens.pop(0)
+    return " ".join(tokens)
+
+
 def _extract_street_address(folded):
     """Capture 'Italia 1341' / 'Av. Cabildo 2500' without treating prices as streets."""
     remainder = _PROPERTY_PREFIX_RE.sub("", folded or "", count=1).strip()
     found = ""
     for match in _STREET_ADDRESS_RE.finditer(remainder):
         tokens = (match.group(1) or "").split()
-        while tokens and tokens[0] in _STREET_NAME_STOP:
+        while tokens and fold_text(tokens[0]) in _STREET_NAME_STOP:
             tokens.pop(0)
         if not tokens:
             continue
@@ -1060,6 +1174,15 @@ def extract_entities(text, *, context=None):
         match = CONTACT_PERSON_RE.search(text or "")
         if match:
             person = _usable_person_name(match.group(1).strip())
+    if not person and has_contact_shared_signal(text):
+        match = re.search(
+            r"\b(?:gust[oó]|descart[oó]|mostr[eé]|mand[eé]|compart[ií]|visit[oóeé])\s+"
+            r"(?:a\s+)?([A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,}(?:\s+[A-Za-zÁÉÍÓÚÑÜáéíóúñü]{2,})?)",
+            text or "",
+            re.IGNORECASE,
+        )
+        if match:
+            person = _usable_person_name(match.group(1).strip())
     if person and not is_generic_agent_reference(person):
         entities["agent_name"] = person
         entities["contact_name"] = person
@@ -1256,7 +1379,9 @@ def classify_intent(prompt, *, context=None):
         else:
             scores[QUERY_DAILY_ROUTE] = 0.97
     if has_property_need_signal(text):
-        scores[QUERY_PROPERTY_NEEDS] = 0.9
+        scores[QUERY_PROPERTY_NEEDS] = 0.93
+    if has_shortlist_signal(text):
+        scores[SHARE_PROPERTY_SHORTLIST] = 0.99
     if has_property_inventory_signal(text) and not has_property_need_signal(text):
         scores[QUERY_PROPERTIES] = 0.9
         if entities.get("availability") or entities.get("jurisdiction") or entities.get("neighborhood"):
@@ -1278,6 +1403,25 @@ def classify_intent(prompt, *, context=None):
         scores[QUERY_CONTACT] = 0.93
     if has_contact_need_create_signal(text):
         scores[START_CONTACT_NEED] = 0.94
+    if has_contact_need_query_signal(text):
+        scores[QUERY_CONTACT_NEED] = 0.97
+        need_name = _need_contact_name(text)
+        if need_name:
+            entities["contact_name"] = need_name
+            entities["agent_name"] = need_name
+    if has_reschedule_signal(text):
+        scores[RESCHEDULE_TASK] = 0.97
+    from modules.visit_close import _looks_like_visit_close
+
+    if _looks_like_visit_close(folded) and not has_reschedule_signal(text):
+        scores[LOG_VISIT_OUTCOME] = 0.99
+    from modules.contact_follow_up import detect_follow_up_command
+
+    follow_plan = detect_follow_up_command(text)
+    if follow_plan:
+        scores[LOG_CONTACT_FOLLOW_UP] = 0.98
+        entities["contact_name"] = follow_plan["contact_name"]
+        entities["agent_name"] = follow_plan["contact_name"]
     if has_create_task_signal(text):
         scores[CREATE_TASK] = 0.88
         entities["title"] = text
@@ -1538,6 +1682,60 @@ def apply_intent_guards(parsed, prompt, context=None):
         result["confidence"] = max(float(result.get("confidence") or 0), 0.9)
         result["guard"] = "visit_route"
         result["entities"] = merged
+    elif rule_intent == LOG_VISIT_OUTCOME and result.get("intent") in {
+        CREATE_TASK,
+        LOG_CONTACT_FOLLOW_UP,
+        QUERY_AGENDA,
+        QUERY_CONTACT,
+        FALLBACK,
+    }:
+        result["intent"] = LOG_VISIT_OUTCOME
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.96)
+        result["guard"] = "visit_close"
+        result["entities"] = merged
+    elif rule_intent == RESCHEDULE_TASK and result.get("intent") in {
+        CREATE_TASK,
+        QUERY_AGENDA,
+        QUERY_CONTACT,
+        FALLBACK,
+    }:
+        result["intent"] = RESCHEDULE_TASK
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.96)
+        result["guard"] = "reschedule_task"
+        result["entities"] = merged
+    elif rule_intent == SHARE_PROPERTY_SHORTLIST and result.get("intent") in {
+        BUILD_DAILY_ROUTE,
+        QUERY_DAILY_ROUTE,
+        CREATE_TASK,
+        QUERY_PROPERTY_NEEDS,
+        QUERY_PROPERTIES,
+        FALLBACK,
+    }:
+        result["intent"] = SHARE_PROPERTY_SHORTLIST
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.97)
+        result["guard"] = "property_shortlist"
+        result["entities"] = merged
+    elif rule_intent == QUERY_PROPERTY_NEEDS and result.get("intent") in {
+        QUERY_PROPERTIES,
+        QUERY_CONTACT,
+        FALLBACK,
+    }:
+        result["intent"] = QUERY_PROPERTY_NEEDS
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.93)
+        result["guard"] = "property_needs"
+        result["entities"] = merged
+    elif rule_intent == QUERY_CONTACT_NEED and result.get("intent") in {
+        QUERY_CONTACT,
+        QUERY_CONTACT_HISTORY,
+        QUERY_PROPERTIES,
+        QUERY_PROPERTY_NEEDS,
+        QUERY_AGENDA,
+        FALLBACK,
+    }:
+        result["intent"] = QUERY_CONTACT_NEED
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.95)
+        result["guard"] = "contact_need"
+        result["entities"] = merged
     elif rule_intent == QUERY_AGENDA and result.get("intent") in {
         CREATE_TASK,
         FALLBACK,
@@ -1545,6 +1743,17 @@ def apply_intent_guards(parsed, prompt, context=None):
         result["intent"] = QUERY_AGENDA
         result["confidence"] = max(float(result.get("confidence") or 0), 0.86)
         result["guard"] = "agenda_query"
+    elif rule_intent == LOG_CONTACT_FOLLOW_UP and result.get("intent") in {
+        QUERY_CONTACT,
+        QUERY_CONTACT_HISTORY,
+        CREATE_TASK,
+        QUERY_AGENDA,
+        FALLBACK,
+    }:
+        result["intent"] = LOG_CONTACT_FOLLOW_UP
+        result["confidence"] = max(float(result.get("confidence") or 0), 0.96)
+        result["guard"] = "contact_follow_up"
+        result["entities"] = merged
     elif rule_intent in {
         QUERY_CONTACT,
         QUERY_CONTACT_HISTORY,

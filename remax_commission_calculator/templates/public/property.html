@@ -1,0 +1,99 @@
+{% extends "public/layout.html" %}
+
+{% block title %}{{ og.title }}{% endblock %}
+
+{% block content %}
+<article class="public-property">
+    {% if photos %}
+    <div class="public-gallery" data-gallery>
+        {% for photo in photos %}
+        <button type="button" class="public-gallery__slide" data-photo="{{ photo.src }}">
+            <img src="{{ photo.src }}" alt="{{ listing.title }}">
+        </button>
+        {% endfor %}
+    </div>
+    {% if photos|length > 1 %}
+    <div class="public-thumbs">
+        {% for photo in photos %}
+        <button type="button" data-photo="{{ photo.src }}">
+            <img src="{{ photo.src }}" alt="">
+        </button>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <div class="public-body">
+        {% if not listing.available %}
+        <p class="public-banner">{{ listing.status_label }}</p>
+        {% endif %}
+        <h1>{{ listing.title }}</h1>
+        {% if listing.location %}<p class="public-muted">{{ listing.location }}</p>{% endif %}
+        {% if listing.price %}<p class="public-price">{{ listing.price }}</p>{% endif %}
+        {% if listing.purpose or listing.property_type %}
+        <p class="public-muted">{{ listing.purpose }}{% if listing.property_type %} · {{ listing.property_type }}{% endif %}</p>
+        {% endif %}
+        {% if listing.facts %}
+        <ul class="public-facts">
+            {% for fact in listing.facts %}
+            <li>{{ fact }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if listing.features %}
+        <ul class="public-facts">
+            {% for feature in listing.features %}
+            <li>{{ feature }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if listing.description %}
+        <p class="public-description">{{ listing.description }}</p>
+        {% endif %}
+
+        {% if agent %}
+        <section class="public-agent">
+            {% if agent.photo_url %}
+            <img src="{{ agent.photo_url }}" alt="{{ agent.name }}">
+            {% endif %}
+            <div>
+                <strong>{{ agent.name }}</strong>
+                {% if agent.title %}<p class="public-muted">{{ agent.title }}</p>{% endif %}
+                {% if agent.whatsapp_label %}<p>{{ agent.whatsapp_label }}</p>{% endif %}
+            </div>
+        </section>
+        {% endif %}
+    </div>
+
+    {% if consult_url or visit_url %}
+    <div class="public-cta">
+        {% if consult_url %}
+        <a class="public-btn public-btn--primary" href="{{ consult_url }}" target="_blank" rel="noopener">{{ t('public_consult') }}</a>
+        {% endif %}
+        {% if visit_url %}
+        <a class="public-btn" href="{{ visit_url }}" target="_blank" rel="noopener">{{ t('public_schedule') }}</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</article>
+<dialog class="public-lightbox" id="public-lightbox">
+    <button type="button" data-lightbox-close>{{ t('cancel') }}</button>
+    <img alt="" id="public-lightbox-img">
+</dialog>
+<script>
+(function () {
+    var dialog = document.getElementById("public-lightbox");
+    var image = document.getElementById("public-lightbox-img");
+    if (!dialog || !image) return;
+    document.querySelectorAll("[data-photo]").forEach(function (node) {
+        node.addEventListener("click", function () {
+            image.src = node.getAttribute("data-photo");
+            if (dialog.showModal) dialog.showModal();
+        });
+    });
+    dialog.querySelector("[data-lightbox-close]").addEventListener("click", function () {
+        dialog.close();
+    });
+})();
+</script>
+{% endblock %}

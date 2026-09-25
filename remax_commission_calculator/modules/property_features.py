@@ -17,6 +17,7 @@ FEATURE_KEYS = (
     "elevator",
     "security",
     "furnished",
+    "parking",
 )
 
 FEATURE_SET = set(FEATURE_KEYS)
@@ -46,6 +47,11 @@ FEATURE_ALIASES = {
     "furnished": "furnished",
     "amoblado": "furnished",
     "amueblado": "furnished",
+    "parking": "parking",
+    "cochera": "parking",
+    "garage": "parking",
+    "garaje": "parking",
+    "estacionamiento": "parking",
 }
 
 

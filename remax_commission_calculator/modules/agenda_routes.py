@@ -82,6 +82,8 @@ from modules.organization_time import (
     organization_timezone,
 )
 from modules.visit_outcome import (
+    NEXT_STEPS,
+    VISIT_RESULTS,
     attach_suggested_task,
     format_budget_label,
     is_search_next_action,
@@ -411,6 +413,8 @@ def register_agenda_routes(app, helpers):
                 language=language,
             ),
             create_result=session.pop("agenda_create_result", None),
+            results=VISIT_RESULTS,
+            steps=NEXT_STEPS,
         )
 
     @app.route("/agenda/new", methods=["GET", "POST"])
@@ -959,6 +963,125 @@ def register_agenda_routes(app, helpers):
         flash_i18n("agent_task_flash_completed", "success")
 
         return _redirect_back()
+
+    @app.route("/agenda/<int:task_id>/visit-close", methods=["GET", "POST"])
+    @login_required
+    def agenda_visit_close(task_id):
+        user, agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+        from modules.organization_time import (
+            local_datetime_to_utc_iso,
+            organization_timezone,
+        )
+        from modules.visit_close import apply_visit_close
+        from modules.visit_outcome import NEXT_STEPS, VISIT_RESULTS, outcome_from_form
+
+        try:
+            task = load_editable_task(
+                organization_id,
+                task_id,
+                agent_id=agent_id,
+            )
+        except AgentTaskError:
+            abort(404)
+        if request.method == "GET":
+            return render_template(
+                "agenda/visit_close.html",
+                task=task,
+                results=VISIT_RESULTS,
+                steps=NEXT_STEPS,
+                errors=[],
+            )
+        form = request.form
+        outcome = outcome_from_form(form)
+        when_date = (form.get("next_step_date") or "").strip()
+        when_time = (form.get("next_step_time") or "").strip()
+        if when_date:
+            tz = organization_timezone(organization_id)
+            try:
+                outcome["next_step_at"] = local_datetime_to_utc_iso(
+                    when_date,
+                    when_time or "10:00",
+                    tz,
+                )
+            except ValueError:
+                outcome["next_step_at"] = ""
+        try:
+            if task.get("status") == "pending":
+                task = complete_task(
+                    organization_id,
+                    task_id,
+                    agent_id=agent_id,
+                    actor_user_id=user["id"],
+                )
+            result = apply_visit_close(
+                task,
+                outcome,
+                organization_id=organization_id,
+                agent_id=agent_id,
+                actor_user_id=user["id"],
+                language=get_current_language(),
+                save_need=False,
+            )
+        except AgentTaskError as error:
+            flash_i18n(error.message_key, "error")
+            return redirect(url_for("agenda_visit_close", task_id=task_id))
+        preview = result.get("need_preview") or {}
+        if preview.get("has_changes"):
+            return redirect(url_for("agenda_visit_need", task_id=task["id"]))
+        flash_i18n("visit_close_saved", "success")
+        return redirect(url_for("agenda_index"))
+
+    @app.route("/agenda/<int:task_id>/visit-need", methods=["GET", "POST"])
+    @login_required
+    def agenda_visit_need(task_id):
+        user, agent_id = _require_agent_user()
+        organization_id = require_user_organization()
+        from modules.visit_close import describe_need_changes, need_changes_for_outcome
+
+        try:
+            task = load_editable_task(
+                organization_id,
+                task_id,
+                agent_id=agent_id,
+            )
+        except AgentTaskError:
+            abort(404)
+        contact = None
+        if task.get("contact_id"):
+            try:
+                contact = load_contact(
+                    organization_id,
+                    task["contact_id"],
+                    agent_id=agent_id,
+                )
+            except ContactError:
+                contact = None
+        preview = (
+            need_changes_for_outcome(contact, task.get("outcome_json"))
+            if contact
+            else {"has_changes": False, "additions": [], "fills": [], "conflicts": []}
+        )
+        if request.method == "POST" and request.form.get("intent") == "apply" and contact:
+            keys = [item["key"] for item in preview.get("conflicts") or []]
+            save_contact_preference_update(
+                organization_id,
+                contact["id"],
+                preview.get("incoming") or {},
+                accepted_conflicts=keys,
+                agent_id=agent_id,
+            )
+            flash_i18n("contacts_flash_prefs_updated", "success")
+            return redirect(url_for("agenda_index"))
+        if request.method == "POST":
+            return redirect(url_for("agenda_index"))
+        return render_template(
+            "agenda/visit_need.html",
+            task=task,
+            contact=contact,
+            preview=preview,
+            change_lines=describe_need_changes(preview, get_current_language()),
+        )
 
     @app.route(
         "/agenda/<int:task_id>/follow-up",

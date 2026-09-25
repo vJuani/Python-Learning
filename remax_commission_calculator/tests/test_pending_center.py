@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -491,6 +492,7 @@ class PendingCenterTests(unittest.TestCase):
         self.assertEqual(after, [])
 
     def test_12_bell_count_matches_center(self):
+        """Pending actions live in the dropdown header; the bell badge only counts unread."""
         draft_id = self._receipt_draft_in_review()
         try:
             self._login("pending_admin_a")
@@ -499,10 +501,16 @@ class PendingCenterTests(unittest.TestCase):
             body = response.get_data(as_text=True)
 
             self.assertEqual(response.status_code, 200)
-            self.assertIn(
-                f'class="badge badge-pending">{len(actions)}<',
+            self.assertGreater(len(actions), 0)
+            self.assertIn(f"{len(actions)} pendientes", body)
+            unread = count_unread_notifications(self.admin_a, self.org_a)
+            badge = re.search(
+                r'<summary[^>]*nav-bell-link[^>]*>.*?data-unread-badge[^>]*>([^<]*)<',
                 body,
+                re.S,
             )
+            self.assertIsNotNone(badge)
+            self.assertEqual(badge.group(1).strip(), "99+" if unread > 99 else str(unread))
         finally:
             self._discard_draft(draft_id)
 

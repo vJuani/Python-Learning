@@ -39,6 +39,15 @@
         <p class="agenda-card__place">{{ task.description }}</p>
         {% endif %}
 
+        {% if can_manage and not is_google and task.task_type == 'visit' and task.status == 'pending' %}
+        <button
+            type="button"
+            class="btn btn-small btn-primary"
+            data-visit-close="{{ url_for('agenda_visit_close', task_id=task.id) }}"
+            data-visit-label="{{ task.contact_name or '' }}{% if task.relation_label %} · {{ task.relation_label }}{% endif %}"
+        >{{ t('visit_close_open') }}</button>
+        {% endif %}
+
         {% if task.contact_name %}
         <p class="agenda-card__person">
             {% if task.contact_id %}
@@ -140,12 +149,23 @@
         <details class="agenda-card__more">
             <summary>{{ t('agenda_card_more') }}</summary>
             <div class="agenda-card__actions">
+                {% if task.task_type == 'visit' and task.status == 'pending' %}
+                <button
+                    type="button"
+                    class="btn btn-small btn-primary"
+                    data-visit-close="{{ url_for('agenda_visit_close', task_id=task.id) }}"
+                    data-visit-label="{{ task.contact_name or '' }}{% if task.relation_label %} · {{ task.relation_label }}{% endif %}"
+                >
+                    {{ t('visit_close_open') }}
+                </button>
+                {% else %}
                 <form method="post" action="{{ url_for('agenda_complete', task_id=task.id) }}">
                     <input type="hidden" name="next" value="{{ back_to }}">
                     <button type="submit" class="btn btn-small btn-primary">
                         {{ t('agent_task_action_complete') }}
                     </button>
                 </form>
+                {% endif %}
                 <a href="{{ url_for('agenda_edit', task_id=task.id, next=back_to) }}" class="btn btn-small btn-secondary">
                     {{ t('agent_task_action_edit') }}
                 </a>

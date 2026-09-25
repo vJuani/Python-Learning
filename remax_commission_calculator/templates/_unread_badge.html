@@ -1,0 +1,2 @@
+{% set _unread = (unread_notifications or 0) | int %}
+<span class="badge badge-pending notif-unread-badge" data-unread-badge aria-label="{{ t('notifications_unread_badge_label', count=_unread) }}" {% if not _unread %}hidden{% endif %}>{{ '99+' if _unread > 99 else _unread }}</span>

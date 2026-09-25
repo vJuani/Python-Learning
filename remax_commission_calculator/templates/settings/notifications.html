@@ -40,6 +40,18 @@
             {% endfor %}
         </fieldset>
         {% endfor %}
+        <fieldset class="push-pref-form__group">
+            <legend>{{ t('followup_settings_title') }}</legend>
+            <p>{{ t('followup_settings_help') }}</p>
+            <label class="push-pref-form__row">
+                {{ t('followup_settings_time') }}
+                <input type="time" name="follow_up_digest_time" value="{{ follow_up_settings.follow_up_digest_time }}">
+            </label>
+            <label class="push-pref-form__row">
+                <input type="checkbox" name="follow_up_individual_alerts" value="1"{% if follow_up_settings.follow_up_individual_alerts %} checked{% endif %}>
+                {{ t('followup_settings_individual') }}
+            </label>
+        </fieldset>
         <div class="integration-card__actions">
             <button type="submit" class="btn btn-primary">{{ t('save') }}</button>
         </div>
@@ -94,5 +106,59 @@
         <button type="button" id="pwa-push-disable" class="btn btn-secondary">{{ t('pwa_push_disable') }}</button>
         <button type="button" id="pwa-push-reset" class="btn btn-secondary">{{ t('pwa_push_reset') }}</button>
     </div>
+</article>
+
+<article class="integration-card push-devices-card">
+    <header class="integration-card__head">
+        <h3>{{ t('push_devices_title') }}</h3>
+    </header>
+    <p>{{ t('push_devices_help') }}</p>
+    {% if push_devices %}
+    <ul
+        id="push-devices"
+        class="push-devices"
+        data-label-inactive="{{ t('push_devices_state_inactive') }}"
+        data-label-deactivated="{{ t('push_devices_deactivated') }}"
+        data-label-all-deactivated="{{ t('push_devices_all_deactivated') }}"
+        data-label-failed="{{ t('push_devices_failed') }}"
+    >
+        {% for device in push_devices %}
+        <li
+            class="push-devices__item {{ 'is-active' if device.is_active else 'is-inactive' }}"
+            data-device-id="{{ device.id }}"
+            data-current="{{ '1' if device.is_current else '0' }}"
+        >
+            <div class="push-devices__main">
+                <p class="push-devices__label">
+                    <span class="push-devices__name">{{ device.label }}</span>
+                    {% if device.is_current %}
+                    <span class="push-devices__current">{{ t('push_devices_current') }}</span>
+                    {% endif %}
+                </p>
+                <p class="push-devices__meta">
+                    <span class="push-devices__state" data-device-state>{{ t('push_devices_state_active') if device.is_active else t('push_devices_state_inactive') }}</span>
+                    {% if device.last_activity_label %}
+                    <span>· {{ t('push_devices_last_activity', when=device.last_activity_label) }}</span>
+                    {% endif %}
+                </p>
+            </div>
+            {% if device.is_active %}
+            <button type="button" class="btn btn-secondary btn-small" data-device-deactivate>{{ t('push_devices_deactivate') }}</button>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    <p id="push-devices-message" class="integration-card__meta" aria-live="polite"></p>
+    <div class="integration-card__actions">
+        <button
+            type="button"
+            id="push-devices-deactivate-all"
+            class="btn btn-danger"
+            data-confirm="{{ t('push_devices_deactivate_all_confirm') }}"
+        >{{ t('push_devices_deactivate_all') }}</button>
+    </div>
+    {% else %}
+    <p class="integration-card__meta">{{ t('push_devices_empty') }}</p>
+    {% endif %}
 </article>
 {% endblock %}

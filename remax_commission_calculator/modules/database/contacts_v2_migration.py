@@ -14,6 +14,12 @@ EXTRA_COLUMNS = (
     ("phone_normalized", "TEXT"),
     ("email_normalized", "TEXT"),
     ("source_type", "TEXT"),
+    ("commercial_stage", "TEXT"),
+    ("follow_up_priority", "TEXT"),
+    ("follow_up_cadence", "TEXT"),
+    ("follow_up_interval_days", "INTEGER"),
+    ("next_follow_up_at", "TEXT"),
+    ("follow_up_reason", "TEXT"),
 )
 
 INTERACTIONS_SQL = """
@@ -79,6 +85,12 @@ def migrate_contacts_v2_sqlite():
             """
             CREATE INDEX IF NOT EXISTS idx_contact_interactions_owner
             ON contact_property_interactions (organization_id, contact_id, created_at)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_contacts_next_follow_up
+            ON contacts (organization_id, agent_id, next_follow_up_at)
             """
         )
         connection.commit()

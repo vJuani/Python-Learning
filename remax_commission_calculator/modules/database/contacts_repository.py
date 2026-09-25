@@ -70,6 +70,13 @@ def _build_contact(row):
         "phone_normalized": row[20] if len(row) > 20 else "",
         "email_normalized": row[21] if len(row) > 21 else "",
         "source_type": row[22] if len(row) > 22 else "",
+        "commercial_stage": row[23] if len(row) > 23 else "",
+        "follow_up_priority": row[24] if len(row) > 24 else "",
+        "follow_up_cadence": row[25] if len(row) > 25 else "",
+        "follow_up_interval_days": row[26] if len(row) > 26 else None,
+        "next_follow_up_at": row[27] if len(row) > 27 else "",
+        "follow_up_reason": row[28] if len(row) > 28 else "",
+        "last_interaction_at": row[11],
     }
 
 
@@ -97,7 +104,13 @@ _SELECT = """
         contact.archived_at,
         contact.phone_normalized,
         contact.email_normalized,
-        contact.source_type
+        contact.source_type,
+        contact.commercial_stage,
+        contact.follow_up_priority,
+        contact.follow_up_cadence,
+        contact.follow_up_interval_days,
+        contact.next_follow_up_at,
+        contact.follow_up_reason
     FROM contacts AS contact
     LEFT JOIN agents AS agent
         ON agent.id = contact.agent_id
@@ -124,6 +137,12 @@ def create_contact(
     phone_normalized=None,
     email_normalized=None,
     source_type=None,
+    commercial_stage=None,
+    follow_up_priority=None,
+    follow_up_cadence=None,
+    follow_up_interval_days=None,
+    next_follow_up_at=None,
+    follow_up_reason=None,
 ):
     organization_id = require_organization_id(organization_id)
     now = _now_iso()
@@ -154,9 +173,15 @@ def create_contact(
                 contact_type,
                 phone_normalized,
                 email_normalized,
-                source_type
+                source_type,
+                commercial_stage,
+                follow_up_priority,
+                follow_up_cadence,
+                follow_up_interval_days,
+                next_follow_up_at,
+                follow_up_reason
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 organization_id,
@@ -179,6 +204,12 @@ def create_contact(
                 phone_normalized,
                 email_normalized,
                 source_type or source or SOURCE_MANUAL,
+                commercial_stage,
+                follow_up_priority,
+                follow_up_cadence,
+                follow_up_interval_days,
+                next_follow_up_at,
+                follow_up_reason,
             ),
         )
         connection.commit()
@@ -294,6 +325,12 @@ def update_contact(
     email_normalized=None,
     source_type=None,
     archived_at=None,
+    commercial_stage=None,
+    follow_up_priority=None,
+    follow_up_cadence=None,
+    follow_up_interval_days=None,
+    next_follow_up_at=None,
+    follow_up_reason=None,
 ):
     organization_id = require_organization_id(organization_id)
     assignments = []
@@ -316,6 +353,12 @@ def update_contact(
         ("email_normalized", email_normalized),
         ("source_type", source_type),
         ("archived_at", archived_at),
+        ("commercial_stage", commercial_stage),
+        ("follow_up_priority", follow_up_priority),
+        ("follow_up_cadence", follow_up_cadence),
+        ("follow_up_interval_days", follow_up_interval_days),
+        ("next_follow_up_at", next_follow_up_at),
+        ("follow_up_reason", follow_up_reason),
     ):
         if value is not None:
             assignments.append(f"{column} = ?")

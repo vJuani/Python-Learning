@@ -266,6 +266,57 @@ def list_notifications(user_id, organization_id, limit=50):
     return [_row_to_notification(row) for row in rows]
 
 
+MAX_PAGE_LIMIT = 50
+
+
+def list_notifications_page(
+    user_id,
+    organization_id,
+    *,
+    limit=20,
+    offset=0,
+    before_id=None,
+    unread_only=False,
+    kinds=None,
+):
+    """
+    One page of the user's notifications, newest first.
+
+    Returns ``(rows, has_more)``. ``before_id`` gives stable "load more"
+    paging while new notifications keep arriving; ``offset`` supports
+    classic page numbers. ``kinds=()`` means a category with no types
+    and yields an empty page.
+    """
+    organization_id = require_organization_id(organization_id)
+    limit = max(1, min(int(limit or 20), MAX_PAGE_LIMIT))
+    offset = max(0, int(offset or 0))
+    if kinds is not None and not kinds:
+        return [], False
+
+    sql = NOTIFICATION_SELECT + " WHERE user_id = ? AND organization_id = ?"
+    params = [user_id, organization_id]
+    if unread_only:
+        sql += " AND is_read = 0"
+    if before_id is not None:
+        sql += " AND id < ?"
+        params.append(int(before_id))
+    if kinds:
+        kinds = tuple(kinds)
+        sql += " AND kind IN (" + ", ".join("?" for _ in kinds) + ")"
+        params.extend(kinds)
+    sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
+    params.extend([limit + 1, 0 if before_id is not None else offset])
+
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(sql, params)
+        rows = [_row_to_notification(row) for row in cursor.fetchall()]
+    finally:
+        connection.close()
+    return rows[:limit], len(rows) > limit
+
+
 def count_unread_notifications(user_id, organization_id):
     organization_id = require_organization_id(
         organization_id
@@ -357,8 +408,10 @@ def mark_all_notifications_read(
         )
     )
 
+    updated = cursor.rowcount or 0
     connection.commit()
     connection.close()
+    return max(updated, 0)
 
 
 def delete_notifications_for_entity(

@@ -88,4 +88,29 @@
             prompt.focus();
         });
     });
+
+    var sheet = document.getElementById("visit-close-sheet");
+    if (sheet) {
+        document.querySelectorAll("[data-visit-close]").forEach(function (button) {
+            button.addEventListener("click", function () {
+                var form = sheet.querySelector("[data-visit-close-form]");
+                var label = sheet.querySelector("[data-visit-close-label]");
+                if (form) {
+                    form.action = button.getAttribute("data-visit-close") || "";
+                }
+                if (label) {
+                    label.textContent = button.getAttribute("data-visit-label") || "";
+                }
+                if (sheet.showModal) {
+                    sheet.showModal();
+                }
+            });
+        });
+        var cancel = sheet.querySelector("[data-visit-close-cancel]");
+        if (cancel) {
+            cancel.addEventListener("click", function () {
+                sheet.close();
+            });
+        }
+    }
 })();

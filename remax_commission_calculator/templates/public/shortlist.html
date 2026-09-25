@@ -1,0 +1,37 @@
+{% extends "public/layout.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<article class="public-collection">
+    <h1>{{ title }}</h1>
+    <ol class="public-cards">
+        {% for card in cards %}
+        <li class="public-card">
+            {% if card.photo %}
+            <img src="{{ card.photo }}" alt="{{ card.title }}">
+            {% endif %}
+            <div>
+                {% if not card.available %}
+                <p class="public-banner">{{ card.status_label }}</p>
+                {% endif %}
+                {% if card.title %}<h2>{{ card.title }}</h2>{% endif %}
+                {% if card.location %}<p class="public-muted">{{ card.location }}</p>{% endif %}
+                {% if card.price %}<p class="public-price">{{ card.price }}</p>{% endif %}
+                {% if card.facts %}
+                <p class="public-muted">{{ card.facts|join(' · ') }}</p>
+                {% endif %}
+                <div class="public-card__actions">
+                    {% if card.url %}
+                    <a class="public-btn" href="{{ card.url }}">{{ t('public_view') }}</a>
+                    {% endif %}
+                    {% if card.consult_url %}
+                    <a class="public-btn public-btn--primary" href="{{ card.consult_url }}" target="_blank" rel="noopener">{{ t('public_consult') }}</a>
+                    {% endif %}
+                </div>
+            </div>
+        </li>
+        {% endfor %}
+    </ol>
+</article>
+{% endblock %}

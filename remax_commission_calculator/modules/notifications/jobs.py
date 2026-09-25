@@ -16,8 +16,11 @@ def run_notification_jobs(*, now=None, source="cron"):
     from modules.task_overdue import dispatch_overdue_tasks_all
     from modules.visit_reminders import dispatch_due_visit_reminders_all
 
+    from modules.follow_up_daily import dispatch_daily_follow_ups_all
+
     agenda = dispatch_due_visit_reminders_all(now=instant)
     overdue = dispatch_overdue_tasks_all(now=instant)
+    follow_ups = dispatch_daily_follow_ups_all(now=instant)
     purged = _purge_push_subscriptions(instant)
     summary = {
         "now": to_utc_iso(instant),
@@ -27,16 +30,22 @@ def run_notification_jobs(*, now=None, source="cron"):
         "agenda_candidates": sum(item.get("candidates_found") or 0 for item in agenda),
         "overdue_orgs": len(overdue),
         "overdue_created": sum(item.get("dispatched") or 0 for item in overdue),
+        "follow_up_created": sum(item.get("created") or 0 for item in follow_ups),
+        "follow_up_individuals": sum(
+            item.get("individuals") or 0 for item in follow_ups
+        ),
         "agenda": agenda,
         "overdue": overdue,
+        "follow_ups": follow_ups,
         "push_subscriptions_purged": purged,
     }
     logger.info(
         "notification_jobs_ran source=%s agenda_created=%s overdue_created=%s "
-        "push_subscriptions_purged=%s",
+        "follow_up_created=%s push_subscriptions_purged=%s",
         source,
         summary["agenda_created"],
         summary["overdue_created"],
+        summary["follow_up_created"],
         purged,
     )
     return summary

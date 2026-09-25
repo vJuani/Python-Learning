@@ -496,3 +496,227 @@ html[data-theme="dark"] .matches-card {
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 }
+
+.followup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.followup-card h2 {
+    margin: 0 0 4px;
+    font-size: 1.15rem;
+}
+
+.followup-card h2 a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.followup-card__reason {
+    font-weight: 700;
+}
+
+.followup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 12px;
+}
+
+.followup-actions form,
+.followup-postpone,
+.followup-note {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 0;
+}
+
+.followup-note input,
+.followup-postpone select {
+    min-height: 40px;
+}
+
+.followup-panel form {
+    margin-top: 12px;
+}
+
+.recommend-panel,
+.recommend-list,
+.recommend-card,
+.matches-list,
+.matches-card {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.recommend-panel__title {
+    margin: 0 0 12px;
+    font-size: 1.05rem;
+}
+
+.recommend-list {
+    display: grid;
+    gap: 12px;
+    margin: 0 0 12px;
+}
+
+.recommend-card {
+    display: grid;
+    gap: 0;
+    border: 1px solid var(--border, #d5dde8);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--surface, #fff);
+}
+
+.recommend-card img,
+.matches-photo {
+    display: block;
+    width: 100%;
+    max-height: 180px;
+    object-fit: cover;
+}
+
+.recommend-card__body {
+    display: grid;
+    gap: 6px;
+    padding: 12px;
+}
+
+.recommend-card__top,
+.recommend-card__actions,
+.matches-actions,
+.recommend-discard {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.recommend-card h2 {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.recommend-reasons {
+    margin: 0;
+    padding-left: 1.1rem;
+}
+
+.recommend-card__actions form,
+.recommend-card__actions .btn,
+.matches-actions .btn,
+.matches-actions select {
+    max-width: 100%;
+}
+
+.contact-profile,
+.matches-page,
+.shortlist-page {
+    overflow-x: hidden;
+}
+
+.recommend-pick {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+}
+
+.shortlist-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    justify-content: stretch;
+    padding: 12px 0;
+    background: color-mix(in srgb, var(--surface, #fff) 92%, transparent);
+}
+
+.shortlist-bar .btn {
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    body.has-mobile-bottom-nav .shortlist-bar,
+    body.has-mobile-bottom-nav .matches-sharebar {
+        position: fixed;
+        left: 16px;
+        right: 16px;
+        bottom: calc(var(--m-nav-h, 74px) + 8px);
+        z-index: 35;
+        padding: 0;
+        background: transparent;
+    }
+
+    body.has-mobile-bottom-nav .shortlist-bar .btn,
+    body.has-mobile-bottom-nav .matches-sharebar .btn {
+        width: 100%;
+        min-height: 52px;
+        border-radius: 999px;
+        box-shadow: 0 8px 24px color-mix(in srgb, var(--color-text, #111) 16%, transparent);
+    }
+
+    body.has-mobile-bottom-nav .recommend-list,
+    body.has-mobile-bottom-nav .matches-page,
+    body.has-mobile-bottom-nav .shortlist-page {
+        padding-bottom: calc(var(--m-nav-h, 74px) + 88px);
+    }
+}
+
+.shortlist-page {
+    width: 100%;
+    max-width: 46rem;
+    margin: 0 auto;
+    padding-bottom: 6rem;
+}
+
+.shortlist-items {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+}
+
+.shortlist-item,
+.shortlist-item__actions form,
+.shortlist-follow,
+.shortlist-date {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.shortlist-item {
+    justify-content: space-between;
+    padding: 12px;
+    border: 1px solid var(--border, #d5dde8);
+    border-radius: 16px;
+    background: var(--surface, #fff);
+}
+
+.shortlist-mode {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 0 0 16px;
+    padding: 0;
+    border: 0;
+}
+
+.shortlist-mode legend {
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.shortlist-draft textarea {
+    width: 100%;
+    min-height: 220px;
+    margin: 8px 0 0;
+}

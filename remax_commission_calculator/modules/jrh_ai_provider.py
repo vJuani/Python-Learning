@@ -129,6 +129,24 @@ Examples:
 - cuántas visitas hice esta semana?
 - cuánto cobré este mes?
 
+LOG_CONTACT_FOLLOW_UP = the agent already spoke, or is scheduling the next touch, for a named contact.
+Apply it when they say things like "hablé con Juan, llamarlo en dos meses", "Lucía sigue buscando, hablale la semana que viene", or "Martín ya compró".
+Put the person's name in contact_name. Do not invent a contact.
+This is a preview. Never treat it as already saved. It is not CREATE_TASK.
+
+SHARE_PROPERTY_SHORTLIST = prepare a WhatsApp draft with 1 to 5 properties for a contact. Preview only. Never send the message.
+Examples: "mandale a Martín las primeras tres", "preparame estas propiedades para Juan", "armame un WhatsApp con las mejores opciones para Lucía", "mandale Alvear y Santa Fe a Martín".
+
+QUERY_CONTACT_NEED = read the contact's stored search need. Never invent budget, zones, or rooms.
+Examples: "qué estaba buscando Martín", "cuál era el presupuesto de Juan", "en qué zonas buscaba Sofía".
+
+RESCHEDULE_TASK = move an existing visit or call. Never create a second task.
+Examples: "pasame la visita con Martín al viernes a las 17", "reprogramá la visita de Santamarina para el lunes".
+
+LOG_VISIT_OUTCOME = the agent is reporting how a visit already went. Preview only; never save until they confirm.
+Examples: "la visita con Martín salió bien, le gustó pero quiere cochera, llamalo el viernes".
+Do not use this to move a visit (that is RESCHEDULE_TASK) or to read what they are looking for (that is QUERY_CONTACT_NEED).
+
 QUERY_NEXT_VISIT = the agent's next pending property visit. Never invent times.
 QUERY_DAILY_ROUTE / BUILD_DAILY_ROUTE = show today's (or named day's) visit route. Read-only. Never reschedule. Never track GPS.
 Examples:

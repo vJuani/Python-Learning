@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('visit_close_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agenda-page.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="visit-close visit-close--page">
+    <header class="visit-close__header">
+        <h1>{{ t('visit_close_title') }}</h1>
+        <p>{{ task.contact_name or '' }}{% if task.property_address %} · {{ task.property_address }}{% elif task.title %} · {{ task.title }}{% endif %}</p>
+    </header>
+    <form method="post">
+        {% include "agenda/_visit_close_fields.html" %}
+        <div class="visit-close__actions">
+            <button type="submit" class="btn btn-primary">{{ t('visit_close_save') }}</button>
+            <a class="btn btn-secondary" href="{{ url_for('agenda_index') }}">{{ t('cancel') }}</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

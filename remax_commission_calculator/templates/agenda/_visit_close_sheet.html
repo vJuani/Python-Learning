@@ -1,0 +1,19 @@
+<dialog id="visit-close-sheet" class="visit-close">
+    <form method="post" data-visit-close-form>
+        <header class="visit-close__header">
+            <h2>{{ t('visit_close_title') }}</h2>
+            <p data-visit-close-label></p>
+        </header>
+        {% set results = [
+            'liked', 'interested', 'negotiate', 'second_visit', 'disliked', 'no_show', 'other'
+        ] %}
+        {% set steps = [
+            'call', 'whatsapp', 'send_properties', 'second_visit', 'negotiate', 'none', 'custom'
+        ] %}
+        {% include "agenda/_visit_close_fields.html" %}
+        <div class="visit-close__actions">
+            <button type="submit" class="btn btn-primary">{{ t('visit_close_save') }}</button>
+            <button type="button" class="btn btn-secondary" data-visit-close-cancel>{{ t('cancel') }}</button>
+        </div>
+    </form>
+</dialog>

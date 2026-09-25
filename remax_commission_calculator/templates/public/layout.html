@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="{{ current_language or 'es' }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ office.name or t('public_shortlist_title') }}{% endblock %}</title>
+    {% if og is defined and og %}
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{{ og.title }}">
+    <meta property="og:description" content="{{ og.description }}">
+    <meta property="og:url" content="{{ og.url }}">
+    {% if og.image %}
+    <meta property="og:image" content="{{ og.image }}">
+    {% endif %}
+    <meta name="description" content="{{ og.description }}">
+    {% endif %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/public-share.css') }}">
+</head>
+<body>
+    <header class="public-top">
+        {% if office is defined and office.logo_url %}
+        <img class="public-logo" src="{{ office.logo_url }}" alt="{{ office.name }}">
+        {% endif %}
+        {% if office is defined and office.name %}
+        <strong>{{ office.name }}</strong>
+        {% endif %}
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="public-legal">
+        {% if office is defined and office.legal_footer %}
+        <p>{{ office.legal_footer }}</p>
+        {% endif %}
+        <p class="public-powered">{{ t('public_powered') }}</p>
+    </footer>
+</body>
+</html>

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from modules.database.notifications_repository import (
+    count_unread_notifications,
     find_notification_by_event_key,
     insert_notification,
 )
@@ -40,6 +41,20 @@ def _resolve_user_id(user_id, agent_id, organization_id):
         return None
     user = get_user_by_agent_id(agent_id, organization_id)
     return None if user is None else user.get("id")
+
+
+def _unread_count(organization_id, user_id):
+    """Badge value carried by the push. Unread notifications only."""
+    try:
+        return count_unread_notifications(user_id, organization_id)
+    except Exception:
+        logger.warning(
+            "notification_unread_count_failed organization_id=%s user_id=%s",
+            organization_id,
+            user_id,
+            exc_info=True,
+        )
+        return None
 
 
 def _fanout_push(organization_id, user_id, payload):
@@ -184,6 +199,7 @@ def notify_user(
                     "type": type,
                     "priority": resolved_priority,
                     "notification_id": notification_id,
+                    "unread_count": _unread_count(organization_id, resolved_user_id),
                     "tag": event_key or type,
                     "icon": "/static/icons/icon-192.png",
                     "badge": "/static/icons/icon-192.png",

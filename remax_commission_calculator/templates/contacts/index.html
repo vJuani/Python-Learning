@@ -17,11 +17,13 @@
         <details class="contacts-hero__add hide-desktop">
             <summary class="contacts-hero__add-btn" aria-label="{{ t('contacts_new') }}">+</summary>
             <div class="contacts-hero__add-menu">
+                <a href="{{ url_for('contacts_follow_ups') }}">{{ t('followup_today') }}</a>
                 <a href="{{ url_for('contacts_new') }}">{{ t('contacts_new') }}</a>
                 <a href="{{ url_for('contacts_import') }}" data-import-entry>{{ t('contacts_import') }}</a>
             </div>
         </details>
         <div class="contacts-hero__actions hide-mobile">
+            <a class="btn btn-secondary" href="{{ url_for('contacts_follow_ups') }}">{{ t('followup_today') }}</a>
             <a class="btn btn-secondary" href="{{ url_for('contacts_import') }}" data-import-entry>{{ t('contacts_import') }}</a>
             <a class="btn btn-primary" href="{{ url_for('contacts_new') }}">+ {{ t('contacts_new') }}</a>
         </div>

@@ -320,6 +320,15 @@ TYPES = {
         ui_type="property_match",
         entity_type="contact",
     ),
+    "crm_daily_follow_up": _type(
+        "crm",
+        PREF_CRM,
+        priority=PRIORITY_IMPORTANT,
+        icon="👤",
+        url="/contacts/follow-ups",
+        ui_type="crm",
+        entity_type="follow_up_digest",
+    ),
     "crm_follow_up_due": _type(
         "crm",
         PREF_CRM,
@@ -341,7 +350,7 @@ TYPES = {
         "treasury",
         PREF_TREASURY,
         icon="💳",
-        url="/my-wallet",
+        url="/wallet",
         ui_type="treasury",
         entity_type="agent_account_movement",
     ),
@@ -349,7 +358,7 @@ TYPES = {
         "treasury",
         PREF_TREASURY,
         icon="💳",
-        url="/my-wallet",
+        url="/wallet",
         ui_type="treasury",
         entity_type="agent_account_movement",
     ),
@@ -357,7 +366,7 @@ TYPES = {
         "treasury",
         PREF_TREASURY,
         icon="💳",
-        url="/my-wallet",
+        url="/wallet",
         ui_type="treasury",
         entity_type="agent_account_movement",
     ),
@@ -366,7 +375,7 @@ TYPES = {
         PREF_TREASURY,
         priority=PRIORITY_IMPORTANT,
         icon="💳",
-        url="/treasury",
+        url="/cash",
         ui_type="treasury",
         entity_type="treasury_movement",
     ),
@@ -375,7 +384,7 @@ TYPES = {
         PREF_TREASURY,
         priority=PRIORITY_IMPORTANT,
         icon="💳",
-        url="/treasury",
+        url="/cash",
         ui_type="treasury",
         entity_type="treasury_movement",
     ),
@@ -457,6 +466,7 @@ EVENT_TO_TYPE = {
     "property.change_approved": "property_change_approved",
     "property.change_rejected": "property_change_rejected",
     "property.match": "property_match",
+    "crm.daily_follow_up": "crm_daily_follow_up",
     "crm.follow_up_due": "crm_follow_up_due",
     "crm.assigned": "contact_assigned",
     "treasury.payment_confirmed": "agent_payment_confirmed",
@@ -475,6 +485,28 @@ EVENT_TO_TYPE = {
 
 def get_type(type_name):
     return TYPES.get(type_name) or _type("system", PREF_SYSTEM)
+
+
+CATEGORY_ORDER = (
+    "agenda",
+    "tasks",
+    "operations",
+    "billing",
+    "properties",
+    "crm",
+    "treasury",
+    "office",
+    "system",
+)
+
+
+def kinds_for_category(category):
+    """Notification kinds of one category, or None for "all"."""
+    if not category:
+        return None
+    return tuple(
+        name for name, spec in TYPES.items() if spec["category"] == category
+    )
 
 
 def pref_key_for_type(type_name):

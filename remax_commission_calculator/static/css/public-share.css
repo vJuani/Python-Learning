@@ -1,0 +1,239 @@
+:root {
+    color-scheme: light;
+    --public-brand: #156a4a;
+    --public-text: #1c2430;
+    --public-muted: #5c6b7a;
+    --public-line: #e3e8ee;
+    --public-bg: #f6f7f8;
+    --public-surface: #fff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    background: var(--public-bg);
+    color: var(--public-text);
+    font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+img { max-width: 100%; }
+
+.public-top, .public-legal, .public-body, .public-collection {
+    width: min(46rem, 100%);
+    margin: 0 auto;
+    padding: 16px;
+}
+
+.public-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.public-logo {
+    width: auto;
+    height: 36px;
+    object-fit: contain;
+}
+
+.public-gallery {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    background: #111;
+}
+
+.public-gallery__slide {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+    border: 0;
+    padding: 0;
+    background: #111;
+    cursor: zoom-in;
+}
+
+.public-gallery__slide img,
+.public-lightbox img {
+    display: block;
+    width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+    background: #111;
+}
+
+.public-thumbs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 8px 16px;
+}
+
+.public-thumbs button {
+    flex: 0 0 72px;
+    height: 72px;
+    border: 0;
+    padding: 0;
+    background: #111;
+}
+
+.public-thumbs img {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+}
+
+.public-price {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 8px 0;
+}
+
+.public-muted { color: var(--public-muted); }
+
+.public-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 0;
+    list-style: none;
+}
+
+.public-facts li {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: var(--public-surface);
+    border: 1px solid var(--public-line);
+}
+
+.public-banner {
+    margin: 0 0 12px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #fff4e5;
+    font-weight: 700;
+}
+
+.public-agent {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 20px;
+}
+
+.public-agent img {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.public-description { white-space: pre-wrap; }
+
+.public-cta {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: color-mix(in srgb, var(--public-surface) 94%, transparent);
+}
+
+.public-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid var(--public-line);
+    background: var(--public-surface);
+    color: var(--public-text);
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.public-btn--primary {
+    flex: 1 1 12rem;
+    background: var(--public-brand);
+    border-color: var(--public-brand);
+    color: #fff;
+}
+
+.public-cards {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 16px;
+}
+
+.public-card {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 16px;
+    background: var(--public-surface);
+    border: 1px solid var(--public-line);
+}
+
+.public-card img {
+    width: 100%;
+    max-height: 240px;
+    object-fit: contain;
+    background: #111;
+}
+
+.public-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.public-legal {
+    padding-bottom: 96px;
+    color: var(--public-muted);
+    font-size: 0.85rem;
+}
+
+.public-powered { opacity: 0.7; }
+
+.public-missing {
+    min-height: 60vh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    text-align: center;
+}
+
+.public-lightbox {
+    width: min(100%, 960px);
+    border: 0;
+    padding: 12px;
+    background: #111;
+}
+
+.public-lightbox::backdrop { background: rgba(0, 0, 0, 0.72); }
+
+.public-lightbox button {
+    color: #fff;
+    background: transparent;
+    border: 0;
+    min-height: 44px;
+}
+
+@media (max-width: 768px) {
+    .public-cta {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 5;
+    }
+
+    .public-property { padding-bottom: 88px; }
+}

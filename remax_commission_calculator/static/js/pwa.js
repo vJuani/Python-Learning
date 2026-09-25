@@ -198,6 +198,320 @@
     });
   }
 
+  var DEVICE_STORE_KEY = "jrh_push_device";
+  var PROMPT_STORE_KEY = "jrh_push_prompt_dismissed_at";
+  var PROMPT_SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
+
+  function storageGet(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function storageSet(key, value) {
+    try {
+      if (value === null) {
+        window.localStorage.removeItem(key);
+      } else {
+        window.localStorage.setItem(key, value);
+      }
+    } catch (error) {
+      /* private mode: preference simply is not remembered */
+    }
+  }
+
+  function rememberSubscription(subscription) {
+    if (!subscription) {
+      return;
+    }
+    var raw = subscription.toJSON ? subscription.toJSON() : {};
+    storageSet(
+      DEVICE_STORE_KEY,
+      JSON.stringify({
+        endpoint: subscription.endpoint,
+        auth: (raw.keys && raw.keys.auth) || "",
+      })
+    );
+  }
+
+  function rememberedSubscription() {
+    try {
+      var parsed = JSON.parse(storageGet(DEVICE_STORE_KEY) || "null");
+      return parsed && parsed.endpoint ? parsed : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function forgetSubscription() {
+    storageSet(DEVICE_STORE_KEY, null);
+  }
+
+  function pushSubscribe(registration) {
+    return jsonFetch("/api/push/public-key").then(function (data) {
+      return registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(data.public_key),
+      });
+    });
+  }
+
+  function saveSubscription(subscription) {
+    var raw = subscription.toJSON();
+    return jsonFetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        endpoint: raw.endpoint,
+        keys: raw.keys,
+        user_agent: navigator.userAgent,
+      }),
+    }).then(function (result) {
+      rememberSubscription(subscription);
+      return result;
+    });
+  }
+
+  // Shared by the settings panel and the soft prompt. Rejects with
+  // Error("ios_install_required"), ("unsupported") or ("permission_denied").
+  function enablePushOnThisDevice() {
+    if (isIos() && !isStandalone()) {
+      return Promise.reject(new Error("ios_install_required"));
+    }
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      return Promise.reject(new Error("unsupported"));
+    }
+    return Notification.requestPermission()
+      .then(function (permission) {
+        if (permission !== "granted") {
+          throw new Error("permission_denied");
+        }
+        return navigator.serviceWorker.ready;
+      })
+      .then(pushSubscribe)
+      .then(saveSubscription);
+  }
+
+  function resubscribe(previous, subscription) {
+    return jsonFetch("/api/push/resubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        old_endpoint: previous.endpoint,
+        old_auth: previous.auth || "",
+        subscription: subscription.toJSON(),
+      }),
+    }).then(function (result) {
+      rememberSubscription(subscription);
+      return result;
+    });
+  }
+
+  // Safari/iOS never fires pushsubscriptionchange, so every app open
+  // compares the browser subscription with the one this device registered.
+  // A device the user (or a logout) deactivated is never reactivated here.
+  function resyncSubscription() {
+    if (currentPermission() !== "granted") {
+      return Promise.resolve(null);
+    }
+    var previous = rememberedSubscription();
+    return getCurrentPushSubscription()
+      .then(function (subscription) {
+        if (subscription) {
+          if (previous && previous.endpoint !== subscription.endpoint) {
+            return resubscribe(previous, subscription);
+          }
+          if (!previous) {
+            rememberSubscription(subscription);
+          }
+          return null;
+        }
+        if (!previous) {
+          return null;
+        }
+        return fetchDeviceStatus({ endpoint: previous.endpoint }).then(function (status) {
+          if (!status || !status.device_active) {
+            return null;
+          }
+          return navigator.serviceWorker.ready
+            .then(pushSubscribe)
+            .then(function (fresh) {
+              return resubscribe(previous, fresh);
+            });
+        });
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function promptSnoozed() {
+    var raw = parseInt(storageGet(PROMPT_STORE_KEY) || "0", 10);
+    return Boolean(raw) && Date.now() - raw < PROMPT_SNOOZE_MS;
+  }
+
+  function snoozePrompt() {
+    storageSet(PROMPT_STORE_KEY, String(Date.now()));
+  }
+
+  function bindSoftPrompt() {
+    var prompt = byId("push-soft-prompt");
+    if (!prompt || promptSnoozed()) {
+      return;
+    }
+    var permission = currentPermission();
+    var iosBrowser = isIos() && !isStandalone();
+    if (!iosBrowser && (permission === "denied" || permission === "unsupported")) {
+      return;
+    }
+    var accept = byId("push-soft-prompt-accept");
+    var later = byId("push-soft-prompt-later");
+    var text = byId("push-soft-prompt-text");
+    var message = byId("push-soft-prompt-message");
+
+    function close() {
+      prompt.hidden = true;
+    }
+
+    getCurrentPushSubscription()
+      .then(fetchDeviceStatus)
+      .then(function (status) {
+        if (status && status.device_active) {
+          return;
+        }
+        if (iosBrowser) {
+          if (text) {
+            text.textContent = prompt.dataset.labelIos || "";
+          }
+          if (accept) {
+            accept.hidden = true;
+          }
+        }
+        prompt.hidden = false;
+      });
+
+    if (later) {
+      later.addEventListener("click", function () {
+        snoozePrompt();
+        close();
+      });
+    }
+    if (accept) {
+      accept.addEventListener("click", function () {
+        accept.disabled = true;
+        enablePushOnThisDevice()
+          .then(function () {
+            close();
+          })
+          .catch(function (error) {
+            accept.disabled = false;
+            if (error && error.message === "permission_denied") {
+              snoozePrompt();
+              close();
+              return;
+            }
+            if (message) {
+              message.hidden = false;
+              message.textContent = prompt.dataset.labelFailed || "";
+            }
+          });
+      });
+    }
+  }
+
+  function bindDevices(onCurrentDeactivated) {
+    var list = byId("push-devices");
+    if (!list) {
+      return;
+    }
+    var status = byId("push-devices-message");
+    function say(text, isError) {
+      if (status) {
+        status.textContent = text || "";
+        status.classList.toggle("is-error", Boolean(isError));
+      }
+    }
+    function markInactive(item) {
+      item.classList.remove("is-active");
+      item.classList.add("is-inactive");
+      var state = item.querySelector("[data-device-state]");
+      if (state) {
+        state.textContent = list.dataset.labelInactive || "";
+      }
+      var button = item.querySelector("[data-device-deactivate]");
+      if (button) {
+        button.remove();
+      }
+    }
+    list.addEventListener("click", function (event) {
+      var button = event.target.closest ? event.target.closest("[data-device-deactivate]") : null;
+      if (!button) {
+        return;
+      }
+      var item = button.closest("[data-device-id]");
+      button.disabled = true;
+      jsonFetch("/api/push/devices/" + encodeURIComponent(item.dataset.deviceId) + "/deactivate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: "{}",
+      })
+        .then(function () {
+          markInactive(item);
+          say(list.dataset.labelDeactivated || "");
+          if (item.dataset.current === "1" && onCurrentDeactivated) {
+            onCurrentDeactivated();
+          }
+        })
+        .catch(function () {
+          button.disabled = false;
+          say(list.dataset.labelFailed || "", true);
+        });
+    });
+    var all = byId("push-devices-deactivate-all");
+    if (all) {
+      all.addEventListener("click", function () {
+        if (!window.confirm(all.dataset.confirm || "")) {
+          return;
+        }
+        all.disabled = true;
+        getCurrentPushSubscription()
+          .then(function (subscription) {
+            return subscription ? subscription.unsubscribe() : true;
+          })
+          .catch(function () {
+            return true;
+          })
+          .then(function () {
+            return jsonFetch("/api/push/reset", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: "{}",
+            });
+          })
+          .then(function () {
+            forgetSubscription();
+            Array.prototype.forEach.call(list.querySelectorAll("[data-device-id]"), markInactive);
+            say(list.dataset.labelAllDeactivated || "");
+            if (onCurrentDeactivated) {
+              onCurrentDeactivated();
+            }
+          })
+          .catch(function () {
+            say(list.dataset.labelFailed || "", true);
+          })
+          .then(function () {
+            all.disabled = false;
+          });
+      });
+    }
+  }
+
   function bindPush() {
     var root = byId("pwa-push-panel");
     if (!root) {
@@ -210,6 +524,10 @@
       unsupported: root.dataset.labelUnsupported || "Este navegador no soporta notificaciones",
     };
     refreshPushStatus(labels, root);
+    bindDevices(function () {
+      root.dataset.hasActive = "0";
+      refreshPushStatus(labels, root);
+    });
 
     var enable = byId("pwa-push-enable");
     var test = byId("pwa-push-test");
@@ -227,52 +545,23 @@
 
     if (enable) {
       enable.addEventListener("click", function () {
-        if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-          setMessage(labels.unsupported, true);
-          return;
-        }
-        if (isIos() && !isStandalone()) {
-          setMessage(root.dataset.labelIos || "", true);
-          return;
-        }
-        Notification.requestPermission()
-          .then(function (permission) {
-            refreshPushStatus(labels, root);
-            if (permission !== "granted") {
-              throw new Error("permission_denied");
-            }
-            return navigator.serviceWorker.ready;
-          })
-          .then(function (registration) {
-            return jsonFetch("/api/push/public-key").then(function (data) {
-              return registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(data.public_key),
-              });
-            });
-          })
-          .then(function (subscription) {
-            var raw = subscription.toJSON();
-            return jsonFetch("/api/push/subscribe", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "same-origin",
-              body: JSON.stringify({
-                endpoint: raw.endpoint,
-                keys: raw.keys,
-                user_agent: navigator.userAgent,
-              }),
-            });
-          })
+        enablePushOnThisDevice()
           .then(function () {
             setMessage(root.dataset.labelReady || "");
-            if (root) {
-              root.dataset.hasActive = "1";
-            }
+            root.dataset.hasActive = "1";
             return refreshPushStatus(labels, root);
           })
           .catch(function (error) {
             var key = (error.payload && error.payload.error) || error.message;
+            if (key === "ios_install_required") {
+              setMessage(root.dataset.labelIos || "", true);
+              return;
+            }
+            if (key === "unsupported") {
+              setMessage(labels.unsupported, true);
+              return;
+            }
+            refreshPushStatus(labels, root);
             setMessage(root.dataset["err" + (key || "").replace(/_/g, "")] || key, true);
           });
       });
@@ -296,9 +585,9 @@
             });
           })
           .then(function () {
-            if (root) {
-              root.dataset.hasActive = "0";
-            }
+            forgetSubscription();
+            snoozePrompt();
+            root.dataset.hasActive = "0";
             setText("pwa-push-status", labels.disabled);
             applyPushButtons("disabled");
             setMessage(root.dataset.labelDisabledOk || "");
@@ -329,9 +618,9 @@
             });
           })
           .then(function () {
-            if (root) {
-              root.dataset.hasActive = "0";
-            }
+            forgetSubscription();
+            snoozePrompt();
+            root.dataset.hasActive = "0";
             setText("pwa-push-status", labels.disabled);
             applyPushButtons("disabled");
             setMessage(root.dataset.labelResetOk || "");
@@ -411,15 +700,23 @@
     });
   }
 
+  function pushEligible() {
+    return Boolean(document.querySelector("[data-push-eligible]"));
+  }
+
+  function boot() {
+    bindInstall();
+    bindPush();
+    if (pushEligible()) {
+      resyncSubscription().then(bindSoftPrompt);
+    }
+  }
+
   registerWorker();
   bindLogout();
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      bindInstall();
-      bindPush();
-    });
+    document.addEventListener("DOMContentLoaded", boot);
   } else {
-    bindInstall();
-    bindPush();
+    boot();
   }
 }());

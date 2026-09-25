@@ -389,6 +389,9 @@ def item_is_active(spec, endpoint):
     return False
 
 
+LIVE_BADGE_KEYS = frozenset({"unread_notifications"})
+
+
 def _resolve_item(spec, *, user, role, endpoint, badges, language, translate):
     if not _role_allowed(spec.get("roles") or (role,), role):
         return None
@@ -413,6 +416,7 @@ def _resolve_item(spec, *, user, role, endpoint, badges, language, translate):
         "endpoint": spec["endpoint"],
         "active": item_is_active(spec, endpoint),
         "badge": badge,
+        "live_badge": badge_key if badge_key in LIVE_BADGE_KEYS else None,
         "chip": spec.get("chip"),
         "featured": bool(spec.get("featured")),
     }
@@ -470,6 +474,7 @@ def build_app_nav(
             continue
         child_active = any(item["active"] for item in children)
         child_badges = [item["badge"] for item in children if item.get("badge")]
+        live_keys = {item["live_badge"] for item in children if item.get("live_badge")}
         groups.append(
             {
                 "key": group["key"],
@@ -482,6 +487,7 @@ def build_app_nav(
                 "active": bool((leaf and leaf["active"]) or child_active),
                 "expanded": child_active,
                 "badge": sum(child_badges) if child_badges else None,
+                "live_badge": live_keys.pop() if len(live_keys) == 1 else None,
                 "href": None if children else (leaf or {}).get("href"),
             }
         )

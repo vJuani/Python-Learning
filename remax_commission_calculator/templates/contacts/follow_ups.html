@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-contacts-page {% endblock %}
+
+{% block title %}{{ t('followup_title') }} | {{ t('contacts_title') }}{% endblock %}
+
+{% block content %}
+<section class="contacts-home">
+    <header class="contacts-hero">
+        <div>
+            <p class="contacts-kicker">{{ t('contacts_title') }}</p>
+            <h1>{{ t('followup_title') }}</h1>
+            {% if items %}
+            <p>{{ t('followup_digest_title', count=items|length) if items|length != 1 else t('followup_digest_title_one') }}</p>
+            {% endif %}
+        </div>
+        <div class="contacts-hero__actions">
+            <a class="btn btn-secondary" href="{{ url_for('contacts_index') }}">{{ t('contacts_back') }}</a>
+        </div>
+    </header>
+
+    {% if not items %}
+    <p class="contacts-stale-banner">{{ t('followup_empty') }}</p>
+    {% endif %}
+
+    <div class="followup-list">
+        {% for item in items %}
+        <article class="contact-panel followup-card">
+            <h2><a href="{{ url_for('contacts_detail', contact_id=item.contact_id) }}">{{ item.name }}</a></h2>
+            <p class="followup-card__reason">{{ item.reason_label }}</p>
+            {% if item.follow_up_reason %}
+            <p>{{ item.follow_up_reason }}</p>
+            {% endif %}
+            {% if can_manage %}
+            <div class="followup-actions">
+                {% if item.whatsapp_url %}
+                <a class="btn btn-secondary" href="{{ item.whatsapp_url }}" target="_blank" rel="noopener">{{ t('followup_action_whatsapp') }}</a>
+                {% endif %}
+                {% if item.tel_url %}
+                <a class="btn btn-secondary" href="{{ item.tel_url }}">{{ t('followup_action_call') }}</a>
+                {% endif %}
+                <form method="post" action="{{ url_for('contacts_follow_up_contacted', contact_id=item.contact_id) }}">
+                    <button type="submit" class="btn btn-primary">{{ t('followup_action_contacted') }}</button>
+                </form>
+                <form method="post" action="{{ url_for('contacts_follow_up_postpone', contact_id=item.contact_id) }}" class="followup-postpone">
+                    <select name="days" aria-label="{{ t('followup_action_postpone') }}">
+                        {% for days in postpone_days %}
+                        <option value="{{ days }}">{{ t('followup_postpone_' ~ days) }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-secondary">{{ t('followup_action_postpone') }}</button>
+                </form>
+                <a class="btn btn-secondary" href="{{ url_for('agenda_compose', contact_id=item.contact_id) }}">{{ t('followup_action_schedule') }}</a>
+                <form method="post" action="{{ url_for('contacts_follow_up_note', contact_id=item.contact_id) }}" class="followup-note">
+                    <input type="text" name="note" placeholder="{{ t('followup_note_placeholder') }}" maxlength="500">
+                    <button type="submit" class="btn btn-secondary">{{ t('followup_action_note') }}</button>
+                </form>
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

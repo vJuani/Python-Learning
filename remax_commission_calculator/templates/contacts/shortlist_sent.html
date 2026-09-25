@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block body_class %}is-contacts-page is-shortlist-page {% endblock %}
+
+{% block title %}{{ t('shortlist_open_whatsapp') }} | {{ contact.name }}{% endblock %}
+
+{% block content %}
+<article class="shortlist-page">
+    <p class="contacts-back"><a href="{{ url_for('contacts_detail', contact_id=contact.id) }}">{{ contact.name }}</a></p>
+    <h1>{{ t('shortlist_sent') }}</h1>
+    <p>
+        <a class="btn btn-primary" href="{{ whatsapp_url }}" target="_blank" rel="noopener">{{ t('shortlist_open_whatsapp') }}</a>
+    </p>
+    {% if collection_token %}
+    <form method="post" action="{{ url_for('contacts_property_shortlist_revoke', contact_id=contact.id) }}">
+        <input type="hidden" name="token" value="{{ collection_token }}">
+        <button type="submit" class="btn btn-small btn-secondary">{{ t('public_revoke') }}</button>
+    </form>
+    {% endif %}
+    <section class="contact-panel">
+        <h2>{{ t('shortlist_followup') }}</h2>
+        <div class="shortlist-follow">
+            <form method="post" action="{{ url_for('contacts_property_shortlist_follow_up', contact_id=contact.id) }}">
+                <button type="submit" name="days" value="1" class="btn btn-small btn-secondary">{{ t('shortlist_tomorrow') }}</button>
+            </form>
+            <form method="post" action="{{ url_for('contacts_property_shortlist_follow_up', contact_id=contact.id) }}">
+                <button type="submit" name="days" value="3" class="btn btn-small btn-secondary">{{ t('shortlist_three_days') }}</button>
+            </form>
+            <form method="post" action="{{ url_for('contacts_property_shortlist_follow_up', contact_id=contact.id) }}">
+                <button type="submit" name="days" value="7" class="btn btn-small btn-secondary">{{ t('shortlist_week') }}</button>
+            </form>
+            <form method="post" action="{{ url_for('contacts_property_shortlist_follow_up', contact_id=contact.id) }}" class="shortlist-date">
+                <label for="shortlist-date">{{ t('shortlist_pick_date') }}</label>
+                <input id="shortlist-date" type="date" name="date" required>
+                <button type="submit" class="btn btn-small btn-primary">{{ t('shortlist_followup') }}</button>
+            </form>
+        </div>
+    </section>
+</article>
+{% endblock %}

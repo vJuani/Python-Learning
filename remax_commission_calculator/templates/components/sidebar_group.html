@@ -10,7 +10,9 @@
         {% set icon_svg = group.icon_svg %}
         {% include "components/sidebar_icon.html" %}
         <span class="jrh-sidebar__label">{{ group.label }}</span>
-        {% if group.badge %}
+        {% if group.live_badge %}
+        <span class="jrh-sidebar__badge jrh-sidebar__badge--group" data-unread-badge {% if not group.badge %}hidden{% endif %}>{{ '99+' if (group.badge or 0) > 99 else (group.badge or 0) }}</span>
+        {% elif group.badge %}
         <span class="jrh-sidebar__badge jrh-sidebar__badge--group" aria-label="{{ group.badge }}">{{ group.badge }}</span>
         {% endif %}
         <span class="jrh-sidebar__chevron" aria-hidden="true"></span>

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import hmac
+import logging
 import re
 from functools import wraps
-
-import logging
 
 from flask import jsonify, redirect, render_template, request, session, url_for
 
@@ -13,15 +13,21 @@ from modules.auth import get_current_user, is_admin, is_guest_session, login_req
 from modules.database.push_subscriptions_repository import (
     deactivate_all_push_subscriptions,
     deactivate_push_subscription,
+    deactivate_push_subscription_by_id,
     get_push_subscription_by_endpoint,
     list_active_push_subscriptions,
+    list_push_subscriptions,
+    replace_push_subscription_endpoint,
     upsert_push_subscription,
 )
 from modules.database.user_notification_preferences_repository import (
+    get_follow_up_notification_settings,
     get_user_notification_preferences,
+    save_follow_up_notification_settings,
     save_user_notification_preferences,
 )
 from modules.notifications.catalog import PREF_GROUPS, PREF_KEYS, PREF_LABEL_KEYS
+from modules.organization_time import format_local_datetime, organization_timezone
 from modules.web_push import (
     WebPushError,
     push_diagnostics,
@@ -96,21 +102,67 @@ def _clean(value):
     return " ".join(str(value or "").split())
 
 
+_PLATFORM_MARKERS = (
+    ("iPhone", "iPhone"),
+    ("iPad", "iPad"),
+    ("Android", "Android"),
+    ("CrOS", "ChromeOS"),
+    ("Windows", "Windows"),
+    ("Macintosh", "Mac"),
+    ("Mac OS", "Mac"),
+    ("Linux", "Linux"),
+)
+
+# Order matters: Edge, Opera and Samsung also announce "Chrome", and every
+# iOS browser announces "Safari".
+_BROWSER_MARKERS = (
+    ("EdgiOS", "Edge"),
+    ("Edg/", "Edge"),
+    ("SamsungBrowser", "Samsung Internet"),
+    ("OPR/", "Opera"),
+    ("FxiOS", "Firefox"),
+    ("Firefox", "Firefox"),
+    ("CriOS", "Chrome"),
+    ("Chrome/", "Chrome"),
+    ("Safari", "Safari"),
+)
+
+
+def describe_device(user_agent):
+    """Best-effort ``(platform, browser)`` from a user agent string."""
+    ua = _clean(user_agent)
+    platform = next((name for marker, name in _PLATFORM_MARKERS if marker in ua), None)
+    browser = next((name for marker, name in _BROWSER_MARKERS if marker in ua), None)
+    return platform, browser
+
+
 def _device_label(user_agent):
     ua = _clean(user_agent)
     if not ua:
         return None
-    if "iPhone" in ua:
-        return "iPhone"
-    if "iPad" in ua:
-        return "iPad"
-    if "Android" in ua:
-        return "Android"
-    if "Windows" in ua:
-        return "Windows"
-    if "Mac OS" in ua or "Macintosh" in ua:
-        return "Mac"
-    return ua[:40]
+    platform, browser = describe_device(ua)
+    parts = [part for part in (platform, browser) if part]
+    return " · ".join(parts) if parts else ua[:40]
+
+
+def _device_to_json(row, current_endpoint=None):
+    platform, browser = describe_device(row.get("user_agent"))
+    last_activity = max(
+        (value for value in (row.get("last_success_at"), row.get("updated_at")) if value),
+        default=row.get("created_at"),
+    )
+    return {
+        "id": row["id"],
+        "label": row.get("device_label") or _device_label(row.get("user_agent")) or "—",
+        "platform": platform,
+        "browser": browser,
+        "is_active": bool(row.get("is_active")),
+        "is_current": bool(current_endpoint) and row.get("endpoint") == current_endpoint,
+        "last_activity_at": last_activity,
+        "last_success_at": row.get("last_success_at"),
+        "last_failure_at": row.get("last_failure_at"),
+        "created_at": row.get("created_at"),
+    }
 
 
 def _subscription_from_payload(payload):
@@ -161,16 +213,35 @@ def register_pwa_routes(app, helpers):
                 user["id"],
                 **{key: request.form.get(key) == "1" for key in PREF_KEYS},
             )
+            save_follow_up_notification_settings(
+                organization_id,
+                user["id"],
+                digest_time=request.form.get("follow_up_digest_time"),
+                individual_alerts=request.form.get("follow_up_individual_alerts") == "1",
+            )
             flash_i18n("settings_push_prefs_saved", "success")
             return redirect(url_for("settings_notifications"))
         active = list_active_push_subscriptions(organization_id, user["id"])
         prefs = get_user_notification_preferences(organization_id, user["id"])
+        current = session.get(PUSH_DEVICE_SESSION_KEY)
+        tz = organization_timezone(organization_id)
+        devices = []
+        for row in list_push_subscriptions(organization_id, user["id"]):
+            device = _device_to_json(row, current)
+            device["last_activity_label"] = (
+                format_local_datetime(device["last_activity_at"], tz) or ""
+            )
+            devices.append(device)
         return render_template(
             "settings/notifications.html",
+            push_devices=devices,
             push_has_active=bool(active),
             push_prefs=prefs,
             push_pref_groups=PREF_GROUPS,
             push_pref_labels=PREF_LABEL_KEYS,
+            follow_up_settings=get_follow_up_notification_settings(
+                organization_id, user["id"]
+            ),
         )
 
     @app.get("/api/push/public-key")
@@ -245,7 +316,86 @@ def register_pwa_routes(app, helpers):
             return jsonify({"ok": True, "known": False, "device_active": False})
         session[PUSH_DEVICE_SESSION_KEY] = endpoint
         return jsonify(
-            {"ok": True, "known": True, "device_active": bool(row["is_active"])}
+            {
+                "ok": True,
+                "known": True,
+                "device_id": row["id"],
+                "device_active": bool(row["is_active"]),
+            }
+        )
+
+    @app.get("/api/push/devices")
+    @json_login_required
+    def api_push_devices():
+        user = get_current_user()
+        organization_id = require_user_organization()
+        current = session.get(PUSH_DEVICE_SESSION_KEY)
+        devices = [
+            _device_to_json(row, current)
+            for row in list_push_subscriptions(organization_id, user["id"])
+        ]
+        return jsonify({"ok": True, "devices": devices})
+
+    @app.post("/api/push/devices/<int:device_id>/deactivate")
+    @json_login_required
+    def api_push_device_deactivate(device_id):
+        user = get_current_user()
+        organization_id = require_user_organization()
+        changed = deactivate_push_subscription_by_id(organization_id, user["id"], device_id)
+        if not changed:
+            owned = any(
+                row["id"] == device_id
+                for row in list_push_subscriptions(organization_id, user["id"])
+            )
+            if not owned:
+                return _json_error("not_found", 404)
+        return jsonify({"ok": True, "id": device_id, "deactivated": changed})
+
+    @app.post("/api/push/resubscribe")
+    def api_push_resubscribe():
+        """
+        ``pushsubscriptionchange`` from the service worker.
+
+        The worker may run with no page open, so the session cookie is not
+        guaranteed. Ownership is proven either by the previous subscription
+        (its endpoint plus its ``auth`` secret, which only that browser and
+        this server know) or by a session that owns the row. The row keeps
+        its user and organization; nothing here can move it to another one.
+        """
+        payload = request.get_json(silent=True) or {}
+        old_endpoint = _clean(payload.get("old_endpoint"))
+        old_auth = _clean(payload.get("old_auth"))
+        try:
+            subscription = _subscription_from_payload(payload.get("subscription"))
+        except WebPushError as error:
+            return _json_error(error.message_key, error.status_code)
+        old = get_push_subscription_by_endpoint(old_endpoint) if old_endpoint else None
+        if old is None:
+            return _json_error("unknown_subscription", 404)
+        owner_ok = bool(old_auth) and hmac.compare_digest(old_auth, old["auth"] or "")
+        user = get_current_user()
+        if not owner_ok and user is not None and not is_guest_session():
+            owner_ok = _owned_subscription(
+                require_user_organization(), user["id"], old_endpoint
+            ) is not None
+        if not owner_ok:
+            return _json_error("unknown_subscription", 404)
+        row = replace_push_subscription_endpoint(
+            old_endpoint,
+            endpoint=subscription["endpoint"],
+            p256dh=subscription["p256dh"],
+            auth=subscription["auth"],
+        )
+        if row is None:
+            return _json_error("endpoint_conflict", 409)
+        if user is not None and session.get(PUSH_DEVICE_SESSION_KEY) == old_endpoint:
+            session[PUSH_DEVICE_SESSION_KEY] = subscription["endpoint"]
+        return jsonify(
+            {
+                "ok": True,
+                "device_id": row["id"] if row else None,
+                "device_active": bool(row and row["is_active"]),
+            }
         )
 
     @app.post("/api/push/reset")

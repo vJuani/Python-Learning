@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="{{ current_language or 'es' }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ t('public_gone') if gone else t('public_missing') }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/public-share.css') }}">
+</head>
+<body>
+    <main class="public-missing">
+        <h1>{{ t('public_gone') if gone else t('public_missing') }}</h1>
+    </main>
+</body>
+</html>

@@ -81,6 +81,43 @@
                     {% endfor %}
                 </select>
             </label>
+            {% if mode != 'need' %}
+            <label class="contact-field">
+                <span>{{ t('followup_stage') }}</span>
+                <select name="commercial_stage">
+                    <option value="">{{ t('followup_unset') }}</option>
+                    {% for key in commercial_stages or [] %}
+                    <option value="{{ key }}" {% if form.commercial_stage == key %}selected{% endif %}>{{ t('followup_stage_' ~ key) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="contact-field">
+                <span>{{ t('followup_priority') }}</span>
+                <select name="follow_up_priority">
+                    <option value="">{{ t('followup_unset') }}</option>
+                    {% for key in follow_up_priorities or [] %}
+                    <option value="{{ key }}" {% if form.follow_up_priority == key %}selected{% endif %}>{{ t('followup_priority_' ~ key) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="contact-field">
+                <span>{{ t('followup_cadence') }}</span>
+                <select name="follow_up_cadence">
+                    <option value="">{{ t('followup_unset') }}</option>
+                    {% for key, label_key in cadence_choices or [] %}
+                    <option value="{{ key }}" {% if form.follow_up_cadence_choice == key %}selected{% endif %}>{{ t(label_key) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="contact-field">
+                <span>{{ t('followup_next') }}</span>
+                <input type="date" name="next_follow_up_date" value="{{ form.next_follow_up_date or '' }}">
+            </label>
+            <label class="contact-field">
+                <span>{{ t('followup_reason') }}</span>
+                <input type="text" name="follow_up_reason" value="{{ form.follow_up_reason or '' }}">
+            </label>
+            {% endif %}
             <label class="contact-field">
                 <span>{{ t('contacts_field_notes') }}</span>
                 <textarea name="notes" rows="3">{{ form.notes or '' }}</textarea>
@@ -170,7 +207,15 @@
                     <span>{{ t('contacts_field_bedrooms') }}</span>
                     <input type="number" name="bedrooms" value="{{ prefs.bedrooms or '' }}">
                 </label>
+                <label class="contact-field">
+                    <span>{{ t('contacts_field_bathrooms') }}</span>
+                    <input type="number" name="bathrooms" min="1" value="{{ prefs.bathrooms or '' }}">
+                </label>
             </div>
+            <label class="contact-field">
+                <span>{{ t('contacts_field_observations') }}</span>
+                <textarea name="observations" rows="3">{{ prefs.observations or '' }}</textarea>
+            </label>
 
             <div class="contact-field" data-contact-chips>
                 <span>{{ t('contacts_field_features') }}</span>

@@ -4,6 +4,7 @@ from flask import (
     abort,
     flash,
     g,
+    has_app_context,
     redirect,
     request,
     session,
@@ -193,12 +194,24 @@ def load_logged_in_user():
     return g.user
 
 
+def _request_state(name):
+    """Read Flask ``g`` only when a request already pushed an app context.
+
+    Service callers such as ``ask_jrh`` pass the user in and have no
+    session. Missing context means there is no logged-in user and no
+    guest, which is the same result an empty session would produce.
+    """
+    if not has_app_context():
+        return None
+    return getattr(g, name, None)
+
+
 def get_current_user():
-    return getattr(g, "user", None)
+    return _request_state("user")
 
 
 def get_guest_access():
-    return getattr(g, "guest_access", None)
+    return _request_state("guest_access")
 
 
 def is_guest_session():
@@ -293,7 +306,11 @@ def scoped_agent_id(user=None):
 
 
 def can_use_agent_workspace(user=None):
-    """Personal agent tools: Agenda, Contactos, Marketing IA."""
+    """Personal agent tools: Agenda, Contactos, Marketing IA.
+
+    A guest HTTP session never qualifies. Outside a request the guest
+    check is skipped, so a caller can pass the agent user directly.
+    """
     if is_guest_session():
         return False
     user = user or get_current_user()

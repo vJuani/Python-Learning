@@ -86,6 +86,111 @@ def list_active_push_subscriptions(organization_id, user_id):
     return rows
 
 
+def list_push_subscriptions(organization_id, user_id):
+    """Every device of the user in this organization, active first."""
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            _select_sql()
+            + """
+            WHERE organization_id = ?
+                AND user_id = ?
+            ORDER BY is_active DESC, COALESCE(last_success_at, updated_at, created_at) DESC, id DESC
+            """,
+            (organization_id, user_id),
+        )
+        return [_row_to_dict(row) for row in cursor.fetchall()]
+    finally:
+        connection.close()
+
+
+def deactivate_push_subscription_by_id(organization_id, user_id, subscription_id):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            UPDATE push_subscriptions
+            SET is_active = 0, updated_at = ?
+            WHERE id = ?
+                AND organization_id = ?
+                AND user_id = ?
+                AND is_active = 1
+            """,
+            (_now_iso(), int(subscription_id), organization_id, user_id),
+        )
+        changed = cursor.rowcount or 0
+        connection.commit()
+        return changed > 0
+    finally:
+        connection.close()
+
+
+def replace_push_subscription_endpoint(old_endpoint, *, endpoint, p256dh, auth):
+    """
+    Move a rotated browser subscription onto its existing row.
+
+    Keeps ``organization_id``/``user_id``/label of the old row so a
+    ``pushsubscriptionchange`` never creates a second row for one device.
+    If the new endpoint is already stored for the same user and office, the
+    old row is dropped and the existing one keeps the old active flag. A new
+    endpoint owned by someone else is never taken over. Returns the resulting
+    row, or None when the old endpoint is unknown or the new one belongs to
+    another owner.
+    """
+    old = get_push_subscription_by_endpoint(old_endpoint)
+    if old is None:
+        return None
+    existing = get_push_subscription_by_endpoint(endpoint)
+    if existing is not None and existing["id"] != old["id"] and (
+        existing["organization_id"] != old["organization_id"]
+        or existing["user_id"] != old["user_id"]
+    ):
+        return None
+    now = _now_iso()
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        if existing is not None and existing["id"] != old["id"]:
+            cursor.execute("DELETE FROM push_subscriptions WHERE id = ?", (old["id"],))
+            cursor.execute(
+                """
+                UPDATE push_subscriptions
+                SET organization_id = ?, user_id = ?, p256dh = ?, auth = ?,
+                    is_active = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    old["organization_id"],
+                    old["user_id"],
+                    p256dh,
+                    auth,
+                    1 if old["is_active"] else 0,
+                    now,
+                    existing["id"],
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE push_subscriptions
+                SET endpoint = ?, p256dh = ?, auth = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (endpoint, p256dh, auth, now, old["id"]),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return get_push_subscription_by_endpoint(endpoint)
+
+
 def upsert_push_subscription(
     organization_id,
     user_id,
@@ -112,7 +217,7 @@ def upsert_push_subscription(
                     p256dh = ?,
                     auth = ?,
                     user_agent = ?,
-                    device_label = ?,
+                    device_label = COALESCE(NULLIF(device_label, ''), ?),
                     is_active = 1,
                     updated_at = ?
                 WHERE endpoint = ?
