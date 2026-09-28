@@ -72,7 +72,15 @@ def get_app_domain() -> str:
 
 
 def get_app_base_url() -> str:
-    raw = os.environ.get("APP_BASE_URL", DEFAULT_APP_BASE_URL).strip()
+    from modules.config import https_public_base_url, is_production
+
+    raw = os.environ.get("APP_BASE_URL", "").strip()
+    if is_production():
+        if not https_public_base_url(raw):
+            raise RuntimeError(
+                "APP_BASE_URL must be a public https URL when APP_ENV=production."
+            )
+        return raw.rstrip("/")
     return (raw or DEFAULT_APP_BASE_URL).rstrip("/")
 
 

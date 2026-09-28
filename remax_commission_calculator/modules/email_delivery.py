@@ -462,18 +462,34 @@ def send_password_reset_email(
     to_email,
     reset_url,
     language="es",
+    choices=None,
 ):
     language = _normalize_language(language)
     copy = _copy(language)
     to_email = _normalize_recipient(to_email)
     reset_url = (reset_url or "").strip()
+    links = [
+        {
+            "label": (item.get("label") or "").strip(),
+            "url": (item.get("url") or "").strip(),
+        }
+        for item in (choices or [])
+        if (item.get("url") or "").strip()
+    ]
+    if not links:
+        links = [{"label": "", "url": reset_url}]
+    reset_url = links[0]["url"]
 
     subject = copy["reset_subject"]
+    link_lines = "\n".join(
+        f"{item['label']}\n{item['url']}" if item["label"] else item["url"]
+        for item in links
+    )
     text_body = (
         f"{get_brand_name()}\n\n"
         f"{copy['reset_title']}\n\n"
         f"{copy['reset_intro']}\n\n"
-        f"{reset_url}\n\n"
+        f"{link_lines}\n\n"
         f"{copy['reset_expiry']}\n"
         f"{copy['reset_ignore']}\n\n"
         f"{get_brand_name()}\n"
@@ -489,6 +505,7 @@ def send_password_reset_email(
         cta_label=copy["reset_cta"],
         expiry_text=copy["reset_expiry"],
         ignore_text=copy["reset_ignore"],
+        choices=links if len(links) > 1 else [],
     )
 
     logger.info(

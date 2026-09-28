@@ -1206,6 +1206,29 @@ def _resolve_issuer(
     raise InvoicingError("invoice_err_issuer_mode_invalid")
 
 
+def operation_invoice_draft_amounts(invoice_amount):
+    """Amounts stored on an operation invoice draft.
+
+    ``invoice_amount`` is the gross figure the office entered as
+    "importe a facturar". It already includes IVA when the voucher
+    will be Factura A or B. The draft does not add 21% on top and
+    stores ``vat_amount`` as 0 because the voucher type is chosen
+    later, from the issuer and the client.
+
+    At fiscal issue, Factura A/B split 21% out of ``total_amount``.
+    Factura C (monotributo, exento) sends that total with IVA 0.
+    Buyer versus seller, and full versus partial commission, do not
+    change this split: they only decide which amount was entered.
+    """
+    amount = round(float(invoice_amount), 2)
+    return {
+        "unit_price": amount,
+        "subtotal": amount,
+        "vat_amount": 0.0,
+        "total_amount": amount,
+    }
+
+
 def build_draft_preview_for_side(
     organization_id,
     operation_id,
@@ -1288,7 +1311,7 @@ def build_draft_preview_for_side(
         )
 
     settings = get_organization_settings(organization_id)
-    amount = float(party["invoice_amount"])
+    amount = operation_invoice_draft_amounts(party["invoice_amount"])
     currency = (
         party.get("invoice_currency") or "ARS"
     ).upper()
@@ -1339,10 +1362,10 @@ def build_draft_preview_for_side(
         "service_type": service_type,
         "description": description,
         "quantity": DEFAULT_QUANTITY,
-        "unit_price": amount,
-        "subtotal": amount,
-        "vat_amount": 0,
-        "total_amount": amount,
+        "unit_price": amount["unit_price"],
+        "subtotal": amount["subtotal"],
+        "vat_amount": amount["vat_amount"],
+        "total_amount": amount["total_amount"],
         "currency": currency,
         "exchange_rate": exchange_rate,
         "payment_condition": pay,

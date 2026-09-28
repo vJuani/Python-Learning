@@ -1961,6 +1961,10 @@ def create_postgres_schema():
 
         migrate_inbound_inquiry_postgres(cursor)
 
+        from .inquiry_rate_migration import migrate_inquiry_rate_limit
+
+        migrate_inquiry_rate_limit()
+
         for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),
             ("snapshot_parking", "INTEGER"),

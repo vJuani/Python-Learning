@@ -81,6 +81,16 @@
         <a href="#settings-legal">{{ t('settings_legal_complete') }}</a>
     </div>
     {% endif %}
+    {% if integrations is defined %}
+    <div class="flash-message" role="status">
+        <strong>{{ t('settings_integrations_title') }}</strong>
+        <ul>
+            {% for item in integrations %}
+            <li>{{ t('integration_' ~ item.key) }}: {% if item.configured %}{{ t('integration_configured') }}{% else %}{{ t('integration_missing') }}{% endif %}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
     <button type="button" class="btn btn-secondary hide-desktop settings-mobile-back" data-settings-mobile-back>
         ← {{ t('back') }}
     </button>

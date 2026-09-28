@@ -201,8 +201,50 @@ def get_session_cookie_samesite():
     )
 
 
+class ProductionConfigError(RuntimeError):
+    """APP_ENV=production is missing a required setting."""
+
+    def __init__(self, missing):
+        self.missing = list(missing)
+        super().__init__(
+            "APP_ENV=production refused to start. Missing or invalid: "
+            + ", ".join(self.missing)
+        )
+
+
+def https_public_base_url(raw):
+    value = (raw or "").strip()
+    if not value.startswith("https://"):
+        return False
+    host = value[len("https://"):].split("/")[0].split("@")[-1].lower()
+    hostname = host.split(":")[0]
+    if hostname in {"localhost", "127.0.0.1"}:
+        return False
+    return True
+
+
+def validate_production_startup():
+    """Fail closed before a production process serves traffic."""
+    if not is_production():
+        return
+    missing = []
+    secret = (os.environ.get("SECRET_KEY") or "").strip()
+    if not secret or secret == DEFAULT_DEV_SECRET_KEY:
+        missing.append("SECRET_KEY")
+    if not https_public_base_url(os.environ.get("APP_BASE_URL", "")):
+        missing.append("APP_BASE_URL")
+    if (
+        not get_database_url()
+        and not (os.environ.get("DATABASE_PATH") or "").strip()
+    ):
+        missing.append("DATABASE_URL")
+    if missing:
+        raise ProductionConfigError(missing)
+
+
 def apply_config(app):
     load_dotenv_file()
+    validate_production_startup()
 
     app.config["APP_ENV"] = get_app_env()
     app.config["DEBUG"] = get_flask_debug()

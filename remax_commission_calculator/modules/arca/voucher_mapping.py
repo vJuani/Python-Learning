@@ -43,6 +43,19 @@ def resolve_voucher_type(
     return None
 
 
+def fiscal_amounts(total_amount, currency, exchange_rate, voucher_type):
+    """ARS amounts sent to WSFE.
+
+    USD is converted with the invoice exchange rate first.
+    Factura A and B treat the result as IVA incluido at 21%.
+    Factura C does not discriminate IVA.
+    """
+    total_source = float(total_amount or 0)
+    if (currency or "ARS").upper() == "USD":
+        total_source = round(total_source * float(exchange_rate or 0), 2)
+    return split_amounts_for_voucher(total_source, voucher_type)
+
+
 def split_amounts_for_voucher(
     total_amount: float,
     voucher_type: int,

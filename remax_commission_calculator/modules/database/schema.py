@@ -3894,6 +3894,10 @@ def migrate_schema(create_backup=True):
 
     migrate_inbound_inquiry_sqlite()
 
+    from .inquiry_rate_migration import migrate_inquiry_rate_limit
+
+    migrate_inquiry_rate_limit()
+
     return backup_path
 
 

@@ -17,7 +17,7 @@ from modules.arca.voucher_mapping import (
     CONCEPT_SERVICES,
     DOC_TYPE_CUIT,
     IVA_21,
-    split_amounts_for_voucher,
+    fiscal_amounts,
 )
 from modules.arca.wsaa import TicketAcceso, authenticate_wsaa
 from modules.arca.wsfev1 import (
@@ -138,14 +138,10 @@ class ArcaClient:
             )
             next_voucher_number = last + 1
 
-        total_source = float(invoice.get("total_amount") or 0)
-        if (invoice.get("currency") or "ARS").upper() == "USD":
-            total_source = round(
-                total_source * float(invoice.get("exchange_rate") or 0),
-                2,
-            )
-        net, vat, total = split_amounts_for_voucher(
-            total_source,
+        net, vat, total = fiscal_amounts(
+            invoice.get("total_amount"),
+            invoice.get("currency") or "ARS",
+            invoice.get("exchange_rate"),
             cbte_tipo,
         )
 

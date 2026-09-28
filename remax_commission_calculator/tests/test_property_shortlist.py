@@ -396,6 +396,16 @@ class ShortlistJrhTests(unittest.TestCase):
             parking_spaces=1,
         )
 
+    def _share_counts(self):
+        connection = get_connection()
+        cursor = connection.cursor()
+        counts = {}
+        for table in ("property_public_links", "public_shortlists"):
+            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            counts[table] = cursor.fetchone()[0]
+        connection.close()
+        return counts
+
     def _ask(self, prompt, session=None):
         return ask_jrh(
             prompt,
@@ -417,18 +427,21 @@ class ShortlistJrhTests(unittest.TestCase):
             self.assertEqual(parsed["intent"], SHARE_PROPERTY_SHORTLIST, phrase)
 
         session = {}
+        links_before = self._share_counts()
         preview = self._ask("Mandale Alvear y Santa Fe a Lucía.", session)
         self.assertEqual(preview["intent"], SHARE_PROPERTY_SHORTLIST)
         self.assertTrue(preview["confirm_required"])
         self.assertFalse(preview["wrote"])
         self.assertIn("Alvear", preview["cards"][0]["detail"])
         self.assertNotIn("%", preview["cards"][0]["detail"])
+        self.assertEqual(self._share_counts(), links_before)
         before = list_property_interactions(self.org, self.contact["id"], limit=20)
         session.pop(SESSION_DRAFT_KEY, None)
         self.assertEqual(
             list_property_interactions(self.org, self.contact["id"], limit=20),
             before,
         )
+        self.assertEqual(self._share_counts(), links_before)
 
         session = {}
         preview = self._ask("Mandale Alvear y Santa Fe a Lucía.", session)

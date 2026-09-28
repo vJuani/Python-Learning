@@ -814,6 +814,15 @@ def inject_maps_config():
 
 
 @app.context_processor
+def inject_integration_status():
+    if request.endpoint != "organization_settings":
+        return {}
+    from modules.integration_status import describe_integrations
+
+    return {"integrations": describe_integrations()}
+
+
+@app.context_processor
 def inject_listing_sources():
     from modules.listing_sources import listing_source_capabilities
 
@@ -2511,11 +2520,11 @@ def reset_password(token):
         verify_reset_token,
     )
 
-    user_id = verify_reset_token(token)
+    identity = verify_reset_token(token)
     errors = []
     success = False
 
-    if user_id is None and request.method == "GET":
+    if identity is None and request.method == "GET":
         flash_i18n("reset_password_invalid", "error")
         return redirect(url_for("forgot_password"))
 

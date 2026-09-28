@@ -54,7 +54,7 @@ from modules.database.properties_repository import (
     update_property_from_sync,
 )
 from modules.database.property_acm_migration import migrate_property_acm_sqlite
-from modules.database.property_acm_repository import get_acm, list_comparables
+from modules.database.property_acm_repository import get_acm, list_acms, list_comparables
 from modules.acm_explain import build_acm_facts, explain_acm
 from modules.acm_engine import compute_price_scenario
 from modules.acm_sources import format_diff_label
@@ -66,7 +66,7 @@ from modules.jrh_ai_intents import (
     DOWNLOAD_ACM,
     START_ACM,
 )
-from modules.jrh_ai_service import ask_jrh
+from modules.jrh_ai_service import ask_jrh, confirm_jrh_action
 from web_app import app
 
 
@@ -588,18 +588,40 @@ class AcmTests(unittest.TestCase):
         self.assertNotIn(b"ana@jrh.test", text)
 
     def test_27_jrh_agent_start_acm(self):
+        session = {}
         result = ask_jrh(
             "haceme un ACM de Libertador 4200",
             organization_id=self.org,
             user=self.agent_record,
             agent_id=self.agent_id,
             language="es",
-            session={},
+            session=session,
         )
         self.assertEqual(result["intent"], START_ACM)
-        self.assertTrue(result.get("wrote"))
-        self.assertEqual(result["entity"].get("kind"), "acm")
-        self.assertTrue(result.get("actions"))
+        self.assertFalse(result.get("wrote"))
+        self.assertTrue(result.get("confirm_required"))
+        self.assertEqual(result["entity"].get("kind"), "property")
+        before = len(list_acms(self.org, agent_id=self.agent_id))
+        confirmed = confirm_jrh_action(
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            session=session,
+            language="es",
+        )
+        self.assertTrue(confirmed.get("wrote"))
+        self.assertEqual(confirmed["entity"].get("kind"), "acm")
+        self.assertTrue(confirmed.get("actions"))
+        self.assertEqual(len(list_acms(self.org, agent_id=self.agent_id)), before + 1)
+        again = confirm_jrh_action(
+            organization_id=self.org,
+            user=self.agent_record,
+            agent_id=self.agent_id,
+            session=session,
+            language="es",
+        )
+        self.assertFalse(again.get("wrote"))
+        self.assertEqual(len(list_acms(self.org, agent_id=self.agent_id)), before + 1)
 
     def test_28_jrh_staff_start_acm_blocked(self):
         result = ask_jrh(
@@ -626,6 +648,7 @@ class AcmTests(unittest.TestCase):
         self.assertGreaterEqual(len(result.get("candidates") or result.get("cards") or []), 2)
 
     def test_30_context_property_then_acm(self):
+        before = len(list_acms(self.org, agent_id=self.agent_id))
         session = {
             "jrh_ai_context": {
                 "last_intent": "QUERY_PROPERTIES",
@@ -647,8 +670,11 @@ class AcmTests(unittest.TestCase):
             session=session,
         )
         self.assertEqual(result["intent"], START_ACM)
-        self.assertTrue(result.get("wrote"))
+        self.assertFalse(result.get("wrote"))
+        self.assertTrue(result.get("confirm_required"))
         self.assertIn("Libertador 4200", result.get("data", {}).get("address") or result.get("message") or "")
+        session.pop("jrh_ai_draft", None)
+        self.assertEqual(len(list_acms(self.org, agent_id=self.agent_id)), before)
 
     def test_31_migration_idempotent(self):
         migrate_property_acm_sqlite()
@@ -1018,8 +1044,9 @@ class AcmTests(unittest.TestCase):
             session={},
         )
         self.assertEqual(result["intent"], START_ACM)
-        self.assertTrue(result.get("wrote"))
-        self.assertEqual(result["entity"].get("kind"), "acm")
+        self.assertFalse(result.get("wrote"))
+        self.assertTrue(result.get("confirm_required"))
+        self.assertEqual(result["entity"].get("kind"), "property")
         self.assertIn("Libertador 4200", result.get("data", {}).get("address") or "")
 
     def test_63_jrh_start_from_operation_address(self):
@@ -1032,7 +1059,8 @@ class AcmTests(unittest.TestCase):
             session={},
         )
         self.assertEqual(result["intent"], START_ACM)
-        self.assertTrue(result.get("wrote"))
+        self.assertFalse(result.get("wrote"))
+        self.assertTrue(result.get("confirm_required"))
         self.assertIn("Libertador 4200", result.get("data", {}).get("address") or "")
 
     def test_64_jrh_ambiguous_operations(self):

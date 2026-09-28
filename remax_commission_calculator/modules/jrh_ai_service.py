@@ -1204,7 +1204,6 @@ def _handle_shortlist(
     **_kwargs,
 ):
     from modules.contacts import ContactError, load_contact
-    from modules.branding import get_app_base_url
     from modules.property_shortlist import (
         ShortlistError,
         draft_whatsapp_message,
@@ -1214,7 +1213,7 @@ def _handle_shortlist(
         top_matches,
         attach_match_scores,
     )
-    from modules.public_share import collection_requested, prepare_client_links
+    from modules.public_share import collection_requested
 
     query = entities.get("contact_name") or entities.get("agent_name") or ""
     if collection_requested(prompt) or not query:
@@ -1305,19 +1304,11 @@ def _handle_shortlist(
             confidence=confidence,
         )
     mode = "collection" if collection_requested(prompt) else "individual"
-    collection_url, token = prepare_client_links(
-        organization_id,
-        items,
-        agent_id=scoped_agent,
-        base_url=get_app_base_url(),
-        mode=mode,
-        contact_id=contact["id"],
-    )
     message = draft_whatsapp_message(
         contact,
         items,
         language=language,
-        collection_url=collection_url if mode == "collection" else "",
+        collection_url="",
     )
     draft = {
         "intent": SHARE_PROPERTY_SHORTLIST,
@@ -1326,7 +1317,6 @@ def _handle_shortlist(
         "property_ids": [item["property_id"] for item in items],
         "message": message,
         "mode": mode,
-        "collection_token": token,
     }
     if session is not None:
         session[SESSION_DRAFT_KEY] = draft
@@ -2252,7 +2242,7 @@ def _handle_start_acm(
     if not is_agent(user) or not agent_id:
         return _require_acm_agent_result(START_ACM, language, confidence)
     from modules.acm_engine import display_area
-    from modules.acm_service import AcmError, create_acm_for_property, get_acm_view
+    from modules.acm_service import AcmError, get_acm_view
     from modules.database.properties_repository import get_property_record
     from modules.entity_match import UNIQUE_MIN
 
@@ -2422,13 +2412,26 @@ def _handle_start_acm(
                 "label": chosen_row.get("address") or "",
             },
         )
-    view = create_acm_for_property(
-        organization_id,
-        user=user,
-        property_id=property_id,
+    address = chosen_row.get("address") or ""
+    draft = {
+        "intent": START_ACM,
+        "property_id": property_id,
+        "address": address,
+    }
+    if session is not None:
+        session[SESSION_DRAFT_KEY] = draft
+    return _result(
+        START_ACM,
+        "ready",
         language=language,
+        message_key="acm_jrh_preview",
+        summary=address,
+        confirm_required=True,
+        wrote=False,
+        confidence=confidence,
+        entity={"kind": "property", "id": property_id, "label": address},
+        data={"address": address, "property_id": property_id, "wrote": False},
     )
-    return _acm_ready_result(view, language=language, confidence=confidence, prompt=prompt)
 
 
 def _marketing_query_from_prompt(prompt, entities):
@@ -3986,8 +3989,6 @@ def _handle_acm_filter(
 ):
     if not is_agent(user) or not agent_id:
         return _require_acm_agent_result(ACM_FILTER_COMPARABLES, language, confidence)
-    from modules.acm_service import refresh_draft
-
     entities = entities or {}
 
     view = _latest_acm_view(organization_id, user, language, session=session)
@@ -4005,32 +4006,29 @@ def _handle_acm_filter(
     elif entities.get("filter") in {"max_distance", "nearest"}:
         if entities.get("max_distance_km") or entities.get("radius_km"):
             filters["max_distance_km"] = entities.get("max_distance_km") or entities.get("radius_km")
-    refresh_draft(
-        view["acm"]["id"],
-        organization_id,
-        user=user,
-        language=language,
-        filters=filters,
-    )
+    draft = {
+        "intent": ACM_FILTER_COMPARABLES,
+        "acm_id": view["acm"]["id"],
+        "filters": filters,
+        "filter": entities.get("filter") or "",
+        "distance": entities.get("radius_km") or entities.get("max_distance_km") or "",
+    }
     message_key = "acm_jrh_filter_closings"
     if entities.get("filter") in {"max_distance", "nearest"}:
         message_key = "acm_jrh_filter_distance"
+    draft["message_key"] = message_key
+    if session is not None:
+        session[SESSION_DRAFT_KEY] = draft
     return _result(
         ACM_FILTER_COMPARABLES,
         "ready",
         language=language,
         message_key=message_key,
-        data={"distance": entities.get("radius_km") or entities.get("max_distance_km") or ""},
-        wrote=True,
+        confirm_required=True,
+        wrote=False,
         confidence=confidence,
         entity={"kind": "acm", "id": view["acm"]["id"]},
-        actions=[
-            {
-                "label_key": "acm_see_results",
-                "href_name": "acm_detail",
-                "href_args": {"acm_id": view["acm"]["id"]},
-            }
-        ],
+        data={"distance": draft["distance"], "wrote": False},
     )
 
 
@@ -4411,6 +4409,46 @@ def confirm_jrh_action(
                 }
             ],
         )
+    if intent == START_ACM:
+        from modules.acm_service import create_acm_for_property
+
+        view = create_acm_for_property(
+            organization_id,
+            user=user,
+            property_id=draft.get("property_id"),
+            language=language,
+        )
+        if session is not None:
+            session.pop(SESSION_DRAFT_KEY, None)
+        ready = _acm_ready_result(
+            view,
+            language=language,
+            confidence=1,
+            prompt=draft.get("address") or "",
+        )
+        return ready
+    if intent == ACM_FILTER_COMPARABLES:
+        from modules.acm_service import refresh_draft
+
+        refresh_draft(
+            draft.get("acm_id"),
+            organization_id,
+            user=user,
+            language=language,
+            filters=draft.get("filters") or {},
+        )
+        if session is not None:
+            session.pop(SESSION_DRAFT_KEY, None)
+        message_key = draft.get("message_key") or "acm_jrh_filter_closings"
+        return _result(
+            ACM_FILTER_COMPARABLES,
+            "ready",
+            language=language,
+            message_key=message_key,
+            wrote=True,
+            data={"distance": draft.get("distance") or ""},
+            entity={"kind": "acm", "id": draft.get("acm_id")},
+        )
     if intent == SHARE_PROPERTY_SHORTLIST:
         from modules.contacts import load_contact
         from modules.organization_time import organization_timezone
@@ -4418,6 +4456,7 @@ def confirm_jrh_action(
         from modules.branding import get_app_base_url
         from modules.property_shortlist import (
             attach_match_scores,
+            draft_whatsapp_message,
             record_shortlist_share,
             select_properties,
         )
@@ -4439,15 +4478,20 @@ def confirm_jrh_action(
             ),
             agent_id=agent_id if is_agent(user) else None,
         )
-        message = draft.get("message") or ""
-        prepare_client_links(
+        mode = draft.get("mode") or "individual"
+        collection_url, _token = prepare_client_links(
             organization_id,
             items,
             agent_id=agent_id if is_agent(user) else None,
             base_url=get_app_base_url(),
-            mode=draft.get("mode") or "individual",
+            mode=mode,
             contact_id=contact["id"],
-            collection_token=draft.get("collection_token") or None,
+        )
+        message = draft_whatsapp_message(
+            contact,
+            items,
+            language=language,
+            collection_url=collection_url if mode == "collection" else "",
         )
         record_shortlist_share(
             organization_id,

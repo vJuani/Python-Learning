@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import threading
 import time
 
 from flask import current_app
@@ -45,10 +44,6 @@ ATTENTION_EMAIL_PHONE = "email_phone_conflict"
 ATTENTION_AMBIGUOUS_PHONE = "ambiguous_phone"
 ATTENTION_OTHER_AGENT = "other_agent_listing"
 
-_RATE_LOCK = threading.Lock()
-_RATE_HITS = {}
-
-
 class InboundClosed(Exception):
     """The public token cannot accept an inquiry."""
 
@@ -58,28 +53,66 @@ class InboundClosed(Exception):
 
 
 def reset_inquiry_rate_limits():
-    with _RATE_LOCK:
-        _RATE_HITS.clear()
+    from modules.database.connection import get_connection
+    from modules.database.inquiry_rate_migration import migrate_inquiry_rate_limit
+
+    migrate_inquiry_rate_limit()
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM public_inquiry_rate_hits")
+    connection.commit()
+    connection.close()
 
 
 def allow_inquiry_rate(token, *, now=None):
-    """At most five posts per public token inside one hour."""
+    """At most five posts per public token inside one hour.
+
+    Hits live in the database so every worker and a process restart
+    share the same window. The key is the public token, not an IP.
+    """
+    from modules.database.connection import get_connection
+    from modules.database.inquiry_rate_migration import migrate_inquiry_rate_limit
+
     moment = time.time() if now is None else float(now)
     key = (token or "").strip()
     if not key:
         return False
-    with _RATE_LOCK:
-        recent = [
-            stamp
-            for stamp in _RATE_HITS.get(key, [])
-            if moment - stamp < RATE_WINDOW_SECONDS
-        ]
-        if len(recent) >= RATE_LIMIT:
-            _RATE_HITS[key] = recent
-            return False
-        recent.append(moment)
-        _RATE_HITS[key] = recent
-        return True
+    migrate_inquiry_rate_limit()
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        "SELECT id, hit_at FROM public_inquiry_rate_hits WHERE token = ?",
+        (key,),
+    )
+    rows = cursor.fetchall()
+    recent = 0
+    expired = []
+    for row in rows:
+        try:
+            stamp = float(row[1])
+        except (TypeError, ValueError):
+            expired.append(row[0])
+            continue
+        if moment - stamp < RATE_WINDOW_SECONDS:
+            recent += 1
+        else:
+            expired.append(row[0])
+    for hit_id in expired:
+        cursor.execute(
+            "DELETE FROM public_inquiry_rate_hits WHERE id = ?",
+            (hit_id,),
+        )
+    if recent >= RATE_LIMIT:
+        connection.commit()
+        connection.close()
+        return False
+    cursor.execute(
+        "INSERT INTO public_inquiry_rate_hits (token, hit_at) VALUES (?, ?)",
+        (key, f"{moment:.6f}"),
+    )
+    connection.commit()
+    connection.close()
+    return True
 
 
 def _serializer():

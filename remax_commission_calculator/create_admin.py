@@ -1,3 +1,4 @@
+import argparse
 import getpass
 import sys
 
@@ -6,35 +7,42 @@ from modules.auth import (
     hash_password
 )
 from modules.database import (
-    DEFAULT_ORGANIZATION_ID,
     add_user,
     create_tables,
-    get_organizations,
+    get_organization_by_id,
     get_user_by_username
 )
 
 
-def resolve_organization_id():
-    organizations = get_organizations()
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Create an admin user in one organization."
+    )
+    parser.add_argument(
+        "--organization-id",
+        type=int,
+        required=True,
+        help="Organization id. There is no default.",
+    )
+    return parser.parse_args(argv)
 
-    for organization in organizations:
-        if organization["id"] == DEFAULT_ORGANIZATION_ID:
-            return DEFAULT_ORGANIZATION_ID
 
-    if len(organizations) == 0:
-        print("No organization was found.")
-        sys.exit(1)
-
-    return organizations[0]["id"]
-
-
-def main():
+def main(argv=None):
+    args = parse_args(argv)
     create_tables()
 
-    organization_id = resolve_organization_id()
+    organization = get_organization_by_id(args.organization_id)
+    if organization is None:
+        print(
+            f"Organization {args.organization_id} was not found."
+        )
+        sys.exit(1)
 
-    print("Create first admin user")
-    print("-----------------------")
+    organization_id = organization["id"]
+
+    print("Create admin user")
+    print("-----------------")
+    print(f"Organization: {organization.get('name')} ({organization_id})")
 
     username = input("Username: ").strip()
 
