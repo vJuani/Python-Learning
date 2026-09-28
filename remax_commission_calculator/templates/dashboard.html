@@ -10,6 +10,7 @@
 
 {% block content %}
 <div class="ds-home home-panel">
+    {% include "dashboard/_onboarding_checklist.html" %}
     {% if current_user %}
     {% include "dashboard/_m_home_staff.html" %}
     {% endif %}

@@ -84,11 +84,36 @@ def provision_organization(
     admin_password_hash,
     admin_role,
     registration_code_hash=None,
-    is_active=True
+    is_active=True,
+    *,
+    admin_email=None,
+    first_name="",
+    last_name="",
+    country="",
+    region="",
+    city="",
+    accent_color=None,
+    marketing_phone="",
+    marketing_email="",
+    marketing_website="",
+    legal_office_name="",
+    legal_broker_name="",
+    legal_broker_license="",
+    legal_footer_line="",
 ):
     name = name.strip()
     display_name = display_name.strip()
     admin_username = admin_username.strip()
+    stored_email = (
+        admin_username.lower()
+        if admin_email is None
+        else admin_email.strip().lower()
+    )
+
+    if len(admin_username) > 64 or len(stored_email) > 64:
+        raise OrganizationProvisioningError(
+            "Admin username exceeds 64 characters."
+        )
 
     connection = get_connection()
     cursor = connection.cursor()
@@ -125,9 +150,23 @@ def provision_organization(
                 logo_path,
                 accent_color,
                 registration_code_hash,
-                registration_enabled
+                registration_enabled,
+                marketing_brand_name,
+                marketing_phone,
+                marketing_email,
+                marketing_website,
+                legal_office_name,
+                legal_broker_name,
+                legal_broker_license,
+                legal_footer_line,
+                country,
+                region,
+                city
             )
-            VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, 1)
+            VALUES (
+                ?, ?, ?, ?, ?, NULL, ?, ?, 1,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
             """,
             (
                 organization_id,
@@ -135,7 +174,19 @@ def provision_organization(
                 default_language,
                 default_currency,
                 timezone,
-                registration_code_hash
+                accent_color,
+                registration_code_hash,
+                display_name,
+                marketing_phone.strip(),
+                marketing_email.strip(),
+                marketing_website.strip(),
+                legal_office_name.strip(),
+                legal_broker_name.strip(),
+                legal_broker_license.strip(),
+                legal_footer_line.strip(),
+                country.strip(),
+                region.strip(),
+                city.strip(),
             )
         )
 
@@ -150,17 +201,31 @@ def provision_organization(
                 is_active,
                 organization_id,
                 email,
-                account_status
+                account_status,
+                first_name,
+                last_name
             )
-            VALUES (?, ?, ?, NULL, 1, ?, ?, 'active')
+            VALUES (?, ?, ?, NULL, 1, ?, ?, 'active', ?, ?)
             """,
             (
                 admin_username,
                 admin_password_hash,
                 admin_role,
                 organization_id,
-                admin_username.lower()
+                stored_email,
+                first_name.strip(),
+                last_name.strip(),
             )
+        )
+
+        from modules.database.treasury_accounts_repository import (
+            ensure_legacy_default_accounts,
+        )
+
+        ensure_legacy_default_accounts(
+            cursor,
+            organization_id,
+            created_by_user_id=admin_user_id,
         )
         connection.commit()
 

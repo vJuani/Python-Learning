@@ -420,6 +420,7 @@ PUBLIC_ENDPOINTS = (
     "public_property_logo",
     "public_shortlist",
     "public_shortlist_inquiry",
+    "onboarding",
 )
 
 
@@ -4358,6 +4359,18 @@ def search_results():
     )
 
 
+def _admin_onboarding_checklist():
+    from modules.onboarding import build_onboarding_checklist
+
+    user = get_current_user()
+    if user is None or user.get("role") != "admin":
+        return None
+    return build_onboarding_checklist(
+        user["organization_id"],
+        get_current_language(),
+    )
+
+
 @app.route("/")
 @login_required
 def dashboard():
@@ -4370,6 +4383,7 @@ def dashboard():
 
         return render_template(
             "dashboard.html",
+            onboarding_checklist=_admin_onboarding_checklist(),
             **get_empty_dashboard_context()
         )
 
@@ -4393,6 +4407,7 @@ def dashboard():
             language=get_current_language(),
         ),
         agenda_summary=_agenda_summary_for_current_user(),
+        onboarding_checklist=_admin_onboarding_checklist(),
         **context
     )
 
@@ -8558,7 +8573,18 @@ register_contact_routes(
     },
 )
 
+from modules.onboarding_routes import register_onboarding_routes
 from modules.public_share_routes import register_public_share_routes
+
+register_onboarding_routes(
+    app,
+    helpers={
+        "login_required": login_required,
+        "admin_required": admin_required,
+        "get_current_language": get_current_language,
+        "get_current_user": get_current_user,
+    },
+)
 
 register_public_share_routes(
     app,

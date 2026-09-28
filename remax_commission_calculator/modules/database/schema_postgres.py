@@ -1965,6 +1965,10 @@ def create_postgres_schema():
 
         migrate_inquiry_rate_limit()
 
+        from .onboarding_migration import migrate_onboarding
+
+        migrate_onboarding()
+
         for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),
             ("snapshot_parking", "INTEGER"),

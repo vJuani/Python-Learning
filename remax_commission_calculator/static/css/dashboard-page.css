@@ -630,3 +630,33 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+
+.onboarding-checklist {
+    grid-column: 1 / -1;
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.6rem;
+    background: transparent;
+    color: inherit;
+}
+
+.onboarding-checklist h2 {
+    margin: 0 0 0.4rem;
+    font-size: 0.95rem;
+    color: inherit;
+}
+
+.onboarding-checklist ul {
+    margin: 0;
+    padding-left: 1.1rem;
+}
+
+.onboarding-checklist .is-done {
+    opacity: 0.8;
+}
+
+.onboarding-checklist .is-pending,
+.onboarding-checklist .is-pending a {
+    color: #e2b657;
+}

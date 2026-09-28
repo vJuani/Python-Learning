@@ -1,0 +1,22 @@
+{% if onboarding_checklist %}
+<aside class="onboarding-checklist" aria-label="{{ t('onboarding_checklist_title') }}">
+    <h2>{{ t('onboarding_checklist_title') }}</h2>
+    <ul>
+        {% for item in onboarding_checklist["items"] %}
+        <li class="{% if item.done %}is-done{% else %}is-pending{% endif %}">
+            {% if item.done %}✓{% else %}⚠{% endif %}
+            {% if item.href and not item.done %}
+            <a href="{{ url_for(item.href) }}">{{ item.label }}</a>
+            {% else %}
+            {{ item.label }}
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% if onboarding_checklist.can_dismiss %}
+    <form method="post" action="{{ url_for('onboarding_checklist_dismiss') }}">
+        <button type="submit">{{ t('onboarding_dismiss') }}</button>
+    </form>
+    {% endif %}
+</aside>
+{% endif %}

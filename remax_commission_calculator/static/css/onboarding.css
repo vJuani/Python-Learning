@@ -1,0 +1,133 @@
+.onboarding {
+    max-width: 32rem;
+    margin: 2rem auto;
+    padding: 1.5rem;
+}
+
+.onboarding__brand {
+    margin: 0;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.onboarding h1 {
+    margin: 0.25rem 0 0.5rem;
+}
+
+.onboarding__lead,
+.onboarding__note {
+    color: #3f4a45;
+}
+
+.onboarding__errors {
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    background: #fde8e8;
+}
+
+.onboarding__step {
+    display: none;
+}
+
+.onboarding__step.is-active {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.onboarding label {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.95rem;
+}
+
+.onboarding input,
+.onboarding select,
+.onboarding button,
+.onboarding__actions a,
+.onboarding__enter {
+    font: inherit;
+}
+
+.onboarding input,
+.onboarding select {
+    width: 100%;
+    padding: 0.6rem 0.7rem;
+    border: 1px solid #c9d1cc;
+    border-radius: 0.4rem;
+}
+
+.onboarding__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.onboarding button,
+.onboarding__actions a,
+.onboarding__enter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.65rem 0.9rem;
+    border-radius: 0.4rem;
+    border: 0;
+    background: #0f766e;
+    color: #fff;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.onboarding__panel {
+    margin-top: 1.25rem;
+    padding-top: 0.25rem;
+}
+
+.onboarding__code {
+    font-size: 1.4rem;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+.onboarding__honeypot {
+    position: absolute;
+    left: -10000px;
+    height: 0;
+    overflow: hidden;
+}
+
+.onboarding-checklist {
+    grid-column: 1 / -1;
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.6rem;
+    background: transparent;
+    color: inherit;
+}
+
+.onboarding-checklist h2 {
+    margin: 0 0 0.4rem;
+    font-size: 0.95rem;
+    color: inherit;
+}
+
+.onboarding-checklist ul {
+    margin: 0;
+    padding-left: 1.1rem;
+}
+
+.onboarding-checklist .is-done {
+    opacity: 0.8;
+}
+
+.onboarding-checklist .is-pending,
+.onboarding-checklist .is-pending a {
+    color: #e2b657;
+}
+
+@media (max-width: 720px) {
+    .onboarding {
+        margin: 0;
+        padding: 1rem;
+    }
+}

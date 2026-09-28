@@ -3898,6 +3898,10 @@ def migrate_schema(create_backup=True):
 
     migrate_inquiry_rate_limit()
 
+    from .onboarding_migration import migrate_onboarding
+
+    migrate_onboarding()
+
     return backup_path
 
 

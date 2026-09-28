@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('onboarding_ready_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding.css') }}">
+{% endblock %}
+
+{% block content %}
+<main class="onboarding">
+    <p class="onboarding__brand">JRH One</p>
+    <h1>{{ t('onboarding_ready_title') }}</h1>
+
+    {% if logo_pending %}
+    <p class="onboarding__note" role="status">{{ t('onboarding_logo_failed') }}</p>
+    {% endif %}
+
+    <section class="onboarding__panel">
+        <h2>{{ t('onboarding_code_label') }}</h2>
+        {% if registration_code %}
+        <p id="onboarding-registration-code" class="onboarding__code">{{ registration_code }}</p>
+        <p class="onboarding__note">{{ t('onboarding_code_hint') }}</p>
+        <div class="onboarding__actions">
+            <button type="button" id="onboarding-copy-code">{{ t('onboarding_copy_code') }}</button>
+            <a href="{{ url_for('users_list') }}">{{ t('onboarding_go_users') }}</a>
+            <a href="{{ url_for('dashboard') }}">{{ t('onboarding_next') }}</a>
+        </div>
+        {% else %}
+        <p>{{ t('onboarding_code_missing') }}</p>
+        <a href="{{ url_for('organization_settings') }}">{{ t('onboarding_go_users') }}</a>
+        {% endif %}
+    </section>
+
+    <section class="onboarding__panel">
+        <h2>{{ t('onboarding_integrations_title') }}</h2>
+        <p class="onboarding__note">{{ t('onboarding_integration_scope') }}</p>
+        <ul>
+            {% for item in integrations %}
+            <li>
+                {{ t('integration_' ~ item.key) }}:
+                {% if item.configured %}{{ t('integration_configured') }}{% else %}{{ t('integration_missing') }}{% endif %}
+                {% if item.key == 'arca' %}<span> — {{ t('onboarding_arca_note') }}</span>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+
+    {% if checklist %}
+    <section class="onboarding__panel">
+        <h2>{{ t('onboarding_checklist_title') }}</h2>
+        <ul>
+            {% for item in checklist["items"] %}
+            <li>{% if item.done %}✓{% else %}⚠{% endif %} {{ item.label }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    <a class="onboarding__enter" href="{{ url_for('dashboard') }}">{{ t('onboarding_enter') }}</a>
+</main>
+<script>
+(function () {
+    var button = document.getElementById("onboarding-copy-code");
+    var code = document.getElementById("onboarding-registration-code");
+    if (!button || !code) return;
+    button.addEventListener("click", function () {
+        var text = code.textContent || "";
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text);
+            return;
+        }
+        var area = document.createElement("textarea");
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        document.body.removeChild(area);
+    });
+})();
+</script>
+{% endblock %}

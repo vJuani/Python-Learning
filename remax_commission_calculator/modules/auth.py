@@ -84,6 +84,9 @@ def authenticate_user(username, password):
     if len(verified) == 0:
         return None, "login_invalid"
 
+    # RC: same email and password in two organizations returns
+    # login_ambiguous. A later step can ask for the office code
+    # without listing offices. Do not weaken this check.
     if len(verified) > 1:
         return None, "login_ambiguous"
 
@@ -104,6 +107,7 @@ def authenticate_user(username, password):
 def login_user(user):
     session.clear()
     session["user_id"] = user["id"]
+    session["organization_id"] = user["organization_id"]
     session.permanent = True
 
     settings = get_organization_settings(
@@ -141,6 +145,8 @@ def login_guest_access(access, token_hash):
 
 def logout_user():
     session.pop("user_id", None)
+    session.pop("organization_id", None)
+    session.pop("onboarding_registration_code", None)
     session.pop("guest_access_id", None)
     session.pop("guest_organization_id", None)
 
@@ -162,8 +168,19 @@ def load_logged_in_user():
             or user["role"] not in LOGIN_ROLES
         ):
             session.pop("user_id", None)
+            session.pop("organization_id", None)
             g.user = None
         else:
+            bound_organization = session.get("organization_id")
+            if (
+                bound_organization is not None
+                and int(bound_organization) != int(user["organization_id"])
+            ):
+                session.pop("user_id", None)
+                session.pop("organization_id", None)
+                g.user = None
+                return None
+            session["organization_id"] = user["organization_id"]
             g.user = user
             return user
 

@@ -138,6 +138,15 @@ def build_settings_dict(row):
         "marketing_logo_updated_at": (
             row[39] if len(row) > 39 and row[39] else ""
         ),
+        "country": row[40] if len(row) > 40 and row[40] else "",
+        "region": row[41] if len(row) > 41 and row[41] else "",
+        "city": row[42] if len(row) > 42 and row[42] else "",
+        "marketing_website": (
+            row[43] if len(row) > 43 and row[43] else ""
+        ),
+        "onboarding_checklist_dismissed_at": (
+            row[44] if len(row) > 44 and row[44] else ""
+        ),
     }
 
 
@@ -182,7 +191,12 @@ SETTINGS_SELECT = """
             marketing_email,
             marketing_logo_path,
             marketing_logo_source,
-            marketing_logo_updated_at
+            marketing_logo_updated_at,
+            country,
+            region,
+            city,
+            marketing_website,
+            onboarding_checklist_dismissed_at
         FROM organization_settings
 """
 
@@ -642,3 +656,44 @@ def backfill_organization_settings(cursor):
                 DEFAULT_TIMEZONE
             )
         )
+
+
+def set_organization_logo_path(organization_id, logo_path):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE organization_settings
+        SET
+            logo_path = ?,
+            marketing_logo_path = ?
+        WHERE organization_id = ?
+        """,
+        (
+            logo_path,
+            logo_path,
+            organization_id,
+        )
+    )
+    connection.commit()
+    connection.close()
+
+
+def dismiss_onboarding_checklist(organization_id, dismissed_at):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE organization_settings
+        SET onboarding_checklist_dismissed_at = ?
+        WHERE organization_id = ?
+        """,
+        (
+            dismissed_at,
+            organization_id,
+        )
+    )
+    connection.commit()
+    connection.close()

@@ -113,7 +113,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-app.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/notifications-live.css') }}?v=live-1">
 </head>
-<body class="{% block body_class %}{% endblock %}{% if current_user or guest_access %} has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password', 'privacy', 'terms') %} is-auth-page{% endif %}">
+<body class="{% block body_class %}{% endblock %}{% if current_user or guest_access %} has-app-rail has-mobile-bottom-nav{% endif %}{% if request.endpoint in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password', 'privacy', 'terms', 'onboarding') %} is-auth-page{% endif %}">
     {% if current_user or guest_access %}
     <aside class="app-rail jrh-sidebar" aria-label="{{ t('nav_aria') }}">
         <div class="jrh-sidebar__brand">
@@ -472,7 +472,7 @@
                     </div>
                 </div>
             </div>
-            {% elif request.endpoint not in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password') %}
+            {% elif request.endpoint not in ('login', 'register', 'register_continue_verification', 'verify_email', 'verify_email_resend', 'forgot_password', 'reset_password', 'onboarding') %}
             <div class="header-zone header-zone-center header-zone-center-guest">
                 <nav class="guest-nav" aria-label="{{ t('nav_aria') }}">
                     <a href="{{ url_for('login') }}" class="btn btn-small btn-primary">{{ t('login_button') }}</a>

@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('onboarding_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding.css') }}">
+{% endblock %}
+
+{% block content %}
+<main class="onboarding">
+    <p class="onboarding__brand">JRH One</p>
+    <h1>{{ t('onboarding_title') }}</h1>
+    <p class="onboarding__lead">{{ t('onboarding_lead') }}</p>
+
+    {% if errors %}
+    <div class="onboarding__errors" role="alert">
+        {% for error in errors %}
+        <p>{{ error }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('onboarding') }}" enctype="multipart/form-data" data-onboarding-form>
+        <p class="onboarding__honeypot">
+            <label for="company_website">{{ t('onboarding_honeypot') }}</label>
+            <input id="company_website" name="company_website" type="text" tabindex="-1" autocomplete="off">
+        </p>
+
+        <section class="onboarding__step is-active" data-step="1">
+            <h2>{{ t('onboarding_office') }}</h2>
+            <label>{{ t('onboarding_invite') }}
+                <input name="invite_code" value="{{ values.invite_code }}" autocomplete="off" required>
+            </label>
+            <label>{{ t('onboarding_office') }}
+                <input name="name" value="{{ values.name }}" maxlength="120" required>
+            </label>
+            <label>{{ t('onboarding_country') }}
+                <select name="country" data-country>
+                    {% for country in countries %}
+                    <option value="{{ country }}" data-timezone="{{ country_timezones[country] }}" {% if values.country == country %}selected{% endif %}>{{ country }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>{{ t('onboarding_region') }}
+                <input name="region" value="{{ values.region }}" maxlength="80">
+            </label>
+            <label>{{ t('onboarding_city') }}
+                <input name="city" value="{{ values.city }}" maxlength="80">
+            </label>
+            <label>{{ t('onboarding_timezone') }}
+                <select name="timezone" data-timezone>
+                    {% for zone in timezones %}
+                    <option value="{{ zone }}" {% if values.timezone == zone %}selected{% endif %}>{{ zone }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>{{ t('onboarding_currency') }}
+                <select name="currency">
+                    {% for currency in currencies %}
+                    <option value="{{ currency }}" {% if values.currency == currency %}selected{% endif %}>{{ currency }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>{{ t('onboarding_language') }}
+                <select name="language">
+                    <option value="es" {% if values.language == 'es' %}selected{% endif %}>Español</option>
+                    <option value="en" {% if values.language == 'en' %}selected{% endif %}>English</option>
+                </select>
+            </label>
+            <div class="onboarding__actions">
+                <button type="button" data-next>{{ t('onboarding_next') }}</button>
+            </div>
+        </section>
+
+        <section class="onboarding__step" data-step="2">
+            <h2>{{ t('onboarding_admin') }}</h2>
+            <label>{{ t('onboarding_first_name') }}
+                <input name="first_name" value="{{ values.first_name }}" maxlength="80" required>
+            </label>
+            <label>{{ t('onboarding_last_name') }}
+                <input name="last_name" value="{{ values.last_name }}" maxlength="80" required>
+            </label>
+            <label>{{ t('onboarding_email') }}
+                <input name="email" type="email" value="{{ values.email }}" maxlength="64" required>
+            </label>
+            <label>{{ t('onboarding_password') }}
+                <input name="password" type="password" autocomplete="new-password" required>
+            </label>
+            <label>{{ t('onboarding_password_confirm') }}
+                <input name="confirm_password" type="password" autocomplete="new-password" required>
+            </label>
+            <div class="onboarding__actions">
+                <button type="button" data-back>{{ t('onboarding_back') }}</button>
+                <button type="button" data-next>{{ t('onboarding_next') }}</button>
+            </div>
+        </section>
+
+        <section class="onboarding__step" data-step="3">
+            <h2>{{ t('onboarding_brand') }}</h2>
+            <label>{{ t('onboarding_commercial_name') }}
+                <input name="commercial_name" value="{{ values.commercial_name }}" maxlength="120">
+            </label>
+            <label>{{ t('onboarding_logo') }}
+                <input name="logo" type="file" accept=".png,.jpg,.jpeg,.webp,.svg">
+            </label>
+            <label>{{ t('onboarding_color') }}
+                <input name="accent_color" type="color" value="{{ values.accent_color }}">
+            </label>
+            <label>{{ t('onboarding_phone') }}
+                <input name="marketing_phone" value="{{ values.marketing_phone }}" maxlength="40">
+            </label>
+            <label>{{ t('onboarding_commercial_email') }}
+                <input name="marketing_email" type="email" value="{{ values.marketing_email }}" maxlength="120">
+            </label>
+            <label>{{ t('onboarding_website') }}
+                <input name="marketing_website" value="{{ values.marketing_website }}" maxlength="200">
+            </label>
+            <div class="onboarding__actions">
+                <button type="button" data-back>{{ t('onboarding_back') }}</button>
+                <button type="button" data-next>{{ t('onboarding_next') }}</button>
+            </div>
+        </section>
+
+        <section class="onboarding__step" data-step="4">
+            <h2>{{ t('onboarding_legal') }}</h2>
+            <label>{{ t('onboarding_legal_office') }}
+                <input name="legal_office_name" value="{{ values.legal_office_name }}" maxlength="200">
+            </label>
+            <label>{{ t('onboarding_legal_broker') }}
+                <input name="legal_broker_name" value="{{ values.legal_broker_name }}" maxlength="200">
+            </label>
+            <label>{{ t('onboarding_legal_license') }}
+                <input name="legal_broker_license" value="{{ values.legal_broker_license }}" maxlength="200">
+            </label>
+            <label>{{ t('onboarding_legal_footer') }}
+                <input name="legal_footer_line" value="{{ values.legal_footer_line }}" maxlength="200">
+            </label>
+            <div class="onboarding__actions">
+                <button type="button" data-back>{{ t('onboarding_back') }}</button>
+                <button type="submit" name="legal_later" value="1">{{ t('onboarding_legal_later') }}</button>
+                <button type="submit">{{ t('onboarding_create') }}</button>
+            </div>
+        </section>
+    </form>
+</main>
+<script>
+(function () {
+    var form = document.querySelector("[data-onboarding-form]");
+    if (!form) return;
+    var steps = Array.prototype.slice.call(form.querySelectorAll("[data-step]"));
+    var current = 0;
+    var timezone = form.querySelector("[data-timezone]");
+    var timezoneTouched = false;
+    function show(index) {
+        current = index;
+        steps.forEach(function (step, stepIndex) {
+            step.classList.toggle("is-active", stepIndex === index);
+        });
+    }
+    form.addEventListener("click", function (event) {
+        if (event.target.matches("[data-next]")) show(Math.min(current + 1, steps.length - 1));
+        if (event.target.matches("[data-back]")) show(Math.max(current - 1, 0));
+    });
+    if (timezone) {
+        timezone.addEventListener("change", function () { timezoneTouched = true; });
+    }
+    var country = form.querySelector("[data-country]");
+    if (country && timezone) {
+        country.addEventListener("change", function () {
+            if (timezoneTouched) return;
+            var option = country.options[country.selectedIndex];
+            var suggested = option.getAttribute("data-timezone");
+            if (!suggested) return;
+            Array.prototype.forEach.call(timezone.options, function (item) {
+                if (item.value === suggested) timezone.value = suggested;
+            });
+        });
+    }
+    {% if errors %}
+    show(0);
+    {% endif %}
+})();
+</script>
+{% endblock %}

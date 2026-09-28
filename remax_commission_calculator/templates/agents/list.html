@@ -232,7 +232,13 @@
                     </form>
                 </footer>
                 {% else %}
-                <div class="agents-empty">{{ t('no_agents_title') }}</div>
+                <div class="agents-empty">
+                    {% if agents_panel.pagination.total == 0 %}
+                    {{ t('onboarding_empty_agent') }}
+                    {% else %}
+                    {{ t('no_agents_title') }}
+                    {% endif %}
+                </div>
                 {% endif %}
             </section>
 
