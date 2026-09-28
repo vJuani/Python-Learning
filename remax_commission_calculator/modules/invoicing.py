@@ -1502,7 +1502,7 @@ def issue_fiscal_invoice(
     transport=None,
 ):
     """
-    Emit a ready_to_issue invoice via ARCA homologation.
+    Emit a ready_to_issue invoice via the ARCA environment in ARCA_ENV.
 
     Flow: validate → claim lock → authenticate → last voucher → CAE → persist.
     """

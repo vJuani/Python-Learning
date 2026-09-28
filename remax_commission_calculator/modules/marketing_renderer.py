@@ -456,7 +456,9 @@ def _paste_logo(canvas, logo_path, *, box, xy):
 
 def _wordmark(draw, xy, brand, *, fill=NAVY, size=36):
     x, y = xy
-    draw.text((x, y), brand or "RE/MAX Data House", font=font(size, bold=True), fill=fill)
+    if not brand:
+        return
+    draw.text((x, y), brand, font=font(size, bold=True), fill=fill)
 
 
 def _office_brand(facts):
@@ -466,7 +468,7 @@ def _office_brand(facts):
             facts.get("office_name"),
             facts.get("organization_name"),
         )
-        or "RE/MAX Data House"
+        or ""
     )
 
 

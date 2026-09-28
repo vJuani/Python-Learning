@@ -11,7 +11,11 @@ from flask import (
     url_for,
 )
 
-from modules.arca.config import get_arca_environment
+from modules.arca.config import (
+    ArcaEnvironmentError,
+    describe_arca_environment,
+    get_arca_environment,
+)
 from modules.arca.connections import (
     ArcaConnectionError,
     WSASS_URL,
@@ -40,7 +44,6 @@ from modules.database.agent_billing_profiles_repository import (
     upsert_profile as upsert_agent_billing_profile,
 )
 from modules.database.arca_connections_repository import (
-    ENV_HOMOLOGATION,
     STATUS_CONFIGURING,
     STATUS_CONNECTED,
     STATUS_ERROR,
@@ -72,29 +75,42 @@ def register_arca_routes(app, helpers):
     def _environment():
         try:
             return get_arca_environment()
-        except Exception:
-            return ENV_HOMOLOGATION
+        except ArcaEnvironmentError:
+            return None
 
     def _context(organization_id, user):
         identity = resolve_fiscal_identity(organization_id, user)
-        connection = get_arca_connection(
-            organization_id,
-            user["id"],
-            environment=_environment(),
-        )
+        environment = _environment()
+        connection = None
+        if environment:
+            connection = get_arca_connection(
+                organization_id,
+                user["id"],
+                environment=environment,
+            )
         return identity, connection, public_connection_view(connection)
+
+    def _refuse_without_environment():
+        if _environment():
+            return None
+        flash_i18n("arca_env_not_configured", "error")
+        return redirect(url_for("settings_arca"))
 
     @app.route("/settings/arca")
     @login_required
     def settings_arca():
         user = _require_billing_user()
         organization_id = require_user_organization()
-        identity, _record, view = _context(organization_id, user)
+        identity, record, view = _context(organization_id, user)
         return render_template(
             "settings/arca.html",
             identity=identity,
             arca=view or {"connection_status": STATUS_NOT_CONFIGURED},
             chip=arca_chip_for(organization_id, user),
+            arca_status=describe_arca_environment(
+                connection=record,
+                cuit=(identity or {}).get("tax_id"),
+            ),
         )
 
     @app.route("/settings/arca/connect", methods=["GET", "POST"])
@@ -104,6 +120,9 @@ def register_arca_routes(app, helpers):
         organization_id = require_user_organization()
         identity, record, view = _context(organization_id, user)
         if request.method == "POST":
+            refused = _refuse_without_environment()
+            if refused is not None:
+                return refused
             legal_name = (request.form.get("legal_name") or "").strip()
             tax_id = (request.form.get("tax_id") or "").strip()
             tax_condition = (request.form.get("tax_condition") or "").strip()
@@ -174,6 +193,9 @@ def register_arca_routes(app, helpers):
             flash_i18n("arca_err_complete_fiscal_first", "error")
             return redirect(url_for("settings_arca_connect"))
         if request.method == "POST" or not record.get("private_key_encrypted"):
+            refused = _refuse_without_environment()
+            if refused is not None:
+                return refused
             key_pem, csr_pem = generate_key_and_csr(
                 common_name=identity.get("legal_name") or "JRH One",
                 cuit=identity.get("tax_id") or "",
@@ -207,6 +229,9 @@ def register_arca_routes(app, helpers):
     def settings_arca_csr():
         user = _require_billing_user()
         organization_id = require_user_organization()
+        if _environment() is None:
+            flash_i18n("arca_env_not_configured", "error")
+            return redirect(url_for("settings_arca"))
         record = get_arca_connection(
             organization_id,
             user["id"],
@@ -236,6 +261,9 @@ def register_arca_routes(app, helpers):
             flash_i18n("arca_err_complete_fiscal_first", "error")
             return redirect(url_for("settings_arca_authorize"))
         if request.method == "POST":
+            refused = _refuse_without_environment()
+            if refused is not None:
+                return refused
             upload = request.files.get("certificate")
             raw = upload.read() if upload else b""
             if not raw:
@@ -283,6 +311,9 @@ def register_arca_routes(app, helpers):
         if record is None:
             return redirect(url_for("settings_arca_connect"))
         if request.method == "POST":
+            refused = _refuse_without_environment()
+            if refused is not None:
+                return refused
             status, error_key = test_arca_connection(
                 {
                     "tax_id": identity.get("tax_id"),
@@ -319,6 +350,9 @@ def register_arca_routes(app, helpers):
     def settings_arca_disconnect():
         user = _require_billing_user()
         organization_id = require_user_organization()
+        refused = _refuse_without_environment()
+        if refused is not None:
+            return refused
         delete_credentials(
             organization_id,
             user["id"],

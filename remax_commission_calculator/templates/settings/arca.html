@@ -32,7 +32,14 @@
     {% if arca.point_of_sale %}
     <p class="integration-card__meta">{{ t('billing_arca_point_of_sale_label') }} {{ arca.point_of_sale }}</p>
     {% endif %}
-    <p class="integration-card__meta">{{ t('billing_arca_env_homologation') }}</p>
+    {% if arca_status is defined and arca_status.environment_configured %}
+    <p class="integration-card__meta">{{ t('arca_env_label') }}: {% if arca_status.is_production %}{{ t('arca_env_production') }}{% else %}{{ t('arca_env_homologation') }}{% endif %}</p>
+    <p class="integration-card__meta">{{ t('arca_endpoint_label') }}: {{ arca_status.wsfe_endpoint }}</p>
+    {% else %}
+    <p class="flash-message flash-error" role="alert">{{ t('arca_env_not_configured') }}</p>
+    {% endif %}
+    <p class="integration-card__meta">{{ t('arca_certificates_label') }}: {{ t('arca_yes') if arca_status is defined and arca_status.certificates_present else t('arca_no') }}</p>
+    <p class="integration-card__meta">{{ t('arca_cuit_label') }}: {{ t('arca_yes') if arca_status is defined and arca_status.cuit_configured else t('arca_no') }}</p>
     {% if arca.certificate_expires_at %}
     <p class="integration-card__meta">{{ t('arca_valid_until') }} {{ arca.certificate_expires_at }}</p>
     {% endif %}

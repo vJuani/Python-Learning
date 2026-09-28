@@ -30,8 +30,8 @@ PLACEHOLDER_BRANDS = frozenset(
         "oficina principal",
     }
 )
-NEUTRAL_BRAND_FALLBACK = "RE/MAX Data House"
-
+# Explicit fixture for tests that seed one office on purpose.
+# Runtime resolution must never copy these values into another organization.
 DEMO_MARKETING_BRANDING = {
     "marketing_brand_name": "RE/MAX Data House",
     "legal_broker_name": "Mauro Marvisi",
@@ -107,6 +107,15 @@ def marketing_legal_is_configured(settings):
         _clean(settings.get("legal_broker_name"))
         and _clean(settings.get("legal_broker_license"))
     )
+
+
+def require_legal_identity(settings):
+    """Block a publication that prints the broker footer when legal data is missing."""
+    if marketing_legal_is_configured(settings):
+        return
+    from modules.marketing_context import MarketingError
+
+    raise MarketingError("settings_legal_publish_blocked", 400)
 
 
 def resolve_local_logo_path(candidate):
@@ -199,30 +208,13 @@ def resolve_marketing_branding(
         settings.get("display_name"),
         settings.get("trade_name"),
     )
-    used_demo = False
+    del apply_demo_fallback
     brand_name = stored_brand or org_name
     if not brand_name:
         logger.warning(
-            "marketing branding missing commercial name org=%s; using demo fallback",
+            "marketing branding missing commercial name org=%s",
             settings.get("organization_id"),
         )
-        if apply_demo_fallback:
-            brand_name = DEMO_MARKETING_BRANDING["marketing_brand_name"]
-            used_demo = True
-        else:
-            brand_name = NEUTRAL_BRAND_FALLBACK
-
-    if apply_demo_fallback:
-        if not stored_broker:
-            stored_broker = DEMO_MARKETING_BRANDING["legal_broker_name"]
-            used_demo = True
-        if not stored_license:
-            stored_license = DEMO_MARKETING_BRANDING["legal_broker_license"]
-            used_demo = True
-        if not stored_footer:
-            stored_footer = DEMO_MARKETING_BRANDING["legal_footer_line"]
-        if not stored_office:
-            stored_office = brand_name
 
     office_name = stored_office or brand_name
     footer = stored_footer or build_legal_footer_line(
@@ -277,7 +269,7 @@ def resolve_marketing_branding(
         "legal_complete": legal_complete,
         "configured": configured,
         "requires_legal_review": not configured,
-        "used_demo_fallback": used_demo or not configured,
+        "used_demo_fallback": False,
         "publishable": configured and legal_complete,
         "system_brand_name": system_brand_name(),
     }
@@ -289,7 +281,7 @@ def branding_from_facts(facts):
         facts.get("brand_name"),
         facts.get("office_name"),
         facts.get("organization_name"),
-    ) or DEMO_MARKETING_BRANDING["marketing_brand_name"]
+    ) or ""
     logo = (
         facts.get("organization_logo")
         or facts.get("office_logo")
@@ -421,14 +413,10 @@ def branding_prompt_block(
 ):
     branding = branding or {}
     brand = usable_brand_name(branding.get("brand_name"), branding.get("office_name"))
-    brand = brand or DEMO_MARKETING_BRANDING["marketing_brand_name"]
     office = usable_brand_name(branding.get("office_name")) or brand
-    footer = branding.get("legal_footer_line") or DEMO_MARKETING_BRANDING["legal_footer_line"]
-    broker = branding.get("legal_broker_name") or DEMO_MARKETING_BRANDING["legal_broker_name"]
-    license_no = (
-        branding.get("legal_broker_license")
-        or DEMO_MARKETING_BRANDING["legal_broker_license"]
-    )
+    footer = branding.get("legal_footer_line") or ""
+    broker = branding.get("legal_broker_name") or ""
+    license_no = branding.get("legal_broker_license") or ""
     wordmark = _clean(branding.get("wordmark_text")) or brand
     if branding.get("has_logo"):
         logo = (

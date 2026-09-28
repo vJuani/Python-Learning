@@ -254,7 +254,7 @@ class InternalInvoiceProvider(InvoiceProvider):
 
 
 class ArcaInvoiceProvider(InvoiceProvider):
-    """WSAA + WSFEv1 — homologation only."""
+    """WSAA + WSFEv1 for the explicit ARCA_ENV (homologation or production)."""
 
     def __init__(self, *, transport=None):
         from modules.arca.client import ArcaClient

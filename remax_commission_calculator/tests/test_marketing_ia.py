@@ -1431,10 +1431,14 @@ class MarketingIaTests(unittest.TestCase):
             organization_name="Inmobiliaria Principal",
             apply_demo_fallback=True,
         )
-        self.assertEqual(empty["brand_name"], "RE/MAX Data House")
+        self.assertEqual(empty["brand_name"], "")
         self.assertFalse(empty["has_logo"])
-        self.assertEqual(empty["wordmark_text"], "RE/MAX Data House")
-        self.assertEqual(empty["legal_broker_name"], "Mauro Marvisi")
+        self.assertEqual(empty["wordmark_text"], "")
+        self.assertEqual(empty["legal_broker_name"], "")
+        self.assertEqual(empty["legal_broker_license"], "")
+        self.assertFalse(empty["publishable"])
+        self.assertNotIn("Mauro", empty["legal_footer_line"])
+        self.assertNotIn("Data House", empty["brand_name"])
         aliased = resolve_marketing_branding(
             {
                 "office_name": "RE/MAX Data House",

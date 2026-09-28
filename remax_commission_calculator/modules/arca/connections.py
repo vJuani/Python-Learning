@@ -15,13 +15,12 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 from modules.arca.config import (
-    ARCA_ENV_HOMOLOGATION,
+    ArcaEnvironmentError,
     get_arca_environment,
 )
 from modules.arca.secrets import ArcaCredentials
 from modules.config import get_secret_key
 from modules.database.arca_connections_repository import (
-    ENV_HOMOLOGATION,
     STATUS_CONFIGURING,
     STATUS_CONNECTED,
     STATUS_ERROR,
@@ -72,9 +71,10 @@ def store_credentials(
     certificate_pem=None,
     private_key_pem=None,
     csr_pem=None,
-    environment=ENV_HOMOLOGATION,
+    environment=None,
     **fields,
 ):
+    environment = environment or get_arca_environment()
     payload = dict(fields)
     if certificate_pem is not None:
         payload["certificate_encrypted"] = encrypt_secret(certificate_pem)
@@ -108,8 +108,9 @@ def delete_credentials(
     organization_id,
     user_id,
     *,
-    environment=ENV_HOMOLOGATION,
+    environment=None,
 ):
+    environment = environment or get_arca_environment()
     delete_arca_connection(
         organization_id,
         user_id,
@@ -225,11 +226,21 @@ def public_connection_view(connection):
 
 
 def arca_chip_for(organization_id, user, *, environment=None):
-    env = environment or ARCA_ENV_HOMOLOGATION
-    try:
-        env = get_arca_environment()
-    except Exception:
-        env = ARCA_ENV_HOMOLOGATION
+    env = environment
+    if not env:
+        try:
+            env = get_arca_environment()
+        except ArcaEnvironmentError:
+            return {
+                "connection_status": STATUS_NOT_CONFIGURED,
+                "environment": None,
+                "point_of_sale": "",
+                "state": STATUS_NOT_CONFIGURED,
+                "connected": False,
+                "can_connect": False,
+                "can_disconnect": False,
+                "wsass_url": WSASS_URL,
+            }
     user_id = (user or {}).get("id")
     record = (
         get_arca_connection(organization_id, user_id, environment=env)

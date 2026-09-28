@@ -50,7 +50,9 @@ def _brand_backdrop(size, *, theme):
 
 def _draw_wordmark(draw, xy, *, width, fill=WHITE, brand=""):
     x, y = xy
-    label = usable_brand_name(brand) or "RE/MAX Data House"
+    label = usable_brand_name(brand)
+    if not label:
+        return
     used = font(_u(width, 26), bold=True)
     draw.text((x, y), label, font=used, fill=fill)
 
@@ -63,7 +65,9 @@ def _draw_office_lockup(canvas, draw, facts, *, pad, top, width, fill, office):
         xy=(pad, top),
     )
     text_x = pad + (placed[0] + _u(width, 14) if placed else 0)
-    label = facts.get("wordmark_text") or usable_brand_name(office) or "RE/MAX Data House"
+    label = facts.get("wordmark_text") or usable_brand_name(office) or ""
+    if not label:
+        return placed
     draw.text(
         (text_x, top + _u(width, 16)),
         label,

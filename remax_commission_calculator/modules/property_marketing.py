@@ -509,15 +509,12 @@ def _logo_uri(path):
 
 
 def _office_logo_path(facts):
-    """(path, source): organization logo first, packaged RE/MAX balloon as fallback."""
+    """(path, source): the organization's own logo, or none."""
     from modules.marketing_renderer import _office_logo
 
     path = _office_logo(facts)
     if path:
         return path, "organization"
-    brand = _clean(facts.get("brand_name") or facts.get("office_name")).casefold()
-    if PACKAGED_BALLOON.is_file() and ("re/max" in brand or "data house" in brand):
-        return str(PACKAGED_BALLOON), "packaged_balloon_fallback"
     return None, "none"
 
 

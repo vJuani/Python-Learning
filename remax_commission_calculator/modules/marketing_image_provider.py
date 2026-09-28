@@ -167,7 +167,7 @@ class MockMarketingImageProvider(MarketingImageProvider):
                 agent = opened
             elif str(item.get("role") or "").startswith("property"):
                 photos.append(opened.convert("RGB"))
-        brand = "RE/MAX Data House"
+        brand = ""
         prompt_text = prompt or ""
         marker = "branded as "
         if marker in prompt_text:
@@ -189,7 +189,7 @@ class MockMarketingImageProvider(MarketingImageProvider):
                     )
         english = "written in English only" in (prompt or "")
         draw.text((left + 8, bottom - 64), "Inquire Now" if english else "Contáctanos", fill=ink)
-        legal = "Mauro Marvisi CUCICBA 1762"
+        legal = ""
         if "Legal footer:" in prompt_text:
             legal = prompt_text.split("Legal footer:", 1)[1].split(".", 1)[0].strip()[:42] or legal
         draw.text((left + 8, bottom - 36), legal, fill=ink)

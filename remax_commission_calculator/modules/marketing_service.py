@@ -30,6 +30,7 @@ from modules.database.marketing_repository import (
     update_marketing_batch,
 )
 from modules.database.organization_settings_repository import get_organization_settings
+from modules.marketing_branding import require_legal_identity
 from modules.database.properties_repository import get_properties, get_property_record
 from modules.database.tenant import require_organization_id
 from modules.i18n import translate
@@ -1010,6 +1011,7 @@ def start_marketing_batch(
         variation = True
     note = (request_text or prompt or "").strip()
     settings = get_organization_settings(organization_id) or {}
+    require_legal_identity(settings)
     language = resolve_creative_language(
         locale=language,
         request_text=note,

@@ -66,6 +66,21 @@
 
 
 <section class="panel settings-mobile-form" id="settings-form">
+    {% set commercial_name = (form_values.marketing_brand_name or form_values.display_name or '')|trim %}
+    {% set has_logo = current_logo_url or (marketing_logo_preview_url|default('', true)) %}
+    {% if not has_logo or not commercial_name or not form_values.legal_broker_name or not form_values.legal_broker_license or not form_values.legal_footer_line %}
+    <div class="flash-message flash-error" role="status">
+        <strong>{{ t('settings_legal_incomplete_title') }}</strong>
+        <ul>
+            {% if not has_logo %}<li>{{ t('settings_legal_missing_logo') }}</li>{% endif %}
+            {% if not commercial_name %}<li>{{ t('settings_legal_missing_brand') }}</li>{% endif %}
+            {% if not form_values.legal_broker_name %}<li>{{ t('settings_legal_missing_broker') }}</li>{% endif %}
+            {% if not form_values.legal_broker_license %}<li>{{ t('settings_legal_missing_license') }}</li>{% endif %}
+            {% if not form_values.legal_footer_line %}<li>{{ t('settings_legal_missing_footer') }}</li>{% endif %}
+        </ul>
+        <a href="#settings-legal">{{ t('settings_legal_complete') }}</a>
+    </div>
+    {% endif %}
     <button type="button" class="btn btn-secondary hide-desktop settings-mobile-back" data-settings-mobile-back>
         ← {{ t('back') }}
     </button>
@@ -171,10 +186,6 @@
 
         <h3>{{ t('settings_marketing_brand_title') }}</h3>
         <p class="field-help">{{ t('settings_marketing_brand_help') }}</p>
-        {% if not form_values.legal_broker_name or not form_values.legal_broker_license %}
-        <p class="flash-message flash-error" role="alert">{{ t('settings_marketing_legal_required') }}</p>
-        {% endif %}
-
         <div class="form-group">
             <label for="marketing_brand_name">{{ t('settings_marketing_brand_name') }}</label>
             <input
@@ -183,7 +194,7 @@
                 name="marketing_brand_name"
                 class="form-input"
                 value="{{ form_values.marketing_brand_name }}"
-                placeholder="RE/MAX Data House"
+                placeholder="{{ t('settings_marketing_brand_name') }}"
             >
             <small class="field-help">{{ t('settings_marketing_brand_name_help') }}</small>
         </div>
@@ -256,15 +267,15 @@
             </div>
         </div>
 
-        <h3>{{ t('settings_marketing_legal_title') }}</h3>
+        <h3 id="settings-legal">{{ t('settings_marketing_legal_title') }}</h3>
         <p class="field-help">{{ t('settings_marketing_legal_help') }}</p>
         <div class="form-group">
             <label for="legal_broker_name">{{ t('settings_legal_broker_name') }}</label>
-            <input type="text" id="legal_broker_name" name="legal_broker_name" class="form-input" value="{{ form_values.legal_broker_name }}" placeholder="Mauro Marvisi">
+            <input type="text" id="legal_broker_name" name="legal_broker_name" class="form-input" value="{{ form_values.legal_broker_name }}">
         </div>
         <div class="form-group">
             <label for="legal_broker_license">{{ t('settings_legal_broker_license') }}</label>
-            <input type="text" id="legal_broker_license" name="legal_broker_license" class="form-input" value="{{ form_values.legal_broker_license }}" placeholder="CUCICBA 1762 / CMCPSI 5574">
+            <input type="text" id="legal_broker_license" name="legal_broker_license" class="form-input" value="{{ form_values.legal_broker_license }}">
         </div>
         <div class="form-group">
             <label for="legal_office_name">{{ t('settings_legal_office_name') }}</label>
@@ -272,7 +283,7 @@
         </div>
         <div class="form-group">
             <label for="legal_footer_line">{{ t('settings_legal_footer_line') }}</label>
-            <input type="text" id="legal_footer_line" name="legal_footer_line" class="form-input" value="{{ form_values.legal_footer_line }}" placeholder="Corredor Público Mauro Marvisi CUCICBA 1762 / CMCPSI 5574">
+            <input type="text" id="legal_footer_line" name="legal_footer_line" class="form-input" value="{{ form_values.legal_footer_line }}">
             <small class="field-help">{{ t('settings_legal_footer_line_help') }}</small>
         </div>
 

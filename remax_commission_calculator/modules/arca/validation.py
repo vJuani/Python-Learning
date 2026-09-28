@@ -153,7 +153,7 @@ def validate_fiscal_issue(
     except Exception:
         return FiscalIssueValidation(
             is_valid=False,
-            error_key="invoice_err_arca_production_blocked",
+            error_key="invoice_err_fiscal_issue_unavailable",
         )
 
     return FiscalIssueValidation(

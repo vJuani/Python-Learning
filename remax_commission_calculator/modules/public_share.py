@@ -33,7 +33,6 @@ from modules.database.public_share_repository import (
     update_shortlist_properties,
 )
 from modules.i18n import translate
-from modules.marketing_branding import build_legal_footer_line
 from modules.property_inventory import (
     format_listing_money,
     is_commercially_available,
@@ -320,8 +319,7 @@ def _office(organization_id, language):
         "name": branding.get("brand_name") or "",
         "logo_url": logo_url,
         "has_logo_file": bool(logo_file),
-        "legal_footer": branding.get("legal_footer_line")
-        or build_legal_footer_line({}, language=language),
+        "legal_footer": branding.get("legal_footer_line") or "",
     }
 
 
