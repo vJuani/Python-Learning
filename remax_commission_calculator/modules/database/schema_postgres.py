@@ -957,7 +957,7 @@ SCHEMA_STATEMENTS = (
         FOREIGN KEY (agent_id)
             REFERENCES agents(id) ON DELETE RESTRICT,
         CHECK (status IN ('lead', 'active', 'inactive', 'closed')),
-        CHECK (source IN ('manual', 'whatsapp', 'agenda', 'operation', 'other')),
+        CHECK (source IN ('manual', 'whatsapp', 'agenda', 'operation', 'other', 'public_property', 'public_shortlist')),
         CHECK (visibility IN ('private', 'team', 'organization'))
     )
     """,
@@ -1956,6 +1956,10 @@ def create_postgres_schema():
         from .public_share_migration import migrate_public_share_postgres
 
         migrate_public_share_postgres(cursor)
+
+        from .inbound_inquiry_migration import migrate_inbound_inquiry_postgres
+
+        migrate_inbound_inquiry_postgres(cursor)
 
         for column_name, column_sql in (
             ("snapshot_bathrooms", "INTEGER"),

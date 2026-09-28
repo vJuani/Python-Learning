@@ -95,6 +95,7 @@ REASON_LONG_TERM = "long_term_due"
 REASON_OUTCOME_MISSING = "visit_outcome_missing"
 REASON_NEXT_STEP = "visit_next_step_missing"
 REASON_SHARED = "properties_shared_pending"
+REASON_INBOUND = "inbound_unanswered"
 
 REASON_KEYS = {
     REASON_OVERDUE: "followup_reason_overdue",
@@ -108,6 +109,7 @@ REASON_KEYS = {
     REASON_OUTCOME_MISSING: "followup_reason_outcome_missing",
     REASON_NEXT_STEP: "followup_reason_next_step",
     REASON_SHARED: "followup_reason_properties_shared",
+    REASON_INBOUND: "followup_reason_inbound",
 }
 
 _STAGE_RANK = {
@@ -302,6 +304,63 @@ def follow_up_columns_from_payload(payload, *, organization_id, creating=False):
     return columns
 
 
+def business_deadline(start, hours, tz):
+    """UTC moment when ``hours`` of weekday 09:00–18:00 time have passed."""
+    local = start.astimezone(tz)
+    remaining = float(hours)
+
+    def _open(moment):
+        if moment.weekday() < 5 and moment.hour < 9:
+            return moment.replace(hour=9, minute=0, second=0, microsecond=0)
+        cursor = moment + timedelta(days=1)
+        while cursor.weekday() >= 5:
+            cursor += timedelta(days=1)
+        return cursor.replace(hour=9, minute=0, second=0, microsecond=0)
+
+    guard = 0
+    while remaining > 1e-9 and guard < 400:
+        guard += 1
+        closed = local.weekday() >= 5 or local.hour >= 18 or local.hour < 9
+        if local.hour == 18 and local.minute == 0 and local.second == 0:
+            closed = True
+        if closed or (local.hour < 9):
+            local = _open(local)
+            continue
+        close = local.replace(hour=18, minute=0, second=0, microsecond=0)
+        available = (close - local).total_seconds() / 3600
+        if available >= remaining:
+            local = local + timedelta(hours=remaining)
+            remaining = 0
+        else:
+            remaining -= available
+            local = _open(close)
+    return local.astimezone(start.tzinfo)
+
+
+def _inbound_unanswered(contact, now):
+    """A new inquiry the agent has not marked as contacted, after 4 office hours."""
+    if contact.get("archived_at"):
+        return None
+    if (contact.get("commercial_stage") or "") != STAGE_NEW:
+        return None
+    if (contact.get("follow_up_cadence") or "") == CADENCE_NONE:
+        return None
+    if _is_snoozed(contact, now):
+        return None
+    inquiry = contact.get("latest_inquiry") or None
+    if not inquiry:
+        return None
+    created = _aware(inquiry.get("created_at"))
+    if created is None:
+        return None
+    from modules.organization_time import organization_timezone
+
+    tz = organization_timezone(contact.get("organization_id"))
+    if now < business_deadline(created, 4, tz):
+        return None
+    return _item(contact, REASON_INBOUND, 76, now=now, individual=False)
+
+
 def _aware(value):
     if value is None:
         return None
@@ -477,7 +536,7 @@ def _automatic_item(contact, now):
     age = _days_since(last, now)
     gap = interval_days(contact)
 
-    if stage == STAGE_NEW and last is None:
+    if stage == STAGE_NEW and last is None and not contact.get("latest_inquiry"):
         return _item(contact, REASON_NEW, 75, now=now, individual=high)
 
     if priority == PRIORITY_ACTIVE_CLIENT:
@@ -623,6 +682,9 @@ def build_daily_follow_up_list(
     visits = visits or []
     bucket = {}
     for contact in contacts or []:
+        inbound = _inbound_unanswered(contact, now)
+        if inbound is not None:
+            _consider(bucket, inbound)
         item = _automatic_item(contact, now)
         if item is not None:
             _consider(bucket, item)

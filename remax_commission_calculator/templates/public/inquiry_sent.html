@@ -1,0 +1,14 @@
+{% extends "public/layout.html" %}
+
+{% block title %}{{ t('public_inquiry_sent') }}{% endblock %}
+
+{% block content %}
+<article class="public-collection">
+    {% if limited %}
+    <h1>{{ t('public_inquiry_limited') }}</h1>
+    {% else %}
+    <h1>{{ t('public_inquiry_sent') }}</h1>
+    <p>{{ t('public_inquiry_sent_body') }}</p>
+    {% endif %}
+</article>
+{% endblock %}

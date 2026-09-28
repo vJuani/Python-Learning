@@ -3933,6 +3933,10 @@ def migrate_schema(create_backup=True):
 
     migrate_public_share_sqlite()
 
+    from .inbound_inquiry_migration import migrate_inbound_inquiry_sqlite
+
+    migrate_inbound_inquiry_sqlite()
+
     return backup_path
 
 

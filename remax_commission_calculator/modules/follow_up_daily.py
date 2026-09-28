@@ -86,6 +86,14 @@ def collect_agent_follow_ups(organization_id, agent_id, *, now=None):
         agent_id=agent_id,
         limit=CONTACT_SCAN_LIMIT,
     )
+    from modules.database.contacts_repository import latest_inquiries_by_contact
+
+    inquiries = latest_inquiries_by_contact(
+        organization_id,
+        [contact.get("id") for contact in contacts],
+    )
+    for contact in contacts:
+        contact["latest_inquiry"] = inquiries.get(contact.get("id"))
     pending = []
     visits = []
     if end:

@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS contacts (
         REFERENCES agents(id) ON DELETE RESTRICT,
 
     CHECK (status IN ('lead', 'active', 'inactive', 'closed')),
-    CHECK (source IN ('manual', 'whatsapp', 'agenda', 'operation', 'other')),
+    CHECK (source IN ('manual', 'whatsapp', 'agenda', 'operation', 'other', 'public_property', 'public_shortlist')),
     CHECK (visibility IN ('private', 'team', 'organization'))
 )
 """

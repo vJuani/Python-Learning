@@ -11,7 +11,15 @@ from .tenant import require_organization_id
 
 
 STATUSES = ("lead", "active", "inactive", "closed")
-SOURCES = ("manual", "whatsapp", "agenda", "operation", "other")
+SOURCES = (
+    "manual",
+    "whatsapp",
+    "agenda",
+    "operation",
+    "other",
+    "public_property",
+    "public_shortlist",
+)
 CONTACT_TYPES = (
     "prospect",
     "buyer",
@@ -29,6 +37,8 @@ SOURCE_TYPES = (
     "whatsapp",
     "operation",
     "other",
+    "public_property",
+    "public_shortlist",
 )
 VISIBILITIES = ("private", "team", "organization")
 
@@ -497,6 +507,51 @@ def find_contacts_by_normalized(
     return unique
 
 
+_INTERACTION_SELECT = """
+    SELECT
+        id,
+        organization_id,
+        agent_id,
+        contact_id,
+        property_id,
+        interaction_type,
+        activity_id,
+        label,
+        created_at,
+        shortlist_id,
+        source,
+        message,
+        listing_agent_id,
+        attention,
+        related_contact_id,
+        visitor_email
+    FROM contact_property_interactions
+"""
+
+
+def _interaction(row):
+    if row is None:
+        return None
+    return {
+        "id": row[0],
+        "organization_id": row[1],
+        "agent_id": row[2],
+        "contact_id": row[3],
+        "property_id": row[4],
+        "interaction_type": row[5],
+        "activity_id": row[6],
+        "label": row[7] or "",
+        "created_at": row[8],
+        "shortlist_id": row[9],
+        "source": row[10] or "",
+        "message": row[11] or "",
+        "listing_agent_id": row[12],
+        "attention": row[13] or "",
+        "related_contact_id": row[14],
+        "visitor_email": row[15] or "",
+    }
+
+
 def record_property_interaction(
     organization_id,
     agent_id,
@@ -506,9 +561,18 @@ def record_property_interaction(
     interaction_type="shared",
     activity_id=None,
     label=None,
+    shortlist_id=None,
+    source=None,
+    message=None,
+    listing_agent_id=None,
+    attention=None,
+    related_contact_id=None,
+    visitor_email=None,
 ):
     organization_id = require_organization_id(organization_id)
     now = _now_iso()
+    if message:
+        message = str(message)[:500]
     connection = get_connection()
     cursor = connection.cursor()
     try:
@@ -523,9 +587,16 @@ def record_property_interaction(
                 interaction_type,
                 activity_id,
                 label,
-                created_at
+                created_at,
+                shortlist_id,
+                source,
+                message,
+                listing_agent_id,
+                attention,
+                related_contact_id,
+                visitor_email
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 organization_id,
@@ -536,6 +607,13 @@ def record_property_interaction(
                 activity_id,
                 label,
                 now,
+                shortlist_id,
+                source,
+                message,
+                listing_agent_id,
+                attention,
+                related_contact_id,
+                visitor_email,
             ),
         )
         connection.commit()
@@ -552,18 +630,8 @@ def list_property_interactions(organization_id, contact_id, *, limit=20):
     connection = get_connection()
     try:
         rows = connection.execute(
-            """
-            SELECT
-                id,
-                organization_id,
-                agent_id,
-                contact_id,
-                property_id,
-                interaction_type,
-                activity_id,
-                label,
-                created_at
-            FROM contact_property_interactions
+            _INTERACTION_SELECT
+            + """
             WHERE organization_id = ?
                 AND contact_id = ?
             ORDER BY created_at DESC, id DESC
@@ -573,17 +641,151 @@ def list_property_interactions(organization_id, contact_id, *, limit=20):
         ).fetchall()
     finally:
         connection.close()
+    return [_interaction(row) for row in rows]
+
+
+def latest_inquiries_by_contact(organization_id, contact_ids):
+    """Newest inquiry_received row for each contact in this organization."""
+    organization_id = require_organization_id(organization_id)
+    ids = [int(value) for value in contact_ids or [] if value]
+    if not ids:
+        return {}
+    placeholders = ", ".join("?" for _ in ids)
+    connection = get_connection()
+    try:
+        rows = connection.execute(
+            f"""
+            SELECT
+                interaction.id,
+                interaction.organization_id,
+                interaction.agent_id,
+                interaction.contact_id,
+                interaction.property_id,
+                interaction.interaction_type,
+                interaction.activity_id,
+                interaction.label,
+                interaction.created_at,
+                interaction.shortlist_id,
+                interaction.source,
+                interaction.message,
+                interaction.listing_agent_id,
+                interaction.attention,
+                interaction.related_contact_id,
+                interaction.visitor_email
+            FROM contact_property_interactions AS interaction
+            INNER JOIN (
+                SELECT contact_id, MAX(id) AS id
+                FROM contact_property_interactions
+                WHERE organization_id = ?
+                    AND interaction_type = 'inquiry_received'
+                    AND contact_id IN ({placeholders})
+                GROUP BY contact_id
+            ) AS latest
+                ON latest.id = interaction.id
+            """,
+            (organization_id, *ids),
+        ).fetchall()
+    finally:
+        connection.close()
+    found = {}
+    for row in rows:
+        item = _interaction(row)
+        found[item["contact_id"]] = item
+    return found
+
+
+def list_contact_identities(organization_id):
+    """Phones and emails of every active contact in the organization."""
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        rows = connection.execute(
+            """
+            SELECT
+                id,
+                agent_id,
+                name,
+                phone,
+                email,
+                phone_normalized,
+                email_normalized
+            FROM contacts
+            WHERE organization_id = ?
+                AND archived_at IS NULL
+            """,
+            (organization_id,),
+        ).fetchall()
+    finally:
+        connection.close()
     return [
         {
             "id": row[0],
-            "organization_id": row[1],
-            "agent_id": row[2],
-            "contact_id": row[3],
-            "property_id": row[4],
-            "interaction_type": row[5],
-            "activity_id": row[6],
-            "label": row[7] or "",
-            "created_at": row[8],
+            "agent_id": row[1],
+            "name": row[2] or "",
+            "phone": row[3] or "",
+            "email": row[4] or "",
+            "phone_normalized": row[5] or "",
+            "email_normalized": row[6] or "",
+        }
+        for row in rows
+    ]
+
+
+def list_received_inquiries(organization_id, *, agent_id=None, limit=200):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        rows = connection.execute(
+            """
+            SELECT
+                interaction.id,
+                interaction.contact_id,
+                interaction.property_id,
+                interaction.shortlist_id,
+                interaction.source,
+                interaction.message,
+                interaction.created_at,
+                interaction.agent_id,
+                contact.name,
+                contact.commercial_stage,
+                contact.agent_id,
+                property.address,
+                shortlist.property_ids_json
+            FROM contact_property_interactions AS interaction
+            JOIN contacts AS contact
+                ON contact.id = interaction.contact_id
+                AND contact.organization_id = interaction.organization_id
+            LEFT JOIN properties AS property
+                ON property.id = interaction.property_id
+                AND property.organization_id = interaction.organization_id
+            LEFT JOIN public_shortlists AS shortlist
+                ON shortlist.id = interaction.shortlist_id
+                AND shortlist.organization_id = interaction.organization_id
+            WHERE interaction.organization_id = ?
+                AND interaction.interaction_type = 'inquiry_received'
+                AND contact.archived_at IS NULL
+                AND (? IS NULL OR contact.agent_id = ?)
+            ORDER BY interaction.created_at DESC, interaction.id DESC
+            LIMIT ?
+            """,
+            (organization_id, agent_id, agent_id, int(limit)),
+        ).fetchall()
+    finally:
+        connection.close()
+    return [
+        {
+            "id": row[0],
+            "contact_id": row[1],
+            "property_id": row[2],
+            "shortlist_id": row[3],
+            "source": row[4] or "",
+            "message": row[5] or "",
+            "created_at": row[6],
+            "owner_agent_id": row[10],
+            "name": row[8] or "",
+            "commercial_stage": row[9] or "",
+            "address": row[11] or "",
+            "property_ids_json": row[12] or "",
         }
         for row in rows
     ]

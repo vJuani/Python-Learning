@@ -414,10 +414,12 @@ PUBLIC_ENDPOINTS = (
     # Service worker rotation; authorized by the old subscription's secret.
     "api_push_resubscribe",
     "public_property",
+    "public_property_inquiry",
     "public_property_photo",
     "public_property_agent",
     "public_property_logo",
     "public_shortlist",
+    "public_shortlist_inquiry",
 )
 
 

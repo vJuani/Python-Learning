@@ -1,0 +1,31 @@
+{% if inquiry_open %}
+<form class="public-form" method="post" action="{{ inquiry_action }}">
+    <h2>{{ t('public_inquiry_title') }}</h2>
+    {% for error in inquiry_errors %}
+    <p class="public-form__error">{{ error }}</p>
+    {% endfor %}
+    <label>
+        {{ t('public_inquiry_name') }}
+        <input name="name" required maxlength="80" autocomplete="name" value="{{ inquiry_values.name or '' }}">
+    </label>
+    <label>
+        {{ t('public_inquiry_phone') }}
+        <input name="phone" required maxlength="40" inputmode="tel" autocomplete="tel" value="{{ inquiry_values.phone or '' }}">
+    </label>
+    <label>
+        {{ t('public_inquiry_email') }}
+        <input name="email" maxlength="120" inputmode="email" autocomplete="email" value="{{ inquiry_values.email or '' }}">
+    </label>
+    <label>
+        {{ t('public_inquiry_message') }}
+        <textarea name="message" required maxlength="500" rows="4">{{ inquiry_values.message or '' }}</textarea>
+    </label>
+    <div class="public-hp" aria-hidden="true">
+        <label>Website
+            <input name="company_website" tabindex="-1" autocomplete="off">
+        </label>
+    </div>
+    <input type="hidden" name="form_token" value="{{ form_token }}">
+    <button class="public-btn public-btn--primary" type="submit">{{ t('public_inquiry_send') }}</button>
+</form>
+{% endif %}

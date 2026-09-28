@@ -56,6 +56,52 @@
     </section>
     {% endif %}
 
+    {% if contact.latest_inquiry %}
+    <section class="contact-panel" id="inquiry-{{ contact.latest_inquiry.id }}">
+        <p class="contacts-kicker">{{ t('inbound_latest') }}</p>
+        <p>{{ t('inbound_origin') }}: {{ contact.latest_inquiry.source_label }}</p>
+        {% if contact.latest_inquiry.address %}
+        <p>{{ t('inbound_property') }}: {{ contact.latest_inquiry.address }}</p>
+        {% endif %}
+        {% if contact.latest_inquiry.when_label %}
+        <p>{{ t('inbound_when') }}: {{ contact.latest_inquiry.when_label }}</p>
+        {% endif %}
+        {% if contact.latest_inquiry.message %}
+        <p>{{ t('inbound_message') }}</p>
+        <p>{{ contact.latest_inquiry.message }}</p>
+        {% endif %}
+        {% if contact.latest_inquiry.visitor_email %}
+        <p>{{ contact.latest_inquiry.visitor_email }}</p>
+        {% endif %}
+        {% if contact.latest_inquiry.other_agent %}
+        <p>{{ t('inbound_other_agent') }}</p>
+        {% endif %}
+        {% if contact.latest_inquiry.attention_label %}
+        <p>{{ contact.latest_inquiry.attention_label }}</p>
+        {% endif %}
+        {% if can_manage %}
+        <div class="followup-actions">
+            {% if contact.whatsapp_url %}
+            <a class="btn btn-secondary" href="{{ contact.whatsapp_url }}" target="_blank" rel="noopener">{{ t('followup_action_whatsapp') }}</a>
+            {% endif %}
+            {% if contact.tel_url %}
+            <a class="btn btn-secondary" href="{{ contact.tel_url }}">{{ t('followup_action_call') }}</a>
+            {% endif %}
+            <a class="btn btn-secondary" href="{{ url_for('agenda_compose', contact_id=contact.id) }}">{{ t('followup_action_schedule') }}</a>
+            <form method="post" action="{{ url_for('contacts_follow_up_note', contact_id=contact.id) }}">
+                <input type="hidden" name="next" value="detail">
+                <input type="text" name="note" maxlength="500" placeholder="{{ t('followup_note_placeholder') }}">
+                <button type="submit" class="btn btn-secondary">{{ t('followup_action_note') }}</button>
+            </form>
+            <form method="post" action="{{ url_for('contacts_follow_up_contacted', contact_id=contact.id) }}">
+                <input type="hidden" name="next" value="detail">
+                <button type="submit" class="btn btn-primary">{{ t('followup_action_contacted') }}</button>
+            </form>
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
+
     <section class="contact-kpis">
         <article>
             <p class="contacts-kicker">{{ t('contacts_last_interaction') }}</p>

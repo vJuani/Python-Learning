@@ -133,6 +133,40 @@ img { max-width: 100%; }
 
 .public-description { white-space: pre-wrap; }
 
+.public-form {
+    display: grid;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.public-form label {
+    display: grid;
+    gap: 6px;
+    font-weight: 700;
+}
+
+.public-form input,
+.public-form textarea {
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 12px;
+    border: 1px solid var(--public-line);
+    border-radius: 12px;
+    font: inherit;
+    font-weight: 400;
+}
+
+.public-form textarea { min-height: 120px; resize: vertical; }
+
+.public-form__error { color: #8d2a2a; margin: 0; }
+
+.public-hp {
+    position: absolute;
+    left: -10000px;
+    height: 0;
+    overflow: hidden;
+}
+
 .public-cta {
     position: sticky;
     bottom: 0;
@@ -235,5 +269,5 @@ img { max-width: 100%; }
         z-index: 5;
     }
 
-    .public-property { padding-bottom: 88px; }
+    .public-property, .public-collection { padding-bottom: 140px; }
 }

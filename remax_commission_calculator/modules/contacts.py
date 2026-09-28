@@ -1177,11 +1177,18 @@ def decorate_contact(
     digits = whatsapp_digits(contact.get("phone"))
     budget = prefs.get("budget") or {}
 
+    interactions = list_property_interactions(organization_id, contact["id"], limit=40)
+    inquiries = [
+        _present_inquiry(row, organization_id, tz, language)
+        for row in interactions
+        if row.get("interaction_type") == "inquiry_received"
+    ]
     history = _history_events(
         contact,
         linked,
         tz=tz,
         language=language,
+        inquiries=inquiries,
     )
     viewed = _viewed_properties(linked)
     shared = _shared_properties(organization_id, contact)
@@ -1231,6 +1238,7 @@ def decorate_contact(
         "viewed_count": len(viewed),
         "last_interaction_label": last_label,
         "last_interaction_task": last_task,
+        "latest_inquiry": inquiries[0] if inquiries else None,
         "recommendation": recommendation,
         "linked_task_count": len(linked),
         **_follow_up_labels(contact, language, tz),
@@ -1284,7 +1292,37 @@ _NOTE_LINE_RE = re.compile(
 )
 
 
-def _history_events(contact, tasks, *, tz, language):
+def _present_inquiry(row, organization_id, tz, language):
+    from modules.database.properties_repository import get_property_record
+
+    address = ""
+    if row.get("property_id"):
+        record = get_property_record(row["property_id"], organization_id)
+        address = (record or {}).get("address") or ""
+    if not address and row.get("source") == "public_shortlist":
+        address = translate("inbound_selection_label", language)
+    source = row.get("source") or ""
+    attention = row.get("attention") or ""
+    other_agent = bool(
+        row.get("listing_agent_id")
+        and row.get("agent_id")
+        and int(row["listing_agent_id"]) != int(row["agent_id"])
+    )
+    local = to_local(row.get("created_at"), tz) if row.get("created_at") else None
+    return {
+        **row,
+        "address": address,
+        "source_label": translate(f"contacts_source_{source}", language) if source else "",
+        "attention_label": (
+            translate(f"inbound_attention_{attention}", language) if attention else ""
+        ),
+        "other_agent": other_agent,
+        "when_label": format_local_datetime(row.get("created_at"), tz),
+        "time_label": local.strftime("%H:%M") if local is not None else "",
+    }
+
+
+def _history_events(contact, tasks, *, tz, language, inquiries=None):
     events = [
         {
             "at": contact.get("created_at"),
@@ -1318,6 +1356,21 @@ def _history_events(contact, tasks, *, tz, language):
                 "status": task.get("status"),
                 "task_id": task.get("id"),
                 "outcome": outcome,
+            }
+        )
+
+    for inquiry in inquiries or []:
+        events.append(
+            {
+                "at": inquiry.get("created_at"),
+                "kind": "inquiry_received",
+                "title": translate(
+                    "contacts_history_inquiry_received",
+                    language,
+                    address=inquiry.get("address") or "",
+                ),
+                "detail": inquiry.get("message") or "",
+                "outcome": None,
             }
         )
 

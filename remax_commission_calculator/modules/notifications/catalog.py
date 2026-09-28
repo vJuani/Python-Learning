@@ -346,6 +346,15 @@ TYPES = {
         ui_type="crm",
         entity_type="contact",
     ),
+    "inbound_lead_received": _type(
+        "crm",
+        PREF_CRM,
+        priority=PRIORITY_IMPORTANT,
+        icon="💬",
+        url="/contacts/{entity_id}",
+        ui_type="crm",
+        entity_type="contact",
+    ),
     "agent_payment_confirmed": _type(
         "treasury",
         PREF_TREASURY,
@@ -469,6 +478,7 @@ EVENT_TO_TYPE = {
     "crm.daily_follow_up": "crm_daily_follow_up",
     "crm.follow_up_due": "crm_follow_up_due",
     "crm.assigned": "contact_assigned",
+    "crm.inbound_lead": "inbound_lead_received",
     "treasury.payment_confirmed": "agent_payment_confirmed",
     "treasury.commission_credited": "commission_credited",
     "treasury.recurring_charge": "recurring_charge_generated",

@@ -609,6 +609,31 @@ def has_contact_need_create_signal(text):
     )
 
 
+def inquiry_address_from_prompt(text):
+    folded = fold_text(text)
+    match = re.search(r"\b(?:pregunto|consulto)\s+por\s+(.+?)(?:\?|$)", folded)
+    if not match:
+        return ""
+    return match.group(1).strip(" .")
+
+
+def has_inquiry_schedule_signal(text):
+    folded = fold_text(text)
+    return bool(
+        CREATE_TASK_RE.search(folded)
+        and re.search(r"\b(?:pregunto|consulto)\s+por\b", folded)
+    )
+
+
+def has_inquiry_query_signal(text):
+    if has_inquiry_schedule_signal(text):
+        return False
+    folded = fold_text(text)
+    if "consultas nuevas" in folded or "contactos nuevos" in folded:
+        return True
+    return bool(re.search(r"\bquien\s+(?:pregunto|consulto)\s+por\b", folded))
+
+
 def has_contact_query_signal(text):
     folded = fold_text(text)
     return any(
@@ -1425,6 +1450,18 @@ def classify_intent(prompt, *, context=None):
     if has_create_task_signal(text):
         scores[CREATE_TASK] = 0.88
         entities["title"] = text
+    if has_inquiry_schedule_signal(text):
+        scores[CREATE_TASK] = 0.99
+        entities["inquiry_address"] = inquiry_address_from_prompt(text)
+        entities["task_type"] = "call"
+    elif has_inquiry_query_signal(text):
+        scores[QUERY_CONTACT] = 0.97
+        entities["inquiry_query"] = (
+            "address"
+            if inquiry_address_from_prompt(text)
+            else ("today" if "hoy" in folded else "new")
+        )
+        entities["inquiry_address"] = inquiry_address_from_prompt(text)
     marketing = detect_marketing_content(text)
     if marketing:
         scores[START_MARKETING_CONTENT] = 0.96

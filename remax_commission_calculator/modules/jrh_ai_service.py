@@ -1636,6 +1636,42 @@ def _handle_create_task(
             message_key="access_denied",
             confidence=confidence,
         )
+    inquiry_contact = None
+    if entities.get("inquiry_address"):
+        from modules.inbound_inquiry import inquiries_for_agent
+
+        found = inquiries_for_agent(
+            organization_id,
+            agent_id,
+            mode="address",
+            address=entities.get("inquiry_address") or "",
+            now=now,
+        )
+        if not found:
+            return _result(
+                CREATE_TASK,
+                "needs_attention",
+                language=language,
+                message_key="jrh_inquiry_none",
+                confidence=confidence,
+            )
+        if len(found) > 1:
+            return _result(
+                CREATE_TASK,
+                "needs_attention",
+                language=language,
+                message_key="jrh_inquiry_ambiguous",
+                candidates=[
+                    {
+                        "id": row["contact_id"],
+                        "name": row.get("name") or "",
+                        "label": row.get("address") or "",
+                    }
+                    for row in found
+                ],
+                confidence=confidence,
+            )
+        inquiry_contact = found[0]
     parsed = interpret_agenda_input(
         prompt,
         organization_id,
@@ -1645,7 +1681,10 @@ def _handle_create_task(
     item = (parsed.get("items") or [{}])[0]
     contact_name = item.get("contact_name") or entities.get("contact_name") or ""
     contact_id = item.get("contact_id") or entities.get("contact_id")
-    if contact_name or contact_id:
+    if inquiry_contact:
+        contact_id = inquiry_contact["contact_id"]
+        contact_name = inquiry_contact.get("name") or contact_name
+    elif contact_name or contact_id:
         status, chosen, _matches = _resolve_prompt_contact(
             organization_id,
             user,
@@ -1676,6 +1715,19 @@ def _handle_create_task(
         "contact_id": contact_id,
         "property_id": item.get("property_id"),
     }
+    if inquiry_contact:
+        from datetime import timedelta
+
+        from modules.organization_time import organization_timezone, to_local
+
+        draft["task_type"] = "call"
+        draft["title"] = f"Llamada con {contact_name}".strip()
+        draft["property_id"] = inquiry_contact.get("property_id")
+        if not draft.get("due_date"):
+            local = to_local(now or now_utc(), organization_timezone(organization_id))
+            if local is not None:
+                draft["due_date"] = (local.date() + timedelta(days=1)).isoformat()
+                draft["due_time"] = draft.get("due_time") or "10:00"
     if session is not None:
         session[SESSION_DRAFT_KEY] = draft
     return _result(
@@ -3277,7 +3329,9 @@ def _handle_contact(
     agent_id,
     language,
     entities,
+    prompt="",
     confidence,
+    now=None,
     **_kwargs,
 ):
     if not can_use_agent_workspace(user) or not agent_id:
@@ -3287,6 +3341,82 @@ def _handle_contact(
             language=language,
             message_key="access_denied",
             confidence=confidence,
+        )
+    if entities.get("inquiry_query"):
+        from modules.inbound_inquiry import inquiries_for_agent
+
+        rows = inquiries_for_agent(
+            organization_id,
+            agent_id,
+            mode=entities.get("inquiry_query") or "new",
+            address=entities.get("inquiry_address") or "",
+            now=now,
+        )
+        if entities.get("inquiry_query") == "address":
+            if not rows:
+                return _result(
+                    QUERY_CONTACT,
+                    "needs_attention",
+                    language=language,
+                    message_key="jrh_inquiry_none",
+                    confidence=confidence,
+                )
+            if len(rows) > 1:
+                return _result(
+                    QUERY_CONTACT,
+                    "needs_attention",
+                    language=language,
+                    message_key="jrh_inquiry_ambiguous",
+                    candidates=[
+                        {
+                            "id": row["contact_id"],
+                            "name": row.get("name") or "",
+                            "label": row.get("address") or row.get("name") or "",
+                        }
+                        for row in rows
+                    ],
+                    confidence=confidence,
+                )
+        if not rows:
+            return _result(
+                QUERY_CONTACT,
+                "ready",
+                language=language,
+                message_key="jrh_inquiry_none",
+                confidence=confidence,
+                data={"source_prompt": prompt},
+            )
+        return _result(
+            QUERY_CONTACT,
+            "ready",
+            language=language,
+            summary=_t("jrh_inquiry_list", language, count=len(rows)),
+            cards=[
+                {
+                    "title": row.get("name") or "",
+                    "subtitle": row.get("address") or row.get("message") or "",
+                }
+                for row in rows[:8]
+            ],
+            actions=[
+                {
+                    "label_key": "jrh_cta_view",
+                    "href_name": "contacts_detail",
+                    "href_args": {"contact_id": row["contact_id"]},
+                }
+                for row in rows[:4]
+            ],
+            confidence=confidence,
+            entity=(
+                {
+                    "kind": "contact",
+                    "id": rows[0]["contact_id"],
+                    "label": rows[0].get("name") or "",
+                }
+                if len(rows) == 1
+                else {}
+            ),
+            data={"source_prompt": prompt, "count": len(rows)},
         )
     from modules.contacts import load_contact
 
