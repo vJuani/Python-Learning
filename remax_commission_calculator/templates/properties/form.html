@@ -49,6 +49,12 @@
 </div>
 {% endif %}
 
+{% if is_edit %}
+{% with photo_next="edit" %}
+{% include "properties/_photo_manager.html" %}
+{% endwith %}
+{% endif %}
+
 <section class="panel">
     <form
         class="agent-form property-inventory-form"

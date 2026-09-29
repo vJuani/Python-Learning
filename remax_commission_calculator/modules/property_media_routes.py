@@ -36,6 +36,14 @@ from modules.property_media_access import (
     PropertyMediaError,
     require_property_media_access,
 )
+from modules.property_photo_upload import (
+    PropertyPhotoError,
+    delete_photo,
+    make_cover,
+    move_photo,
+    reorder_photos,
+    upload_local_photos,
+)
 from modules.database.properties_repository import get_property_record
 
 
@@ -254,3 +262,113 @@ def register_property_media_routes(app, helpers):
 
         flash_i18n("property_doc_archived", "success")
         return redirect(url_for("properties_detail", property_id=property_id))
+
+    def _photo_property(property_id):
+        user = _require_media_user()
+        if not can_write(user):
+            abort(403)
+        organization_id = require_user_organization()
+        property_data = get_property_record(property_id, organization_id)
+        try:
+            require_property_media_access(
+                user,
+                property_data,
+                is_guest=False,
+                write=True,
+            )
+        except PropertyMediaError as error:
+            abort(error.status_code)
+        return organization_id
+
+    def _photo_next(property_id):
+        if (request.form.get("next") or "") == "edit":
+            return redirect(url_for("properties_edit", property_id=property_id))
+        return redirect(url_for("properties_detail", property_id=property_id))
+
+    @app.route("/properties/<int:property_id>/photos", methods=["POST"])
+    @login_required
+    @write_required
+    def property_photos_upload(property_id):
+        organization_id = _photo_property(property_id)
+        try:
+            saved, errors = upload_local_photos(
+                organization_id,
+                property_id,
+                _file_storages(),
+            )
+        except PropertyPhotoError as error:
+            flash_i18n(error.message_key, "error")
+            return _photo_next(property_id)
+        if saved:
+            flash_i18n("property_photo_saved", "success")
+        for key in dict.fromkeys(errors):
+            flash_i18n(key, "error")
+        return _photo_next(property_id)
+
+    @app.route(
+        "/properties/<int:property_id>/photos/<int:media_id>/cover",
+        methods=["POST"],
+    )
+    @login_required
+    @write_required
+    def property_photos_cover(property_id, media_id):
+        organization_id = _photo_property(property_id)
+        try:
+            make_cover(organization_id, property_id, media_id)
+        except PropertyPhotoError as error:
+            if error.status_code in (403, 404):
+                abort(error.status_code)
+            flash_i18n(error.message_key, "error")
+        else:
+            flash_i18n("property_photo_saved", "success")
+        return _photo_next(property_id)
+
+    @app.route("/properties/<int:property_id>/photos/order", methods=["POST"])
+    @login_required
+    @write_required
+    def property_photos_order(property_id):
+        organization_id = _photo_property(property_id)
+        raw = (request.form.get("order") or "").replace(" ", "")
+        ordered = [part for part in raw.split(",") if part]
+        try:
+            reorder_photos(organization_id, property_id, ordered)
+        except PropertyPhotoError as error:
+            if error.status_code in (403, 404):
+                abort(error.status_code)
+            flash_i18n(error.message_key, "error")
+        return _photo_next(property_id)
+
+    @app.route(
+        "/properties/<int:property_id>/photos/<int:media_id>/move",
+        methods=["POST"],
+    )
+    @login_required
+    @write_required
+    def property_photos_move(property_id, media_id):
+        organization_id = _photo_property(property_id)
+        direction = (request.form.get("direction") or "").strip()
+        try:
+            move_photo(organization_id, property_id, media_id, direction)
+        except PropertyPhotoError as error:
+            if error.status_code in (403, 404):
+                abort(error.status_code)
+            flash_i18n(error.message_key, "error")
+        return _photo_next(property_id)
+
+    @app.route(
+        "/properties/<int:property_id>/photos/<int:media_id>/delete",
+        methods=["POST"],
+    )
+    @login_required
+    @write_required
+    def property_photos_delete(property_id, media_id):
+        organization_id = _photo_property(property_id)
+        try:
+            delete_photo(organization_id, property_id, media_id)
+        except PropertyPhotoError as error:
+            if error.status_code in (403, 404):
+                abort(error.status_code)
+            flash_i18n(error.message_key, "error")
+        else:
+            flash_i18n("property_photo_saved", "success")
+        return _photo_next(property_id)

@@ -1484,6 +1484,25 @@ def _maps_template_config():
     return get_maps_provider().public_config()
 
 
+def _property_photo_context(property_data):
+    from modules.property_media_access import can_access_property_media
+    from modules.property_photo_upload import list_managed_photos
+
+    user = get_current_user()
+    allowed = bool(
+        property_data
+        and property_data.get("id")
+        and user is not None
+        and get_guest_access() is None
+        and can_write(user)
+        and can_access_property_media(user, property_data)
+    )
+    return {
+        "can_manage_property_photos": allowed,
+        "property_photos": list_managed_photos(property_data) if allowed else [],
+    }
+
+
 def _property_form_context(property_data):
     selected_features = []
     if property_data:
@@ -1502,6 +1521,7 @@ def _property_form_context(property_data):
         "feature_keys": FEATURE_KEYS,
         "selected_features": selected_features,
         "maps": _maps_template_config(),
+        **_property_photo_context(property_data),
     }
 
 
@@ -5594,6 +5614,7 @@ def properties_detail(property_id):
             and can_write(get_current_user())
         ),
         maps=_maps_template_config(),
+        **_property_photo_context(property_data),
     )
 
 

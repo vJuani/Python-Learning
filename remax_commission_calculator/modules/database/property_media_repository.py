@@ -276,3 +276,68 @@ def mark_media_removed_from_source(media_id, organization_id):
         connection.commit()
     finally:
         connection.close()
+
+
+def set_property_media_positions(organization_id, property_id, ordered_ids):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        for index, media_id in enumerate(ordered_ids):
+            connection.execute(
+                """
+                UPDATE property_media
+                SET position = ?
+                WHERE id = ?
+                    AND organization_id = ?
+                    AND property_id = ?
+                    AND status = ?
+                """,
+                (
+                    index,
+                    int(media_id),
+                    organization_id,
+                    int(property_id),
+                    STATUS_ACTIVE,
+                ),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def set_property_media_cover(organization_id, property_id, media_id):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        current = connection.execute(
+            """
+            SELECT id FROM property_media
+            WHERE id = ?
+                AND organization_id = ?
+                AND property_id = ?
+                AND status = ?
+            """,
+            (int(media_id), organization_id, int(property_id), STATUS_ACTIVE),
+        ).fetchone()
+        if current is None:
+            return False
+        connection.execute(
+            """
+            UPDATE property_media
+            SET is_cover = 0
+            WHERE organization_id = ? AND property_id = ?
+            """,
+            (organization_id, int(property_id)),
+        )
+        connection.execute(
+            """
+            UPDATE property_media
+            SET is_cover = 1
+            WHERE id = ? AND organization_id = ? AND property_id = ?
+            """,
+            (int(media_id), organization_id, int(property_id)),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    return True

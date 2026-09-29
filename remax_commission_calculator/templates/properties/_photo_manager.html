@@ -1,0 +1,77 @@
+{% if can_manage_property_photos %}
+<section class="property-photos" data-property-photos aria-label="{{ t('property_photos_title') }}">
+    <header class="property-photos__header">
+        <h3>{{ t('property_photos_title') }}</h3>
+        <form
+            method="post"
+            enctype="multipart/form-data"
+            action="{{ url_for('property_photos_upload', property_id=property_data.id) }}"
+            data-photo-upload
+        >
+            <input type="hidden" name="next" value="{{ photo_next or 'detail' }}">
+            <label class="btn btn-primary property-photos__add">
+                {{ t('property_photos_add') }}
+                <input
+                    type="file"
+                    name="files"
+                    class="property-photos__input"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    data-photo-input
+                >
+            </label>
+        </form>
+    </header>
+    {% if property_photos %}
+    <ul class="property-photos__grid" data-photo-list>
+        {% for photo in property_photos %}
+        <li draggable="true" data-media-id="{{ photo.id }}">
+            <img src="{{ photo.src }}" alt="{{ t('property_photo_alt') }}" decoding="async">
+            {% if photo.is_cover %}
+            <span class="property-photos__cover">{{ t('property_photo_cover') }}</span>
+            {% endif %}
+            <div class="property-photos__actions">
+                {% if not photo.is_cover %}
+                <form method="post" action="{{ url_for('property_photos_cover', property_id=property_data.id, media_id=photo.id) }}">
+                    <input type="hidden" name="next" value="{{ photo_next or 'detail' }}">
+                    <button type="submit" class="btn btn-small btn-secondary">{{ t('property_photo_make_cover') }}</button>
+                </form>
+                {% endif %}
+                <form method="post" action="{{ url_for('property_photos_move', property_id=property_data.id, media_id=photo.id) }}">
+                    <input type="hidden" name="next" value="{{ photo_next or 'detail' }}">
+                    <input type="hidden" name="direction" value="earlier">
+                    <button type="submit" class="btn btn-small btn-secondary" aria-label="{{ t('property_photo_move_earlier') }}">←</button>
+                </form>
+                <form method="post" action="{{ url_for('property_photos_move', property_id=property_data.id, media_id=photo.id) }}">
+                    <input type="hidden" name="next" value="{{ photo_next or 'detail' }}">
+                    <input type="hidden" name="direction" value="later">
+                    <button type="submit" class="btn btn-small btn-secondary" aria-label="{{ t('property_photo_move_later') }}">→</button>
+                </form>
+                <form
+                    method="post"
+                    action="{{ url_for('property_photos_delete', property_id=property_data.id, media_id=photo.id) }}"
+                    data-photo-delete
+                    data-confirm="{{ t('property_photo_delete_confirm') }}"
+                >
+                    <input type="hidden" name="next" value="{{ photo_next or 'detail' }}">
+                    <button type="submit" class="btn btn-small btn-secondary">{{ t('property_photo_delete') }}</button>
+                </form>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    <form
+        method="post"
+        action="{{ url_for('property_photos_order', property_id=property_data.id) }}"
+        data-photo-order
+        hidden
+    >
+        <input type="hidden" name="next" value="{{ photo_next or 'detail' }}">
+        <input type="hidden" name="order" value="">
+    </form>
+    {% else %}
+    <p class="property-photos__empty">{{ t('property_no_photos') }}</p>
+    {% endif %}
+</section>
+<script src="{{ url_for('static', filename='js/property-photos.js') }}" defer></script>
+{% endif %}
