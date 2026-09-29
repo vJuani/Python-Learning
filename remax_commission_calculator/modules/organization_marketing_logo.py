@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from modules.config import get_private_upload_root
+from modules.config import get_private_upload_root, get_upload_root
 from modules.database.organization_settings_repository import get_organization_settings
 from modules.database.tenant import require_organization_id
 
@@ -72,6 +72,14 @@ def resolve_stored_logo_file(candidate):
         private = None
     if private and private.is_file():
         return private
+    upload_root = get_upload_root().resolve()
+    uploaded = (upload_root / value).resolve()
+    try:
+        uploaded.relative_to(upload_root)
+    except ValueError:
+        uploaded = None
+    if uploaded and uploaded.is_file():
+        return uploaded
     static_root = (BASE_DIR / "static").resolve()
     static_candidate = (static_root / value).resolve()
     try:
@@ -90,6 +98,7 @@ def scan_organization_logo(organization_id):
     if not organization_id:
         return None
     folders = (
+        get_upload_root() / "organizations" / str(organization_id),
         get_private_upload_root() / "organizations" / str(organization_id),
         BASE_DIR / "static" / "uploads" / "organizations" / str(organization_id),
     )

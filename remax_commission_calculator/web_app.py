@@ -347,6 +347,7 @@ from modules.jrh_routes import register_jrh_routes
 from modules.organization_settings import (
     COMMON_TIMEZONES,
     LOGO_EXTENSIONS,
+    MAX_LOGO_SIZE_BYTES,
     build_branding_css,
     validate_organization_settings_form
 )
@@ -790,11 +791,10 @@ def inject_organization_branding():
             "default_currency"
         ]
 
-        if settings["logo_path"]:
-            logo_url = url_for(
-                "static",
-                filename=settings["logo_path"]
-            )
+        logo_url = organization_logo_url(
+            organization_id,
+            settings.get("logo_path"),
+        )
 
         if settings["accent_color"]:
             branding_css = build_branding_css(
@@ -1059,12 +1059,21 @@ def settings_to_form_values(settings):
     }
 
 
+def _reject_organization_logo(organization_id, reason):
+    app.logger.warning(
+        "organization logo not stored organization_id=%s reason=%s",
+        organization_id,
+        reason,
+    )
+    return None
+
+
 def save_organization_logo(
     organization_id,
     logo_file
 ):
     filename = secure_filename(
-        logo_file.filename
+        getattr(logo_file, "filename", "") or ""
     ).lower()
 
     extension = None
@@ -1075,48 +1084,98 @@ def save_organization_logo(
             break
 
     if extension is None:
-        return None
+        return _reject_organization_logo(organization_id, "invalid_type")
 
-    upload_root = Path(
-        app.config["UPLOAD_ROOT"]
-    )
-    upload_dir = (
-        upload_root
-        / "organizations"
-        / str(organization_id)
-    )
+    stream = getattr(logo_file, "stream", None)
+    if stream is None:
+        return _reject_organization_logo(organization_id, "empty")
 
-    os.makedirs(
-        upload_dir,
-        exist_ok=True
-    )
+    stream.seek(0, os.SEEK_END)
+    size = stream.tell()
+    stream.seek(0)
 
-    for existing_name in os.listdir(upload_dir):
-        if existing_name.startswith("logo."):
-            existing_path = upload_dir / existing_name
+    if size <= 0:
+        return _reject_organization_logo(organization_id, "empty")
 
-            if existing_path.is_file():
-                existing_path.unlink()
+    if size > MAX_LOGO_SIZE_BYTES:
+        return _reject_organization_logo(organization_id, "too_large")
 
-    logo_filename = f"logo{extension}"
-    absolute_path = upload_dir / logo_filename
-
-    logo_file.save(str(absolute_path))
-
-    static_root = Path(app.root_path) / "static"
+    upload_root = Path(app.config["UPLOAD_ROOT"]).resolve()
+    upload_dir = upload_root / "organizations" / str(organization_id)
 
     try:
-        relative_path = absolute_path.relative_to(
-            static_root
-        )
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        for existing_path in upload_dir.glob("logo.*"):
+            if existing_path.is_file():
+                existing_path.unlink()
+        absolute_path = upload_dir / f"logo{extension}"
+        logo_file.save(str(absolute_path))
+    except OSError:
+        return _reject_organization_logo(organization_id, "save_failed")
+
+    resolved = absolute_path.resolve()
+    static_root = (Path(app.root_path) / "static").resolve()
+    try:
+        return resolved.relative_to(static_root).as_posix()
     except ValueError:
-        app.logger.warning(
-            "Logo saved outside static directory: %s",
-            absolute_path
-        )
+        try:
+            resolved.relative_to(upload_root)
+        except ValueError:
+            return _reject_organization_logo(
+                organization_id,
+                "outside_upload_root",
+            )
+        return f"organizations/{organization_id}/logo{extension}"
+
+
+def organization_logo_file(organization_id, logo_path=None):
+    from modules.organization_marketing_logo import (
+        resolve_stored_logo_file,
+        scan_organization_logo,
+    )
+
+    resolved = resolve_stored_logo_file(logo_path) if logo_path else None
+    if resolved is None:
+        resolved = scan_organization_logo(organization_id)
+    if resolved is None or not _logo_file_belongs_to_organization(
+        resolved,
+        organization_id,
+    ):
+        return None
+    return resolved
+
+
+def organization_logo_url(organization_id, logo_path=None):
+    resolved = organization_logo_file(organization_id, logo_path)
+    if resolved is None:
         return None
 
-    return relative_path.as_posix()
+    static_root = (Path(app.root_path) / "static").resolve()
+    try:
+        relative = resolved.relative_to(static_root)
+    except ValueError:
+        return url_for("organization_brand_logo")
+
+    return url_for("static", filename=relative.as_posix())
+
+
+def _logo_file_belongs_to_organization(path, organization_id):
+    from modules.config import get_private_upload_root, get_upload_root
+
+    resolved = Path(path).resolve()
+    org_key = str(organization_id)
+    roots = (
+        get_upload_root().resolve() / "organizations" / org_key,
+        get_private_upload_root().resolve() / "organizations" / org_key,
+        (Path(app.root_path) / "static" / "uploads" / "organizations" / org_key).resolve(),
+    )
+    for root in roots:
+        try:
+            resolved.relative_to(root)
+            return True
+        except ValueError:
+            continue
+    return False
 
 
 def marketing_logo_preview_url(settings):
@@ -1132,7 +1191,10 @@ def marketing_logo_preview_url(settings):
         separator = "&" if "?" in url else "?"
         return f"{url}{separator}v={version}"
     if source == "general" and settings and settings.get("logo_path"):
-        return url_for("static", filename=settings["logo_path"], v=version)
+        return organization_logo_url(
+            settings.get("organization_id"),
+            settings.get("logo_path"),
+        )
     return None
 
 
@@ -1141,6 +1203,11 @@ def delete_organization_logo_file(
     logo_path
 ):
     if logo_path is None:
+        return
+
+    resolved = organization_logo_file(organization_id, logo_path)
+    if resolved is not None and resolved.is_file():
+        resolved.unlink()
         return
 
     expected_prefix = (
@@ -3517,15 +3584,9 @@ def organization_settings():
                 "settings/organization.html",
                 form_values=form_values,
                 errors=localize_form_errors(errors),
-                current_logo_url=(
-                    url_for(
-                        "static",
-                        filename=current_settings[
-                            "logo_path"
-                        ]
-                    )
-                    if current_settings["logo_path"]
-                    else None
+                current_logo_url=organization_logo_url(
+                    organization_id,
+                    current_settings.get("logo_path"),
                 ),
                 marketing_logo_preview_url=marketing_logo_preview_url(
                     current_settings
@@ -3641,15 +3702,9 @@ def organization_settings():
             current_settings
         ),
         errors=[],
-        current_logo_url=(
-            url_for(
-                "static",
-                filename=current_settings[
-                    "logo_path"
-                ]
-            )
-            if current_settings["logo_path"]
-            else None
+        current_logo_url=organization_logo_url(
+            organization_id,
+            current_settings.get("logo_path"),
         ),
         marketing_logo_preview_url=marketing_logo_preview_url(
             current_settings
@@ -3673,6 +3728,30 @@ def organization_settings():
         new_registration_code=None,
         new_guest_url=None
     )
+
+
+@app.route("/branding/logo")
+def organization_brand_logo():
+    user = get_current_user()
+    guest = get_guest_access()
+    organization_id = None
+    if user is not None:
+        organization_id = user.get("organization_id")
+    elif guest is not None:
+        organization_id = guest.get("organization_id")
+    if not organization_id:
+        abort(404)
+    settings = get_organization_settings(organization_id) or {}
+    path = organization_logo_file(
+        organization_id,
+        settings.get("logo_path"),
+    )
+    if path is None:
+        abort(404)
+    mime = mimetypes.guess_type(str(path))[0] or "image/png"
+    response = send_file(path, mimetype=mime)
+    response.headers["Cache-Control"] = "private, max-age=0, must-revalidate"
+    return response
 
 
 @app.route("/settings/organization/marketing-logo")
@@ -4231,13 +4310,9 @@ def rotate_registration_code():
             current_settings
         ),
         errors=[],
-        current_logo_url=(
-            url_for(
-                "static",
-                filename=current_settings["logo_path"]
-            )
-            if current_settings["logo_path"]
-            else None
+        current_logo_url=organization_logo_url(
+            organization_id,
+            current_settings.get("logo_path"),
         ),
         timezones=COMMON_TIMEZONES,
         tax_conditions=TAX_CONDITIONS,
@@ -4297,13 +4372,9 @@ def manage_guest_links():
             current_settings
         ),
         errors=[],
-        current_logo_url=(
-            url_for(
-                "static",
-                filename=current_settings["logo_path"]
-            )
-            if current_settings["logo_path"]
-            else None
+        current_logo_url=organization_logo_url(
+            organization_id,
+            current_settings.get("logo_path"),
         ),
         timezones=COMMON_TIMEZONES,
         tax_conditions=TAX_CONDITIONS,

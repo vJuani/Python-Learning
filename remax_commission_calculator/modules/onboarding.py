@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import re
 import time
@@ -28,6 +29,8 @@ from modules.organization_settings import (
     normalize_accent_color,
 )
 from modules.passwords import validate_password_policy
+
+logger = logging.getLogger(__name__)
 
 INVITE_ENV = "JRH_ONBOARDING_INVITE_CODE"
 EVENT_INVITE_FAILED = "invite_failed"
@@ -299,7 +302,12 @@ def complete_onboarding(form, logo_file=None, save_logo=None):
     if logo_file is not None and getattr(logo_file, "filename", ""):
         try:
             stored = save_logo(created["organization_id"], logo_file) if save_logo else None
-        except Exception:
+        except Exception as error:
+            logger.warning(
+                "organization logo not stored organization_id=%s reason=%s",
+                created["organization_id"],
+                type(error).__name__,
+            )
             stored = None
         if stored:
             set_organization_logo_path(created["organization_id"], stored)
@@ -337,7 +345,13 @@ def build_onboarding_checklist(organization_id, language="es"):
     property_count = int(cursor.fetchone()[0] or 0)
     connection.close()
 
-    logo_done = bool(settings.get("logo_path") or settings.get("marketing_logo_path"))
+    from modules.organization_marketing_logo import scan_organization_logo
+
+    logo_done = bool(
+        settings.get("logo_path")
+        or settings.get("marketing_logo_path")
+        or scan_organization_logo(organization_id)
+    )
     legal_done = marketing_legal_is_configured(settings)
     integrations = describe_integrations()
     integrations_done = all(item["configured"] for item in integrations)
@@ -347,8 +361,26 @@ def build_onboarding_checklist(organization_id, language="es"):
         {"key": "admin", "done": True, "optional": False, "label": translate("onboarding_check_admin", language)},
         {"key": "code", "done": bool(settings.get("registration_code_hash")), "optional": False, "label": translate("onboarding_check_code", language)},
         {"key": "settings", "done": True, "optional": False, "label": translate("onboarding_check_settings", language)},
-        {"key": "logo", "done": logo_done, "optional": True, "label": translate("onboarding_warn_logo", language), "href": "organization_settings"},
-        {"key": "legal", "done": legal_done, "optional": True, "label": translate("onboarding_warn_legal", language), "href": "organization_settings"},
+        {
+            "key": "logo",
+            "done": logo_done,
+            "optional": True,
+            "label": translate(
+                "onboarding_ok_logo" if logo_done else "onboarding_warn_logo",
+                language,
+            ),
+            "href": "organization_settings",
+        },
+        {
+            "key": "legal",
+            "done": legal_done,
+            "optional": True,
+            "label": translate(
+                "onboarding_ok_legal" if legal_done else "onboarding_warn_legal",
+                language,
+            ),
+            "href": "organization_settings",
+        },
         {"key": "agents", "done": agent_count > 0, "optional": True, "label": translate("onboarding_warn_agents", language), "href": "agents_list"},
         {"key": "properties", "done": property_count > 0, "optional": True, "label": translate("onboarding_warn_properties", language), "href": "properties_new"},
         {"key": "integrations", "done": integrations_done, "optional": True, "label": translate("onboarding_warn_integrations", language), "href": "organization_settings"},

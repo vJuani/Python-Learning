@@ -84,6 +84,9 @@ class OnboardingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         apply_config(app)
+        cls.upload_root = Path(_TEST_TMP.name) / "public-uploads"
+        os.environ["UPLOAD_DIR"] = str(cls.upload_root)
+        app.config["UPLOAD_ROOT"] = str(cls.upload_root)
         create_tables()
 
     def setUp(self):
@@ -303,6 +306,136 @@ class OnboardingTests(unittest.TestCase):
         user, error = authenticate_user("logo@achard.test", "Achard2026")
         self.assertIsNone(error)
         self.assertEqual(user["organization_id"], created["id"])
+
+    def test_complete_legal_identity_is_not_marked_incomplete(self):
+        response = self.client.post(
+            "/onboarding",
+            data=_payload(
+                email="legal-ok@achard.test",
+                name="Legales Completos",
+                legal_office_name="Achard Propiedades QA",
+                legal_broker_name="Martín Prueba",
+                legal_broker_license="QA-0000",
+                legal_footer_line="Achard Propiedades QA · Martín Prueba · Matrícula QA-0000",
+            ),
+        )
+        self.assertEqual(response.status_code, 302)
+        ready = self.client.get("/onboarding/ready")
+        body = ready.get_data(as_text=True)
+        self.assertNotIn("Identidad legal incompleta", body)
+        self.assertIn("Identidad legal cargada", body)
+        created = next(item for item in get_organizations() if item["name"] == "Legales Completos")
+        settings = get_organization_settings(created["id"])
+        self.assertEqual(settings["legal_office_name"], "Achard Propiedades QA")
+        self.assertEqual(settings["legal_broker_name"], "Martín Prueba")
+        self.assertEqual(settings["legal_broker_license"], "QA-0000")
+        self.assertEqual(
+            settings["legal_footer_line"],
+            "Achard Propiedades QA · Martín Prueba · Matrícula QA-0000",
+        )
+
+    def _image(self, image_format, color):
+        from PIL import Image
+
+        buffer = io.BytesIO()
+        Image.new("RGB", (8, 8), color).save(buffer, format=image_format)
+        buffer.seek(0)
+        return buffer
+
+    def _office_with_logo(self, email, name, image_format, filename, color):
+        data = _payload(email=email, name=name)
+        data["logo"] = (self._image(image_format, color), filename)
+        response = self.client.post(
+            "/onboarding",
+            data=data,
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 302, response.get_data(as_text=True))
+        created = next(item for item in get_organizations() if item["name"] == name)
+        return created
+
+    def test_png_jpg_and_webp_logos_persist_outside_static(self):
+        cases = (
+            ("png-logo@achard.test", "Logo PNG", "PNG", "office.png", (255, 0, 0)),
+            ("jpg-logo@achard.test", "Logo JPG", "JPEG", "office.jpg", (0, 255, 0)),
+            ("webp-logo@achard.test", "Logo WEBP", "WEBP", "office.webp", (0, 0, 255)),
+        )
+        for email, name, image_format, filename, color in cases:
+            self.client.get("/logout")
+            created = self._office_with_logo(email, name, image_format, filename, color)
+            settings = get_organization_settings(created["id"])
+            self.assertEqual(
+                settings["logo_path"],
+                f"organizations/{created['id']}/logo{Path(filename).suffix.lower()}",
+            )
+            self.assertEqual(settings["marketing_logo_path"], settings["logo_path"])
+            stored = self.upload_root / settings["logo_path"]
+            self.assertTrue(stored.is_file())
+            ready = self.client.get("/onboarding/ready")
+            body = ready.get_data(as_text=True)
+            self.assertNotIn("logo no se pudo guardar", body)
+            self.assertNotIn("Logo pendiente", body)
+            self.assertIn("Logo cargado", body)
+            served = self.client.get("/branding/logo")
+            self.assertEqual(served.status_code, 200)
+            self.assertEqual(served.data, stored.read_bytes())
+
+    def test_invalid_logo_keeps_the_organization(self):
+        before = _counts()[0]
+        data = _payload(email="bad-logo@achard.test", name="Logo Invalido")
+        data["logo"] = (io.BytesIO(b"not-an-image"), "notes.txt")
+        response = self.client.post(
+            "/onboarding",
+            data=data,
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 302)
+        created = next(item for item in get_organizations() if item["name"] == "Logo Invalido")
+        settings = get_organization_settings(created["id"])
+        self.assertFalse(settings["logo_path"])
+        self.assertGreater(_counts()[0], before)
+        ready = self.client.get("/onboarding/ready")
+        body = ready.get_data(as_text=True)
+        self.assertIn("logo no se pudo guardar", body)
+        self.assertIn("Logo pendiente", body)
+        oversized = _payload(email="big-logo@achard.test", name="Logo Grande")
+        oversized["logo"] = (io.BytesIO(b"x" * (2 * 1024 * 1024 + 1)), "big.png")
+        self.client.get("/logout")
+        too_big = self.client.post(
+            "/onboarding",
+            data=oversized,
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(too_big.status_code, 302)
+        big_office = next(item for item in get_organizations() if item["name"] == "Logo Grande")
+        self.assertFalse(get_organization_settings(big_office["id"])["logo_path"])
+
+    def test_logo_files_stay_inside_each_organization(self):
+        self.client.get("/logout")
+        first = self._office_with_logo(
+            "logo-a@achard.test",
+            "Logo A",
+            "PNG",
+            "a.png",
+            (255, 0, 0),
+        )
+        first_bytes = (self.upload_root / f"organizations/{first['id']}/logo.png").read_bytes()
+        self.client.get("/logout")
+        second = self._office_with_logo(
+            "logo-b@achard.test",
+            "Logo B",
+            "PNG",
+            "b.png",
+            (0, 0, 255),
+        )
+        second_bytes = (self.upload_root / f"organizations/{second['id']}/logo.png").read_bytes()
+        self.assertNotEqual(first_bytes, second_bytes)
+        served = self.client.get("/branding/logo")
+        self.assertEqual(served.data, second_bytes)
+        self.assertNotEqual(served.data, first_bytes)
+        self._login("logo-a@achard.test", "Achard2026")
+        served_first = self.client.get("/branding/logo")
+        self.assertEqual(served_first.data, first_bytes)
 
     def test_checklist_stays_until_the_office_is_complete(self):
         self.client.post(
