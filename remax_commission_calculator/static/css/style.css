@@ -3303,16 +3303,22 @@ a.dashboard-quick-card:hover {
         display: flex;
         flex-direction: column;
         gap: 0.65rem;
-        position: sticky;
+        position: fixed;
+        left: 0;
         top: 0;
-        height: 100vh;
+        bottom: 0;
+        height: 100dvh;
+        width: var(--rail-width);
+        max-width: var(--rail-width);
+        box-sizing: border-box;
         z-index: 40;
         padding: 0.75rem 0.65rem 0.85rem;
         border-right: 1px solid var(--rail-border);
         background: var(--rail-bg);
         color: var(--rail-text);
         overflow-x: hidden;
-        overflow-y: auto;
+        overflow-y: hidden;
+        transition: width 0.2s ease, max-width 0.2s ease;
     }
 
     body.has-app-rail .app-rail-top {
@@ -3347,7 +3353,11 @@ a.dashboard-quick-card:hover {
         display: flex;
         flex-direction: column;
         gap: 0.15rem;
-        flex: 1;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
     }
 
     body.has-app-rail .app-rail-nav .nav-link {
@@ -3367,6 +3377,7 @@ a.dashboard-quick-card:hover {
     body.has-app-rail .app-rail-footer {
         display: grid;
         gap: 0.35rem;
+        flex-shrink: 0;
         padding-top: 0.55rem;
         border-top: 1px solid var(--rail-border);
     }
@@ -3426,6 +3437,8 @@ a.dashboard-quick-card:hover {
     }
 
     body.has-app-rail .app-frame {
+        grid-column: 2;
+        min-width: 0;
         background:
             linear-gradient(
                 180deg,
@@ -3456,6 +3469,8 @@ a.dashboard-quick-card:hover {
 
     /* Collapsed rail */
     html[data-rail="collapsed"] body.has-app-rail .app-rail {
+        width: var(--rail-collapsed-width);
+        max-width: var(--rail-collapsed-width);
         padding-left: 0.45rem;
         padding-right: 0.45rem;
         align-items: center;

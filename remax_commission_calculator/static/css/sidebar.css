@@ -39,13 +39,17 @@
         padding: 0.85rem 0.6rem 1rem;
         gap: 0.65rem;
         overflow-x: hidden;
-        overflow-y: auto;
-        width: 100%;
+        overflow-y: hidden;
+        width: var(--rail-width);
         min-width: 0;
-        max-width: 100%;
-        z-index: auto;
+        max-width: var(--rail-width);
+        z-index: 40;
         align-items: stretch;
-        position: sticky;
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        height: 100dvh;
     }
 
     html[data-rail="collapsed"] body.has-app-rail .app-rail.jrh-sidebar .app-rail-nav,
@@ -68,9 +72,9 @@
 
     html[data-sidebar="pinned"] body.has-app-rail .app-rail.jrh-sidebar,
     html[data-sidebar] body.has-app-rail .app-rail.jrh-sidebar.is-hover-open {
-        width: 100%;
+        width: var(--rail-width);
         min-width: 0;
-        max-width: 100%;
+        max-width: var(--rail-width);
         overflow-x: hidden;
         padding-left: 0.85rem;
         padding-right: 0.85rem;
@@ -78,6 +82,8 @@
     }
 
     html[data-rail="collapsed"] body.has-app-rail .app-rail.jrh-sidebar:not(.is-hover-open) {
+        width: var(--rail-collapsed-width);
+        max-width: var(--rail-collapsed-width);
         padding-left: 0.6rem;
         padding-right: 0.6rem;
         align-items: stretch;
@@ -194,7 +200,9 @@
         gap: 0.15rem;
         overflow-y: auto;
         overflow-x: hidden;
-        flex: 1;
+        flex: 1 1 auto;
+        min-height: 0;
+        overscroll-behavior: contain;
         padding: 0.15rem 0;
     }
 
