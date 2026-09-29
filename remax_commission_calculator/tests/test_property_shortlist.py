@@ -240,9 +240,13 @@ class ShortlistRouteTests(unittest.TestCase):
         self.assertIn("1 propiedad seleccionada", body)
         self.assertIn("Av. Santa Fe 2100", body)
         self.assertIn("Encontré una propiedad en Martínez", body)
+        self.assertIn("Compartir ficha por WhatsApp", body)
         self.assertIn("Descargar ficha", body)
         self.assertIn("Agendar visita", body)
-        self.assertIn("Abrir WhatsApp", body)
+        self.assertIn("/agenda/new", body)
+        self.assertIn("type=visit", body)
+        self.assertIn("wa.me/", body)
+        self.assertIn("La ficha fue descargada. Adjuntala en WhatsApp antes de enviar.", body)
         self.assertNotIn("https://www.remax.com.ar", body)
         self.assertNotIn("/p/", body)
         self.assertNotIn("/s/", body)
@@ -296,29 +300,81 @@ class ShortlistRouteTests(unittest.TestCase):
         )
         self.assertIn("descartada", discarded.get_data(as_text=True))
 
-    def test_open_does_not_record_shared_until_marked(self):
+    def _public_link_counts(self):
+        connection = get_connection()
+        try:
+            counts = {}
+            for table in ("property_public_links", "public_shortlists"):
+                cursor = connection.execute(f"SELECT COUNT(*) FROM {table}")
+                counts[table] = cursor.fetchone()[0]
+            return counts
+        finally:
+            connection.close()
+
+    def test_sheet_pdf_does_not_record_shared_or_public_links(self):
         self.client.post(
             f"/contacts/{self.contact['id']}/shortlist",
             data={"property_id": [str(self.alvear), str(self.santa)]},
         )
-        opened = self.client.post(
-            f"/contacts/{self.contact['id']}/shortlist/open",
-            data={
-                "property_id": [str(self.alvear), str(self.santa)],
-                "message": "Hola Martín, ¿cómo estás?",
-            },
-            follow_redirects=True,
+        links_before = self._public_link_counts()
+        page = self.client.get(f"/contacts/{self.contact['id']}/shortlist")
+        body = page.get_data(as_text=True)
+        self.assertIn("Compartir ficha por WhatsApp", body)
+        self.assertIn("Marcar enviada", body)
+        script = (
+            Path(__file__).resolve().parents[1] / "static" / "js" / "shortlist-share.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("navigator.canShare", script)
+        self.assertIn("navigator.share", script)
+        self.assertNotIn("/p/", script)
+        self.assertNotIn("/s/", script)
+        self.assertIn("Hola Martín, ¿cómo estás?", body)
+        self.assertIn(
+            "Encontr%C3%A9%20una%20propiedad%20en%20Mart%C3%ADnez",
+            body,
         )
-        page = opened.get_data(as_text=True)
-        self.assertIn("Abrir WhatsApp", page)
-        self.assertIn("wa.me/", page)
-        self.assertIn("Marcar enviada", page)
-        self.assertNotIn("/p/", page)
-        self.assertNotIn("/s/", page)
-        self.assertIn("Agendar seguimiento", page)
+        self.assertIn("Te%20paso%20la%20ficha%20con%20todos%20los%20detalles", body)
+        self.assertIn("wa.me/", body)
+        self.assertNotIn("/p/", body)
+        self.assertNotIn("%2Fp%2F", body)
+        self.assertNotIn("/s/", body)
+        self.assertNotIn("%2Fs%2F", body)
+        self.assertNotIn("Links individuales", body)
+        self.assertEqual(self._public_link_counts(), links_before)
+
+        sheet = self.client.get(
+            f"/contacts/{self.contact['id']}/shortlist/{self.santa}/sheet"
+        )
+        self.assertEqual(sheet.status_code, 200)
+        self.assertEqual(sheet.mimetype, "application/pdf")
+        self.assertTrue(sheet.data.startswith(b"%PDF"))
+        self.assertIn("attachment", sheet.headers.get("Content-Disposition", ""))
         rows = list_property_interactions(self.org, self.contact["id"], limit=20)
         shared = [row for row in rows if row["interaction_type"] == "shared"]
         self.assertEqual(shared, [])
+        self.assertEqual(self._public_link_counts(), links_before)
+
+        brochure = self.client.post(
+            f"/properties/{self.santa}/brochure",
+            data={"include_agent_contact": "1"},
+        )
+        self.assertEqual(brochure.status_code, 200)
+        self.assertEqual(brochure.mimetype, "application/pdf")
+        self.assertTrue(brochure.data.startswith(b"%PDF"))
+
+        agenda = self.client.get(
+            "/agenda/new",
+            query_string={
+                "type": "visit",
+                "property_id": self.santa,
+                "contact_id": self.contact["id"],
+            },
+        )
+        self.assertEqual(agenda.status_code, 200)
+        agenda_body = agenda.get_data(as_text=True)
+        self.assertIn('name="task_type"', agenda_body)
+        self.assertIn("visit", agenda_body)
+
         marked = self.client.post(
             f"/contacts/{self.contact['id']}/shortlist/mark-sent",
             follow_redirects=True,

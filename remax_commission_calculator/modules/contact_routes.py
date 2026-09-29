@@ -4,7 +4,9 @@ Agent contacts: list, create, commercial profile and preferences.
 
 from __future__ import annotations
 
-from flask import abort, redirect, render_template, request, session, url_for
+import io
+
+from flask import abort, redirect, render_template, request, send_file, session, url_for
 
 from modules.auth import (
     can_use_agent_workspace,
@@ -852,6 +854,32 @@ def register_contact_routes(app, helpers):
     def _shortlist_key(contact_id):
         return f"property_shortlist_{int(contact_id)}"
 
+    def _shortlist_share_items(contact, items, *, language):
+        from modules.property_match import whatsapp_share_url
+        from modules.property_shortlist import draft_whatsapp_message
+
+        payload = []
+        for item in items or []:
+            text = draft_whatsapp_message(
+                contact,
+                [item],
+                language=language,
+            )
+            payload.append(
+                {
+                    "property_id": item["property_id"],
+                    "pdf_url": url_for(
+                        "contacts_property_shortlist_sheet",
+                        contact_id=contact["id"],
+                        property_id=item["property_id"],
+                    ),
+                    "whatsapp_url": whatsapp_share_url(contact.get("phone"), text) or "",
+                    "title": item.get("address") or "",
+                    "text": text,
+                }
+            )
+        return payload
+
     def _load_shortlist(organization_id, agent_id, contact, language):
         from modules.property_shortlist import (
             ShortlistError,
@@ -959,8 +987,11 @@ def register_contact_routes(app, helpers):
             items=items,
             message=message,
             can_manage=can_manage,
-            share_mode=share.get("mode") or "individual",
-            share_days=share.get("share_days") or 30,
+            share_items=_shortlist_share_items(
+                contact,
+                items,
+                language=language,
+            ),
         )
 
     @app.route("/contacts/<int:contact_id>/shortlist/update", methods=["POST"])
@@ -1042,6 +1073,47 @@ def register_contact_routes(app, helpers):
                 edited = message
         _save_shortlist(contact, items, edited, share)
         return redirect(url_for("contacts_property_shortlist", contact_id=contact_id))
+
+    @app.route(
+        "/contacts/<int:contact_id>/shortlist/<int:property_id>/sheet",
+    )
+    @login_required
+    def contacts_property_shortlist_sheet(contact_id, property_id):
+        from modules.property_brochure import generate_property_brochure
+        from modules.property_media_access import PropertyMediaError
+        from modules.property_shortlist import ShortlistError, select_properties
+
+        user, organization_id, agent_id, can_manage, contact = _scoped_contact(
+            contact_id
+        )
+        if not can_manage or agent_id is None:
+            abort(403)
+        try:
+            select_properties(
+                organization_id,
+                contact["id"],
+                [property_id],
+                agent_id=agent_id,
+            )
+        except ShortlistError:
+            abort(404)
+        try:
+            result = generate_property_brochure(
+                property_id=property_id,
+                organization_id=organization_id,
+                include_agent_contact=True,
+                requesting_user=user,
+                is_guest=False,
+                language=get_current_language(),
+            )
+        except PropertyMediaError as error:
+            abort(error.status_code)
+        return send_file(
+            io.BytesIO(result["pdf_bytes"]),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=result["filename"],
+        )
 
     @app.route("/contacts/<int:contact_id>/shortlist/open", methods=["POST"])
     @login_required
@@ -1139,9 +1211,7 @@ def register_contact_routes(app, helpers):
             language=get_current_language(),
         )
         flash_i18n("shortlist_marked_sent", "success")
-        return redirect(
-            url_for("contacts_property_shortlist_sent", contact_id=contact_id)
-        )
+        return redirect(url_for("contacts_property_shortlist", contact_id=contact_id))
 
     @app.route("/contacts/<int:contact_id>/shortlist/follow-up", methods=["POST"])
     @login_required
