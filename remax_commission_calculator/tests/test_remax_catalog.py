@@ -29,6 +29,10 @@ from modules.database.external_listings_repository import (
     list_active_external_listings,
     list_external_listings,
 )
+from modules.database.property_sync_hub_repository import (
+    STATUS_CONNECTED,
+    upsert_property_integration,
+)
 from modules.integrations import (
     confirm_remax_catalog,
     confirm_remax_export,
@@ -50,6 +54,7 @@ from modules.listing_sources import (
     match_visible_sources,
 )
 from modules.listings_normalize import listing_from_external_listing
+from modules.property_sync.redremax.mapping import PROVIDER_REDREMAX
 from modules.property_match import (
     build_whatsapp_message,
     decorate_match,
@@ -314,13 +319,9 @@ class RemaxCatalogTests(unittest.TestCase):
             agent_id=self.agent_id,
         )
         sources = {item["source"] for item in ranked}
-        self.assertIn(SOURCE_REMAX, sources)
+        self.assertNotIn(SOURCE_REMAX, sources)
         self.assertNotIn(SOURCE_MERCADOLIBRE, sources)
-        remax = next(item for item in ranked if item["source"] == SOURCE_REMAX)
-        self.assertIsNotNone(remax["external_listing_id"])
-        self.assertIsNone(remax.get("internal_property_id"))
-        card = decorate_match(remax, language="es")
-        self.assertEqual(card["source_label"], "RE/MAX")
+        self.assertTrue(all(item.get("source") in (None, "internal") for item in ranked))
 
     def test_whatsapp_with_and_without_url(self):
         self._import(CATALOG_CSV.encode("utf-8"))
@@ -413,6 +414,7 @@ class RemaxCatalogTests(unittest.TestCase):
             capabilities[SOURCE_MERCADOLIBRE]["search"],
             SEARCH_NOT_AUTHORIZED,
         )
+        self.assertFalse(capabilities[SOURCE_REMAX]["visible_in_match"])
         self.assertFalse(capabilities[SOURCE_MERCADOLIBRE]["visible_in_match"])
         self.assertEqual(
             capabilities[SOURCE_ZONAPROP]["search"],
@@ -422,7 +424,7 @@ class RemaxCatalogTests(unittest.TestCase):
             capabilities[SOURCE_ARGENPROP]["search"],
             SEARCH_UNSUPPORTED_SEARCH,
         )
-        self.assertEqual(match_visible_sources(), [SOURCE_INTERNAL, SOURCE_REMAX])
+        self.assertEqual(match_visible_sources(), [SOURCE_INTERNAL])
 
     def test_organization_isolation(self):
         self._import(CATALOG_CSV.encode("utf-8"))
@@ -443,6 +445,13 @@ class RemaxCatalogTests(unittest.TestCase):
         denied = client.get("/integrations/remax/catalog")
         self.assertIn(denied.status_code, (302, 401, 403))
 
+        upsert_property_integration(
+            self.org,
+            PROVIDER_REDREMAX,
+            status=STATUS_CONNECTED,
+            sync_enabled=True,
+            config={"external_office_id": "catalog-org"},
+        )
         self._login_admin(client)
         page = client.get("/integrations/remax/catalog")
         self.assertEqual(page.status_code, 200)

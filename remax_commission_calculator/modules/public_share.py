@@ -151,6 +151,12 @@ def ensure_public_shortlist(
             continue
         if property_id not in ids:
             ids.append(property_id)
+    owned = []
+    for property_id in ids:
+        if get_property_record(property_id, organization_id) is None:
+            continue
+        owned.append(property_id)
+    ids = owned
     if not ids:
         raise PublicShareError("empty")
     expires = (_utcnow() + timedelta(days=span)).isoformat()

@@ -86,6 +86,7 @@
                 class="nav-dropdown-item{% if request.endpoint and request.endpoint.startswith('csv_import_') %} active{% endif %}"
                 role="menuitem"
             >{{ t('nav_csv_import') }}</a>
+            {% if redremax_enabled %}
             <a
                 href="{{ url_for('remax_export_upload') }}"
                 class="nav-dropdown-item{% if request.endpoint and request.endpoint.startswith('remax_export_') %} active{% endif %}"
@@ -96,6 +97,7 @@
                 class="nav-dropdown-item{% if request.endpoint and request.endpoint.startswith('remax_catalog_') %} active{% endif %}"
                 role="menuitem"
             >{{ t('nav_remax_catalog') }}</a>
+            {% endif %}
         </div>
     </details>
     {% endif %}

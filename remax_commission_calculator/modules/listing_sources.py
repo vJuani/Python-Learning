@@ -19,6 +19,12 @@ LISTING_SOURCES = (
 
 LISTING_SOURCE_SET = set(LISTING_SOURCES)
 
+MARKET_COMPARABLE_SOURCES = frozenset({
+    SOURCE_ZONAPROP,
+    SOURCE_ARGENPROP,
+    SOURCE_MERCADOLIBRE,
+})
+
 SEARCH_ENABLED = "enabled"
 SEARCH_INDEXED = "indexed"
 SEARCH_NOT_AUTHORIZED = "not_authorized"
@@ -48,7 +54,7 @@ SOURCE_CAPABILITIES = {
     SOURCE_REMAX: {
         "search": SEARCH_INDEXED,
         "sync": SYNC_MANUAL_IMPORT,
-        "visible_in_match": True,
+        "visible_in_match": False,
     },
     SOURCE_ZONAPROP: {
         "search": SEARCH_UNSUPPORTED_SEARCH,

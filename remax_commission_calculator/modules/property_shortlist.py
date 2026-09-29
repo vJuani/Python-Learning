@@ -246,7 +246,11 @@ def top_matches(organization_id, contact, *, agent_id=None, limit=3):
     )
     ids = []
     for row in ranked or []:
-        property_id = row.get("property_id")
+        if (row.get("source") or "internal") != "internal":
+            continue
+        if row.get("external_listing_id") and not row.get("internal_property_id"):
+            continue
+        property_id = row.get("internal_property_id") or row.get("property_id")
         if not property_id or int(row.get("score") or 0) <= 0:
             continue
         ids.append(property_id)

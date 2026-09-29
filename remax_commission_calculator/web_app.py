@@ -361,6 +361,7 @@ from modules.integrations import (
     preview_remax_export,
     resolve_remax_export_preview,
 )
+from modules.inventory_boundary import organization_uses_redremax
 
 from modules.config import (
     BASE_DIR,
@@ -470,6 +471,17 @@ def require_authenticated_user():
     )
 
 
+@app.before_request
+def require_redremax_integration():
+    endpoint = request.endpoint or ""
+    if not endpoint.startswith(("remax_export", "remax_catalog")):
+        return None
+    user = get_current_user()
+    if user is None or not organization_uses_redremax(user["organization_id"]):
+        abort(404)
+    return None
+
+
 def get_current_language():
     if "language" in session:
         return normalize_language(
@@ -563,6 +575,11 @@ def inject_auth_helpers():
             else 0
         ),
         "unread_notifications": _current_unread_notifications(),
+        "redremax_enabled": (
+            organization_uses_redremax(user["organization_id"])
+            if user is not None
+            else False
+        ),
     }
 
 

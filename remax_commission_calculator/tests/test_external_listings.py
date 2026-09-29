@@ -8,8 +8,6 @@ import unittest
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
-from urllib.parse import unquote
-
 _TEST_TMP = tempfile.TemporaryDirectory()
 os.environ["DATABASE_PATH"] = str(
     Path(_TEST_TMP.name) / "test_external_listings.db"
@@ -559,7 +557,7 @@ class MatcherAgendaWhatsappTests(ExternalListingsBase):
         )
         sources = {item["source"] for item in mixed}
         self.assertIn(SOURCE_INTERNAL, sources)
-        self.assertIn(SOURCE_REMAX, sources)
+        self.assertNotIn(SOURCE_REMAX, sources)
         self.assertNotIn(SOURCE_MERCADOLIBRE, sources)
 
     def test_whatsapp_external_uses_original_url(self):
@@ -674,19 +672,16 @@ class MatcherAgendaWhatsappTests(ExternalListingsBase):
         )
         self.assertEqual(page.status_code, 200)
         body = page.get_data(as_text=True)
-        self.assertIn("Ver publicación", body)
-        self.assertIn("remax.com.ar", body)
-        self.assertIn("RE/MAX", body)
+        self.assertIn("Av. Cabildo 3200", body)
+        self.assertNotIn("Ver publicación", body)
+        self.assertNotIn("remax.com.ar", body)
         self.assertNotIn("✓ Mercado Libre", body)
 
         share = self.client.get(
             f"/contacts/{self.contact['id']}/property-matches/share",
             query_string={"external_listing_id": listing_id},
         )
-        self.assertEqual(share.status_code, 302)
-        location = unquote(share.headers["Location"])
-        self.assertIn("wa.me/5491112345678", location)
-        self.assertIn("remax.com.ar", location)
+        self.assertEqual(share.status_code, 404)
         self.assertEqual(_property_count(self.org_a), before)
 
 

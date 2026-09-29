@@ -1297,8 +1297,7 @@ def register_contact_routes(app, helpers):
         )
         language = get_current_language()
         selected_property_ids = _selected_ids("property_id")
-        selected_external_ids = _selected_ids("external_listing_id")
-        if not selected_property_ids and not selected_external_ids:
+        if not selected_property_ids:
             abort(404)
 
         ranked = rank_contact_properties(
@@ -1307,11 +1306,6 @@ def register_contact_routes(app, helpers):
             agent_id=agent_id,
         )
         by_property = {item.get("property_id"): item for item in ranked}
-        by_external = {
-            item.get("external_listing_id"): item
-            for item in ranked
-            if item.get("external_listing_id")
-        }
         selected = []
         for property_id in selected_property_ids:
             item = by_property.get(property_id)
@@ -1340,32 +1334,6 @@ def register_contact_routes(app, helpers):
                 property_id=property_id,
                 _external=False,
             )
-            selected.append(card)
-        for listing_id in selected_external_ids:
-            item = by_external.get(listing_id)
-            if item is None:
-                from modules.database.external_listings_repository import (
-                    get_external_listing,
-                )
-                from modules.listings_normalize import listing_from_external_listing
-
-                record = get_external_listing(listing_id, organization_id)
-                if record is None:
-                    abort(404)
-                item = {
-                    "external_listing_id": listing_id,
-                    "source": record["source"],
-                    "external_url": record.get("external_url"),
-                    "score": 0,
-                    "level": "low",
-                    "hidden": True,
-                    "dimensions": {},
-                    "listing": listing_from_external_listing(record),
-                    "property": record,
-                    "visited": False,
-                    "discarded": False,
-                }
-            card = decorate_match(item, language=language)
             selected.append(card)
 
         if not selected:

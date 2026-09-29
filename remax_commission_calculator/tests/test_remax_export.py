@@ -25,6 +25,10 @@ from modules.database import (
     get_properties,
     list_property_external_listings,
 )
+from modules.database.property_sync_hub_repository import (
+    STATUS_CONNECTED,
+    upsert_property_integration,
+)
 from modules.integrations import (
     confirm_remax_export,
     preview_remax_export,
@@ -37,6 +41,7 @@ from modules.integrations.remax_export import (
     parse_remax_export_bytes,
     resolve_jurisdiction,
 )
+from modules.property_sync.redremax.mapping import PROVIDER_REDREMAX
 from web_app import app
 
 
@@ -314,6 +319,13 @@ RM-AMB,Calle Falsa,123,Pueblo Raro,Activa,Venta,Casa,100000,USD
             sess["role"] = ROLE_ADMIN
             sess["organization_id"] = self.org
 
+        upsert_property_integration(
+            self.org,
+            PROVIDER_REDREMAX,
+            status=STATUS_CONNECTED,
+            sync_enabled=True,
+            config={"external_office_id": "export-org"},
+        )
         ok = client.get("/integrations/remax")
         self.assertEqual(ok.status_code, 200)
         self.assertIn(b"Tomas Pasman", ok.data)

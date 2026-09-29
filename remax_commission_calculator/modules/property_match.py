@@ -734,13 +734,7 @@ def rank_contact_properties(
 ):
     criteria = resolve_criteria(contact, criteria_override)
     if listings is None:
-        from modules.database.external_listings_repository import (
-            list_active_external_listings,
-        )
         from modules.listing_connectors.internal import InternalListingConnector
-        from modules.listings_normalize import attach_listing_identity
-
-        from modules.listing_sources import SOURCE_INTERNAL, match_visible_sources
 
         listings = list(
             InternalListingConnector().search(
@@ -749,20 +743,6 @@ def rank_contact_properties(
                 agent_id=agent_id,
             ).listings
         )
-        for source in match_visible_sources():
-            if source == SOURCE_INTERNAL:
-                continue
-            for row in list_active_external_listings(
-                organization_id,
-                source=source,
-                limit=CANDIDATE_LIMIT,
-            ):
-                listing = attach_listing_identity(
-                    listing_from_external_listing(row),
-                    external_listing_id=row["id"],
-                )
-                listing["is_active"] = row.get("is_active")
-                listings.append(listing)
 
     visits = visit_map_for_contact(
         organization_id,
