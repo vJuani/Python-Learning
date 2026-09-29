@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-import unicodedata
+import re
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_JUSTIFY, TA_RIGHT
@@ -21,18 +21,16 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from modules.branding import get_brand_name, resolve_brand_logo_path
 from modules.pdf_images import compose_on_color, pdf_image_flowable, prepare_image
 
 
 NAVY = colors.HexColor("#0A1633")
-ELECTRIC = colors.HexColor("#0D47FF")
 SOFT = colors.HexColor("#EEF3FF")
 MUTED = colors.HexColor("#5B6B7C")
 INK = colors.HexColor("#33415C")
 WHITE = colors.white
 NAVY_RGB = (10, 22, 51)
-FOOTER_H = 48 * mm
+FOOTER_H = 52 * mm
 
 
 class ChipRow(Flowable):
@@ -153,14 +151,27 @@ class PhotoCollage(Flowable):
             self.canv.restoreState()
 
 
-def _styles():
+def _org_accent(payload):
+    raw = str((payload.get("organization") or {}).get("accent_color") or "").strip()
+    if not re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
+        return NAVY
+    red = int(raw[1:3], 16)
+    green = int(raw[3:5], 16)
+    blue = int(raw[5:7], 16)
+    if (0.299 * red + 0.587 * green + 0.114 * blue) / 255 > 0.75:
+        return NAVY
+    return colors.HexColor(raw)
+
+
+def _styles(accent):
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="BrKicker", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=ELECTRIC, leading=10, tracking=0.8))
+    styles.add(ParagraphStyle(name="BrKicker", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=accent, leading=10, tracking=0.8))
     styles.add(ParagraphStyle(name="BrMeta", parent=styles["Normal"], fontName="Helvetica", fontSize=7.5, textColor=MUTED, leading=9, alignment=TA_RIGHT))
+    styles.add(ParagraphStyle(name="BrBrand", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=11, textColor=NAVY, leading=13, spaceBefore=1))
     styles.add(ParagraphStyle(name="BrTitle", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=22, textColor=NAVY, leading=25, spaceAfter=1))
     styles.add(ParagraphStyle(name="BrPlace", parent=styles["Normal"], fontName="Helvetica", fontSize=10, textColor=MUTED, leading=13))
     styles.add(ParagraphStyle(name="BrPrice", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=22, textColor=NAVY, leading=26, spaceBefore=3, spaceAfter=4))
-    styles.add(ParagraphStyle(name="BrSection", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8, textColor=ELECTRIC, leading=11, spaceBefore=8, spaceAfter=3))
+    styles.add(ParagraphStyle(name="BrSection", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8, textColor=accent, leading=11, spaceBefore=8, spaceAfter=3))
     styles.add(ParagraphStyle(name="BrBody", parent=styles["Normal"], fontName="Helvetica", fontSize=9.4, textColor=INK, leading=13.6, alignment=TA_JUSTIFY, spaceAfter=3))
     styles.add(ParagraphStyle(name="BrFactLabel", parent=styles["Normal"], fontName="Helvetica", fontSize=6.6, textColor=MUTED, leading=8))
     styles.add(ParagraphStyle(name="BrFactValue", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=12, textColor=NAVY, leading=14))
@@ -169,8 +180,7 @@ def _styles():
 
 
 def _escape(value):
-    text = unicodedata.normalize("NFKD", str(value or ""))
-    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = str(value or "")
     text = text.encode("latin-1", "replace").decode("latin-1")
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -185,15 +195,82 @@ def _split_description(text):
     return blocks
 
 
+def _contact_lines(agent):
+    lines = []
+    phone = agent.get("phone")
+    if phone:
+        lines.append(str(phone))
+    whatsapp = agent.get("whatsapp")
+    if whatsapp and str(whatsapp) != str(phone or ""):
+        lines.append(str(whatsapp))
+    if agent.get("email"):
+        lines.append(str(agent["email"]))
+    instagram = agent.get("instagram")
+    if instagram:
+        handle = str(instagram)
+        if not handle.startswith("@"):
+            handle = f"@{handle}"
+        lines.append(handle)
+    return lines
+
+
+def _wrap_footer_text(value, width=42):
+    text = _escape(value)
+    if not text:
+        return []
+    chunks = []
+    while text:
+        chunks.append(text[:width])
+        text = text[width:]
+        if len(chunks) == 2:
+            break
+    return chunks
+
+
+def _draw_legal(canvas, payload, x, top):
+    org = payload.get("organization") or {}
+    broker = org.get("legal_broker_name")
+    license_no = org.get("legal_broker_license")
+    footer_line = org.get("legal_footer_line")
+    if not any((broker, license_no, footer_line)):
+        return
+    y = top
+    canvas.setFillColor(colors.HexColor("#D5DEE8"))
+    if broker:
+        canvas.setFont("Helvetica", 6.5)
+        canvas.drawString(x, y, _escape(payload.get("broker_label") or "Martillero").upper()[:24])
+        y -= 4.2 * mm
+        canvas.setFillColor(WHITE)
+        canvas.setFont("Helvetica-Bold", 9)
+        canvas.drawString(x, y, _escape(broker)[:36])
+        y -= 5 * mm
+        canvas.setFillColor(colors.HexColor("#D5DEE8"))
+    if license_no:
+        canvas.setFont("Helvetica", 6.5)
+        canvas.drawString(x, y, _escape(payload.get("license_label") or "Matricula").upper()[:24])
+        y -= 4.2 * mm
+        canvas.setFillColor(WHITE)
+        canvas.setFont("Helvetica-Bold", 9)
+        canvas.drawString(x, y, _escape(license_no)[:36])
+        y -= 5 * mm
+    if footer_line:
+        canvas.setFillColor(colors.HexColor("#C5D0DC"))
+        canvas.setFont("Helvetica", 6.5)
+        for chunk in _wrap_footer_text(footer_line, 46):
+            canvas.drawString(x, y, chunk)
+            y -= 3.4 * mm
+
+
 def _draw_footer(canvas, payload):
     width, _height = A4
+    accent = _org_accent(payload)
     canvas.saveState()
     canvas.setFillColor(NAVY)
     canvas.rect(0, 0, width, FOOTER_H, fill=1, stroke=0)
-    canvas.setFillColor(ELECTRIC)
-    canvas.rect(0, FOOTER_H - 2.1, width, 2.1, fill=1, stroke=0)
+    canvas.setFillColor(accent)
+    canvas.rect(0, FOOTER_H - 1.8, width, 1.8, fill=1, stroke=0)
     agent = payload.get("agent")
-    x = 14 * mm
+    x = 12 * mm
     if agent:
         photo = None
         if agent.get("photo_path"):
@@ -208,76 +285,69 @@ def _draw_footer(canvas, payload):
                 canvas.drawImage(
                     ImageReader(photo["buffer"]),
                     x,
-                    7 * mm,
-                    width=30 * mm,
-                    height=36 * mm,
+                    12 * mm,
+                    width=26 * mm,
+                    height=32 * mm,
                     mask="auto",
                     preserveAspectRatio=True,
                     anchor="sw",
                 )
-                x += 34 * mm
+                x += 30 * mm
             except Exception:
                 pass
-        canvas.setFillColor(ELECTRIC)
+        canvas.setFillColor(colors.HexColor("#D5DEE8"))
         canvas.setFont("Helvetica", 7)
-        canvas.drawString(x, 39 * mm, _escape(payload.get("advisor_label") or "").upper()[:42])
+        canvas.drawString(x, 44 * mm, _escape(payload.get("advisor_label") or "").upper()[:42])
         canvas.setFillColor(WHITE)
-        canvas.setFont("Helvetica-Bold", 12)
-        canvas.drawString(x, 32 * mm, _escape(agent.get("name") or "")[:42])
-        canvas.setFont("Helvetica", 8)
-        canvas.drawString(x, 26 * mm, _escape(agent.get("title") or agent.get("role") or "")[:46])
-        y = 20 * mm
+        canvas.setFont("Helvetica-Bold", 11)
+        canvas.drawString(x, 38 * mm, _escape(agent.get("name") or "")[:36])
+        role = agent.get("title") or agent.get("role")
+        y = 32.5 * mm
+        if role:
+            canvas.setFont("Helvetica", 7.5)
+            canvas.setFillColor(colors.HexColor("#D5DEE8"))
+            canvas.drawString(x, y, _escape(role)[:40])
+            y = 27.5 * mm
+        canvas.setFillColor(WHITE)
         canvas.setFont("Helvetica", 7.5)
-        for key in ("phone", "email", "instagram", "linkedin"):
-            value = agent.get(key)
-            if not value:
-                continue
-            canvas.drawString(x, y, _escape(value)[:48])
-            y -= 7.4
+        for line in _contact_lines(agent)[:4]:
+            canvas.drawString(x, y, _escape(line)[:42])
+            y -= 3.6 * mm
+        _draw_legal(canvas, payload, 118 * mm, 44 * mm)
     else:
-        org = payload.get("organization") or {}
-        mark = org.get("logo") or payload.get("platform_logo") or resolve_brand_logo_path()
-        if mark:
-            composed = compose_on_color(mark, NAVY_RGB, max_width_px=360, max_height_px=120)
-            if composed:
-                try:
-                    canvas.drawImage(
-                        ImageReader(composed["buffer"]),
-                        x,
-                        28 * mm,
-                        width=34 * mm,
-                        height=11 * mm,
-                        mask="auto",
-                        preserveAspectRatio=True,
-                        anchor="sw",
-                    )
-                except Exception:
-                    pass
-        canvas.setFillColor(WHITE)
-        canvas.setFont("Helvetica-Bold", 12)
-        canvas.drawString(x, 20 * mm, _escape(org.get("name") or payload.get("platform_name") or get_brand_name())[:40])
-        canvas.setFont("Helvetica", 8)
-        canvas.setFillColor(colors.HexColor("#C5D0DC"))
-        canvas.drawString(x, 13 * mm, _escape(payload.get("platform_name") or get_brand_name())[:40])
+        _draw_legal(canvas, payload, x, 40 * mm)
+    powered = payload.get("powered_by")
+    if powered:
+        canvas.setFillColor(colors.HexColor("#8E9AAB"))
+        canvas.setFont("Helvetica", 6.5)
+        canvas.drawRightString(width - 12 * mm, 4.2 * mm, _escape(powered)[:48])
     canvas.restoreState()
 
 
 def build_property_brochure_pdf(payload):
     buffer = io.BytesIO()
-    styles = _styles()
+    accent = _org_accent(payload)
+    styles = _styles(accent)
     usable_width = A4[0] - (24 * mm)
     gallery = list(payload.get("gallery") or [])
     if payload.get("hero_image") and payload["hero_image"] not in gallery:
         gallery = [payload["hero_image"], *gallery]
     gallery = gallery[:5]
 
-    header_logo = pdf_image_flowable(
-        payload.get("platform_logo") or resolve_brand_logo_path(),
-        34 * mm,
-        10 * mm,
-        mode="contain",
-        preserve_alpha=True,
-    )
+    org = payload.get("organization") or {}
+    left = []
+    if org.get("logo"):
+        logo = pdf_image_flowable(
+            org.get("logo"),
+            42 * mm,
+            14 * mm,
+            mode="contain",
+            preserve_alpha=True,
+        )
+        if logo:
+            left.append(logo)
+    if org.get("name"):
+        left.append(Paragraph(_escape(org["name"]), styles["BrBrand"]))
     meta_bits = [payload.get("generated_on")]
     if payload.get("mls"):
         meta_bits.append(f"MLS #{payload['mls']}")
@@ -286,8 +356,8 @@ def build_property_brochure_pdf(payload):
         Paragraph(_escape("  ·  ".join(bit for bit in meta_bits if bit)), styles["BrMeta"]),
     ]
     header = Table(
-        [[header_logo or "", right]],
-        colWidths=[usable_width * 0.55, usable_width * 0.45],
+        [[left or "", right]],
+        colWidths=[usable_width * 0.62, usable_width * 0.38],
     )
     header.setStyle(
         TableStyle([

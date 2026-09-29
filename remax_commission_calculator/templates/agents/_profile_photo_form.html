@@ -1,0 +1,22 @@
+{% if agent.profile_photo_key %}
+<p>
+    <img src="{{ url_for('agent_profile_photo', agent_id=agent.id) }}" alt="{{ agent.name }}" style="max-height: 10rem; width: auto; object-fit: contain; background: transparent;">
+</p>
+{% else %}
+<p class="field-help">{{ t('agent_photo_empty') }}</p>
+{% endif %}
+<form method="post" action="{{ photo_upload_url }}" enctype="multipart/form-data">
+    <input type="hidden" name="action" value="upload">
+    <input type="hidden" name="next" value="{{ photo_next or 'profile' }}">
+    <label class="{{ photo_button_class or 'btn btn-primary' }}">
+        {{ t('agent_photo_upload') }}
+        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden onchange="if (this.form.requestSubmit) { this.form.requestSubmit(); } else { this.form.submit(); }">
+    </label>
+</form>
+{% if agent.profile_photo_key %}
+<form method="post" action="{{ photo_upload_url }}" style="margin-top: 0.75rem;">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="next" value="{{ photo_next or 'profile' }}">
+    <button type="submit" class="{{ photo_button_class or 'btn btn-secondary' }}">{{ t('agent_photo_delete') }}</button>
+</form>
+{% endif %}

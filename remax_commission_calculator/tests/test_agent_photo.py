@@ -131,6 +131,50 @@ class AgentPhotoTests(unittest.TestCase):
         finally:
             photo_mod.MAX_MEDIA_BYTES = original
 
+    def test_06b_profile_page_uploads_own_photo(self):
+        client = self._login(self.agent_user, ROLE_AGENT, self.org)
+        page = client.get(f"/agents/{self.agent_id}")
+        html = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Subir foto", html)
+        self.assertIn('accept="image/jpeg,image/png,image/webp"', html)
+        self.assertIn('name="photo"', html)
+        response = client.post(
+            f"/agents/{self.agent_id}/photo",
+            data={
+                "action": "upload",
+                "next": "profile",
+                "photo": (io.BytesIO(_png_bytes()), "emilio.png", "image/png"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f"/agents/{self.agent_id}", response.headers["Location"])
+        agent = get_agent_record(self.agent_id, self.org)
+        self.assertIn(f"organizations/{self.org}/agents/{self.agent_id}/profile/", agent["profile_photo_key"])
+        other = self._login(self.other_user, ROLE_AGENT, self.org)
+        denied = other.post(
+            f"/agents/{self.agent_id}/photo",
+            data={
+                "action": "upload",
+                "next": "profile",
+                "photo": (io.BytesIO(_jpeg_bytes()), "ajena.jpg", "image/jpeg"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(denied.status_code, 403)
+        kept = get_agent_record(self.agent_id, self.org)
+        self.assertEqual(kept["profile_photo_key"], agent["profile_photo_key"])
+        foreign = client.post(
+            f"/agents/{self.foreign_agent}/photo",
+            data={
+                "action": "upload",
+                "photo": (io.BytesIO(_png_bytes()), "no.png", "image/png"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(foreign.status_code, 404)
+
     def test_06_agent_sees_own_photo_page(self):
         save_agent_profile_photo(self.org, self.agent_id, _png_bytes(), content_type="image/png")
         client = self._login(self.agent_user, ROLE_AGENT, self.org)

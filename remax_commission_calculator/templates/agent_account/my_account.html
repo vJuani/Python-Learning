@@ -19,15 +19,14 @@
     </header>
 
     <section class="aa-panel">
-        <h2>{{ t('agent_photo_title') }}</h2>
+        <h2>{{ t('agent_photo_profile_title') }}</h2>
         <p>{{ t('agent_photo_help') }}</p>
-        {% if agent.profile_photo_key %}
+        {% with photo_button_class="aa-btn", photo_next="account", photo_upload_url=url_for('agent_photo_edit', agent_id=agent.id) %}
+        {% include "agents/_profile_photo_form.html" %}
+        {% endwith %}
         <p>
-            <img src="{{ url_for('agent_profile_photo', agent_id=agent.id) }}" alt="{{ agent.name }}" class="acm-photo-preview__img" style="max-height: 10rem; background: transparent;">
+            <a href="{{ url_for('agent_contact_channels_self') }}" class="aa-btn aa-btn--ghost">{{ t('agent_contact_title') }}</a>
         </p>
-        {% endif %}
-        <a href="{{ url_for('agent_photo_profile') }}" class="aa-btn aa-btn--ghost">{{ t('agent_photo_change') }}</a>
-        <a href="{{ url_for('agent_contact_channels_self') }}" class="aa-btn aa-btn--ghost">{{ t('agent_contact_title') }}</a>
     </section>
 
     <section class="aa-balance-grid aa-balance-grid--compact">

@@ -103,7 +103,7 @@ def register_agent_photo_routes(app, helpers):
                     flash_i18n("agent_photo_saved", "success")
             except AgentPhotoError as error:
                 flash_i18n(error.message_key, "error")
-            return redirect(url_for(success_endpoint, **(endpoint_kwargs or {})))
+            return _photo_redirect(agent, success_endpoint, endpoint_kwargs)
         return render_template(
             "agents/photo.html",
             agent=agent,
@@ -111,3 +111,11 @@ def register_agent_photo_routes(app, helpers):
             can_edit=can_edit_agent_photo(user, agent),
             photo_is_admin=user.get("role") == ROLE_ADMIN,
         )
+
+    def _photo_redirect(agent, success_endpoint, endpoint_kwargs):
+        target = (request.form.get("next") or "").strip()
+        if target == "profile":
+            return redirect(url_for("agents_detail", agent_id=agent["id"]))
+        if target == "account":
+            return redirect(url_for("my_agent_account"))
+        return redirect(url_for(success_endpoint, **(endpoint_kwargs or {})))

@@ -35,9 +35,10 @@ def _slug_part(value, fallback="Propiedad", max_len=40):
 
 
 def brochure_filename(property_data, brand_name=None):
-    prefix = _slug_part(brand_name or "JRH", fallback="JRH", max_len=16)
-    if prefix.lower().startswith("jrh"):
-        prefix = "JRH"
+    raw = str(brand_name or "").strip()
+    prefix = _slug_part(raw, fallback="Ficha", max_len=16)
+    if not raw or prefix.lower().startswith("jrh"):
+        prefix = "Ficha"
     address = _slug_part(property_data.get("address"), max_len=36)
     external_id = property_data.get("external_id")
     if _present(external_id):
@@ -102,8 +103,9 @@ def generate_property_brochure(
         "eyebrow": assets["eyebrow"],
         "brand_name": org.get("name"),
         "organization": org,
-        "platform_name": assets["platform_name"],
-        "platform_logo": str(assets["platform_logo"]) if assets.get("platform_logo") else None,
+        "powered_by": f"Powered by {assets.get('platform_name') or 'JRH One'}",
+        "broker_label": assets.get("broker_label"),
+        "license_label": assets.get("license_label"),
         "mls": assets["mls"],
         "generated_on": assets["generated_on"],
         "sheet_label": assets["sheet_label"],

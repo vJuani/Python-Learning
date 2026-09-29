@@ -6,11 +6,12 @@ from datetime import date
 
 from modules.agent_branding import get_agent_branding
 from modules.agent_photo import resolve_agent_photo_path
-from modules.branding import get_brand_name, resolve_brand_logo_path
+from modules.branding import get_brand_name
 from modules.database.agents_repository import get_agent_record
 from modules.database.organization_settings_repository import get_organization_settings
 from modules.i18n import translate
-from modules.operation_summary import _brand_logo_path
+from modules.organization_marketing_logo import get_organization_marketing_branding
+from modules.organization_settings import normalize_accent_color
 from modules.property_detail_view import (
     compact_property_location,
     compact_property_title,
@@ -110,6 +111,36 @@ def _load_gallery(property_data):
     return items
 
 
+def _clean_text(value):
+    text = " ".join(str(value or "").split())
+    return text or None
+
+
+def _organization_branding(organization_id, language):
+    """Office brand for this property. Never another office and never the product logo."""
+    settings = get_organization_settings(organization_id) or {}
+    office = get_organization_marketing_branding(
+        organization_id,
+        language=language,
+        materialize_url=True,
+    ) or {}
+    if office.get("organization_id") not in (None, "", organization_id):
+        try:
+            if int(office.get("organization_id")) != int(organization_id):
+                office = {}
+        except (TypeError, ValueError):
+            office = {}
+    return {
+        "organization_id": organization_id,
+        "name": _clean_text(office.get("brand_name") or office.get("wordmark_text")),
+        "logo": office.get("logo_path") or None,
+        "accent_color": normalize_accent_color(settings.get("accent_color")),
+        "legal_broker_name": _clean_text(office.get("legal_broker_name")),
+        "legal_broker_license": _clean_text(office.get("legal_broker_license")),
+        "legal_footer_line": _clean_text(settings.get("legal_footer_line")),
+    }
+
+
 def _attach_photo(branding):
     if not branding or branding.get("photo_path") or not branding.get("has_photo"):
         return branding
@@ -129,8 +160,6 @@ def build_property_presentation_assets(
     """Cover, gallery[:5], agent, org, price and features for commercial creatives."""
     display = decorate_property_for_display(property_data, language=language)
     meta = parse_external_metadata(display)
-    settings = get_organization_settings(display.get("organization_id")) or {}
-    org_name = (settings.get("display_name") or "").strip() or None
     purpose = normalize_listing_purpose(display.get("listing_purpose"))
     branding = None
     if include_agent:
@@ -149,6 +178,7 @@ def build_property_presentation_assets(
     mls = meta.get("mlsid")
     if not _present(mls):
         mls = None
+    organization_id = display.get("organization_id")
     return {
         "property": display,
         "title": compact_property_title(display),
@@ -158,12 +188,8 @@ def build_property_presentation_assets(
         "cover": gallery[0] if gallery else None,
         "gallery": gallery[:5],
         "agent_branding": branding,
-        "organization_branding": {
-            "name": org_name,
-            "logo": _brand_logo_path(settings.get("logo_path")),
-        },
+        "organization_branding": _organization_branding(organization_id, language),
         "platform_name": get_brand_name(),
-        "platform_logo": resolve_brand_logo_path(),
         "formatted_price": display.get("price_display"),
         "key_features": _chips(display, language),
         "highlights": _highlights(display, language),
@@ -176,6 +202,8 @@ def build_property_presentation_assets(
         "about_label": translate("property_brochure_about", language=language),
         "features_label": translate("property_brochure_facts", language=language),
         "location_label": translate("property_brochure_location", language=language),
-        "advisor_label": translate("property_brochure_advisor", language=language),
+        "advisor_label": translate("property_brochure_responsible", language=language),
+        "broker_label": translate("property_brochure_broker", language=language),
+        "license_label": translate("property_brochure_license", language=language),
         "agent_role": translate("property_brochure_agent_role", language=language),
     }
