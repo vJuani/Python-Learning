@@ -246,7 +246,9 @@ class ShortlistRouteTests(unittest.TestCase):
         self.assertIn("/agenda/new", body)
         self.assertIn("type=visit", body)
         self.assertIn("wa.me/", body)
-        self.assertIn("La ficha fue descargada. Adjuntala en WhatsApp antes de enviar.", body)
+        self.assertIn("Copiar mensaje", body)
+        self.assertIn("Ficha lista para compartir. El mensaje quedó copiado: pegalo en WhatsApp.", body)
+        self.assertIn("Ficha lista. Copiá el mensaje desde JRH antes de enviarla.", body)
         self.assertNotIn("https://www.remax.com.ar", body)
         self.assertNotIn("/p/", body)
         self.assertNotIn("/s/", body)
@@ -324,10 +326,16 @@ class ShortlistRouteTests(unittest.TestCase):
         script = (
             Path(__file__).resolve().parents[1] / "static" / "js" / "shortlist-share.js"
         ).read_text(encoding="utf-8")
+        self.assertIn("navigator.clipboard.writeText", script)
+        self.assertLess(script.index("writeText"), script.index("navigator.share"))
+        self.assertIn("files: [file]", script)
         self.assertIn("navigator.canShare", script)
         self.assertIn("navigator.share", script)
         self.assertNotIn("/p/", script)
         self.assertNotIn("/s/", script)
+        self.assertIn("Copiar mensaje", body)
+        self.assertIn("Hola Martín", body)
+        self.assertIn("Martínez", body)
         self.assertIn("Hola Martín, ¿cómo estás?", body)
         self.assertIn(
             "Encontr%C3%A9%20una%20propiedad%20en%20Mart%C3%ADnez",
