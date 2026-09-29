@@ -195,39 +195,60 @@ def _split_description(text):
     return blocks
 
 
+def _stored_text(value):
+    text = " ".join(str(value or "").split())
+    return text or None
+
+
 def _contact_lines(agent):
-    lines = []
-    phone = agent.get("phone")
-    if phone:
-        lines.append(str(phone))
-    whatsapp = agent.get("whatsapp")
-    if whatsapp and str(whatsapp) != str(phone or ""):
-        lines.append(str(whatsapp))
-    if agent.get("email"):
-        lines.append(str(agent["email"]))
-    instagram = agent.get("instagram")
-    if instagram:
-        handle = str(instagram)
-        if not handle.startswith("@"):
-            handle = f"@{handle}"
-        lines.append(handle)
-    return lines
+    """Email with the agent's real phone or WhatsApp. Nothing is invented."""
+    email = _stored_text(agent.get("email"))
+    phone = _stored_text(agent.get("phone"))
+    whatsapp = _stored_text(agent.get("whatsapp"))
+    if whatsapp and whatsapp == phone:
+        whatsapp = None
+    numbers = [item for item in (phone, whatsapp) if item]
+    instagram = _stored_text(agent.get("instagram"))
+    if instagram and not instagram.startswith("@"):
+        instagram = f"@{instagram}"
+    return email, numbers, instagram
 
 
-def _wrap_footer_text(value, width=42):
-    text = _escape(value)
-    if not text:
+def _wrap_words(canvas, text, font_name, font_size, max_width):
+    """Wrap on spaces. A word that does not fit is scaled, never cut."""
+    words = [word for word in _escape(text).split() if word]
+    if not words or max_width <= 0:
         return []
-    chunks = []
-    while text:
-        chunks.append(text[:width])
-        text = text[width:]
-        if len(chunks) == 2:
-            break
-    return chunks
+    lines = []
+    current = []
+    for word in words:
+        trial = " ".join(current + [word])
+        if current and canvas.stringWidth(trial, font_name, font_size) > max_width:
+            lines.append(" ".join(current))
+            current = [word]
+        else:
+            current.append(word)
+    if current:
+        lines.append(" ".join(current))
+    fitted = []
+    for line in lines:
+        size = float(font_size)
+        while size > 5 and canvas.stringWidth(line, font_name, size) > max_width:
+            size -= 0.25
+        fitted.append((line, size))
+    return fitted
 
 
-def _draw_legal(canvas, payload, x, top):
+def _draw_wrapped(canvas, text, x, y, font_name, font_size, max_width, color, leading):
+    for line, size in _wrap_words(canvas, text, font_name, font_size, max_width):
+        canvas.setFillColor(color)
+        canvas.setFont(font_name, size)
+        canvas.drawString(x, y, line)
+        y -= leading
+    return y
+
+
+def _draw_legal(canvas, payload, x, top, max_width):
     org = payload.get("organization") or {}
     broker = org.get("legal_broker_name")
     license_no = org.get("legal_broker_license")
@@ -235,30 +256,67 @@ def _draw_legal(canvas, payload, x, top):
     if not any((broker, license_no, footer_line)):
         return
     y = top
-    canvas.setFillColor(colors.HexColor("#D5DEE8"))
+    label_color = colors.HexColor("#D5DEE8")
     if broker:
-        canvas.setFont("Helvetica", 6.5)
-        canvas.drawString(x, y, _escape(payload.get("broker_label") or "Martillero").upper()[:24])
-        y -= 4.2 * mm
-        canvas.setFillColor(WHITE)
-        canvas.setFont("Helvetica-Bold", 9)
-        canvas.drawString(x, y, _escape(broker)[:36])
-        y -= 5 * mm
-        canvas.setFillColor(colors.HexColor("#D5DEE8"))
+        y = _draw_wrapped(
+            canvas,
+            (payload.get("broker_label") or "Martillero").upper(),
+            x, y, "Helvetica", 6.5, max_width, label_color, 3.4 * mm,
+        )
+        y -= 0.8 * mm
+        y = _draw_wrapped(
+            canvas, broker, x, y, "Helvetica-Bold", 9, max_width, WHITE, 4.2 * mm,
+        )
+        y -= 0.8 * mm
     if license_no:
-        canvas.setFont("Helvetica", 6.5)
-        canvas.drawString(x, y, _escape(payload.get("license_label") or "Matricula").upper()[:24])
-        y -= 4.2 * mm
-        canvas.setFillColor(WHITE)
-        canvas.setFont("Helvetica-Bold", 9)
-        canvas.drawString(x, y, _escape(license_no)[:36])
-        y -= 5 * mm
+        y = _draw_wrapped(
+            canvas,
+            (payload.get("license_label") or "Matricula").upper(),
+            x, y, "Helvetica", 6.5, max_width, label_color, 3.4 * mm,
+        )
+        y -= 0.8 * mm
+        y = _draw_wrapped(
+            canvas, license_no, x, y, "Helvetica-Bold", 9, max_width, WHITE, 4.2 * mm,
+        )
+        y -= 0.8 * mm
     if footer_line:
-        canvas.setFillColor(colors.HexColor("#C5D0DC"))
-        canvas.setFont("Helvetica", 6.5)
-        for chunk in _wrap_footer_text(footer_line, 46):
-            canvas.drawString(x, y, chunk)
-            y -= 3.4 * mm
+        _draw_wrapped(
+            canvas,
+            footer_line,
+            x, y, "Helvetica", 6.5, max_width, colors.HexColor("#C5D0DC"), 3.4 * mm,
+        )
+
+
+def _draw_fitted(canvas, text, x, y, font_name, font_size, max_width):
+    fitted = _wrap_words(canvas, text, font_name, font_size, max_width)
+    if not fitted:
+        return y
+    line, size = fitted[0]
+    canvas.setFont(font_name, size)
+    canvas.drawString(x, y, line)
+    return y - (3.6 * mm)
+
+
+def _draw_agent_contacts(canvas, x, y, max_width, email, numbers, instagram):
+    canvas.setFillColor(WHITE)
+    font_name = "Helvetica"
+    font_size = 7.5
+    if email and numbers:
+        together = "  ·  ".join([email, *numbers])
+        if canvas.stringWidth(_escape(together), font_name, font_size) <= max_width:
+            y = _draw_fitted(canvas, together, x, y, font_name, font_size, max_width)
+        else:
+            y = _draw_fitted(canvas, email, x, y, font_name, font_size, max_width)
+            for number in numbers:
+                y = _draw_fitted(canvas, number, x, y, font_name, font_size, max_width)
+    elif email:
+        y = _draw_fitted(canvas, email, x, y, font_name, font_size, max_width)
+    else:
+        for number in numbers:
+            y = _draw_fitted(canvas, number, x, y, font_name, font_size, max_width)
+    if instagram:
+        y = _draw_fitted(canvas, instagram, x, y, font_name, font_size, max_width)
+    return y
 
 
 def _draw_footer(canvas, payload):
@@ -310,12 +368,15 @@ def _draw_footer(canvas, payload):
             y = 27.5 * mm
         canvas.setFillColor(WHITE)
         canvas.setFont("Helvetica", 7.5)
-        for line in _contact_lines(agent)[:4]:
-            canvas.drawString(x, y, _escape(line)[:42])
-            y -= 3.6 * mm
-        _draw_legal(canvas, payload, 118 * mm, 44 * mm)
+        email, numbers, instagram = _contact_lines(agent)
+        contact_width = (118 * mm) - x - (4 * mm)
+        y = _draw_agent_contacts(
+            canvas, x, y, contact_width, email, numbers, instagram,
+        )
+        legal_x = 118 * mm
+        _draw_legal(canvas, payload, legal_x, 44 * mm, width - legal_x - (12 * mm))
     else:
-        _draw_legal(canvas, payload, x, 40 * mm)
+        _draw_legal(canvas, payload, x, 40 * mm, width - x - (12 * mm))
     powered = payload.get("powered_by")
     if powered:
         canvas.setFillColor(colors.HexColor("#8E9AAB"))

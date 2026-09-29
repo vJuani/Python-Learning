@@ -47,6 +47,22 @@ def brochure_filename(property_data, brand_name=None):
     return f"{prefix}_Propiedad_{address}.pdf"
 
 
+def _attach_stored_whatsapp(agent):
+    """Use the number saved on this agent. Do not invent one."""
+    if agent.get("whatsapp"):
+        return agent
+    from modules.agent_contact_channels import resolve_agent_contact_channels
+
+    channels = resolve_agent_contact_channels(
+        agent.get("agent_id"),
+        agent.get("organization_id"),
+    )
+    stored = " ".join(str(channels.get("whatsapp_number") or "").split())
+    if stored:
+        agent["whatsapp"] = stored
+    return agent
+
+
 def resolve_property_agent_contact(property_data):
     from modules.agent_branding import get_agent_branding
 
@@ -94,6 +110,7 @@ def generate_property_brochure(
             **agent,
             "role": translate("property_brochure_agent_role", language=language),
         }
+        _attach_stored_whatsapp(agent)
 
     payload = {
         "title": assets["title"] or display.get("address") or "Property",

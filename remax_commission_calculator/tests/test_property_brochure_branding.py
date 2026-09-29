@@ -257,3 +257,80 @@ class PropertyBrochureBrandingTests(unittest.TestCase):
         self.assertIn("Estudio Norte", text)
         self.assertNotIn("Data House", text)
         self.assertNotIn("Mauro Marvisi", text)
+
+    def test_legal_footer_keeps_whole_words(self):
+        import io
+
+        from reportlab.pdfgen import canvas as pdfcanvas
+
+        from modules.pdf_property_brochure import _wrap_words
+
+        canv = pdfcanvas.Canvas(io.BytesIO())
+        source = "Corredor Público Martín Prueba Matrícula QA-0000"
+        lines = _wrap_words(canv, source, "Helvetica", 6.5, 90)
+        tokens = [token for line, _size in lines for token in line.split()]
+        self.assertGreater(len(lines), 1)
+        self.assertIn("Matrícula", tokens)
+        self.assertFalse(any(
+            token.startswith("Matr") and token != "Matrícula" for token in tokens
+        ))
+        fitted = _wrap_words(canv, "Matrícula", "Helvetica-Bold", 9, 20)
+        self.assertEqual(fitted[0][0], "Matrícula")
+        self.assertLess(fitted[0][1], 9)
+
+    def test_stored_whatsapp_is_shown_next_to_email(self):
+        agent_id = add_agent("Nico", "Alto", self.org_a)
+        user_id = add_user(
+            "nico_phone",
+            hash_password("Password1"),
+            ROLE_AGENT,
+            self.org_a,
+            agent_id=agent_id,
+            is_active=True,
+            first_name="Nico",
+            last_name="Real",
+            email="nico@achard.test",
+        )
+        link_agent_whatsapp(agent_id, self.org_a, "1155559999", enable_marketing=False)
+        prop = add_property(
+            "Calle Nico 1",
+            "Buenos Aires",
+            self.org_a,
+            agent_id=agent_id,
+            status=STATUS_APPROVED,
+            listing_price=100000,
+            listing_currency="USD",
+        )
+        result = generate_property_brochure(prop, self.org_a, True, get_user_by_id(user_id))
+        text = _pdf_text(result["pdf_bytes"])
+        self.assertEqual(result["agent"]["whatsapp"], "+54 9 11 5555 9999")
+        self.assertIn("nico@achard.test · +54 9 11 5555 9999", text)
+
+    def test_missing_phone_is_not_invented(self):
+        agent_id = add_agent("Sin", "Alto", self.org_a)
+        user_id = add_user(
+            "sin_phone",
+            hash_password("Password1"),
+            ROLE_AGENT,
+            self.org_a,
+            agent_id=agent_id,
+            is_active=True,
+            first_name="Sin",
+            last_name="Telefono",
+            email="sin.telefono@achard.test",
+        )
+        prop = add_property(
+            "Calle Sin 2",
+            "Buenos Aires",
+            self.org_a,
+            agent_id=agent_id,
+            status=STATUS_APPROVED,
+            listing_price=100000,
+            listing_currency="USD",
+        )
+        result = generate_property_brochure(prop, self.org_a, True, get_user_by_id(user_id))
+        text = _pdf_text(result["pdf_bytes"])
+        self.assertIsNone(result["agent"].get("phone"))
+        self.assertIsNone(result["agent"].get("whatsapp"))
+        self.assertIn("sin.telefono@achard.test", text)
+        self.assertNotIn("+54", text)
