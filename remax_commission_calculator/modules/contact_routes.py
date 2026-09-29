@@ -852,32 +852,6 @@ def register_contact_routes(app, helpers):
     def _shortlist_key(contact_id):
         return f"property_shortlist_{int(contact_id)}"
 
-    def _shortlist_share(stored):
-        mode = stored.get("mode") or "individual"
-        if mode not in ("individual", "collection"):
-            mode = "individual"
-        try:
-            days = int(stored.get("share_days") or 30)
-        except (TypeError, ValueError):
-            days = 30
-        return mode, days, stored.get("collection_token") or ""
-
-    def _attach_share_links(organization_id, agent_id, contact, items, stored):
-        from modules.public_share import prepare_client_links
-
-        mode, days, token = _shortlist_share(stored)
-        collection_url, token = prepare_client_links(
-            organization_id,
-            items,
-            agent_id=agent_id,
-            base_url=request.url_root.rstrip("/"),
-            mode=mode,
-            contact_id=contact["id"],
-            days=days,
-            collection_token=token,
-        )
-        return collection_url, token, mode, days
-
     def _load_shortlist(organization_id, agent_id, contact, language):
         from modules.property_shortlist import (
             ShortlistError,
@@ -899,25 +873,12 @@ def register_contact_routes(app, helpers):
             ),
             agent_id=agent_id,
         )
-        collection_url, token, mode, days = _attach_share_links(
-            organization_id,
-            agent_id,
-            contact,
-            items,
-            stored,
-        )
         message = stored.get("message") or draft_whatsapp_message(
             contact,
             items,
             language=language,
-            collection_url=collection_url if mode == "collection" else "",
         )
-        return items, message, {
-            "mode": mode,
-            "share_days": days,
-            "collection_token": token,
-            "collection_url": collection_url if mode == "collection" else "",
-        }
+        return items, message, stored
 
     def _save_shortlist(contact, items, message, share=None):
         share = share or {}
@@ -965,20 +926,6 @@ def register_contact_routes(app, helpers):
                 )
             except ShortlistError as error:
                 return _reject_shortlist(contact_id, error)
-            share = {"mode": "individual", "share_days": 30, "collection_token": ""}
-            collection_url, token, mode, days = _attach_share_links(
-                organization_id,
-                agent_id,
-                contact,
-                items,
-                share,
-            )
-            share = {
-                "mode": mode,
-                "share_days": days,
-                "collection_token": token,
-                "collection_url": collection_url,
-            }
             _save_shortlist(
                 contact,
                 items,
@@ -986,9 +933,7 @@ def register_contact_routes(app, helpers):
                     contact,
                     items,
                     language=language,
-                    collection_url=collection_url if mode == "collection" else "",
                 ),
-                share,
             )
             return redirect(url_for("contacts_property_shortlist", contact_id=contact_id))
 
@@ -1014,8 +959,8 @@ def register_contact_routes(app, helpers):
             items=items,
             message=message,
             can_manage=can_manage,
-            share_mode=share["mode"],
-            share_days=share["share_days"],
+            share_mode=share.get("mode") or "individual",
+            share_days=share.get("share_days") or 30,
         )
 
     @app.route("/contacts/<int:contact_id>/shortlist/update", methods=["POST"])
@@ -1085,25 +1030,11 @@ def register_contact_routes(app, helpers):
             )
         except ShortlistError as error:
             return _reject_shortlist(contact_id, error)
-        collection_url, token, mode, days = _attach_share_links(
-            organization_id,
-            agent_id,
-            contact,
-            items,
-            share,
-        )
-        share = {
-            "mode": mode,
-            "share_days": days,
-            "collection_token": token,
-            "collection_url": collection_url if mode == "collection" else "",
-        }
         if action == "mode":
             edited = draft_whatsapp_message(
                 contact,
                 items,
                 language=language,
-                collection_url=share["collection_url"],
             )
         else:
             edited = request.form.get("message")
@@ -1119,7 +1050,6 @@ def register_contact_routes(app, helpers):
         from modules.property_shortlist import (
             ShortlistError,
             attach_match_scores,
-            record_shortlist_share,
             select_properties,
         )
 
@@ -1128,7 +1058,6 @@ def register_contact_routes(app, helpers):
         )
         if not can_manage or agent_id is None:
             abort(403)
-        language = get_current_language()
         try:
             items = attach_match_scores(
                 organization_id,
@@ -1147,44 +1076,16 @@ def register_contact_routes(app, helpers):
         if not message:
             flash_i18n("shortlist_err_empty", "error")
             return redirect(url_for("contacts_property_shortlist", contact_id=contact_id))
-        stored = session.get(_shortlist_key(contact_id)) or {}
-        posted_mode = request.form.get("share_mode") or stored.get("mode") or "individual"
-        posted_days = request.form.get("share_days") or stored.get("share_days") or 30
-        collection_url, token, mode, days = _attach_share_links(
-            organization_id,
-            agent_id,
-            contact,
-            items,
-            {
-                "mode": posted_mode,
-                "share_days": posted_days,
-                "collection_token": stored.get("collection_token") or "",
-            },
-        )
         url = whatsapp_share_url(contact.get("phone"), message)
         if url is None:
             flash_i18n("contacts_add_phone", "error")
             return redirect(url_for("contacts_property_shortlist", contact_id=contact_id))
-        updated, _written = record_shortlist_share(
-            organization_id,
-            contact,
-            items,
-            agent_id=agent_id,
-            now=now_utc(),
-            tz=organization_timezone(organization_id),
-            language=language,
-        )
         session[_shortlist_key(contact_id)] = {
             "property_ids": [item["property_id"] for item in items],
             "message": message,
             "whatsapp_url": url,
             "opened": True,
-            "mode": mode,
-            "share_days": days,
-            "collection_token": token if mode == "collection" else "",
-            "collection_url": collection_url if mode == "collection" else "",
         }
-        session["property_shortlist_contact"] = updated.get("id")
         return redirect(url_for("contacts_property_shortlist_sent", contact_id=contact_id))
 
     @app.route("/contacts/<int:contact_id>/shortlist/sent")
@@ -1201,7 +1102,45 @@ def register_contact_routes(app, helpers):
             contact=contact,
             whatsapp_url=stored["whatsapp_url"],
             can_manage=can_manage,
-            collection_token=stored.get("collection_token") or "",
+            collection_token="",
+        )
+
+    @app.route("/contacts/<int:contact_id>/shortlist/mark-sent", methods=["POST"])
+    @login_required
+    def contacts_property_shortlist_mark_sent(contact_id):
+        from modules.property_shortlist import (
+            ShortlistError,
+            record_shortlist_share,
+            select_properties,
+        )
+
+        _user, organization_id, agent_id, can_manage, contact = _scoped_contact(
+            contact_id
+        )
+        if not can_manage or agent_id is None:
+            abort(403)
+        stored = session.get(_shortlist_key(contact_id)) or {}
+        try:
+            items = select_properties(
+                organization_id,
+                contact["id"],
+                stored.get("property_ids") or [],
+                agent_id=agent_id,
+            )
+        except ShortlistError as error:
+            return _reject_shortlist(contact_id, error)
+        record_shortlist_share(
+            organization_id,
+            contact,
+            items,
+            agent_id=agent_id,
+            now=now_utc(),
+            tz=organization_timezone(organization_id),
+            language=get_current_language(),
+        )
+        flash_i18n("shortlist_marked_sent", "success")
+        return redirect(
+            url_for("contacts_property_shortlist_sent", contact_id=contact_id)
         )
 
     @app.route("/contacts/<int:contact_id>/shortlist/follow-up", methods=["POST"])
@@ -1338,23 +1277,6 @@ def register_contact_routes(app, helpers):
 
         if not selected:
             abort(404)
-
-        if can_manage and agent_id is not None:
-            for card in selected:
-                listing = card.get("listing") or {}
-                record_property_interaction(
-                    organization_id,
-                    agent_id,
-                    contact_id=contact["id"],
-                    property_id=card.get("property_id") or listing.get("property_id"),
-                    interaction_type="shared",
-                    label=(
-                        listing.get("address")
-                        or listing.get("title")
-                        or card.get("title")
-                        or ""
-                    ),
-                )
 
         message = build_whatsapp_message(
             contact,

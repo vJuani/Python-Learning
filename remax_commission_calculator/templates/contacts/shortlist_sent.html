@@ -11,12 +11,9 @@
     <p>
         <a class="btn btn-primary" href="{{ whatsapp_url }}" target="_blank" rel="noopener">{{ t('shortlist_open_whatsapp') }}</a>
     </p>
-    {% if collection_token %}
-    <form method="post" action="{{ url_for('contacts_property_shortlist_revoke', contact_id=contact.id) }}">
-        <input type="hidden" name="token" value="{{ collection_token }}">
-        <button type="submit" class="btn btn-small btn-secondary">{{ t('public_revoke') }}</button>
+    <form method="post" action="{{ url_for('contacts_property_shortlist_mark_sent', contact_id=contact.id) }}">
+        <button type="submit" class="btn btn-secondary">{{ t('shortlist_mark_sent') }}</button>
     </form>
-    {% endif %}
     <section class="contact-panel">
         <h2>{{ t('shortlist_followup') }}</h2>
         <div class="shortlist-follow">

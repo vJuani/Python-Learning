@@ -90,12 +90,39 @@ class ShortlistMessageTests(unittest.TestCase):
             message.index("Alvear 450"),
             message.index("Santa Fe 2100"),
         )
-        self.assertIn("https://www.remax.com.ar/listings/alvear-450", message)
+        self.assertNotIn("https://www.remax.com.ar", message)
+        self.assertNotIn("/p/", message)
+        self.assertNotIn("/s/", message)
         self.assertNotIn("/properties/", message)
         self.assertNotIn("88%", message)
         self.assertNotIn("86%", message)
         self.assertIn("cochera", message.casefold())
         self.assertIn("Hola Martín", message)
+
+    def test_one_property_message_has_no_public_url(self):
+        message = draft_whatsapp_message(
+            {"name": "Martín Pérez"},
+            [
+                {
+                    "address": "Alvear 450",
+                    "neighborhood": "Martínez",
+                    "public_url": "https://www.remax.com.ar/listings/alvear-450",
+                    "score": 88,
+                }
+            ],
+        )
+        self.assertEqual(
+            message,
+            "\n".join(
+                [
+                    "Hola Martín, ¿cómo estás?",
+                    "",
+                    "Encontré una propiedad en Martínez que encaja muy bien con lo que estás buscando.",
+                    "",
+                    "Te paso la ficha con todos los detalles. Si te interesa, coordinamos una visita.",
+                ]
+            ),
+        )
 
 
 class ShortlistRouteTests(unittest.TestCase):
@@ -212,7 +239,15 @@ class ShortlistRouteTests(unittest.TestCase):
         body = one.get_data(as_text=True)
         self.assertIn("1 propiedad seleccionada", body)
         self.assertIn("Av. Santa Fe 2100", body)
-        self.assertIn("https://www.remax.com.ar/listings/santa-fe-2100", body)
+        self.assertIn("Encontré una propiedad en Martínez", body)
+        self.assertIn("Descargar ficha", body)
+        self.assertIn("Agendar visita", body)
+        self.assertIn("Abrir WhatsApp", body)
+        self.assertNotIn("https://www.remax.com.ar", body)
+        self.assertNotIn("/p/", body)
+        self.assertNotIn("/s/", body)
+        self.assertNotIn("Links individuales", body)
+        self.assertNotIn("Un solo link", body)
 
         ordered = self.client.post(
             f"/contacts/{self.contact['id']}/shortlist",
@@ -261,7 +296,7 @@ class ShortlistRouteTests(unittest.TestCase):
         )
         self.assertIn("descartada", discarded.get_data(as_text=True))
 
-    def test_open_records_one_timeline_and_does_not_duplicate_shared(self):
+    def test_open_does_not_record_shared_until_marked(self):
         self.client.post(
             f"/contacts/{self.contact['id']}/shortlist",
             data={"property_id": [str(self.alvear), str(self.santa)]},
@@ -270,24 +305,30 @@ class ShortlistRouteTests(unittest.TestCase):
             f"/contacts/{self.contact['id']}/shortlist/open",
             data={
                 "property_id": [str(self.alvear), str(self.santa)],
-                "message": "Hola Martín\n\n1. Alvear 450\nhttps://www.remax.com.ar/listings/alvear-450",
+                "message": "Hola Martín, ¿cómo estás?",
             },
             follow_redirects=True,
         )
         page = opened.get_data(as_text=True)
         self.assertIn("Abrir WhatsApp", page)
         self.assertIn("wa.me/", page)
+        self.assertIn("Marcar enviada", page)
+        self.assertNotIn("/p/", page)
+        self.assertNotIn("/s/", page)
         self.assertIn("Agendar seguimiento", page)
-        self.assertNotIn("88%", page)
+        rows = list_property_interactions(self.org, self.contact["id"], limit=20)
+        shared = [row for row in rows if row["interaction_type"] == "shared"]
+        self.assertEqual(shared, [])
+        marked = self.client.post(
+            f"/contacts/{self.contact['id']}/shortlist/mark-sent",
+            follow_redirects=True,
+        )
+        self.assertEqual(marked.status_code, 200)
         rows = list_property_interactions(self.org, self.contact["id"], limit=20)
         shared = [row for row in rows if row["interaction_type"] == "shared"]
         self.assertEqual(len(shared), 2)
         again = self.client.post(
-            f"/contacts/{self.contact['id']}/shortlist/open",
-            data={
-                "property_id": [str(self.alvear), str(self.santa)],
-                "message": "Hola Martín de nuevo",
-            },
+            f"/contacts/{self.contact['id']}/shortlist/mark-sent",
             follow_redirects=True,
         )
         self.assertEqual(again.status_code, 200)
@@ -299,7 +340,7 @@ class ShortlistRouteTests(unittest.TestCase):
             line for line in (contact.get("notes") or "").splitlines()
             if "property_shortlist_shared" in line
         ]
-        self.assertEqual(len(notes), 2)
+        self.assertEqual(len(notes), 1)
         self.assertIn("Alvear 450", notes[-1])
         self.assertIn("Santa Fe 2100", notes[-1])
         detail = self.client.get(f"/contacts/{self.contact['id']}")

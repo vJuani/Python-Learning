@@ -4453,14 +4453,12 @@ def confirm_jrh_action(
         from modules.contacts import load_contact
         from modules.organization_time import organization_timezone
         from modules.property_match import whatsapp_share_url
-        from modules.branding import get_app_base_url
         from modules.property_shortlist import (
             attach_match_scores,
             draft_whatsapp_message,
             record_shortlist_share,
             select_properties,
         )
-        from modules.public_share import prepare_client_links
 
         contact = load_contact(
             organization_id,
@@ -4478,20 +4476,10 @@ def confirm_jrh_action(
             ),
             agent_id=agent_id if is_agent(user) else None,
         )
-        mode = draft.get("mode") or "individual"
-        collection_url, _token = prepare_client_links(
-            organization_id,
-            items,
-            agent_id=agent_id if is_agent(user) else None,
-            base_url=get_app_base_url(),
-            mode=mode,
-            contact_id=contact["id"],
-        )
         message = draft_whatsapp_message(
             contact,
             items,
             language=language,
-            collection_url=collection_url if mode == "collection" else "",
         )
         record_shortlist_share(
             organization_id,

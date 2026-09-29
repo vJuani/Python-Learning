@@ -167,21 +167,35 @@ def _listing_lines(items, language, *, include_urls):
 
 
 def draft_whatsapp_message(contact, items, *, language="es", collection_url=""):
-    """Client-facing text. Compatibility scores stay off this draft."""
+    """Client-facing text. The agent attaches the PDF by hand.
+
+    Public /p/ and /s/ links stay out of this message.
+    """
+    del collection_url
     name = ((contact or {}).get("name") or "").split()
     first = name[0] if name else ""
+    rows = list(items or [])
+    hello = translate("shortlist_wa_hello", language, name=first)
+    if len(rows) <= 1:
+        place = ""
+        if rows:
+            place = (rows[0].get("neighborhood") or "").strip()
+        found = (
+            translate("shortlist_wa_found", language, place=place)
+            if place
+            else translate("shortlist_wa_found_plain", language)
+        )
+        return "\n".join(
+            [hello, "", found, "", translate("shortlist_wa_sheet", language)]
+        ).strip()
     lines = [
-        translate("shortlist_wa_hello", language, name=first),
+        hello,
         "",
-        translate("shortlist_wa_intro", language),
+        translate("shortlist_wa_found_many", language, count=len(rows)),
         "",
     ]
-    lines.extend(_listing_lines(items, language, include_urls=not collection_url))
-    if collection_url:
-        lines.append(translate("shortlist_wa_collection", language))
-        lines.append(collection_url)
-        lines.append("")
-    lines.append(translate("shortlist_wa_close", language))
+    lines.extend(_listing_lines(rows, language, include_urls=False))
+    lines.append(translate("shortlist_wa_sheet_many", language))
     return "\n".join(lines).strip()
 
 
@@ -213,6 +227,8 @@ def record_shortlist_share(
             label=f"{position}|{item.get('address') or ''}",
         )
         written.append(property_id)
+    if not written:
+        return contact, written
     addresses = [item.get("address") or "" for item in items if item.get("address")]
     if len(addresses) == 1:
         detail = addresses[0]
