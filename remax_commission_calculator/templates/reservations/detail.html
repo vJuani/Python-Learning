@@ -3,11 +3,15 @@
 {% block title %}{{ detail.reservation.property_address or t('reservation_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/reservations.css') }}?v=board2">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reservations.css') }}?v=board6">
 {% endblock %}
 
 {% block content %}
 <p class="res-back"><a class="btn btn-secondary" href="{{ url_for('reservations_list') }}">{{ t('back') }}</a></p>
 {% set reservation = detail.reservation %}
 {% include "reservations/_detail_panel.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/reservations.js') }}?v=board6"></script>
 {% endblock %}

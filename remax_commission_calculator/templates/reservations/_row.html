@@ -4,9 +4,7 @@
             {% include "reservations/_thumb.html" %}
             <div>
                 <a href="{{ url_for('reservations_detail', reservation_id=row.id) }}">{{ row.property_address or row.property_id }}</a>
-                {% if row.zone or row.external_ref %}
-                <small>{{ row.zone }}{% if row.zone and row.external_ref %} · {% endif %}{{ row.external_ref }}</small>
-                {% endif %}
+                <small>{{ row.contact_name or '—' }}{% if row.external_ref %} · #{{ row.external_ref }}{% endif %}</small>
             </div>
         </div>
     </td>
@@ -17,7 +15,7 @@
     <td>{{ row.amount_label or '—' }}</td>
     <td>
         {% if row.commission_state == 'pending_operation' %}
-        <span class="res-muted">{{ t('reservation_commission_pending') }}</span>
+        <span class="res-muted" title="{{ t('reservation_commission_pending') }}">{{ t('reservation_commission_pending') }}</span>
         {% else %}
         {{ row.commission_agent_label or '—' }}
         <small>{{ t('reservation_paid') if row.operation_paid else t('reservation_unpaid') }}</small>
@@ -26,9 +24,11 @@
     <td>
         <em class="res-badge" data-status="{{ row.reservation_status }}">{{ t(row.status_label_key) }}</em>
         {% if row.alerts %}
-        <ul class="res-alerts">
-            {% for key in row.alerts %}<li>{{ t(key) }}</li>{% endfor %}
-        </ul>
+        <span class="res-warn" tabindex="0">⚠ {{ row.alerts|length }}
+            <span class="res-warn__tip">
+                {% for key in row.alerts %}<span>{{ t(key) }}</span>{% endfor %}
+            </span>
+        </span>
         {% endif %}
     </td>
     <td>{% if row.next_milestone %}{{ t('visit_close_milestone_' ~ row.next_milestone) }}{% else %}—{% endif %}</td>

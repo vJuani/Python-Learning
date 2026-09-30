@@ -1,4 +1,51 @@
 (function () {
+    function setHidden(node, hidden) {
+        if (!node) {
+            return;
+        }
+        node.hidden = hidden;
+    }
+
+    function backdrop() {
+        return document.querySelector("[data-res-backdrop]");
+    }
+
+    document.addEventListener("click", function (event) {
+        var tab = event.target.closest("[data-res-tab]");
+        if (tab) {
+            var root = tab.closest("[data-res-switch]");
+            if (!root) {
+                return;
+            }
+            var name = tab.getAttribute("data-res-tab");
+            root.querySelectorAll("[data-res-tab]").forEach(function (button) {
+                button.setAttribute("aria-selected", button === tab ? "true" : "false");
+            });
+            root.querySelectorAll("[data-res-pane]").forEach(function (pane) {
+                pane.hidden = pane.getAttribute("data-res-pane") !== name;
+            });
+            return;
+        }
+        var formButton = event.target.closest("[data-res-form]");
+        if (formButton) {
+            var host = formButton.closest(".res-detail") || document;
+            var sheetName = formButton.getAttribute("data-res-form");
+            host.querySelectorAll("[data-res-sheet]").forEach(function (sheet) {
+                var selected = sheet.getAttribute("data-res-sheet") === sheetName;
+                sheet.hidden = selected ? !sheet.hidden : true;
+            });
+            setHidden(host.querySelector("[data-res-more-menu]"), true);
+            return;
+        }
+        var more = event.target.closest("[data-res-more]");
+        if (more) {
+            var moreMenu = more.parentElement.querySelector("[data-res-more-menu]");
+            if (moreMenu) {
+                moreMenu.hidden = !moreMenu.hidden;
+            }
+        }
+    });
+
     var board = document.querySelector("[data-res-board]");
     if (!board) {
         return;
@@ -9,21 +56,18 @@
     var openFilters = document.querySelector("[data-res-filters-open]");
     var closeFilters = document.querySelector("[data-res-filters-close]");
 
-    function setHidden(node, hidden) {
-        if (!node) {
-            return;
-        }
-        node.hidden = hidden;
-    }
-
     if (openFilters) {
         openFilters.addEventListener("click", function () {
             setHidden(drawer, false);
+            setHidden(backdrop(), false);
         });
     }
     if (closeFilters) {
         closeFilters.addEventListener("click", function () {
             setHidden(drawer, true);
+            if (!panel || panel.hidden) {
+                setHidden(backdrop(), true);
+            }
         });
     }
 
@@ -92,6 +136,7 @@
             return;
         }
         panel.hidden = false;
+        setHidden(backdrop(), false);
         panel.setAttribute("aria-busy", "true");
         fetch("/reservations/" + id + "?panel=1", { credentials: "same-origin" })
             .then(function (response) {
@@ -123,12 +168,27 @@
         openReservation(row.getAttribute("data-res-row"));
     });
 
+    function closePanel() {
+        if (!panel) {
+            return;
+        }
+        panel.hidden = true;
+        panel.innerHTML = "";
+        setHidden(backdrop(), true);
+    }
+
     if (panel) {
         panel.addEventListener("click", function (event) {
             if (event.target.closest("[data-res-close]")) {
-                panel.hidden = true;
-                panel.innerHTML = "";
+                closePanel();
             }
         });
     }
+
+    document.addEventListener("click", function (event) {
+        if (event.target.closest("[data-res-backdrop]")) {
+            closePanel();
+            setHidden(drawer, true);
+        }
+    });
 }());

@@ -1,103 +1,154 @@
 {% set reservation = detail.reservation %}
-<article class="res-detail{% if panel %} res-detail--panel{% else %} res-detail--page{% endif %}">
-    <header class="res-detail__head">
-        <div class="res-property">
-            {% with row=reservation %}
-            {% include "reservations/_thumb.html" %}
-            {% endwith %}
+{% macro human_when(value) -%}
+{%- set raw = (value or '')|string -%}
+{%- if raw|length >= 16 and 'T' in raw -%}
+{{ raw[8:10] }}/{{ raw[5:7] }}/{{ raw[0:4] }} · {{ raw[11:16] }}
+{%- elif raw|length >= 10 and raw[4:5] == '-' -%}
+{{ raw[8:10] }}/{{ raw[5:7] }}/{{ raw[0:4] }}
+{%- else -%}
+{{ raw }}
+{%- endif -%}
+{%- endmacro %}
+{% macro track_label(step, compact=false) -%}
+{%- if compact and step.key == 'reserved' -%}{{ t('reservation_track_short_reserved') }}
+{%- elif compact and step.key == 'documentation' -%}{{ t('reservation_track_short_docs') }}
+{%- elif step.key == 'credit_contract' -%}{{ t('reservation_track_credit') }}
+{%- elif step.key == 'deed_scheduled' -%}{{ t('reservation_track_deed') }}
+{%- elif compact and step.key == 'in_operation' -%}{{ t('reservation_track_operation') }}
+{%- elif compact and step.key == 'closed' -%}{{ t('reservation_track_short_closed') }}
+{%- else -%}{{ t(step.label_key) }}
+{%- endif -%}
+{%- endmacro %}
+
+<article class="res-detail{% if panel %} res-detail--panel{% else %} res-detail--page{% endif %}" data-res-switch>
+    <header class="res-hero">
+        {% if reservation.thumbnail_url %}
+        <img class="res-hero__photo" src="{{ reservation.thumbnail_url }}" alt="">
+        {% else %}
+        <div class="res-hero__photo res-hero__photo--empty" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"/></svg>
+        </div>
+        {% endif %}
+        {% if panel %}
+        <button type="button" class="res-hero__close" data-res-close aria-label="{{ t('reservation_close') }}">×</button>
+        {% endif %}
+        <div class="res-hero__body">
             <div>
                 <h2>{{ reservation.property_address or reservation.property_id }}</h2>
-                {% if reservation.zone or reservation.external_ref %}
-                <small>{{ reservation.zone }}{% if reservation.zone and reservation.external_ref %} · {% endif %}{{ reservation.external_ref }}</small>
-                {% endif %}
-                <p>{{ reservation.contact_name or '—' }}{% if reservation.agent_name %} · {{ reservation.agent_name }}{% endif %}</p>
+                <p>{{ reservation.contact_name or reservation.zone or '—' }}{% if reservation.external_ref %} · #{{ reservation.external_ref }}{% endif %}</p>
             </div>
+            <em class="res-badge" data-status="{{ reservation.reservation_status }}">{{ t(reservation.status_label_key) }}</em>
         </div>
-        <em class="res-badge" data-status="{{ reservation.reservation_status }}">{{ t(reservation.status_label_key) }}</em>
-        {% if panel %}
-        <button type="button" class="btn btn-secondary" data-res-close>{{ t('reservation_close') }}</button>
+        {% if reservation.property_id %}
+        <a class="res-hero__link" href="{{ url_for('properties_detail', property_id=reservation.property_id) }}">{{ t('reservation_view_property') }}</a>
         {% endif %}
     </header>
 
-    {% if reservation.alerts %}
-    <ul class="res-alerts res-alerts--block">
-        {% for key in reservation.alerts %}<li>{{ t(key) }}</li>{% endfor %}
-    </ul>
-    {% endif %}
+    <div class="res-switch" role="tablist">
+        <button type="button" data-res-tab="summary" aria-selected="true">{{ t('reservation_section_summary') }}</button>
+        <button type="button" data-res-tab="progress" aria-selected="false">{{ t('reservation_section_progress') }}</button>
+        <button type="button" data-res-tab="documents" aria-selected="false">{{ t('reservation_documents') }}</button>
+        <button type="button" data-res-tab="timeline" aria-selected="false">{{ t('reservation_pane_timeline') }}</button>
+    </div>
 
-    {% if reservation.gaps %}
-    <section class="res-gaps">
-        <h3>{{ t('reservation_gap_title') }}</h3>
-        <ul>
-            {% for key in reservation.gaps %}<li>{{ t(key) }}</li>{% endfor %}
-        </ul>
-    </section>
-    {% endif %}
+    <div class="res-panes">
+        <section data-res-pane="summary">
+            <div class="res-block">
+                <h3>{{ t('reservation_state_now') }}</h3>
+                <p class="res-block__lead">{{ t(reservation.status_label_key) }}</p>
+                <ol class="res-track res-track--inline">
+                    {% for step in reservation.progress.steps %}
+                    <li class="is-{{ step.state }}"><span>{{ track_label(step, true) }}</span></li>
+                    {% endfor %}
+                </ol>
+            </div>
 
-    <div class="res-detail__grid">
-        <section>
-            <h3>{{ t('reservation_section_summary') }}</h3>
-            <dl class="res-facts">
-                <div><dt>{{ t('reservation_col_property') }}</dt><dd>{{ reservation.property_address or reservation.property_id }}</dd></div>
-                <div><dt>{{ t('reservation_col_client') }}</dt><dd>{{ reservation.contact_name or '—' }}</dd></div>
-                <div><dt>{{ t('reservation_col_agent') }}</dt><dd>{{ reservation.agent_name or '—' }}</dd></div>
-                <div><dt>{{ t('reservation_original_price') }}</dt><dd>{{ reservation.original_label or '—' }}</dd></div>
-                <div><dt>{{ t('reservation_col_agreed') }}</dt><dd>{{ reservation.agreed_label or '—' }}</dd></div>
-                <div><dt>{{ t('reservation_col_amount') }}</dt><dd>{{ reservation.amount_label or '—' }}</dd></div>
-                <div><dt>{{ t('visit_close_payment') }}</dt><dd>{% if reservation.payment_method %}{{ t('visit_close_payment_' ~ reservation.payment_method) }}{% else %}—{% endif %}</dd></div>
-            </dl>
+            <div class="res-block">
+                <h3>{{ t('reservation_commercial') }}</h3>
+                <dl class="res-grid">
+                    <div><dt>{{ t('reservation_col_client') }}</dt><dd>{{ reservation.contact_name or '—' }}</dd></div>
+                    <div><dt>{{ t('reservation_col_agent') }}</dt><dd>{{ reservation.agent_name or '—' }}</dd></div>
+                    <div><dt>{{ t('reservation_col_operation') }}</dt><dd>{{ t('reservation_purpose_rent') if reservation.purpose_key == 'rent' else t('reservation_purpose_sale') }}</dd></div>
+                    <div><dt>{{ t('reservation_original_price') }}</dt><dd>{{ reservation.original_label or '—' }}</dd></div>
+                    <div><dt>{{ t('reservation_col_agreed') }}</dt><dd>{{ reservation.agreed_label or '—' }}</dd></div>
+                    <div><dt>{{ t('reservation_col_amount') }}</dt><dd>{{ reservation.amount_label or '—' }}</dd></div>
+                    <div><dt>{{ t('visit_close_payment') }}</dt><dd>{% if reservation.payment_method %}{{ t('visit_close_payment_' ~ reservation.payment_method) }}{% else %}—{% endif %}</dd></div>
+                    <div><dt>{{ t('reservation_col_close') }}</dt><dd>{{ reservation.close_display or '—' }}</dd></div>
+                </dl>
+            </div>
+
+            {% if reservation.operation_id and reservation.commission_state != 'pending_operation' %}
+            <div class="res-block">
+                <h3>{{ t('reservation_section_operation') }}</h3>
+                <dl class="res-grid">
+                    <div><dt>{{ t('reservation_col_operation') }}</dt><dd>COM-{{ '%06d'|format(reservation.operation_id) }}</dd></div>
+                    <div><dt>{{ t('reservation_col_agreed') }}</dt><dd>{{ reservation.operation_amount_label or '—' }}</dd></div>
+                    <div><dt>{{ t('reservation_commission_total') }}</dt><dd>{{ reservation.commission_total_label or '—' }}</dd></div>
+                    <div><dt>{{ t('reservation_commission_agent') }}</dt><dd>{{ reservation.commission_agent_label or '—' }}</dd></div>
+                    <div><dt>{{ t('reservation_commission_status') }}</dt><dd>{{ t('reservation_paid') if reservation.operation_paid else t('reservation_unpaid') }}</dd></div>
+                </dl>
+            </div>
+            {% endif %}
+
+            <div class="res-block res-block--gaps">
+                <h3>{{ t('reservation_gap_title') }}</h3>
+                <ul class="res-gap-list">
+                    <li class="is-done"><span aria-hidden="true">✓</span>{{ t('reservation_gap_created') }}</li>
+                    {% for key in reservation.gaps %}
+                    <li class="{% if key == 'reservation_gap_prepare' %}is-next{% else %}is-warn{% endif %}">
+                        <span aria-hidden="true">{% if key == 'reservation_gap_prepare' %}→{% else %}!{% endif %}</span>
+                        {{ t(key) }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
         </section>
 
-        <section>
-            <h3>{{ t('reservation_section_progress') }}</h3>
-            {% if reservation.progress.cancelled %}
-            <p class="res-muted">{{ t('reservation_status_cancelled') }}</p>
-            {% endif %}
-            <ol class="res-progress">
+        <section data-res-pane="progress" hidden>
+            <ol class="res-track">
                 {% for step in reservation.progress.steps %}
-                <li class="res-step res-step--{{ step.state }}">
-                    <span>{{ t(step.label_key) }}</span>
+                <li class="is-{{ step.state }}">
+                    <span class="res-track__mark" aria-hidden="true"></span>
+                    <span>{{ track_label(step) }}</span>
                     {% if step.detail_key %}<small>{{ t(step.detail_key) }}</small>{% endif %}
                 </li>
                 {% endfor %}
             </ol>
+            <div class="res-block">
+                <h3>{{ t('reservation_section_plan') }}</h3>
+                <dl class="res-grid">
+                    <div><dt>{{ t('reservation_col_milestone') }}</dt><dd>{% if reservation.next_milestone %}{{ t('visit_close_milestone_' ~ reservation.next_milestone) }}{% else %}—{% endif %}</dd></div>
+                    <div><dt>{{ t('reservation_col_close') }}</dt><dd>{{ reservation.close_display or '—' }}</dd></div>
+                </dl>
+            </div>
         </section>
 
-        <section>
-            <h3>{{ t('reservation_section_plan') }}</h3>
-            <dl class="res-facts">
-                <div>
-                    <dt>{{ t('reservation_col_milestone') }}</dt>
-                    <dd>{% if reservation.next_milestone %}{{ t('visit_close_milestone_' ~ reservation.next_milestone) }}{% else %}—{% endif %}</dd>
-                </div>
-                <div>
-                    <dt>{{ t('reservation_col_close') }}</dt>
-                    <dd>{{ reservation.close_display or '—' }}</dd>
-                </div>
-            </dl>
+        <section data-res-pane="documents" hidden>
+            <ul class="res-docs">
+                {% for doc_type in ['reservation_receipt', 'uif', 'invoice', 'boleto', 'deed', 'credit', 'other'] %}
+                <li class="res-doc">
+                    <span class="res-doc__icon" aria-hidden="true"></span>
+                    <span class="res-doc__name">{{ t('reservation_doc_' ~ doc_type) }}</span>
+                    {% set ns = namespace(found=false) %}
+                    {% for document in detail.documents if document.doc_type == doc_type %}
+                    {% set ns.found = true %}
+                    <a href="{{ url_for('reservations_document_download', reservation_id=reservation.id, document_id=document.id) }}">{{ t('reservation_download') }}</a>
+                    {% endfor %}
+                    {% if ns.found %}
+                    <em class="res-pill is-ok">{{ t('reservation_doc_loaded') }}</em>
+                    {% else %}
+                    <em class="res-pill">{{ t('reservation_doc_pending') }}</em>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
         </section>
 
-        <section>
-            <h3>{{ t('reservation_section_operation') }}</h3>
-            {% if reservation.operation_id and reservation.commission_state != 'pending_operation' %}
-            <dl class="res-facts">
-                <div><dt>{{ t('reservation_col_operation') }}</dt><dd>COM-{{ '%06d'|format(reservation.operation_id) }}</dd></div>
-                <div><dt>{{ t('reservation_col_agreed') }}</dt><dd>{{ reservation.operation_amount_label or '—' }}</dd></div>
-                <div><dt>{{ t('reservation_commission_total') }}</dt><dd>{{ reservation.commission_total_label or '—' }}</dd></div>
-                <div><dt>{{ t('reservation_commission_agent') }}</dt><dd>{{ reservation.commission_agent_label or '—' }}</dd></div>
-                <div><dt>{{ t('reservation_commission_status') }}</dt><dd>{{ t('reservation_paid') if reservation.operation_paid else t('reservation_unpaid') }}</dd></div>
-            </dl>
-            {% else %}
-            <p class="res-muted">{{ t('reservation_commission_pending') }}</p>
-            {% endif %}
-        </section>
-
-        <section class="res-span">
-            <h3>{{ t('reservation_section_notes') }}</h3>
-            <ol class="res-timeline">
+        <section data-res-pane="timeline" hidden>
+            <ol class="res-story">
                 {% for event in detail.events %}
                 <li>
-                    <time>{{ event.created_at }}</time>
+                    <time>{{ human_when(event.created_at) }}</time>
                     <strong>
                         {% if event.event_type == 'created' %}{{ t('reservation_event_created') }}
                         {% elif event.event_type == 'updated' %}{{ t('reservation_event_updated') }}
@@ -105,116 +156,92 @@
                         {% elif event.event_type == 'operation_linked' %}{{ t('reservation_event_operation_linked') }}
                         {% else %}{{ event.event_type }}{% endif %}
                     </strong>
-                    {% if event.payload and event.payload.price_decision %}<span>{{ event.payload.price_decision }}</span>{% endif %}
                 </li>
                 {% endfor %}
                 {% for note in detail.notes %}
                 <li>
-                    <time>{{ note.created_at }}</time>
-                    <span>{{ note.body }}</span>
+                    <time>{{ human_when(note.created_at) }}</time>
+                    <strong>{{ note.body }}</strong>
                 </li>
                 {% endfor %}
+                {% if reservation.next_milestone %}
+                <li class="is-next">
+                    {% if reservation.close_display %}<time>{{ reservation.close_display }}</time>{% endif %}
+                    <strong>{{ t('reservation_col_milestone') }}: {{ t('visit_close_milestone_' ~ reservation.next_milestone) }}</strong>
+                </li>
+                {% endif %}
             </ol>
-        </section>
-
-        <section class="res-span">
-            <h3>{{ t('reservation_documents') }}</h3>
-            <p class="res-muted">{{ t('reservation_document_optional') }}</p>
-            <ul class="res-docs">
-                {% for doc_type in document_types %}
-                <li>
-                    <strong>{{ t('reservation_doc_' ~ doc_type) }}</strong>
-                    {% for document in detail.documents if document.doc_type == doc_type %}
-                    <a href="{{ url_for('reservations_document_download', reservation_id=reservation.id, document_id=document.id) }}">{{ document.original_filename }}</a>
-                    {% else %}
-                    <span>{{ t('reservation_doc_missing') }}</span>
-                    {% endfor %}
-                </li>
-                {% endfor %}
-            </ul>
         </section>
     </div>
 
     {% if not read_only and reservation.reservation_status not in ['closed', 'cancelled'] %}
-    <div class="res-actions">
+    <div class="res-sheets">
+        <form method="post" action="{{ url_for('reservations_update', reservation_id=reservation.id) }}" class="res-form" data-res-sheet="edit" hidden>
+            <label><span>{{ t('reservation_col_status') }}</span>
+                <select name="reservation_status">
+                    {% for status in statuses %}
+                    <option value="{{ status }}" {% if reservation.reservation_status == status %}selected{% endif %}>{{ t('reservation_status_' ~ status) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label><span>{{ t('visit_close_payment') }}</span>
+                <select name="payment_method">
+                    {% for method in ['cash', 'mortgage', 'mixed', 'other'] %}
+                    <option value="{{ method }}" {% if reservation.payment_method == method %}selected{% endif %}>{{ t('visit_close_payment_' ~ method) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label><span>{{ t('visit_close_milestone') }}</span>
+                <select name="next_milestone">
+                    {% for milestone in detail.milestones %}
+                    <option value="{{ milestone }}" {% if reservation.next_milestone == milestone %}selected{% endif %}>{{ t('visit_close_milestone_' ~ milestone) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label><span>{{ t('visit_close_estimated_close') }}</span>
+                <input type="date" name="estimated_closing_date" value="{{ reservation.estimated_closing_date or '' }}">
+            </label>
+            <label><span>{{ t('visit_close_reservation_notes') }}</span>
+                <textarea name="notes" rows="3">{{ reservation.notes or '' }}</textarea>
+            </label>
+            <button type="submit" class="btn btn-primary">{{ t('reservation_save') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('reservations_note', reservation_id=reservation.id) }}" class="res-form" data-res-sheet="note" hidden>
+            <label><span>{{ t('reservation_note_add') }}</span>
+                <textarea name="body" rows="2" maxlength="500" placeholder="{{ t('reservation_note_placeholder') }}"></textarea>
+            </label>
+            <button type="submit" class="btn btn-secondary">{{ t('reservation_note_add') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('reservations_document_upload', reservation_id=reservation.id) }}" enctype="multipart/form-data" class="res-form" data-res-sheet="upload" hidden>
+            <label><span>{{ t('reservation_documents') }}</span>
+                <select name="doc_type">
+                    {% for doc_type in document_types %}
+                    <option value="{{ doc_type }}">{{ t('reservation_doc_' ~ doc_type) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <input type="file" name="document" required>
+            <button type="submit" class="btn btn-secondary">{{ t('reservation_upload') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('reservations_cancel', reservation_id=reservation.id) }}" class="res-form" data-res-sheet="cancel" hidden>
+            <label class="res-check">
+                <input type="checkbox" name="keep_negotiated_price" value="1">
+                <span>{{ t('reservation_keep_price') }}</span>
+            </label>
+            <button type="submit" class="btn btn-secondary">{{ t('reservation_cancel') }}</button>
+        </form>
+    </div>
+    <footer class="res-dock">
+        <button type="button" class="btn btn-secondary" data-res-form="edit">{{ t('reservation_edit') }}</button>
+        <button type="button" class="btn btn-secondary" data-res-form="note">{{ t('reservation_note_add') }}</button>
+        <button type="button" class="btn btn-secondary" data-res-form="upload">{{ t('reservation_upload_document') }}</button>
         {% if reservation.reservation_status not in ['in_operation'] %}
         <a class="btn btn-primary" href="{{ url_for('operations_new', reservation_id=reservation.id) }}">{{ t('reservation_prepare') }}</a>
         {% endif %}
-        <details>
-            <summary>{{ t('reservation_edit') }}</summary>
-            <form method="post" action="{{ url_for('reservations_update', reservation_id=reservation.id) }}" class="res-form">
-                <label>
-                    <span>{{ t('reservation_col_status') }}</span>
-                    <select name="reservation_status">
-                        {% for status in statuses %}
-                        <option value="{{ status }}" {% if reservation.reservation_status == status %}selected{% endif %}>{{ t('reservation_status_' ~ status) }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>
-                    <span>{{ t('visit_close_payment') }}</span>
-                    <select name="payment_method">
-                        {% for method in ['cash', 'mortgage', 'mixed', 'other'] %}
-                        <option value="{{ method }}" {% if reservation.payment_method == method %}selected{% endif %}>{{ t('visit_close_payment_' ~ method) }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>
-                    <span>{{ t('visit_close_milestone') }}</span>
-                    <select name="next_milestone">
-                        {% for milestone in detail.milestones %}
-                        <option value="{{ milestone }}" {% if reservation.next_milestone == milestone %}selected{% endif %}>{{ t('visit_close_milestone_' ~ milestone) }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>
-                    <span>{{ t('visit_close_estimated_close') }}</span>
-                    <input type="date" name="estimated_closing_date" value="{{ reservation.estimated_closing_date or '' }}">
-                </label>
-                <label>
-                    <span>{{ t('visit_close_reservation_notes') }}</span>
-                    <textarea name="notes" rows="3">{{ reservation.notes or '' }}</textarea>
-                </label>
-                <button type="submit" class="btn btn-primary">{{ t('reservation_save') }}</button>
-            </form>
-        </details>
-        <details>
-            <summary>{{ t('reservation_note_add') }}</summary>
-            <form method="post" action="{{ url_for('reservations_note', reservation_id=reservation.id) }}" class="res-form">
-                <label>
-                    <span>{{ t('reservation_note_add') }}</span>
-                    <textarea name="body" rows="2" maxlength="500" placeholder="{{ t('reservation_note_placeholder') }}"></textarea>
-                </label>
-                <button type="submit" class="btn btn-secondary">{{ t('reservation_note_add') }}</button>
-            </form>
-        </details>
-        <details>
-            <summary>{{ t('reservation_upload') }}</summary>
-            <form method="post" action="{{ url_for('reservations_document_upload', reservation_id=reservation.id) }}" enctype="multipart/form-data" class="res-form">
-                <label>
-                    <span>{{ t('reservation_documents') }}</span>
-                    <select name="doc_type">
-                        {% for doc_type in document_types %}
-                        <option value="{{ doc_type }}">{{ t('reservation_doc_' ~ doc_type) }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <input type="file" name="document" required>
-                <button type="submit" class="btn btn-secondary">{{ t('reservation_upload') }}</button>
-            </form>
-        </details>
-        <details>
-            <summary>{{ t('reservation_cancel') }}</summary>
-            <form method="post" action="{{ url_for('reservations_cancel', reservation_id=reservation.id) }}" class="res-form">
-                <label class="res-check">
-                    <input type="checkbox" name="keep_negotiated_price" value="1">
-                    <span>{{ t('reservation_keep_price') }}</span>
-                </label>
-                <button type="submit" class="btn btn-secondary">{{ t('reservation_cancel') }}</button>
-            </form>
-        </details>
-    </div>
-    {% elif read_only %}
-    <p class="res-muted">{{ t('reservation_readonly') }}</p>
+        <button type="button" class="btn btn-secondary res-dock__more" data-res-more aria-label="{{ t('reservation_cancel') }}">···</button>
+        <div class="res-more" data-res-more-menu hidden>
+            <button type="button" data-res-form="cancel">{{ t('reservation_cancel') }}</button>
+        </div>
+    </footer>
     {% endif %}
 </article>

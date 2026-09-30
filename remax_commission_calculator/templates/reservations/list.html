@@ -3,7 +3,7 @@
 {% block title %}{% if read_only %}{{ t('reservation_mine') }}{% else %}{{ t('reservation_title') }}{% endif %} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/reservations.css') }}?v=board2">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reservations.css') }}?v=board6">
 {% endblock %}
 
 {% block content %}
@@ -46,34 +46,73 @@
         </form>
     </header>
 
-    {% if not read_only %}
     <div class="res-kpis">
+        {% if read_only %}
         <a class="res-kpi{% if filters.view == 'active' %} is-current{% endif %}" href="{{ keep('active') }}">
+            <span class="res-kpi__icon" aria-hidden="true"></span>
             <strong>{{ board.counts.active }}</strong>
             <span>{{ t('reservation_kpi_active') }}</span>
         </a>
         <a class="res-kpi{% if filters.view == 'financing' %} is-current{% endif %}" href="{{ keep('financing') }}">
+            <span class="res-kpi__icon" aria-hidden="true"></span>
+            <strong>{{ board.counts.financing }}</strong>
+            <span>{{ t('reservation_kpi_credit') }}</span>
+        </a>
+        <a class="res-kpi{% if filters.view == 'closing' %} is-current{% endif %}" href="{{ keep('closing') }}">
+            <span class="res-kpi__icon" aria-hidden="true"></span>
+            <strong>{{ board.counts.closing }}</strong>
+            <span>{{ t('reservation_kpi_closing') }}</span>
+        </a>
+        <div class="res-kpi res-kpi--money">
+            <span class="res-kpi__icon" aria-hidden="true"></span>
+            <div class="res-kpi__lines">
+                {% for line in board.kpis.commission %}
+                <strong>{{ line.currency }} {{ line.amount }}</strong>
+                {% endfor %}
+            </div>
+            <span>{{ t('reservation_kpi_my_commission') }}</span>
+        </div>
+        {% else %}
+        <a class="res-kpi{% if filters.view == 'active' %} is-current{% endif %}" href="{{ keep('active') }}">
+            <span class="res-kpi__icon" aria-hidden="true"></span>
+            <strong>{{ board.counts.active }}</strong>
+            <span>{{ t('reservation_kpi_active') }}</span>
+        </a>
+        <a class="res-kpi{% if filters.view == 'financing' %} is-current{% endif %}" href="{{ keep('financing') }}">
+            <span class="res-kpi__icon" aria-hidden="true"></span>
             <strong>{{ board.counts.financing }}</strong>
             <span>{{ t('reservation_kpi_financing') }}</span>
         </a>
         <a class="res-kpi{% if filters.view == 'closing' %} is-current{% endif %}" href="{{ keep('closing') }}">
+            <span class="res-kpi__icon" aria-hidden="true"></span>
             <strong>{{ board.counts.closing }}</strong>
             <span>{{ t('reservation_kpi_closing') }}</span>
         </a>
         <a class="res-kpi{% if filters.view == 'delayed' %} is-current{% endif %}" href="{{ keep('delayed') }}">
+            <span class="res-kpi__icon" aria-hidden="true"></span>
             <strong>{{ board.counts.delayed }}</strong>
             <span>{{ t('reservation_kpi_delayed') }}</span>
         </a>
+        <div class="res-kpi res-kpi--money">
+            <span class="res-kpi__icon" aria-hidden="true"></span>
+            <div class="res-kpi__lines">
+                {% for line in board.kpis.agreed %}
+                <strong>{{ line.currency }} {{ line.amount }}</strong>
+                {% endfor %}
+            </div>
+            <span>{% for line in board.kpis.agreed %}{{ line.currency }} {{ t('reservation_money_agreed') }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+        </div>
+        <div class="res-kpi res-kpi--money">
+            <span class="res-kpi__icon" aria-hidden="true"></span>
+            <div class="res-kpi__lines">
+                {% for line in board.kpis.deposits %}
+                <strong>{{ line.currency }} {{ line.amount }}</strong>
+                {% endfor %}
+            </div>
+            <span>{% for line in board.kpis.deposits %}{{ t('reservation_money_deposit') }} {{ line.currency }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+        </div>
+        {% endif %}
     </div>
-    <p class="res-money">
-        {% for line in board.kpis.agreed %}
-        <span>{{ line.currency }} {{ t('reservation_money_agreed') }} <strong>{{ line.amount }}</strong></span>
-        {% endfor %}
-        {% for line in board.kpis.deposits %}
-        <span>{{ t('reservation_money_deposit') }} {{ line.currency }} <strong>{{ line.amount }}</strong></span>
-        {% endfor %}
-    </p>
-    {% endif %}
 
     <nav class="res-tabs" aria-label="{{ t('reservation_title') }}">
         <a href="{{ keep('active') }}" {% if filters.view == 'active' %}aria-current="page"{% endif %}>{{ t('reservation_tab_active') }} <em>{{ board.counts.active }}</em></a>
@@ -125,36 +164,45 @@
     <div class="res-cards">
         {% for row in reservations %}
         <article class="res-card" data-status="{{ row.reservation_status }}">
-            <div class="res-property">
+            <div class="res-card__top">
                 {% include "reservations/_thumb.html" %}
                 <div>
                     <strong>{{ row.property_address or row.property_id }}</strong>
-                    {% if row.zone or row.external_ref %}<small>{{ row.zone }}{% if row.zone and row.external_ref %} · {% endif %}{{ row.external_ref }}</small>{% endif %}
-                    <span>{{ row.contact_name or '—' }}</span>
+                    <small>{{ row.contact_name or row.zone or '—' }}</small>
                 </div>
                 <em class="res-badge" data-status="{{ row.reservation_status }}">{{ t(row.status_label_key) }}</em>
             </div>
-            <p><span>{{ row.agreed_label or '—' }}</span><span>{{ t('reservation_col_amount') }} {{ row.amount_label or '—' }}</span></p>
-            <p><span>{{ t('reservation_col_milestone') }}</span><strong>{% if row.next_milestone %}{{ t('visit_close_milestone_' ~ row.next_milestone) }}{% else %}—{% endif %}</strong></p>
-            <p><span>{{ t('reservation_col_close') }}</span><strong>{{ row.close_display or '—' }}</strong></p>
-            <p class="res-commission">
-                {% if row.commission_state == 'pending_operation' %}
-                {{ t('reservation_commission_pending') }}
-                {% else %}
-                {{ row.commission_agent_label or '—' }} · {{ t('reservation_paid') if row.operation_paid else t('reservation_unpaid') }}
-                {% endif %}
+            <p class="res-card__price">
+                <strong>{{ row.agreed_label or '—' }}</strong>
+                <span>{{ t('reservation_col_amount') }} {{ row.amount_label or '—' }}</span>
             </p>
-            {% if row.alerts %}
-            <ul class="res-alerts">
-                {% for key in row.alerts %}<li>{{ t(key) }}</li>{% endfor %}
-            </ul>
-            {% endif %}
-            <a class="btn btn-secondary" href="{{ url_for('reservations_detail', reservation_id=row.id) }}">{{ t('reservation_follow') }}</a>
+            <dl class="res-card__facts">
+                <div>
+                    <dt>{{ t('reservation_col_milestone') }}</dt>
+                    <dd>{% if row.next_milestone %}{{ t('visit_close_milestone_' ~ row.next_milestone) }}{% else %}—{% endif %}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('reservation_col_close') }}</dt>
+                    <dd>{{ row.close_display or '—' }}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('reservation_kpi_my_commission') }}</dt>
+                    <dd>
+                        {% if row.commission_state == 'pending_operation' %}
+                        {{ t('reservation_commission_pending') }}
+                        {% else %}
+                        {{ row.commission_agent_label or '—' }}
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+            <a class="btn btn-primary" href="{{ url_for('reservations_detail', reservation_id=row.id) }}">{{ t('reservation_follow') }}</a>
         </article>
         {% endfor %}
     </div>
     {% endif %}
 
+    <div class="res-backdrop" data-res-backdrop hidden></div>
     <aside class="res-panel" data-res-panel hidden></aside>
 </section>
 
@@ -257,5 +305,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/reservations.js') }}"></script>
+<script src="{{ url_for('static', filename='js/reservations.js') }}?v=board6"></script>
 {% endblock %}

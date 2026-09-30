@@ -236,6 +236,8 @@ def _commission(row, operation):
             "commission_agent_label": "",
             "operation_amount_label": "",
             "operation_paid": None,
+            "commission_amount": None,
+            "commission_currency": None,
         }
     currency = operation.get("currency") or "USD"
     paid = str(operation.get("was_invoiced") or "no").strip().lower() == "yes"
@@ -249,6 +251,8 @@ def _commission(row, operation):
             currency,
         ),
         "operation_paid": paid,
+        "commission_amount": None if paid else operation.get("agent_payment"),
+        "commission_currency": currency,
     }
 
 
@@ -508,12 +512,18 @@ def _counts(rows, today):
 def _kpis(rows):
     agreed = {"USD": Decimal("0"), "ARS": Decimal("0")}
     deposits = {"USD": Decimal("0"), "ARS": Decimal("0")}
+    commission = {"USD": Decimal("0"), "ARS": Decimal("0")}
     for row in rows:
         if row.get("reservation_status") not in OPEN_STATUSES:
             continue
         _add_money(agreed, row.get("agreed_property_price"), row.get("agreed_currency"))
         _add_money(deposits, row.get("reservation_amount"), row.get("reservation_currency"))
-    return {"agreed": _money_lines(agreed), "deposits": _money_lines(deposits)}
+        _add_money(commission, row.get("commission_amount"), row.get("commission_currency"))
+    return {
+        "agreed": _money_lines(agreed),
+        "deposits": _money_lines(deposits),
+        "commission": _money_lines(commission),
+    }
 
 
 def _groups(rows):
