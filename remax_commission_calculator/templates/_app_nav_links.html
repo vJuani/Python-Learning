@@ -57,6 +57,15 @@
 </a>
 {% endif %}
 <a
+    href="{{ url_for('reservations_list') }}"
+    class="nav-link app-nav-link app-nav-link--reservations{% if request.endpoint and request.endpoint.startswith('reservations_') %} active{% endif %}"
+>
+    <svg class="app-nav-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.2L6 20V5.5a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+    </svg>
+    <span class="app-nav-link__label">{{ t('nav_reservations') }}</span>
+</a>
+<a
     href="{{ url_for('operations_list') }}"
     class="nav-link app-nav-link app-nav-link--operations{% if request.endpoint and request.endpoint.startswith('operations_') %} active{% endif %}"
 >

@@ -64,6 +64,17 @@
         <span class="mobile-bottom-nav-label">{{ t('nav_reports') }}</span>
     </a>
     <a
+        href="{{ url_for('reservations_list') }}"
+        class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('reservations_') %} active{% endif %}"
+    >
+        <span class="mobile-bottom-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.2L6 20V5.5a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+            </svg>
+        </span>
+        <span class="mobile-bottom-nav-label">{{ t('nav_reservations') }}</span>
+    </a>
+    <a
         href="{{ url_for('operations_list') }}"
         class="mobile-bottom-nav-item{% if request.endpoint and request.endpoint.startswith('operations_') %} active{% endif %}"
     >

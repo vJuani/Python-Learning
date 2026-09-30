@@ -77,7 +77,8 @@ _TASK_SELECT = """
         task.google_event_id,
         task.contact_id,
         task.external_listing_id,
-        listing.external_url
+        listing.external_url,
+        property.listing_purpose
     FROM agent_tasks AS task
     LEFT JOIN agents AS agent
         ON agent.id = task.agent_id
@@ -143,6 +144,7 @@ def _build_task(row):
         "contact_id": row[31] if len(row) > 31 else None,
         "external_listing_id": row[32] if len(row) > 32 else None,
         "external_url": row[33] if len(row) > 33 else None,
+        "listing_purpose": row[34] if len(row) > 34 else None,
         "source": "jrh",
     }
 

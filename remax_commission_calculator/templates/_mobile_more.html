@@ -19,6 +19,10 @@
     <nav class="m-section" aria-label="{{ t('m_more_modules') }}">
         <p class="m-kicker">{{ t('m_more_modules') }}</p>
         <div class="m-tile-grid">
+            <a class="m-tile" href="{{ url_for('reservations_list') }}">
+                {% with icon='ops' %}{% include "_m_icon.html" %}{% endwith %}
+                <span>{{ t('nav_reservations') }}</span>
+            </a>
             <a class="m-tile" href="{{ url_for('operations_list') }}">
                 {% with icon='ops' %}{% include "_m_icon.html" %}{% endwith %}
                 <span>{{ t('nav_operations') }}</span>

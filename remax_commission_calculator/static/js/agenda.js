@@ -97,6 +97,11 @@
                 var label = sheet.querySelector("[data-visit-close-label]");
                 if (form) {
                     form.action = button.getAttribute("data-visit-close") || "";
+                    form.setAttribute(
+                        "data-listing-purpose",
+                        button.getAttribute("data-listing-purpose") || "sale"
+                    );
+                    form.dispatchEvent(new Event("change"));
                 }
                 if (label) {
                     label.textContent = button.getAttribute("data-visit-label") || "";

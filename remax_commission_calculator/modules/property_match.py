@@ -498,14 +498,14 @@ def passes_hard_filters(criteria, listing, property_row=None):
     source = listing.get("source") or row.get("source") or SOURCE_INTERNAL
     is_external = source != SOURCE_INTERNAL or row.get("external_listing_id")
     if is_external:
-        if listing.get("commercial_status") in ("sold", "rented", "withdrawn"):
+        if listing.get("commercial_status") in ("sold", "rented", "withdrawn", "reserved"):
             return False
         if row.get("is_active") is False:
             return False
     elif "status" in row:
         if not is_commercially_available(row):
             return False
-    elif listing.get("commercial_status") in ("sold", "rented", "withdrawn"):
+    elif listing.get("commercial_status") in ("sold", "rented", "withdrawn", "reserved"):
         return False
 
     wanted_purpose = normalize_listing_purpose((criteria or {}).get("purpose"))

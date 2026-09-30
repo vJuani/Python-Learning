@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('reservation_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reservations.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{% if read_only %}{{ t('reservation_mine') }}{% else %}{{ t('reservation_title') }}{% endif %}</h2>
+        <p>{{ t('reservation_subtitle') }}</p>
+    </div>
+</section>
+
+<section class="panel">
+    <form class="reservations-filters" method="get" action="{{ url_for('reservations_list') }}">
+        <label>
+            <span>{{ t('reservation_filter_status') }}</span>
+            <select name="status">
+                <option value="">{{ t('reservation_filter_all') }}</option>
+                {% for status in statuses %}
+                <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ t('reservation_status_' ~ status) }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        {% if not read_only %}
+        <label>
+            <span>{{ t('reservation_filter_agent') }}</span>
+            <select name="agent_id">
+                <option value="">{{ t('reservation_filter_all') }}</option>
+                {% for agent in agents %}
+                <option value="{{ agent.id }}" {% if filters.agent_id|string == agent.id|string %}selected{% endif %}>{{ agent.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        {% endif %}
+        <label>
+            <span>{{ t('reservation_filter_property') }}</span>
+            <input type="number" name="property_id" value="{{ filters.property_id }}" min="1">
+        </label>
+        <label>
+            <span>{{ t('reservation_filter_from') }}</span>
+            <input type="date" name="date_from" value="{{ filters.date_from }}">
+        </label>
+        <label>
+            <span>{{ t('reservation_filter_to') }}</span>
+            <input type="date" name="date_to" value="{{ filters.date_to }}">
+        </label>
+        <button type="submit" class="btn btn-secondary">{{ t('reservation_filter_apply') }}</button>
+    </form>
+
+    {% if not reservations %}
+    <p class="empty-message">{{ t('reservation_empty') }}</p>
+    {% else %}
+    <div class="reservations-table-wrap">
+        <table class="reservations-table">
+            <thead>
+                <tr>
+                    <th>{{ t('reservation_col_property') }}</th>
+                    <th>{{ t('reservation_col_client') }}</th>
+                    {% if not read_only %}<th>{{ t('reservation_col_agent') }}</th>{% endif %}
+                    <th>{{ t('reservation_col_agreed') }}</th>
+                    <th>{{ t('reservation_col_amount') }}</th>
+                    <th>{{ t('reservation_col_status') }}</th>
+                    {% if not read_only %}<th>{{ t('reservation_col_payment') }}</th>{% endif %}
+                    <th>{{ t('reservation_col_close') }}</th>
+                    {% if not read_only %}<th>{{ t('reservation_col_operation') }}</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in reservations %}
+                <tr>
+                    <td><a href="{{ url_for('reservations_detail', reservation_id=row.id) }}">{{ row.property_address or row.property_id }}</a></td>
+                    <td>{{ row.contact_name or '—' }}</td>
+                    {% if not read_only %}<td>{{ row.agent_name or '—' }}</td>{% endif %}
+                    <td>{{ row.agreed_label or '—' }}</td>
+                    <td>{{ row.amount_label or '—' }}</td>
+                    <td>{{ t('reservation_status_' ~ row.reservation_status) }}</td>
+                    {% if not read_only %}<td>{{ t('visit_close_payment_' ~ row.payment_method) if row.payment_method else '—' }}</td>{% endif %}
+                    <td>{{ row.estimated_closing_date or '—' }}</td>
+                    {% if not read_only %}
+                    <td>{% if row.operation_id %}COM-{{ '%06d'|format(row.operation_id) }}{% else %}—{% endif %}</td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="reservations-cards">
+        {% for row in reservations %}
+        <a class="reservations-card" href="{{ url_for('reservations_detail', reservation_id=row.id) }}">
+            <strong>{{ row.property_address or row.property_id }}</strong>
+            <span>{{ row.contact_name or '—' }}</span>
+            <span>{{ t('reservation_status_' ~ row.reservation_status) }}</span>
+            <span>{{ row.agreed_label or '—' }}</span>
+            <span>{{ row.amount_label or '—' }}</span>
+            <span>{{ row.estimated_closing_date or '—' }}</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

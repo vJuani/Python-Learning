@@ -175,6 +175,12 @@ def apply_visit_close(
     if data.get("result") == "reserved" and not data.get("next_step"):
         data["next_step"] = "prepare_operation"
         data = _with_default_when(data, now=instant, tz=tz)
+    if data.get("result") == "negotiate" and not data.get("next_step"):
+        data["next_step"] = "negotiate"
+        data = _with_default_when(data, now=instant, tz=tz)
+    if data.get("result") == "second_visit" and not data.get("next_step"):
+        data["next_step"] = "second_visit"
+        data = _with_default_when(data, now=instant, tz=tz)
     if data.get("result") == "reserved":
         _assert_can_reserve(task, organization_id=organization_id, agent_id=agent_id)
     previous_outcome = task.get("outcome_json") or ""
@@ -341,6 +347,10 @@ def _commit_property_reservation(
     connection = get_connection()
     try:
         cursor = connection.cursor()
+        try:
+            cursor.execute("BEGIN IMMEDIATE")
+        except Exception:
+            pass
         cursor.execute(
             """
             SELECT commercial_status, listing_price, listing_currency, agent_id
@@ -379,6 +389,7 @@ def _commit_property_reservation(
         )
         if cursor.rowcount == 0:
             raise VisitCloseError("visit_close_err_property")
+        created_at = to_utc_iso(now)
         event_id = insert_property_commercial_event(
             cursor,
             {
@@ -395,7 +406,58 @@ def _commit_property_reservation(
                 "listing_currency": new_currency if agreed is not None else None,
                 "reservation_amount": outcome.get("reservation_amount"),
                 "reservation_currency": outcome.get("reservation_currency"),
-                "created_at": to_utc_iso(now),
+                "created_at": created_at,
+            },
+        )
+        from modules.database.reservations_repository import (
+            ReservationConflict,
+            insert_reservation,
+            insert_reservation_event,
+        )
+
+        try:
+            reservation_id = insert_reservation(
+                cursor,
+                {
+                    "organization_id": organization_id,
+                    "property_id": property_id,
+                    "contact_id": task.get("contact_id"),
+                    "agent_id": agent_id,
+                    "visit_id": task.get("id"),
+                    "operation_id": None,
+                    "reservation_status": "reserved",
+                    "original_property_price": previous_price,
+                    "original_currency": previous_currency,
+                    "agreed_property_price": agreed,
+                    "agreed_currency": (
+                        outcome.get("agreed_property_currency") if agreed is not None else None
+                    ),
+                    "reservation_amount": outcome.get("reservation_amount"),
+                    "reservation_currency": outcome.get("reservation_currency"),
+                    "payment_method": outcome.get("payment_method"),
+                    "next_milestone": outcome.get("next_milestone"),
+                    "estimated_closing_date": outcome.get("estimated_closing_date"),
+                    "notes": outcome.get("reservation_notes"),
+                    "reserved_at": created_at,
+                    "created_by_user_id": actor_user_id,
+                    "created_at": created_at,
+                    "updated_at": created_at,
+                },
+            )
+        except ReservationConflict as error:
+            raise VisitCloseError("visit_close_err_reservation_open") from error
+        insert_reservation_event(
+            cursor,
+            {
+                "organization_id": organization_id,
+                "reservation_id": reservation_id,
+                "event_type": "created",
+                "actor_user_id": actor_user_id,
+                "payload": {
+                    "reservation_amount": outcome.get("reservation_amount"),
+                    "agreed_property_price": agreed,
+                },
+                "created_at": created_at,
             },
         )
         connection.commit()
@@ -412,6 +474,7 @@ def _commit_property_reservation(
         "listing_price": previous_price,
         "listing_currency": previous_currency,
         "price_changed": agreed is not None,
+        "reservation_id": reservation_id,
     }
 
 
@@ -467,6 +530,10 @@ def _restore_property_reservation(snapshot):
             snapshot["organization_id"],
             snapshot["event_id"],
         )
+    if snapshot.get("reservation_id"):
+        from modules.database.reservations_repository import delete_reservation
+
+        delete_reservation(snapshot["organization_id"], snapshot["reservation_id"])
 
 
 def _with_default_when(outcome, *, now, tz):

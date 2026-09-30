@@ -3892,6 +3892,10 @@ def migrate_schema(create_backup=True):
 
     migrate_property_commercial_events_sqlite()
 
+    from .reservations_migration import migrate_reservations_sqlite
+
+    migrate_reservations_sqlite()
+
     from .public_share_migration import migrate_public_share_sqlite
 
     migrate_public_share_sqlite()

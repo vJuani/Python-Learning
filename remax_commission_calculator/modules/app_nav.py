@@ -20,6 +20,7 @@ ICONS = {
     "acm": '<path d="M5 19V9M12 19V5M19 19v-7" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><path d="M4 19h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>',
     "agenda": '<rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.75"/><path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>',
     "operations": '<path d="M8 7h12M8 12h12M8 17h8" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="4.5" cy="7" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="17" r="1" fill="currentColor"/>',
+    "reservations": '<path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.2L6 20V5.5a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>',
     "wallet": '<path d="M4 7h16v12H4z" stroke="currentColor" stroke-width="1.75"/><path d="M8 11h8M8 15h5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><path d="M8 4h8" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>',
     "cash": '<rect x="3" y="7" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.75"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.75"/><path d="M12 13v3M10.5 14.5h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
     "billing": '<path d="M7 3h10v18H7z" stroke="currentColor" stroke-width="1.75"/><path d="M9 8h6M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>',
@@ -90,6 +91,17 @@ NAV_GROUPS = (
             "endpoint": "agenda_index",
             "active_prefixes": ("agenda_",),
             "require_agent_id": True,
+        },
+    },
+    {
+        "key": "reservations",
+        "label_key": "nav_reservations",
+        "icon": "reservations",
+        "roles": (ROLE_ADMIN, ROLE_AGENT),
+        "item": {
+            "key": "reservations",
+            "endpoint": "reservations_list",
+            "active_prefixes": ("reservations_",),
         },
     },
     {

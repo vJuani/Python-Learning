@@ -339,6 +339,7 @@ from modules.agent_tasks import (
 )
 
 from modules.agenda_routes import register_agenda_routes
+from modules.reservation_routes import register_reservation_routes
 from modules.contact_routes import register_contact_routes
 from modules.property_media_routes import register_property_media_routes
 from modules.arca_routes import register_arca_routes
@@ -1967,6 +1968,7 @@ def get_new_operation_form_values(form):
         ),
         "seller_vat_amount": form.get("seller_vat_amount", "0"),
         "buyer_vat_amount": form.get("buyer_vat_amount", "0"),
+        "reservation_id": form.get("reservation_id", ""),
     }
 
 
@@ -7004,7 +7006,7 @@ def operations_new():
             require_owner = False
 
         try:
-            save_calculated_operation(
+            operation_id, _saved = save_calculated_operation(
                 parsed["agent_id"],
                 parsed["property_id"],
                 organization_id,
@@ -7013,6 +7015,21 @@ def operations_new():
                 created_by_user_id=current_user["id"],
                 require_property_owner=require_owner
             )
+            reservation_id = form_values.get("reservation_id") or request.form.get(
+                "reservation_id"
+            )
+            if reservation_id:
+                from modules.reservations import ReservationError, link_operation
+
+                try:
+                    link_operation(
+                        organization_id,
+                        int(reservation_id),
+                        operation_id,
+                        actor_user_id=current_user["id"],
+                    )
+                except (ReservationError, TypeError, ValueError):
+                    pass
         except TenantError:
             abort(403)
         except ValueError as error:
@@ -7041,34 +7058,65 @@ def operations_new():
     org_defaults = get_new_operation_form_defaults(
         organization_id
     )
+    prefill = {
+        "agent_id": default_agent,
+        "property_id": "",
+        "search_mode": "agent",
+        "currency": org_defaults["currency"],
+        "original_amount": "",
+        "exchange_rate": "",
+        "operation_date": date.today().strftime(
+            "%d/%m/%Y"
+        ),
+        "seller_side_active": "1",
+        "buyer_side_active": "1",
+        "is_referred": "",
+        "referred_side": "",
+        "seller_commission_rate": org_defaults[
+            "seller_commission_rate"
+        ],
+        "buyer_commission_rate": org_defaults[
+            "buyer_commission_rate"
+        ],
+        "seller_vat_amount": "0",
+        "buyer_vat_amount": "0",
+    }
+    reservation_id = request.args.get("reservation_id")
+    if reservation_id and not scoped_id:
+        from modules.reservations import load_reservation_detail
+
+        try:
+            detail = load_reservation_detail(
+                organization_id, int(reservation_id)
+            )
+        except (TypeError, ValueError):
+            detail = None
+        if detail:
+            reservation = detail["reservation"]
+            prefill["agent_id"] = str(reservation.get("agent_id") or "")
+            prefill["property_id"] = str(reservation.get("property_id") or "")
+            prefill["currency"] = (
+                reservation.get("agreed_currency")
+                or reservation.get("original_currency")
+                or prefill["currency"]
+            )
+            agreed = reservation.get("agreed_property_price")
+            if agreed not in (None, ""):
+                try:
+                    number = float(agreed)
+                except (TypeError, ValueError):
+                    number = None
+                if number is not None and number == int(number):
+                    prefill["original_amount"] = str(int(number))
+                else:
+                    prefill["original_amount"] = str(agreed)
+            prefill["reservation_id"] = str(reservation["id"])
 
     return render_operation_form(
         "New Operation",
         "Save Draft" if scoped_id else "Save Operation",
         "Preview Calculation",
-        {
-            "agent_id": default_agent,
-            "property_id": "",
-            "search_mode": "agent",
-            "currency": org_defaults["currency"],
-            "original_amount": "",
-            "exchange_rate": "",
-            "operation_date": date.today().strftime(
-                "%d/%m/%Y"
-            ),
-            "seller_side_active": "1",
-            "buyer_side_active": "1",
-            "is_referred": "",
-            "referred_side": "",
-            "seller_commission_rate": org_defaults[
-                "seller_commission_rate"
-            ],
-            "buyer_commission_rate": org_defaults[
-                "buyer_commission_rate"
-            ],
-            "seller_vat_amount": "0",
-            "buyer_vat_amount": "0",
-        },
+        prefill,
         [],
         organization_id,
         is_edit=False
@@ -8673,6 +8721,14 @@ register_agenda_routes(
         "get_current_language": get_current_language,
         "flash_i18n": flash_i18n,
         "get_safe_redirect_target": get_safe_redirect_target,
+    },
+)
+
+register_reservation_routes(
+    app,
+    helpers={
+        "require_user_organization": require_user_organization,
+        "flash_i18n": flash_i18n,
     },
 )
 

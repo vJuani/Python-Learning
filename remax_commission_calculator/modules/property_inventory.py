@@ -29,7 +29,7 @@ IDENTITY_FIELDS = (
 )
 
 UNAVAILABLE_COMMERCIAL_STATUSES = frozenset(
-    ("sold", "rented", "withdrawn")
+    ("sold", "rented", "withdrawn", "reserved")
 )
 
 WORKFLOW_APPROVED = "approved"

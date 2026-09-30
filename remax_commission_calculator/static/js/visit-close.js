@@ -61,6 +61,37 @@
             return (currency ? currency.value : "USD") + " " + raw;
         }
 
+        var panels = {
+            liked: ["note", "steps"],
+            interested: ["note", "steps"],
+            negotiate: ["note", "offer", "steps"],
+            second_visit: ["note"],
+            disliked: ["objections", "steps"],
+            no_show: ["steps"],
+            reserved: ["reservation", "steps"],
+            other: ["note", "steps"]
+        };
+        var limitedSteps = {
+            no_show: ["call", "whatsapp", "second_visit"]
+        };
+
+        function setFields(node, enabled) {
+            if (!node) {
+                return;
+            }
+            node.querySelectorAll("input, textarea, select").forEach(function (field) {
+                field.disabled = !enabled;
+            });
+        }
+
+        function showNode(node, enabled) {
+            if (!node) {
+                return;
+            }
+            node.hidden = !enabled;
+            setFields(node, enabled);
+        }
+
         function setEnabled(show) {
             [dateInput, timeInput, stepNote && stepNote.querySelector("input")].forEach(function (field) {
                 if (field) {
@@ -72,23 +103,58 @@
         function sync() {
             var resultInput = form.querySelector("input[name='result']:checked");
             var result = resultInput ? resultInput.value : "";
-            var showReservation = result === "reserved";
-            if (reservation) {
-                reservation.hidden = !showReservation;
-                reservation.querySelectorAll("input").forEach(function (field) {
-                    field.disabled = !showReservation;
-                });
-            }
-            if (showReservation && !form.querySelector("input[name='next_step']:checked")) {
+            var active = panels[result] || [];
+            ["note", "objections", "offer", "steps"].forEach(function (name) {
+                showNode(form.querySelector("[data-visit-panel='" + name + "']"), active.indexOf(name) >= 0);
+            });
+            var showReservation = active.indexOf("reservation") >= 0;
+            showNode(reservation, showReservation);
+            var purpose = form.getAttribute("data-listing-purpose") || "sale";
+            var milestoneSet = purpose === "rental" || purpose === "temporary_rental" ? "rent" : "sale";
+            form.querySelectorAll("[data-visit-milestones]").forEach(function (group) {
+                var match = showReservation && group.getAttribute("data-visit-milestones") === milestoneSet;
+                group.hidden = !match;
+                setFields(group, match);
+            });
+
+            var allowedSteps = limitedSteps[result] || null;
+            form.querySelectorAll("[data-visit-step]").forEach(function (label) {
+                var key = label.getAttribute("data-visit-step");
+                var visible = active.indexOf("steps") >= 0 && (!allowedSteps || allowedSteps.indexOf(key) >= 0);
+                label.hidden = !visible;
+                var input = label.querySelector("input");
+                if (!input) {
+                    return;
+                }
+                input.disabled = !visible;
+                if (!visible) {
+                    input.checked = false;
+                }
+            });
+
+            if (result === "reserved" && !form.querySelector("input[name='next_step']:checked")) {
                 var prepare = form.querySelector("input[name='next_step'][value='prepare_operation']");
-                if (prepare) {
+                if (prepare && !prepare.disabled) {
                     prepare.checked = true;
+                }
+            }
+            if (result === "negotiate" && !form.querySelector("input[name='next_step']:checked")) {
+                var negotiate = form.querySelector("input[name='next_step'][value='negotiate']");
+                if (negotiate && !negotiate.disabled) {
+                    negotiate.checked = true;
+                }
+            }
+            if (result === "second_visit") {
+                var second = form.querySelector("input[name='next_step'][value='second_visit']");
+                if (second) {
+                    second.disabled = false;
+                    second.checked = true;
                 }
             }
 
             var stepInput = form.querySelector("input[name='next_step']:checked");
             var step = stepInput ? stepInput.value : "";
-            var show = Boolean(step) && step !== hideUnless;
+            var show = result === "second_visit" || (Boolean(step) && step !== hideUnless);
             if (when) {
                 when.hidden = !show;
             }

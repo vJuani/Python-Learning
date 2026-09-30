@@ -45,6 +45,7 @@
             class="btn btn-small btn-primary"
             data-visit-close="{{ url_for('agenda_visit_close', task_id=task.id) }}"
             data-visit-label="{{ task.contact_name or '' }}{% if task.relation_label %} · {{ task.relation_label }}{% endif %}"
+            data-listing-purpose="{{ task.listing_purpose or 'sale' }}"
         >{{ t('visit_close_open') }}</button>
         {% endif %}
 
@@ -155,6 +156,7 @@
                     class="btn btn-small btn-primary"
                     data-visit-close="{{ url_for('agenda_visit_close', task_id=task.id) }}"
                     data-visit-label="{{ task.contact_name or '' }}{% if task.relation_label %} · {{ task.relation_label }}{% endif %}"
+                    data-listing-purpose="{{ task.listing_purpose or 'sale' }}"
                 >
                     {{ t('visit_close_open') }}
                 </button>

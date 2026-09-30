@@ -41,6 +41,33 @@
     </div>
 </fieldset>
 
+<label class="visit-close__field" data-visit-panel="note" hidden>
+    <span>{{ t('visit_close_note_label') }}</span>
+    <textarea name="note" rows="3" maxlength="500" placeholder="{{ t('visit_close_note_placeholder') }}" disabled></textarea>
+</label>
+<label class="visit-close__field" data-visit-panel="objections" hidden>
+    <span>{{ t('visit_close_objections_label') }}</span>
+    <textarea name="objections" rows="2" maxlength="500" placeholder="{{ t('visit_close_objections_placeholder') }}" disabled></textarea>
+</label>
+<section class="visit-close__reserve" data-visit-panel="offer" hidden>
+    <div class="visit-close__field">
+        <span>{{ t('visit_close_offer_amount') }}</span>
+        <div class="visit-close__money">
+            <div class="visit-close__currency" role="radiogroup" aria-label="{{ t('visit_close_offer_amount') }}">
+                <label class="visit-close__currency-option">
+                    <input type="radio" name="offer_currency" value="USD" checked disabled>
+                    <span>USD</span>
+                </label>
+                <label class="visit-close__currency-option">
+                    <input type="radio" name="offer_currency" value="ARS" disabled>
+                    <span>ARS</span>
+                </label>
+            </div>
+            <input type="text" name="offer_amount" inputmode="decimal" maxlength="20" placeholder="170.000" autocomplete="off" disabled>
+        </div>
+    </div>
+</section>
+
 <section class="visit-close__reserve" data-visit-reservation hidden>
     <h3 class="visit-close__section-title">{{ t('visit_close_reserved_title') }}</h3>
     <div class="visit-close__field">
@@ -75,23 +102,51 @@
             <input type="text" name="agreed_property_price" inputmode="decimal" maxlength="20" placeholder="178.000" autocomplete="off" disabled>
         </div>
     </div>
+    <label class="visit-close__field">
+        <span>{{ t('visit_close_payment') }}</span>
+        <select name="payment_method" disabled>
+            <option value="">{{ t('visit_close_milestone_undefined') }}</option>
+            <option value="cash">{{ t('visit_close_payment_cash') }}</option>
+            <option value="mortgage">{{ t('visit_close_payment_mortgage') }}</option>
+            <option value="mixed">{{ t('visit_close_payment_mixed') }}</option>
+            <option value="other">{{ t('visit_close_payment_other') }}</option>
+        </select>
+    </label>
+    <div class="visit-close__field">
+        <span>{{ t('visit_close_milestone') }}</span>
+        <div class="visit-close__choices" data-visit-milestones="sale">
+            {% for key in ['boleto', 'mortgage', 'deed', 'possession', 'undefined', 'other'] %}
+            <label class="visit-close__choice">
+                <input type="radio" name="next_milestone" value="{{ key }}" disabled>
+                <span data-visit-label-text>{{ t('visit_close_milestone_' ~ key) }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <div class="visit-close__choices" data-visit-milestones="rent" hidden>
+            {% for key in ['paperwork', 'contract_sign', 'keys', 'move_in', 'undefined', 'other'] %}
+            <label class="visit-close__choice">
+                <input type="radio" name="next_milestone" value="{{ key }}" disabled>
+                <span data-visit-label-text>{{ t('visit_close_milestone_' ~ key) }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+    <label class="visit-close__field">
+        <span>{{ t('visit_close_estimated_close') }}</span>
+        <input type="date" name="estimated_closing_date" disabled>
+    </label>
+    <label class="visit-close__field">
+        <span>{{ t('visit_close_reservation_notes') }}</span>
+        <textarea name="reservation_notes" rows="2" maxlength="500" disabled></textarea>
+    </label>
 </section>
 
-<label class="visit-close__field">
-    <span>{{ t('visit_close_note_label') }}</span>
-    <textarea name="note" rows="3" maxlength="500" placeholder="{{ t('visit_close_note_placeholder') }}"></textarea>
-</label>
-<label class="visit-close__field">
-    <span>{{ t('visit_close_objections_label') }}</span>
-    <textarea name="objections" rows="2" maxlength="500" placeholder="{{ t('visit_close_objections_placeholder') }}"></textarea>
-</label>
-
-<section class="visit-close__next">
+<section class="visit-close__next" data-visit-panel="steps" hidden>
     <h3 class="visit-close__section-title">{{ t('visit_close_step') }}</h3>
     <div class="visit-close__choices" data-visit-steps>
         {% for key in step_order %}
-        <label class="visit-close__choice">
-            <input type="radio" name="next_step" value="{{ key }}">
+        <label class="visit-close__choice" data-visit-step="{{ key }}">
+            <input type="radio" name="next_step" value="{{ key }}" disabled>
             <svg class="visit-close__icon" viewBox="0 0 24 24" aria-hidden="true">{{ step_icons[key] | safe }}</svg>
             <span data-visit-label-text>{{ step_labels.get(key, t('visit_step_' ~ key)) }}</span>
             <svg class="visit-close__check" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.2 10.2 16 17.5 8"/></svg>

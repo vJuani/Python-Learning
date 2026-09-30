@@ -1191,7 +1191,7 @@ def filter_properties(
     return properties
 
 
-UNAVAILABLE_FOR_MATCH = ("sold", "rented", "withdrawn")
+UNAVAILABLE_FOR_MATCH = ("sold", "rented", "withdrawn", "reserved")
 
 
 def list_match_candidates(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -564,6 +565,14 @@ class VisitCloseTests(unittest.TestCase):
         self.assertEqual(closed["created_task"]["task_type"], "follow_up")
         self.assertIn("Preparar operación", closed["created_task"]["title"])
         self.assertEqual(self._operation_count(), before_ops)
+        from modules.database.reservations_repository import get_open_reservation_for_property
+
+        reservation = get_open_reservation_for_property(self.org, property_id)
+        self.assertIsNotNone(reservation)
+        self.assertEqual(int(reservation["reservation_amount"]), 2000)
+        self.assertEqual(int(reservation["agreed_property_price"]), 178000)
+        self.assertEqual(int(reservation["original_property_price"]), 185000)
+        self.assertEqual(reservation["reservation_status"], "reserved")
 
     def test_reservation_amount_does_not_replace_the_price(self):
         property_id = self._priced_property("Calle Sin Acuerdo")
@@ -693,3 +702,101 @@ class VisitCloseTests(unittest.TestCase):
         kept = get_property_record(owned_by_other, self.org)
         self.assertEqual(kept["commercial_status"], "available")
         self.assertEqual(int(kept["listing_price"]), 185000)
+
+    def test_opening_the_reserved_chip_does_not_change_the_property(self):
+        property_id = self._priced_property("Calle Sin Guardar")
+        contact = self._contact("Sin guardar")
+        visit = create_task(
+            self.org,
+            self.agent,
+            {
+                "title": "Visita sin guardar",
+                "task_type": "visit",
+                "due_date": "2026-09-24",
+                "due_time": "16:00",
+                "contact_id": contact["id"],
+                "contact_name": contact["name"],
+                "property_id": property_id,
+            },
+            created_by_user_id=self.user,
+        )
+        client = app.test_client()
+        client.post(
+            "/login",
+            data={"username": "visit_agent", "password": "Password1"},
+            follow_redirects=True,
+        )
+        page = client.get(f"/agenda/{visit['id']}/visit-close")
+        body = page.get_data(as_text=True)
+        self.assertIn('name="result" value="reserved"', body)
+        self.assertEqual(get_property_record(property_id, self.org)["commercial_status"], "available")
+        from modules.database.reservations_repository import get_open_reservation_for_property
+
+        self.assertIsNone(get_open_reservation_for_property(self.org, property_id))
+        self.assertFalse(get_agent_task(visit["id"], self.org).get("outcome_json"))
+
+    def test_two_simultaneous_reservations_leave_one_open(self):
+        property_id = self._priced_property("Calle Simultanea")
+        contact = self._contact("Simultanea")
+        visits = []
+        for hour in ("17:00", "17:30"):
+            visit = create_task(
+                self.org,
+                self.agent,
+                {
+                    "title": f"Visita {hour}",
+                    "task_type": "visit",
+                    "due_date": "2026-09-24",
+                    "due_time": hour,
+                    "contact_id": contact["id"],
+                    "contact_name": contact["name"],
+                    "property_id": property_id,
+                },
+                created_by_user_id=self.user,
+            )
+            visits.append(
+                complete_task(
+                    self.org,
+                    visit["id"],
+                    agent_id=self.agent,
+                    actor_user_id=self.user,
+                )
+            )
+        barrier = threading.Barrier(2)
+        results = []
+
+        def attempt(visit):
+            barrier.wait(timeout=5)
+            try:
+                apply_visit_close(
+                    visit,
+                    {
+                        "result": "reserved",
+                        "reservation_amount": "2.000",
+                        "agreed_property_price": "178.000",
+                        "note": "carrera",
+                    },
+                    organization_id=self.org,
+                    agent_id=self.agent,
+                    actor_user_id=self.user,
+                    now=self._now(),
+                    tz=self.tz,
+                    language="es",
+                )
+                results.append(("ok", visit["id"]))
+            except VisitCloseError as error:
+                results.append((error.message_key, visit["id"]))
+
+        threads = [threading.Thread(target=attempt, args=(visit,)) for visit in visits]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=15)
+        self.assertFalse(any(thread.is_alive() for thread in threads))
+        self.assertEqual(sorted(item[0] for item in results), ["ok", "visit_close_err_reservation_open"])
+        from modules.database.reservations_repository import get_open_reservation_for_property
+
+        self.assertIsNotNone(get_open_reservation_for_property(self.org, property_id))
+        self.assertEqual(get_property_record(property_id, self.org)["commercial_status"], "reserved")
+        loser_id = next(item[1] for item in results if item[0] != "ok")
+        self.assertFalse(get_agent_task(loser_id, self.org).get("outcome_json"))

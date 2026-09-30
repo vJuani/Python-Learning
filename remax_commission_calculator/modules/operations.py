@@ -995,6 +995,9 @@ def save_calculated_operation(
             operation_id,
         )
 
+    from modules.reservations import sync_reservation_from_operation
+
+    sync_reservation_from_operation(organization_id, operation_id)
     return operation_id, operation
 
 
@@ -1066,6 +1069,9 @@ def update_calculated_operation(
             status,
         )
 
+    from modules.reservations import sync_reservation_from_operation
+
+    sync_reservation_from_operation(organization_id, operation_id)
     return operation
 
 

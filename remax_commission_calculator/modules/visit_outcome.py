@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from decimal import Decimal, InvalidOperation
 
 
 INTERESTS = ("positive", "neutral", "negative")
@@ -82,6 +83,45 @@ def _lines(value):
         for part in str(value or "").replace(",", "\n").splitlines()
         if part.strip()
     ]
+
+
+def parse_jrh_money(value):
+    """Property and operation amounts. Dotted thousands (2.000) stay whole units."""
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    if isinstance(value, Decimal):
+        amount = value
+    elif isinstance(value, int):
+        amount = Decimal(value)
+    elif isinstance(value, float):
+        amount = Decimal(str(value))
+    else:
+        text = (
+            str(value)
+            .strip()
+            .replace("USD", "")
+            .replace("ARS", "")
+            .replace("$", "")
+            .strip()
+        )
+        if not text:
+            return None
+        if re.fullmatch(r"\d{1,3}(\.\d{3})+", text):
+            text = text.replace(".", "")
+        elif "," in text and "." in text:
+            text = text.replace(".", "").replace(",", ".")
+        elif "," in text:
+            text = text.replace(",", ".")
+        try:
+            amount = Decimal(text)
+        except InvalidOperation:
+            return None
+    if amount <= 0:
+        return None
+    amount = amount.quantize(Decimal("0.0001"))
+    if amount == amount.to_integral():
+        return int(amount)
+    return float(amount)
 
 
 def _positive_amount(value):
@@ -222,10 +262,16 @@ def normalize_visit_outcome(raw):
         next_step = _next_step_from_action(next_action)
     next_step_at = str(raw.get("next_step_at") or "").strip()
     next_step_note = str(raw.get("next_step_note") or "").strip()
-    reservation_amount = _positive_amount(raw.get("reservation_amount"))
+    reservation_amount = parse_jrh_money(raw.get("reservation_amount"))
     reservation_currency = _currency(raw.get("reservation_currency"))
-    agreed_price = _positive_amount(raw.get("agreed_property_price"))
+    agreed_price = parse_jrh_money(raw.get("agreed_property_price"))
     agreed_currency = _currency(raw.get("agreed_property_currency"))
+    offer_amount = parse_jrh_money(raw.get("offer_amount"))
+    offer_currency = _currency(raw.get("offer_currency"))
+    payment_method = str(raw.get("payment_method") or "").strip()
+    next_milestone = str(raw.get("next_milestone") or "").strip()
+    estimated_closing_date = str(raw.get("estimated_closing_date") or "").strip()
+    reservation_notes = str(raw.get("reservation_notes") or "").strip()
 
     outcome = {}
     if note:
@@ -252,6 +298,9 @@ def normalize_visit_outcome(raw):
         outcome["next_step_at"] = next_step_at
     if next_step_note:
         outcome["next_step_note"] = next_step_note
+    if result == "negotiate" and offer_amount is not None:
+        outcome["offer_amount"] = offer_amount
+        outcome["offer_currency"] = offer_currency or "USD"
     if result == "reserved":
         if reservation_amount is not None:
             outcome["reservation_amount"] = reservation_amount
@@ -261,6 +310,14 @@ def normalize_visit_outcome(raw):
             outcome["agreed_property_currency"] = (
                 agreed_currency or reservation_currency or "USD"
             )
+        if payment_method:
+            outcome["payment_method"] = payment_method
+        if next_milestone:
+            outcome["next_milestone"] = next_milestone
+        if estimated_closing_date:
+            outcome["estimated_closing_date"] = estimated_closing_date
+        if reservation_notes:
+            outcome["reservation_notes"] = reservation_notes
     if suggested:
         outcome["suggested_task"] = suggested
 
@@ -350,6 +407,18 @@ def outcome_from_form(form):
         base["agreed_property_price"] = form.get("agreed_property_price")
     if form.get("agreed_property_currency") is not None:
         base["agreed_property_currency"] = form.get("agreed_property_currency")
+    if form.get("offer_amount") is not None:
+        base["offer_amount"] = form.get("offer_amount")
+    if form.get("offer_currency") is not None:
+        base["offer_currency"] = form.get("offer_currency")
+    if form.get("payment_method") is not None:
+        base["payment_method"] = form.get("payment_method")
+    if form.get("next_milestone") is not None:
+        base["next_milestone"] = form.get("next_milestone")
+    if form.get("estimated_closing_date") is not None:
+        base["estimated_closing_date"] = form.get("estimated_closing_date")
+    if form.get("reservation_notes") is not None:
+        base["reservation_notes"] = form.get("reservation_notes")
     if form.get("next_action") is not None:
         base["next_action"] = form.get("next_action")
     if form.get("suggested_task_prompt"):

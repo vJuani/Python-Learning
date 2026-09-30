@@ -1959,6 +1959,10 @@ def create_postgres_schema():
 
         migrate_property_commercial_events_postgres(cursor)
 
+        from .reservations_migration import migrate_reservations_postgres
+
+        migrate_reservations_postgres(cursor)
+
         from .public_share_migration import migrate_public_share_postgres
 
         migrate_public_share_postgres(cursor)

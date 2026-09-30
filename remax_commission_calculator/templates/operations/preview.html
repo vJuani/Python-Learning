@@ -26,6 +26,7 @@
 <section class="panel">
     <form method="post" action="{{ save_url }}" class="form-actions">
         <input type="hidden" name="agent_id" value="{{ form_values.agent_id }}">
+        <input type="hidden" name="reservation_id" value="{{ form_values.reservation_id or '' }}">
         <input type="hidden" name="property_id" value="{{ form_values.property_id }}">
         <input type="hidden" name="currency" value="{{ form_values.currency }}">
         <input type="hidden" name="original_amount" value="{{ form_values.original_amount }}">
