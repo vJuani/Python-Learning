@@ -22,6 +22,7 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from reportlab.platypus.flowables import _listWrapOn
 
 from modules.pdf_images import _open_image, compose_on_color, uncropped_raster
 from modules.pdf_svg import draw_svg
@@ -89,7 +90,33 @@ class ChipRow(Flowable):
 
 
 _COLLAGE_GAP = 8
-_COLLAGE_MAX_H = 168 * mm
+_PAGE_TOP = 12 * mm
+_PAGE_BOTTOM = FOOTER_H + 4 * mm
+_FRAME_PAD = 6
+
+
+def brochure_content_height():
+    """Inner frame height: page, margins, footer, and ReportLab frame padding."""
+    return A4[1] - _PAGE_TOP - _PAGE_BOTTOM - (2 * _FRAME_PAD)
+
+
+def collage_height_limit(content_height=None):
+    """35–40% of the usable page. The collage never grows past this."""
+    height = brochure_content_height() if content_height is None else content_height
+    return height * 0.38
+
+
+def _story_height(story, width):
+    """Height ReportLab will actually reserve, including paragraph spacing."""
+    flat = []
+    for item in story:
+        content = getattr(item, "_content", None)
+        if isinstance(item, KeepTogether) and content is not None:
+            flat.extend(content)
+        else:
+            flat.append(item)
+    _width, height = _listWrapOn(flat, width, None)
+    return height
 
 
 def _hero_stack(width, hero_ratio, top_ratio, bottom_ratio, gap):
@@ -108,7 +135,141 @@ def _hero_stack(width, hero_ratio, top_ratio, bottom_ratio, gap):
     return hero_w, hero_h, side_w, top_h, bottom_h
 
 
-def collage_frames(sizes, width, *, gap=_COLLAGE_GAP, max_height=_COLLAGE_MAX_H):
+def _row_cells(indices, ratio, y, width, row_h, gap):
+    """One row. Height stays at or below the ratio's full-width height."""
+    if row_h <= 0 or len(indices) < 2:
+        return None
+    ratio_sum = sum(ratio[index] for index in indices)
+    full_h = (width - gap) / ratio_sum
+    row_h = min(row_h, full_h)
+    widths = [row_h * ratio[index] for index in indices]
+    used = sum(widths) + gap
+    if used > width + 0.5 or min(min(widths), row_h) < 36:
+        return None
+    x = max(0.0, (width - used) / 2.0)
+    placed = {}
+    for index, cell_w in zip(indices, widths):
+        placed[index] = (x, y, cell_w, row_h)
+        x += cell_w + gap
+    return placed, row_h
+
+
+def _two_row_fit(width, max_height, ratio, gap, rows):
+    def natural(row):
+        return (width - gap) / (ratio[row[0]] + ratio[row[1]])
+
+    def ordered(row):
+        return tuple(sorted(row, key=lambda index: (-ratio[index], index)))
+
+    best = None
+    budget = max_height - gap
+    for first, second in (rows, tuple(reversed(rows))):
+        first, second = ordered(first), ordered(second)
+        h1_nat, h2_nat = natural(first), natural(second)
+        if h1_nat + h2_nat <= budget:
+            heights = (h1_nat, h2_nat)
+        else:
+            short_is_first = h1_nat <= h2_nat
+            short_h = h1_nat if short_is_first else h2_nat
+            tall_h = h2_nat if short_is_first else h1_nat
+            if short_h + 36 <= budget:
+                tall_h = budget - short_h
+            else:
+                share = budget / (short_h + tall_h)
+                short_h *= share
+                tall_h = budget - short_h
+            heights = (short_h, tall_h) if short_is_first else (tall_h, short_h)
+        top = _row_cells(first, ratio, 0.0, width, heights[0], gap)
+        if top is None:
+            continue
+        top_placed, top_h = top
+        bottom = _row_cells(second, ratio, top_h + gap, width, heights[1], gap)
+        if bottom is None:
+            continue
+        bottom_placed, bottom_h = bottom
+        placed = {**top_placed, **bottom_placed}
+        height = top_h + gap + bottom_h
+        area = sum(cell_w * cell_h for _x, _y, cell_w, cell_h in placed.values())
+        top_span = max(x + cell_w for x, _y, cell_w, _h in top_placed.values())
+        top_span -= min(x for x, _y, _w, _h in top_placed.values())
+        if best is None or area > best[0] + 0.5 or (abs(area - best[0]) <= 0.5 and top_span > best[3]):
+            best = (area, placed, height, top_span)
+    return None if best is None else best[:3]
+
+
+def _two_column_fit(width, max_height, ratio, gap, columns):
+    def ordered(column):
+        return tuple(sorted(column, key=lambda index: (-ratio[index], index)))
+
+    def col_width(pair, height):
+        return (height - gap) / (1 / ratio[pair[0]] + 1 / ratio[pair[1]])
+
+    left, right = ordered(columns[0]), ordered(columns[1])
+    height = max_height
+    if height <= gap + 36:
+        return None
+    left_w = col_width(left, height)
+    right_w = col_width(right, height)
+    if left_w + right_w + gap > width:
+        scale = (width - gap) / (left_w + right_w)
+        left_w *= scale
+        right_w *= scale
+        height = gap + (height - gap) * scale
+    used = left_w + gap + right_w
+    x0 = max(0.0, (width - used) / 2.0)
+
+    def stack(pair, x, col_w):
+        top_h = col_w / ratio[pair[0]]
+        bottom_h = col_w / ratio[pair[1]]
+        if min(col_w, top_h, bottom_h) < 36:
+            return None
+        return {
+            pair[0]: (x, 0.0, col_w, top_h),
+            pair[1]: (x, top_h + gap, col_w, bottom_h),
+        }
+
+    placed = stack(left, x0, left_w)
+    other = stack(right, x0 + left_w + gap, right_w)
+    if placed is None or other is None:
+        return None
+    placed.update(other)
+    block_h = max(y + cell_h for _x, y, _w, cell_h in placed.values())
+    if block_h > max_height + 0.5:
+        return None
+    area = sum(cell_w * cell_h for _x, _y, cell_w, cell_h in placed.values())
+    return area, placed, block_h
+
+
+def _best_four_fit(width, max_height, ratio, gap, diagram, diagram_height, count):
+    """When the banner collage is too tall, pick a fuller arrangement."""
+    scale = max_height / diagram_height if diagram_height > max_height > 0 else 1.0
+    diagram_area = sum(cell_w * cell_h for _x, _y, cell_w, cell_h in diagram.values())
+    diagram_area *= scale * scale
+    ids = sorted(ratio)
+    pairings = (
+        ((ids[0], ids[1]), (ids[2], ids[3])),
+        ((ids[0], ids[2]), (ids[1], ids[3])),
+        ((ids[0], ids[3]), (ids[1], ids[2])),
+    )
+    best_area = diagram_area * 1.12
+    best = None
+    for rows in pairings:
+        for result in (
+            _two_row_fit(width, max_height, ratio, gap, rows),
+            _two_column_fit(width, max_height, ratio, gap, rows),
+        ):
+            if result is None or result[0] <= best_area:
+                continue
+            best_area = result[0]
+            best = result
+    if best is None:
+        return None
+    _area, placed, height = best
+    frames = [placed.get(index) for index in range(count)]
+    return frames, height
+
+
+def collage_frames(sizes, width, *, gap=_COLLAGE_GAP, max_height=None):
     """Cells follow each photo. Nothing is cropped or stretched.
 
     Four photos: the widest is the left hero, the next widest is the full
@@ -119,6 +280,8 @@ def collage_frames(sizes, width, *, gap=_COLLAGE_GAP, max_height=_COLLAGE_MAX_H)
         for index, (src_w, src_h) in enumerate(sizes or [])
         if src_w and src_h
     ]
+    if max_height is None:
+        max_height = collage_height_limit()
     if not usable or width <= gap:
         return [None] * len(sizes or []), 0.0
     ratio = {index: src_w / src_h for index, src_w, src_h in usable}
@@ -130,7 +293,14 @@ def collage_frames(sizes, width, *, gap=_COLLAGE_GAP, max_height=_COLLAGE_MAX_H)
                 index: (x * scale, y * scale, w * scale, h * scale)
                 for index, (x, y, w, h) in placed.items()
             }
-            height *= scale
+            used = max(x + w for x, _y, w, _h in placed.values())
+            pad = max(0.0, (width - used) / 2.0)
+            if pad:
+                placed = {
+                    index: (x + pad, y, w, h)
+                    for index, (x, y, w, h) in placed.items()
+                }
+            height = max_height
         frames = [placed.get(index) for index in range(len(sizes))]
         return frames, height
 
@@ -200,16 +370,21 @@ def collage_frames(sizes, width, *, gap=_COLLAGE_GAP, max_height=_COLLAGE_MAX_H)
         y += row_h
     else:
         y -= gap
+    if len(usable) == 4 and y > max_height:
+        fitted = _best_four_fit(width, max_height, ratio, gap, placed, y, len(sizes))
+        if fitted is not None:
+            return fitted
     return finish(placed, y)
 
 
 class PhotoCollage(Flowable):
     """Up to five photos. Each cell follows that photo. Nothing is cropped."""
 
-    def __init__(self, images, width):
+    def __init__(self, images, width, max_height=None):
         super().__init__()
         self.images = [item for item in images if item is not None][:5]
         self.box_width = width
+        self.max_height = collage_height_limit() if max_height is None else max_height
         self._sources = []
         self._frames = []
 
@@ -227,7 +402,9 @@ class PhotoCollage(Flowable):
             sources.append(source)
             sizes.append((src_w, src_h))
         self._sources = sources
-        self._frames, self.height = collage_frames(sizes, self.width)
+        self._frames, self.height = collage_frames(
+            sizes, self.width, max_height=self.max_height,
+        )
         return self.width, self.height
 
     def draw(self):
@@ -632,6 +809,7 @@ def build_property_brochure_pdf(payload):
         ])
     )
 
+    frame_height = brochure_content_height()
     pack = [header]
     if payload.get("eyebrow"):
         pack.append(Paragraph(_escape(payload["eyebrow"]).upper(), styles["BrKicker"]))
@@ -641,9 +819,11 @@ def build_property_brochure_pdf(payload):
         pack.append(Paragraph(_escape(payload["unit_line"]), styles["BrPlace"]))
     if payload.get("location_line"):
         pack.append(Paragraph(_escape(payload["location_line"]), styles["BrPlace"]))
+    collage = None
     if gallery:
+        collage = PhotoCollage(gallery, usable_width, max_height=collage_height_limit(frame_height))
         pack.append(Spacer(1, 4 * mm))
-        pack.append(PhotoCollage(gallery, usable_width))
+        pack.append(collage)
     if payload.get("price"):
         pack.append(Paragraph(_escape(payload["price"]), styles["BrPrice"]))
     chips = payload.get("chips") or []
@@ -697,13 +877,23 @@ def build_property_brochure_pdf(payload):
             loc.append(Paragraph(_escape(payload["location_line"]), styles["BrPlace"]))
         story.append(KeepTogether(loc))
 
+    if collage is not None:
+        frame_width = A4[0] - (24 * mm) - (2 * _FRAME_PAD)
+        budget = frame_height - 4
+        for _ in range(4):
+            used = _story_height(story, frame_width)
+            overflow = used - budget
+            if overflow <= 0:
+                break
+            collage.max_height = max(48.0, collage.height - overflow)
+
     document = SimpleDocTemplate(
         buffer,
         pagesize=A4,
         leftMargin=12 * mm,
         rightMargin=12 * mm,
-        topMargin=12 * mm,
-        bottomMargin=FOOTER_H + 4 * mm,
+        topMargin=_PAGE_TOP,
+        bottomMargin=_PAGE_BOTTOM,
         title=payload.get("title") or "Property",
     )
 

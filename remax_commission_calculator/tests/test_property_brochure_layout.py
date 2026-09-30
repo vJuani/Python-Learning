@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 import unittest
 from pathlib import Path
 
@@ -13,8 +14,10 @@ from modules.pdf_images import uncropped_raster
 from modules.pdf_property_brochure import (
     _COLLAGE_GAP,
     _CONTACT_ICON_FILES,
+    brochure_content_height,
     build_property_brochure_pdf,
     collage_frames,
+    collage_height_limit,
     contained_draw_box,
     logo_draw_size,
 )
@@ -23,6 +26,16 @@ from modules.property_marketing import ICON_EMAIL, ICON_IG, ICON_WA
 
 def _ratio(width, height):
     return width / height
+
+
+def _page_count(payload):
+    return len(re.findall(rb"/Type\s*/Page(?!s)", payload))
+
+
+def _jpeg(size, color):
+    buffer = io.BytesIO()
+    Image.new("RGB", size, color).save(buffer, format="JPEG", quality=90)
+    return buffer.getvalue()
 
 
 class BrochureLayoutTests(unittest.TestCase):
@@ -96,7 +109,7 @@ class BrochureLayoutTests(unittest.TestCase):
 
     def test_four_photos_fill_cells_that_match_their_ratios(self):
         sizes = [(1600, 900), (800, 1200), (1000, 750), (2000, 800)]
-        frames, height = collage_frames(sizes, 480)
+        frames, height = collage_frames(sizes, 480, max_height=1000)
         self.assertEqual(len(frames), 4)
         image_area = 0.0
         for (src_w, src_h), frame in zip(sizes, frames):
@@ -118,7 +131,7 @@ class BrochureLayoutTests(unittest.TestCase):
 
     def test_portrait_column_is_narrower_than_the_wide_hero(self):
         sizes = [(1800, 800), (700, 1100), (900, 700)]
-        frames, _height = collage_frames(sizes, 480)
+        frames, _height = collage_frames(sizes, 480, max_height=1000)
         hero = frames[0]
         portrait = frames[1]
         self.assertEqual(hero[0], 0)
@@ -148,6 +161,61 @@ class BrochureLayoutTests(unittest.TestCase):
         draw_w, draw_h = logo_draw_size(640, 160, 42 * mm, 14 * mm)
         self.assertAlmostEqual(_ratio(draw_w, draw_h), 4.0, places=3)
         self.assertLess(draw_h, 14 * mm)
+
+    def test_collage_stays_within_forty_percent_of_the_page(self):
+        limit = collage_height_limit()
+        content = brochure_content_height()
+        self.assertGreaterEqual(limit, content * 0.35)
+        self.assertLessEqual(limit, content * 0.40)
+        sizes = [(592, 504), (460, 260), (312, 138), (312, 138)]
+        frames, height = collage_frames(sizes, 520, max_height=limit)
+        self.assertLessEqual(height, limit + 0.5)
+        image_area = 0.0
+        for (src_w, src_h), frame in zip(sizes, frames):
+            x, y, w, h = frame
+            self.assertAlmostEqual(w / h, src_w / src_h, places=2)
+            self.assertGreaterEqual(min(w, h), 48)
+            image_area += w * h
+            self.assertGreaterEqual(x, -0.01)
+            self.assertLessEqual(x + w, 520 + 0.5)
+            self.assertLessEqual(y + h, height + 0.5)
+        self.assertGreater(image_area / (520 * limit), 0.75)
+
+    def test_four_photo_sheet_is_one_page(self):
+        gallery = [
+            _jpeg((592, 504), (180, 150, 120)),
+            _jpeg((460, 260), (90, 140, 80)),
+            _jpeg((312, 138), (160, 140, 110)),
+            _jpeg((312, 138), (200, 170, 130)),
+        ]
+        pdf_bytes = build_property_brochure_pdf({
+            "eyebrow": "Venta",
+            "title": "Calle Test 1234",
+            "location_line": "Buenos Aires",
+            "price": "USD 185.000,00",
+            "chips": ["3 amb.", "2 baños", "85 m²"],
+            "highlights": [
+                ("Dormitorios", "2"),
+                ("Baños", "2"),
+                ("Superficie", "85 m²"),
+            ],
+            "description": "Departamento luminoso para revisar el collage de la ficha.",
+            "features": ["Balcón", "Luminoso", "Cocina integrada"],
+            "about_label": "Descripción",
+            "features_label": "Características",
+            "location_label": "Ubicación",
+            "gallery": gallery,
+            "organization": {"name": "Achard Propiedades QA", "accent_color": "#0f766e"},
+            "agent": {
+                "name": "Emilio Perez",
+                "email": "emilio@achard.test",
+                "whatsapp": "+54 11 5555 0101",
+                "instagram": "emilio.perez",
+            },
+            "powered_by": "Powered by JRH One",
+        })
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+        self.assertEqual(_page_count(pdf_bytes), 1)
 
 
 if __name__ == "__main__":
