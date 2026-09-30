@@ -112,5 +112,12 @@
                 sheet.close();
             });
         }
+        sheet.addEventListener("close", function () {
+            var form = sheet.querySelector("[data-visit-close-form]");
+            if (form) {
+                form.reset();
+            }
+            document.body.style.overflow = "";
+        });
     }
 })();

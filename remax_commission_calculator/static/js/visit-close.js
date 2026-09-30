@@ -32,9 +32,34 @@
         var timeInput = form.querySelector("[name='next_step_time']");
         var dateField = form.querySelector("[data-visit-date-field]");
         var resultLine = form.querySelector("[data-visit-summary-result]");
+        var reservationLine = form.querySelector("[data-visit-summary-reservation]");
+        var propertyLine = form.querySelector("[data-visit-summary-property]");
+        var agreedLine = form.querySelector("[data-visit-summary-agreed]");
         var stepLine = form.querySelector("[data-visit-summary-step]");
         var whenLine = form.querySelector("[data-visit-summary-when]");
+        var reservation = form.querySelector("[data-visit-reservation]");
         var hideUnless = when ? (when.getAttribute("data-visit-show-unless") || "none") : "none";
+
+        function fillLine(line, text) {
+            if (!line) {
+                return;
+            }
+            line.hidden = !text;
+            var value = line.querySelector("[data-visit-summary-value]");
+            if (value) {
+                value.textContent = text || "";
+            }
+        }
+
+        function moneyText(amountName, currencyName) {
+            var amount = form.querySelector("[name='" + amountName + "']");
+            var raw = amount && amount.value ? amount.value.trim() : "";
+            if (!raw) {
+                return "";
+            }
+            var currency = form.querySelector("input[name='" + currencyName + "']:checked");
+            return (currency ? currency.value : "USD") + " " + raw;
+        }
 
         function setEnabled(show) {
             [dateInput, timeInput, stepNote && stepNote.querySelector("input")].forEach(function (field) {
@@ -45,6 +70,22 @@
         }
 
         function sync() {
+            var resultInput = form.querySelector("input[name='result']:checked");
+            var result = resultInput ? resultInput.value : "";
+            var showReservation = result === "reserved";
+            if (reservation) {
+                reservation.hidden = !showReservation;
+                reservation.querySelectorAll("input").forEach(function (field) {
+                    field.disabled = !showReservation;
+                });
+            }
+            if (showReservation && !form.querySelector("input[name='next_step']:checked")) {
+                var prepare = form.querySelector("input[name='next_step'][value='prepare_operation']");
+                if (prepare) {
+                    prepare.checked = true;
+                }
+            }
+
             var stepInput = form.querySelector("input[name='next_step']:checked");
             var step = stepInput ? stepInput.value : "";
             var show = Boolean(step) && step !== hideUnless;
@@ -64,6 +105,12 @@
                     resultValue.textContent = resultText;
                 }
             }
+
+            fillLine(reservationLine, showReservation ? moneyText("reservation_amount", "reservation_currency") : "");
+            if (propertyLine) {
+                propertyLine.hidden = !showReservation;
+            }
+            fillLine(agreedLine, showReservation ? moneyText("agreed_property_price", "agreed_property_currency") : "");
 
             var stepText = selectedLabel(form, "next_step");
             if (stepLine) {
@@ -92,6 +139,10 @@
         }
 
         form.addEventListener("change", sync);
+        form.addEventListener("input", sync);
+        form.addEventListener("reset", function () {
+            window.setTimeout(sync, 0);
+        });
         form.querySelectorAll("[data-visit-offset]").forEach(function (button) {
             button.addEventListener("click", function () {
                 if (!dateInput) {

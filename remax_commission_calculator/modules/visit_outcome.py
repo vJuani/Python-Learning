@@ -22,6 +22,7 @@ VISIT_RESULTS = (
     "second_visit",
     "disliked",
     "no_show",
+    "reserved",
     "other",
 )
 NEXT_STEPS = (
@@ -30,6 +31,7 @@ NEXT_STEPS = (
     "send_properties",
     "second_visit",
     "negotiate",
+    "prepare_operation",
     "none",
     "custom",
 )
@@ -37,6 +39,7 @@ _RESULT_INTEREST = {
     "liked": "positive",
     "interested": "positive",
     "negotiate": "positive",
+    "reserved": "positive",
     "second_visit": "positive",
     "disliked": "negative",
     "no_show": "neutral",
@@ -79,6 +82,25 @@ def _lines(value):
         for part in str(value or "").replace(",", "\n").splitlines()
         if part.strip()
     ]
+
+
+def _positive_amount(value):
+    """Whole amount. Thousands separators are ignored. Zero is empty."""
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number = int(value)
+        return number if number > 0 else None
+    digits = re.sub(r"[^\d]", "", str(value))
+    if not digits:
+        return None
+    number = int(digits)
+    return number if number > 0 else None
+
+
+def _currency(value):
+    currency = str(value or "").strip().upper()
+    return currency if currency in CURRENCIES else ""
 
 
 def _parse_amount(value):
@@ -200,6 +222,10 @@ def normalize_visit_outcome(raw):
         next_step = _next_step_from_action(next_action)
     next_step_at = str(raw.get("next_step_at") or "").strip()
     next_step_note = str(raw.get("next_step_note") or "").strip()
+    reservation_amount = _positive_amount(raw.get("reservation_amount"))
+    reservation_currency = _currency(raw.get("reservation_currency"))
+    agreed_price = _positive_amount(raw.get("agreed_property_price"))
+    agreed_currency = _currency(raw.get("agreed_property_currency"))
 
     outcome = {}
     if note:
@@ -226,6 +252,15 @@ def normalize_visit_outcome(raw):
         outcome["next_step_at"] = next_step_at
     if next_step_note:
         outcome["next_step_note"] = next_step_note
+    if result == "reserved":
+        if reservation_amount is not None:
+            outcome["reservation_amount"] = reservation_amount
+            outcome["reservation_currency"] = reservation_currency or "USD"
+        if agreed_price is not None:
+            outcome["agreed_property_price"] = agreed_price
+            outcome["agreed_property_currency"] = (
+                agreed_currency or reservation_currency or "USD"
+            )
     if suggested:
         outcome["suggested_task"] = suggested
 
@@ -307,6 +342,14 @@ def outcome_from_form(form):
         base["next_step_at"] = form.get("next_step_at")
     if form.get("next_step_note") is not None:
         base["next_step_note"] = form.get("next_step_note")
+    if form.get("reservation_amount") is not None:
+        base["reservation_amount"] = form.get("reservation_amount")
+    if form.get("reservation_currency") is not None:
+        base["reservation_currency"] = form.get("reservation_currency")
+    if form.get("agreed_property_price") is not None:
+        base["agreed_property_price"] = form.get("agreed_property_price")
+    if form.get("agreed_property_currency") is not None:
+        base["agreed_property_currency"] = form.get("agreed_property_currency")
     if form.get("next_action") is not None:
         base["next_action"] = form.get("next_action")
     if form.get("suggested_task_prompt"):

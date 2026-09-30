@@ -1,9 +1,10 @@
-{% set result_order = ['liked', 'interested', 'negotiate', 'second_visit', 'disliked', 'no_show', 'other'] %}
-{% set step_order = ['call', 'whatsapp', 'second_visit', 'send_properties', 'negotiate', 'custom', 'none'] %}
+{% set result_order = ['liked', 'interested', 'negotiate', 'reserved', 'second_visit', 'disliked', 'no_show', 'other'] %}
+{% set step_order = ['call', 'whatsapp', 'second_visit', 'send_properties', 'negotiate', 'custom', 'prepare_operation', 'none'] %}
 {% set result_icons = {
     'liked': '<path d="M8 11.2V19h8.2l1.6-6.2V10h-3.4l.7-3.2A1.5 1.5 0 0 0 13.6 5L8 11.2Z"/><path d="M8 11H5.5A1.5 1.5 0 0 0 4 12.5V17.5A1.5 1.5 0 0 0 5.5 19H8"/>',
     'interested': '<path d="M12 4.2 14.1 9l5.2.5-3.9 3.4 1.2 5L12 15.4 7.4 17.9l1.2-5L4.7 9.5 9.9 9 12 4.2Z"/>',
     'negotiate': '<path d="M8 14.5 11 11l2 2 3.2-3.2"/><path d="M7 18h10"/><path d="M9 8.5h.01M15 8.5h.01"/><path d="M8.2 6.8a2.2 2.2 0 1 1 1.6 3.8M14.2 6.8a2.2 2.2 0 1 1 1.6 3.8"/>',
+    'reserved': '<path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.2L6 20V5.5a1 1 0 0 1 1-1Z"/>',
     'second_visit': '<path d="M20 12a8 8 0 1 1-2.2-5.5"/><path d="M20 4.8V9h-4.2"/>',
     'disliked': '<path d="M8 12.8V5h8.2L18 11.2V14h-3.4l.7 3.2A1.5 1.5 0 0 1 13.8 19L8 12.8Z"/><path d="M8 13H5.5A1.5 1.5 0 0 1 4 11.5V6.5A1.5 1.5 0 0 1 5.5 5H8"/>',
     'no_show': '<circle cx="12" cy="12" r="7"/><path d="M8.2 15.8 15.8 8.2"/>',
@@ -16,6 +17,7 @@
     'send_properties': '<path d="M7 4.5h7l4 4V19.5H7Z"/><path d="M14 4.5V8.5h4"/><path d="M10 13h5M10 16h3"/>',
     'negotiate': '<path d="M8 14.5 11 11l2 2 3.2-3.2"/><path d="M7 18h10"/>',
     'custom': '<circle cx="12" cy="12" r="7"/><path d="M12 8.5V12l2.4 1.6"/>',
+    'prepare_operation': '<rect x="6" y="4.5" width="12" height="15" rx="2"/><path d="M9 4.5h6v2.2H9Z"/><path d="M9 11h6M9 14.5h4"/>',
     'none': '<path d="M6.5 12.2 10.2 16 17.5 8"/>'
 } %}
 {% set step_labels = {
@@ -38,6 +40,42 @@
         {% endfor %}
     </div>
 </fieldset>
+
+<section class="visit-close__reserve" data-visit-reservation hidden>
+    <h3 class="visit-close__section-title">{{ t('visit_close_reserved_title') }}</h3>
+    <div class="visit-close__field">
+        <span>{{ t('visit_close_reservation_amount') }}</span>
+        <div class="visit-close__money">
+            <div class="visit-close__currency" role="radiogroup" aria-label="{{ t('visit_close_reservation_amount') }}">
+                <label class="visit-close__currency-option">
+                    <input type="radio" name="reservation_currency" value="USD" checked disabled>
+                    <span>USD</span>
+                </label>
+                <label class="visit-close__currency-option">
+                    <input type="radio" name="reservation_currency" value="ARS" disabled>
+                    <span>ARS</span>
+                </label>
+            </div>
+            <input type="text" name="reservation_amount" inputmode="decimal" maxlength="20" placeholder="2.000" autocomplete="off" disabled>
+        </div>
+    </div>
+    <div class="visit-close__field">
+        <span>{{ t('visit_close_agreed_price') }}</span>
+        <div class="visit-close__money">
+            <div class="visit-close__currency" role="radiogroup" aria-label="{{ t('visit_close_agreed_price') }}">
+                <label class="visit-close__currency-option">
+                    <input type="radio" name="agreed_property_currency" value="USD" checked disabled>
+                    <span>USD</span>
+                </label>
+                <label class="visit-close__currency-option">
+                    <input type="radio" name="agreed_property_currency" value="ARS" disabled>
+                    <span>ARS</span>
+                </label>
+            </div>
+            <input type="text" name="agreed_property_price" inputmode="decimal" maxlength="20" placeholder="178.000" autocomplete="off" disabled>
+        </div>
+    </div>
+</section>
 
 <label class="visit-close__field">
     <span>{{ t('visit_close_note_label') }}</span>
@@ -89,6 +127,9 @@
     <ul>
         <li>{{ t('visit_close_summary_done') }}</li>
         <li data-visit-summary-result hidden>{{ t('visit_close_summary_result') }}: <span data-visit-summary-value></span></li>
+        <li data-visit-summary-reservation hidden>{{ t('visit_close_summary_reservation') }}: <span data-visit-summary-value></span></li>
+        <li data-visit-summary-property hidden>{{ t('visit_close_summary_property') }}</li>
+        <li data-visit-summary-agreed hidden>{{ t('visit_close_summary_agreed') }}: <span data-visit-summary-value></span></li>
         <li data-visit-summary-step hidden>{{ t('visit_close_summary_step') }}: <span data-visit-summary-value></span></li>
         <li data-visit-summary-when hidden><span data-visit-summary-value></span></li>
     </ul>

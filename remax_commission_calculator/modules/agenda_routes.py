@@ -973,7 +973,7 @@ def register_agenda_routes(app, helpers):
             local_datetime_to_utc_iso,
             organization_timezone,
         )
-        from modules.visit_close import apply_visit_close
+        from modules.visit_close import VisitCloseError, apply_visit_close
         from modules.visit_outcome import NEXT_STEPS, VISIT_RESULTS, outcome_from_form
 
         try:
@@ -1023,7 +1023,7 @@ def register_agenda_routes(app, helpers):
                 language=get_current_language(),
                 save_need=False,
             )
-        except AgentTaskError as error:
+        except (AgentTaskError, VisitCloseError) as error:
             flash_i18n(error.message_key, "error")
             return redirect(url_for("agenda_visit_close", task_id=task_id))
         preview = result.get("need_preview") or {}

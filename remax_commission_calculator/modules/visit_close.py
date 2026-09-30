@@ -26,12 +26,19 @@ from modules.organization_time import local_datetime_to_utc_iso, parse_utc_iso, 
 from modules.visit_outcome import NEXT_STEPS, VISIT_RESULTS, normalize_visit_outcome
 
 
+class VisitCloseError(Exception):
+    def __init__(self, message_key):
+        self.message_key = message_key
+        super().__init__(message_key)
+
+
 _STEP_TASK = {
     "call": "call",
     "whatsapp": "follow_up",
     "send_properties": "follow_up",
     "second_visit": "visit",
     "negotiate": "follow_up",
+    "prepare_operation": "follow_up",
     "custom": "follow_up",
 }
 _RELATION_FOR_RESULT = {
@@ -157,78 +164,95 @@ def apply_visit_close(
     accepted_conflicts=None,
 ):
     """Persist a close. Creates the next task unless the step is none or a duplicate visit."""
-    from modules.agent_tasks import create_task, save_visit_outcome
+    from modules.agent_tasks import save_visit_outcome
+    from modules.database.agent_tasks_repository import save_task_outcome
     from modules.contacts import load_contact, save_contact_preference_update
-    from modules.i18n import translate
     from modules.organization_time import now_utc, organization_timezone
 
     instant = now or now_utc()
     tz = tz or organization_timezone(organization_id)
     data = _with_default_when(normalize_visit_outcome(outcome), now=instant, tz=tz)
+    if data.get("result") == "reserved" and not data.get("next_step"):
+        data["next_step"] = "prepare_operation"
+        data = _with_default_when(data, now=instant, tz=tz)
+    if data.get("result") == "reserved":
+        _assert_can_reserve(task, organization_id=organization_id, agent_id=agent_id)
+    previous_outcome = task.get("outcome_json") or ""
     updated = save_visit_outcome(
         organization_id,
         task["id"],
         data,
         agent_id=agent_id,
     )
-    contact = None
-    if updated.get("contact_id"):
-        contact = load_contact(
-            organization_id,
-            updated["contact_id"],
+    snapshot = None
+    try:
+        if data.get("result") == "reserved":
+            snapshot = _commit_property_reservation(
+                updated,
+                data,
+                organization_id=organization_id,
+                agent_id=agent_id,
+                actor_user_id=actor_user_id,
+                now=instant,
+            )
+        contact = None
+        if updated.get("contact_id"):
+            contact = load_contact(
+                organization_id,
+                updated["contact_id"],
+                agent_id=agent_id,
+            )
+        place = (
+            updated.get("property_address")
+            or updated.get("title")
+            or ""
+        ).strip()
+        line = _timeline_line(place, data)
+        if contact:
+            contact = record_timeline_note(
+                contact,
+                line,
+                kind="visit_outcome",
+                now=instant,
+                tz=tz,
+            )
+            contact = _apply_stage(contact, data)
+            if data.get("next_step") not in ("", "none") and data.get("next_step_at"):
+                contact = update_contact(
+                    contact["id"],
+                    organization_id,
+                    next_follow_up_at=data["next_step_at"],
+                )
+        created = _create_next_task(
+            updated,
+            data,
+            organization_id=organization_id,
             agent_id=agent_id,
-        )
-    place = (
-        updated.get("property_address")
-        or updated.get("title")
-        or ""
-    ).strip()
-    result_label = ""
-    if data.get("result"):
-        result_label = translate(f"visit_result_{data['result']}", language)
-    line = f"Visitó {place}".strip()
-    if result_label:
-        line = f"{line} — {result_label}"
-    if contact:
-        contact = record_timeline_note(
-            contact,
-            line,
-            kind="visit_outcome",
-            now=instant,
+            actor_user_id=actor_user_id,
+            language=language,
             tz=tz,
         )
-        contact = _apply_stage(contact, data)
-        if data.get("next_step") not in ("", "none") and data.get("next_step_at"):
-            contact = update_contact(
-                contact["id"],
+        relations = _record_property_relations(updated, data)
+        preview = need_changes_for_outcome(contact, data) if contact else {
+            "has_changes": False,
+            "additions": [],
+            "fills": [],
+            "conflicts": [],
+        }
+        if save_need and contact and preview.get("has_changes"):
+            keys = [item["key"] for item in preview.get("conflicts") or []]
+            contact = save_contact_preference_update(
                 organization_id,
-                next_follow_up_at=data["next_step_at"],
+                contact["id"],
+                preview.get("incoming") or {},
+                accepted_conflicts=accepted_conflicts if accepted_conflicts is not None else keys,
+                agent_id=agent_id,
             )
-    created = _create_next_task(
-        updated,
-        data,
-        organization_id=organization_id,
-        agent_id=agent_id,
-        actor_user_id=actor_user_id,
-        language=language,
-        tz=tz,
-    )
-    relations = _record_property_relations(updated, data)
-    preview = need_changes_for_outcome(contact, data) if contact else {
-        "has_changes": False,
-        "additions": [],
-        "fills": [],
-        "conflicts": [],
-    }
-    if save_need and contact and preview.get("has_changes"):
-        keys = [item["key"] for item in preview.get("conflicts") or []]
-        contact = save_contact_preference_update(
-            organization_id,
-            contact["id"],
-            preview.get("incoming") or {},
-            accepted_conflicts=accepted_conflicts if accepted_conflicts is not None else keys,
-            agent_id=agent_id,
-        )
+    except Exception:
+        save_task_outcome(task["id"], organization_id, previous_outcome)
+        if snapshot:
+            _restore_property_reservation(snapshot)
+        raise
     return {
         "task": updated,
         "contact": contact,
@@ -237,7 +261,212 @@ def apply_visit_close(
         "relations": relations,
         "need_preview": preview,
         "outcome": data,
+        "property_event": snapshot,
     }
+
+
+def _money_label(amount, currency):
+    if amount in (None, ""):
+        return ""
+    grouped = f"{int(amount):,}".replace(",", ".")
+    return f"{currency or 'USD'} {grouped}"
+
+
+def _timeline_line(place, outcome):
+    if outcome.get("result") == "reserved":
+        line = f"Reservó {place}".strip()
+        details = []
+        if outcome.get("reservation_amount"):
+            details.append(
+                "Reserva: "
+                + _money_label(
+                    outcome.get("reservation_amount"),
+                    outcome.get("reservation_currency"),
+                )
+            )
+        if outcome.get("agreed_property_price"):
+            details.append(
+                "Valor acordado: "
+                + _money_label(
+                    outcome.get("agreed_property_price"),
+                    outcome.get("agreed_property_currency"),
+                )
+            )
+        if details:
+            line = f"{line}. {'. '.join(details)}."
+        return line
+    from modules.i18n import translate
+
+    result_label = ""
+    if outcome.get("result"):
+        result_label = translate(f"visit_result_{outcome['result']}", "es")
+    line = f"Visitó {place}".strip()
+    if result_label:
+        line = f"{line} — {result_label}"
+    return line
+
+
+def _assert_can_reserve(task, *, organization_id, agent_id):
+    from modules.database.properties_repository import get_property_record
+
+    property_id = task.get("property_id")
+    if not property_id:
+        raise VisitCloseError("visit_close_err_property")
+    row = get_property_record(property_id, organization_id)
+    if row is None:
+        raise VisitCloseError("visit_close_err_property")
+    owner = row.get("agent_id")
+    if owner is not None and agent_id is not None and int(owner) != int(agent_id):
+        raise VisitCloseError("visit_close_err_property_forbidden")
+    return row
+
+
+def _commit_property_reservation(
+    task,
+    outcome,
+    *,
+    organization_id,
+    agent_id,
+    actor_user_id,
+    now,
+):
+    from modules.database.connection import get_connection
+    from modules.database.property_commercial_events_repository import (
+        insert_property_commercial_event,
+    )
+    from modules.organization_time import to_utc_iso
+
+    property_id = task.get("property_id")
+    agreed = outcome.get("agreed_property_price")
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT commercial_status, listing_price, listing_currency, agent_id
+            FROM properties
+            WHERE id = ?
+                AND organization_id = ?
+            """,
+            (property_id, organization_id),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            raise VisitCloseError("visit_close_err_property")
+        owner = row[3]
+        if owner is not None and agent_id is not None and int(owner) != int(agent_id):
+            raise VisitCloseError("visit_close_err_property_forbidden")
+        previous_status, previous_price, previous_currency = row[0], row[1], row[2]
+        assignments = ["commercial_status = ?"]
+        params = ["reserved"]
+        new_price = previous_price
+        new_currency = previous_currency
+        if agreed is not None:
+            new_price = agreed
+            new_currency = outcome.get("agreed_property_currency") or previous_currency or "USD"
+            assignments.append("listing_price = ?")
+            assignments.append("listing_currency = ?")
+            params.extend([new_price, new_currency])
+        params.extend([property_id, organization_id])
+        cursor.execute(
+            f"""
+            UPDATE properties
+            SET {", ".join(assignments)}
+            WHERE id = ?
+                AND organization_id = ?
+            """,
+            params,
+        )
+        if cursor.rowcount == 0:
+            raise VisitCloseError("visit_close_err_property")
+        event_id = insert_property_commercial_event(
+            cursor,
+            {
+                "organization_id": organization_id,
+                "property_id": property_id,
+                "actor_user_id": actor_user_id,
+                "agent_id": agent_id,
+                "task_id": task.get("id"),
+                "previous_commercial_status": previous_status,
+                "commercial_status": "reserved",
+                "previous_price": previous_price,
+                "previous_currency": previous_currency,
+                "listing_price": new_price if agreed is not None else None,
+                "listing_currency": new_currency if agreed is not None else None,
+                "reservation_amount": outcome.get("reservation_amount"),
+                "reservation_currency": outcome.get("reservation_currency"),
+                "created_at": to_utc_iso(now),
+            },
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {
+        "organization_id": organization_id,
+        "property_id": property_id,
+        "event_id": event_id,
+        "commercial_status": previous_status,
+        "listing_price": previous_price,
+        "listing_currency": previous_currency,
+        "price_changed": agreed is not None,
+    }
+
+
+def _restore_property_reservation(snapshot):
+    from modules.database.connection import get_connection
+    from modules.database.property_commercial_events_repository import (
+        delete_property_commercial_event,
+    )
+
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        if snapshot.get("price_changed"):
+            cursor.execute(
+                """
+                UPDATE properties
+                SET commercial_status = ?,
+                    listing_price = ?,
+                    listing_currency = ?
+                WHERE id = ?
+                    AND organization_id = ?
+                """,
+                (
+                    snapshot.get("commercial_status"),
+                    snapshot.get("listing_price"),
+                    snapshot.get("listing_currency"),
+                    snapshot["property_id"],
+                    snapshot["organization_id"],
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE properties
+                SET commercial_status = ?
+                WHERE id = ?
+                    AND organization_id = ?
+                """,
+                (
+                    snapshot.get("commercial_status"),
+                    snapshot["property_id"],
+                    snapshot["organization_id"],
+                ),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    if snapshot.get("event_id"):
+        delete_property_commercial_event(
+            snapshot["organization_id"],
+            snapshot["event_id"],
+        )
 
 
 def _with_default_when(outcome, *, now, tz):
@@ -260,7 +489,7 @@ def _apply_stage(contact, outcome):
     step = outcome.get("next_step") or ""
     current = contact.get("commercial_stage") or ""
     proposed = ""
-    if result == "negotiate" or step == "negotiate":
+    if result in ("negotiate", "reserved") or step == "negotiate":
         proposed = STAGE_NEGOTIATING
     elif result == "interested":
         from modules.contact_follow_up import STAGE_VISIT_SCHEDULED, _STAGE_RANK

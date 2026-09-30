@@ -1438,7 +1438,6 @@ html[data-theme="dark"] .agenda-reschedule input {
 }
 
 .visit-close {
-    display: flex;
     flex-direction: column;
     width: min(760px, calc(100vw - 2rem));
     max-height: min(92vh, 920px);
@@ -1450,6 +1449,19 @@ html[data-theme="dark"] .agenda-reschedule input {
     background: var(--surface);
     color: var(--text);
     box-shadow: var(--shadow-lg);
+}
+
+dialog.visit-close:not([open]) {
+    display: none;
+}
+
+dialog.visit-close[open],
+.visit-close--page {
+    display: flex;
+}
+
+.visit-close [hidden] {
+    display: none !important;
 }
 
 .visit-close--page {
@@ -1672,6 +1684,60 @@ html[data-theme="dark"] .agenda-reschedule input {
 
 .visit-close__time {
     max-width: 9rem;
+}
+
+.visit-close__reserve {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 0.95rem;
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface));
+}
+
+.visit-close__money {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.visit-close__money input[type="text"] {
+    flex: 1 1 8rem;
+    min-width: 0;
+}
+
+.visit-close__currency {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.visit-close__currency-option {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.6rem;
+    min-width: 4.2rem;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.visit-close__currency-option input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.visit-close__currency-option:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
 }
 
 .visit-close__summary {

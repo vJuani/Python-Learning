@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
+_UNSET = object()
 _TEST_TMP = tempfile.TemporaryDirectory()
 os.environ["DATABASE_PATH"] = str(Path(_TEST_TMP.name) / "test_visit_close.db")
 os.environ["JRH_AI_PROVIDER"] = "mock"
@@ -29,7 +31,12 @@ from modules.jrh_ai_intents import LOG_VISIT_OUTCOME
 from modules.jrh_ai_provider import MockAIIntentProvider
 from modules.jrh_ai_service import ask_jrh, confirm_jrh_action
 from modules.organization_time import UTC, organization_timezone, to_utc_iso
-from modules.visit_close import apply_visit_close, learn_need_from_text
+from modules.database.connection import get_connection
+from modules.database.properties_repository import get_property_record
+from modules.database.property_commercial_events_repository import (
+    list_property_commercial_events,
+)
+from modules.visit_close import VisitCloseError, apply_visit_close, learn_need_from_text
 from modules.visit_outcome import normalize_visit_outcome
 from web_app import app
 
@@ -445,3 +452,244 @@ class VisitCloseTests(unittest.TestCase):
         self.assertIn("width: min(760px, calc(100vw - 2rem))", css)
         self.assertIn("width: 95vw", css)
         self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr))", css)
+        self.assertIn("Reservó", body)
+        self.assertIn("data-visit-reservation", body)
+        self.assertIn('name="reservation_amount"', body)
+        self.assertIn('name="agreed_property_price"', body)
+        self.assertIn('value="prepare_operation"', body)
+        self.assertIn("dialog.visit-close:not([open])", css)
+        self.assertIn("display: none", css)
+
+    def _operation_count(self):
+        connection = get_connection()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) FROM operations WHERE organization_id = ?",
+                (self.org,),
+            )
+            return cursor.fetchone()[0]
+        finally:
+            connection.close()
+
+    def _priced_property(self, address="Calle Test 1234", *, agent=_UNSET, org=None, price=185000):
+        return add_property(
+            address,
+            "CABA",
+            org or self.org,
+            agent_id=self.agent if agent is _UNSET else agent,
+            listing_price=price,
+            listing_currency="USD",
+        )
+
+    def test_agenda_hides_the_visit_sheet_after_save(self):
+        contact = self._contact("Cierre visible")
+        visit = self._visit(contact)
+        client = app.test_client()
+        client.post(
+            "/login",
+            data={"username": "visit_agent", "password": "Password1"},
+            follow_redirects=True,
+        )
+        saved = client.post(
+            f"/agenda/{visit['id']}/visit-close",
+            data={"result": "liked", "next_step": "none", "note": "ok"},
+            follow_redirects=True,
+        )
+        body = saved.get_data(as_text=True)
+        self.assertEqual(saved.status_code, 200)
+        self.assertTrue(saved.request.path.endswith("/agenda"))
+        self.assertIn('id="visit-close-sheet"', body)
+        self.assertNotRegex(body, r'<dialog id="visit-close-sheet"[^>]*\bopen\b')
+        css = Path("static/css/agenda-page.css").read_text(encoding="utf-8")
+        self.assertIn("dialog.visit-close:not([open])", css)
+        self.assertRegex(
+            css,
+            r"dialog\.visit-close:not\(\[open\]\)\s*\{\s*display:\s*none;",
+        )
+
+    def test_reserved_updates_price_status_and_does_not_open_an_operation(self):
+        property_id = self._priced_property()
+        contact = self._contact("Reserva")
+        visit = create_task(
+            self.org,
+            self.agent,
+            {
+                "title": "Visita Calle Test",
+                "task_type": "visit",
+                "due_date": "2026-09-24",
+                "due_time": "11:00",
+                "contact_id": contact["id"],
+                "contact_name": contact["name"],
+                "property_id": property_id,
+            },
+            created_by_user_id=self.user,
+        )
+        before_ops = self._operation_count()
+        closed = self._close(
+            contact,
+            {
+                "result": "reserved",
+                "reservation_amount": "2.000",
+                "reservation_currency": "USD",
+                "agreed_property_price": "178.000",
+                "agreed_property_currency": "USD",
+                "note": "seña",
+            },
+            task=visit,
+        )
+        stored = json.loads(closed["task"]["outcome_json"])
+        self.assertEqual(stored["result"], "reserved")
+        self.assertEqual(stored["reservation_amount"], 2000)
+        self.assertEqual(stored["reservation_currency"], "USD")
+        self.assertEqual(stored["agreed_property_price"], 178000)
+        self.assertEqual(stored["agreed_property_currency"], "USD")
+        row = get_property_record(property_id, self.org)
+        self.assertEqual(row["commercial_status"], "reserved")
+        self.assertEqual(int(row["listing_price"]), 178000)
+        self.assertNotEqual(int(row["listing_price"]), 2000)
+        notes = get_contact(contact["id"], self.org)["notes"]
+        self.assertIn("Reservó Calle Test 1234", notes)
+        self.assertIn("Reserva: USD 2.000", notes)
+        self.assertIn("Valor acordado: USD 178.000", notes)
+        event = list_property_commercial_events(self.org, property_id)[0]
+        self.assertEqual(event["previous_commercial_status"], "available")
+        self.assertEqual(event["commercial_status"], "reserved")
+        self.assertEqual(int(event["previous_price"]), 185000)
+        self.assertEqual(int(event["listing_price"]), 178000)
+        self.assertEqual(event["actor_user_id"], self.user)
+        self.assertEqual(event["agent_id"], self.agent)
+        self.assertEqual(event["organization_id"], self.org)
+        self.assertTrue(event["created_at"])
+        self.assertEqual(closed["created_task"]["task_type"], "follow_up")
+        self.assertIn("Preparar operación", closed["created_task"]["title"])
+        self.assertEqual(self._operation_count(), before_ops)
+
+    def test_reservation_amount_does_not_replace_the_price(self):
+        property_id = self._priced_property("Calle Sin Acuerdo")
+        contact = self._contact("Solo seña")
+        visit = create_task(
+            self.org,
+            self.agent,
+            {
+                "title": "Visita sin acuerdo",
+                "task_type": "visit",
+                "due_date": "2026-09-24",
+                "due_time": "12:00",
+                "contact_id": contact["id"],
+                "contact_name": contact["name"],
+                "property_id": property_id,
+            },
+            created_by_user_id=self.user,
+        )
+        self._close(
+            contact,
+            {
+                "result": "reserved",
+                "reservation_amount": 2000,
+                "reservation_currency": "USD",
+                "next_step": "none",
+                "note": "seña",
+            },
+            task=visit,
+        )
+        row = get_property_record(property_id, self.org)
+        self.assertEqual(row["commercial_status"], "reserved")
+        self.assertEqual(int(row["listing_price"]), 185000)
+
+    def test_reservation_rolls_back_when_the_property_update_fails(self):
+        property_id = self._priced_property("Calle Rollback")
+        contact = self._contact("Rollback")
+        visit = create_task(
+            self.org,
+            self.agent,
+            {
+                "title": "Visita rollback",
+                "task_type": "visit",
+                "due_date": "2026-09-24",
+                "due_time": "13:00",
+                "contact_id": contact["id"],
+                "contact_name": contact["name"],
+                "property_id": property_id,
+            },
+            created_by_user_id=self.user,
+        )
+        visit = complete_task(
+            self.org,
+            visit["id"],
+            agent_id=self.agent,
+            actor_user_id=self.user,
+        )
+        from unittest.mock import patch
+
+        with patch(
+            "modules.visit_close._commit_property_reservation",
+            side_effect=RuntimeError("property write failed"),
+        ):
+            with self.assertRaises(RuntimeError):
+                apply_visit_close(
+                    visit,
+                    {
+                        "result": "reserved",
+                        "reservation_amount": 2000,
+                        "agreed_property_price": 178000,
+                        "note": "falla",
+                    },
+                    organization_id=self.org,
+                    agent_id=self.agent,
+                    actor_user_id=self.user,
+                    now=self._now(),
+                    tz=self.tz,
+                    language="es",
+                )
+        self.assertFalse(get_agent_task(visit["id"], self.org).get("outcome_json"))
+        row = get_property_record(property_id, self.org)
+        self.assertEqual(row["commercial_status"], "available")
+        self.assertEqual(int(row["listing_price"]), 185000)
+        self.assertEqual(list_property_commercial_events(self.org, property_id), [])
+
+    def test_reservation_stays_inside_the_organization_and_the_owning_agent(self):
+        foreign = self._priced_property("Ajena org", org=self.other_org, agent=None)
+        contact = self._contact("Aislada")
+        visit = complete_task(
+            self.org,
+            self._visit(contact)["id"],
+            agent_id=self.agent,
+            actor_user_id=self.user,
+        )
+        visit["property_id"] = foreign
+        with self.assertRaises(VisitCloseError) as other_org:
+            apply_visit_close(
+                visit,
+                {"result": "reserved", "reservation_amount": 2000, "note": "no"},
+                organization_id=self.org,
+                agent_id=self.agent,
+                actor_user_id=self.user,
+                now=self._now(),
+                tz=self.tz,
+            )
+        self.assertEqual(other_org.exception.message_key, "visit_close_err_property")
+        self.assertFalse(get_agent_task(visit["id"], self.org).get("outcome_json"))
+        self.assertNotEqual(
+            get_property_record(foreign, self.other_org)["commercial_status"],
+            "reserved",
+        )
+        owned_by_other = self._priced_property("De otro agente", agent=self.other_agent)
+        visit["property_id"] = owned_by_other
+        with self.assertRaises(VisitCloseError) as other_agent:
+            apply_visit_close(
+                visit,
+                {"result": "reserved", "note": "no"},
+                organization_id=self.org,
+                agent_id=self.agent,
+                actor_user_id=self.user,
+                now=self._now(),
+                tz=self.tz,
+            )
+        self.assertEqual(
+            other_agent.exception.message_key,
+            "visit_close_err_property_forbidden",
+        )
+        kept = get_property_record(owned_by_other, self.org)
+        self.assertEqual(kept["commercial_status"], "available")
+        self.assertEqual(int(kept["listing_price"]), 185000)

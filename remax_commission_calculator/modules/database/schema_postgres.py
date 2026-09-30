@@ -1953,6 +1953,12 @@ def create_postgres_schema():
 
         migrate_visit_reminder_runs_postgres(cursor)
 
+        from .property_commercial_events_migration import (
+            migrate_property_commercial_events_postgres,
+        )
+
+        migrate_property_commercial_events_postgres(cursor)
+
         from .public_share_migration import migrate_public_share_postgres
 
         migrate_public_share_postgres(cursor)
