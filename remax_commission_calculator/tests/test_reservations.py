@@ -360,3 +360,206 @@ class ReservationTests(unittest.TestCase):
         self.assertEqual(list_visible_reservations(self.other_org), [])
         add_note(self.org, reservation["id"], "interna", actor_user_id=self.admin)
         self.assertIsNone(load_reservation_detail(self.other_org, reservation["id"]))
+
+    def test_board_is_a_read_model_and_does_not_query_per_row(self):
+        from datetime import date
+
+        from modules.database import property_media_repository
+        from modules.database.reservations_repository import update_reservation_fields
+        from modules.reservation_board import (
+            build_reservation_board,
+            present_reservation,
+            property_cover_url,
+        )
+        from modules import reservation_board
+
+        today = date(2026, 9, 30)
+        self.assertIsNone(
+            property_cover_url(
+                {"source": "acm", "original_url": "https://photos.example/comp.jpg"},
+                1,
+            )
+        )
+        pending = present_reservation(
+            {
+                "reservation_status": "reserved",
+                "listing_purpose": "sale",
+                "next_milestone": "boleto",
+                "operation_id": None,
+                "estimated_closing_date": None,
+            },
+            today=today,
+        )
+        self.assertEqual(pending["commission_state"], "pending_operation")
+        self.assertEqual(pending["commission_agent_label"], "")
+        self.assertEqual(pending["close_display"], "")
+        self.assertNotIn("milestone_date", pending)
+        self.assertIn("reservation_gap_prepare", pending["gaps"])
+        self.assertIn("reservation_gap_boleto", pending["gaps"])
+        self.assertIn("reservation_gap_no_close", pending["gaps"])
+
+        linked = present_reservation(
+            {
+                "reservation_status": "in_operation",
+                "listing_purpose": "sale",
+                "next_milestone": "deed",
+                "operation_id": 8,
+                "estimated_closing_date": "2026-10-10",
+            },
+            operation={
+                "sale_price": 178000,
+                "total_commission": 8900,
+                "agent_payment": 5000,
+                "currency": "USD",
+                "was_invoiced": "no",
+            },
+            today=today,
+        )
+        self.assertEqual(linked["commission_total_label"], "USD 8.900")
+        self.assertEqual(linked["commission_agent_label"], "USD 5.000")
+        self.assertEqual(linked["commission_state"], "unpaid")
+        self.assertEqual(linked["close_display"], "10/10/2026")
+        self.assertTrue(linked["closing_soon"])
+        self.assertFalse(linked["delayed"])
+
+        overdue = present_reservation(
+            {
+                "reservation_status": "financing",
+                "listing_purpose": "sale",
+                "estimated_closing_date": "2026-09-01",
+                "next_milestone": "mortgage",
+                "operation_id": None,
+            },
+            today=today,
+        )
+        self.assertTrue(overdue["delayed"])
+        self.assertIn("reservation_alert_close_overdue", overdue["alerts"])
+        self.assertIn("reservation_gap_financing", overdue["gaps"])
+
+        _property_id, pesos = self._reserve("Calle Pesos")
+        update_reservation_fields(
+            self.org,
+            pesos["id"],
+            {
+                "agreed_currency": "ARS",
+                "agreed_property_price": 1000000,
+                "reservation_currency": "ARS",
+                "reservation_amount": 250000,
+                "estimated_closing_date": "2026-10-08",
+                "updated_at": "2026-09-30T12:00:00",
+            },
+        )
+        board = build_reservation_board(self.org, today=today)
+        agreed = {line["currency"]: line["label"] for line in board["kpis"]["agreed"]}
+        deposits = {line["currency"]: line["label"] for line in board["kpis"]["deposits"]}
+        self.assertIn("USD", agreed["USD"])
+        self.assertNotIn("ARS", agreed["USD"])
+        self.assertEqual(agreed["ARS"], "ARS 1.000.000")
+        self.assertEqual(deposits["ARS"], "ARS 250.000")
+        visible_ids = [row["id"] for row in board["rows"]]
+        self.assertEqual(len(visible_ids), len(set(visible_ids)))
+        self.assertIn(pesos["id"], visible_ids)
+
+        def count_reads():
+            calls = []
+            modules = (
+                reservation_board,
+                property_media_repository,
+                __import__(
+                    "modules.database.reservations_repository",
+                    fromlist=["get_connection"],
+                ),
+            )
+            originals = {module: module.get_connection for module in modules}
+
+            def wrapped(real):
+                def open_connection():
+                    connection = real()
+                    original_execute = connection.execute
+                    original_cursor = connection.cursor
+
+                    def execute(sql, parameters=None):
+                        calls.append(sql)
+                        if parameters is None:
+                            return original_execute(sql)
+                        return original_execute(sql, parameters)
+
+                    def cursor(*args, **kwargs):
+                        current = original_cursor(*args, **kwargs)
+                        current_execute = current.execute
+
+                        def cursor_execute(sql, parameters=None):
+                            calls.append(sql)
+                            if parameters is None:
+                                return current_execute(sql)
+                            return current_execute(sql, parameters)
+
+                        current.execute = cursor_execute
+                        return current
+
+                    connection.execute = execute
+                    connection.cursor = cursor
+                    return connection
+
+                return open_connection
+
+            for module in modules:
+                module.get_connection = wrapped(originals[module])
+            try:
+                build_reservation_board(self.org, today=today)
+            finally:
+                for module, original in originals.items():
+                    module.get_connection = original
+            return len(calls)
+
+        _first_property, first = self._reserve("Calle Lote Uno")
+        update_reservation_fields(
+            self.org,
+            first["id"],
+            {"operation_id": 910001, "updated_at": "2026-09-30T12:00:00"},
+        )
+        one_row = count_reads()
+        for index in (2, 3):
+            _extra_property, extra = self._reserve(f"Calle Lote {index}")
+            update_reservation_fields(
+                self.org,
+                extra["id"],
+                {"operation_id": 910000 + index, "updated_at": "2026-09-30T12:00:00"},
+            )
+        many_rows = count_reads()
+        self.assertEqual(one_row, many_rows)
+        self.assertEqual(many_rows, 3)
+
+        client = app.test_client()
+        self._login(client, "reserva_admin")
+        staff = client.get("/reservations")
+        staff_html = staff.get_data(as_text=True)
+        self.assertEqual(staff.status_code, 200)
+        self.assertNotIn("Nueva reserva", staff_html)
+        self.assertIn("Reservas activas", staff_html)
+        self.assertIn("Demoradas", staff_html)
+        self.assertIn("USD acordado", staff_html)
+        self.assertIn("Señas ARS", staff_html)
+        self.assertIn("data-res-drawer", staff_html)
+        self.assertIn("data-res-agent-input", staff_html)
+        detail = client.get(f"/reservations/{pesos['id']}")
+        detail_html = detail.get_data(as_text=True)
+        self.assertIn("Qué falta para cerrar", detail_html)
+        self.assertIn("Editar reserva", detail_html)
+        self.assertIn("Boleto", detail_html)
+        self.assertIn("08/10/2026", detail_html)
+
+        agent = app.test_client()
+        self._login(agent, "reserva_agent")
+        mine = agent.get("/reservations")
+        mine_html = mine.get_data(as_text=True)
+        self.assertIn("Mis reservas", mine_html)
+        self.assertNotIn("Nueva reserva", mine_html)
+        self.assertNotIn('name="reservation_status"', mine_html)
+        self.assertNotIn("Cancelar reserva", mine_html)
+        own_detail = agent.get(f"/reservations/{pesos['id']}")
+        own_html = own_detail.get_data(as_text=True)
+        self.assertIn("Qué falta para cerrar", own_html)
+        self.assertNotIn("Editar reserva", own_html)
+        self.assertNotIn("Cancelar reserva", own_html)
+

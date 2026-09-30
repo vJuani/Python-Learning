@@ -233,6 +233,9 @@ def list_reservations(
                 reservations.created_at,
                 reservations.updated_at,
                 properties.address,
+                properties.neighborhood,
+                properties.external_id,
+                properties.listing_purpose,
                 contacts.name,
                 agents.name
             FROM reservations
@@ -252,10 +255,14 @@ def list_reservations(
         )
         rows = []
         for row in cursor.fetchall():
-            item = _row(row[: len(RESERVATION_COLUMNS)])
-            item["property_address"] = row[len(RESERVATION_COLUMNS)]
-            item["contact_name"] = row[len(RESERVATION_COLUMNS) + 1]
-            item["agent_name"] = row[len(RESERVATION_COLUMNS) + 2]
+            base = len(RESERVATION_COLUMNS)
+            item = _row(row[:base])
+            item["property_address"] = row[base]
+            item["neighborhood"] = row[base + 1]
+            item["property_external_id"] = row[base + 2]
+            item["listing_purpose"] = row[base + 3]
+            item["contact_name"] = row[base + 4]
+            item["agent_name"] = row[base + 5]
             rows.append(item)
         return rows
     finally:

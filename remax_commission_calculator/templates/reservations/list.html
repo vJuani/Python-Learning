@@ -1,24 +1,172 @@
 {% extends "base.html" %}
 
-{% block title %}{{ t('reservation_title') }} | {{ t('app_title') }}{% endblock %}
+{% block title %}{% if read_only %}{{ t('reservation_mine') }}{% else %}{{ t('reservation_title') }}{% endif %} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/reservations.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reservations.css') }}?v=board2">
 {% endblock %}
 
 {% block content %}
-<section class="page-header">
-    <div class="page-header-text">
-        <h2>{% if read_only %}{{ t('reservation_mine') }}{% else %}{{ t('reservation_title') }}{% endif %}</h2>
-        <p>{{ t('reservation_subtitle') }}</p>
+{% macro keep(view) -%}
+{{ url_for(
+    'reservations_list',
+    view=view,
+    q=filters.q,
+    status=filters.status,
+    agent_id=filters.agent_id,
+    agent_query=filters.agent_query,
+    address=filters.address,
+    client=filters.client,
+    purpose=filters.purpose,
+    payment_method=filters.payment_method,
+    credit=filters.credit,
+    next_milestone=filters.next_milestone,
+    close_from=filters.close_from,
+    close_to=filters.close_to,
+    reserved_from=filters.reserved_from,
+    reserved_to=filters.reserved_to,
+    has_operation=filters.has_operation
+) }}
+{%- endmacro %}
+{% set ns = namespace(agent='') %}
+{% for agent in agents %}
+    {% if filters.agent_id|string == agent.id|string %}{% set ns.agent = agent.name %}{% endif %}
+{% endfor %}
+
+<section class="res-board" data-res-board {% if read_only %}data-read-only="1"{% endif %}>
+    <header class="res-head">
+        <div>
+            <h2>{% if read_only %}{{ t('reservation_mine') }}{% else %}{{ t('reservation_title') }}{% endif %}</h2>
+            <p>{{ t('reservation_subtitle') }}</p>
+        </div>
+        <form id="res-filters" class="res-search" method="get" action="{{ url_for('reservations_list') }}">
+            <input type="hidden" name="view" value="{{ filters.view }}">
+            <input type="search" name="q" value="{{ filters.q }}" placeholder="{{ t('reservation_search_placeholder') }}" autocomplete="off">
+            <button type="button" class="btn btn-secondary" data-res-filters-open>{{ t('reservation_filters') }}</button>
+        </form>
+    </header>
+
+    {% if not read_only %}
+    <div class="res-kpis">
+        <a class="res-kpi{% if filters.view == 'active' %} is-current{% endif %}" href="{{ keep('active') }}">
+            <strong>{{ board.counts.active }}</strong>
+            <span>{{ t('reservation_kpi_active') }}</span>
+        </a>
+        <a class="res-kpi{% if filters.view == 'financing' %} is-current{% endif %}" href="{{ keep('financing') }}">
+            <strong>{{ board.counts.financing }}</strong>
+            <span>{{ t('reservation_kpi_financing') }}</span>
+        </a>
+        <a class="res-kpi{% if filters.view == 'closing' %} is-current{% endif %}" href="{{ keep('closing') }}">
+            <strong>{{ board.counts.closing }}</strong>
+            <span>{{ t('reservation_kpi_closing') }}</span>
+        </a>
+        <a class="res-kpi{% if filters.view == 'delayed' %} is-current{% endif %}" href="{{ keep('delayed') }}">
+            <strong>{{ board.counts.delayed }}</strong>
+            <span>{{ t('reservation_kpi_delayed') }}</span>
+        </a>
     </div>
+    <p class="res-money">
+        {% for line in board.kpis.agreed %}
+        <span>{{ line.currency }} {{ t('reservation_money_agreed') }} <strong>{{ line.amount }}</strong></span>
+        {% endfor %}
+        {% for line in board.kpis.deposits %}
+        <span>{{ t('reservation_money_deposit') }} {{ line.currency }} <strong>{{ line.amount }}</strong></span>
+        {% endfor %}
+    </p>
+    {% endif %}
+
+    <nav class="res-tabs" aria-label="{{ t('reservation_title') }}">
+        <a href="{{ keep('active') }}" {% if filters.view == 'active' %}aria-current="page"{% endif %}>{{ t('reservation_tab_active') }} <em>{{ board.counts.active }}</em></a>
+        <a href="{{ keep('closing') }}" {% if filters.view == 'closing' %}aria-current="page"{% endif %}>{{ t('reservation_tab_closing') }} <em>{{ board.counts.closing }}</em></a>
+        <a href="{{ keep('financing') }}" {% if filters.view == 'financing' %}aria-current="page"{% endif %}>{{ t('reservation_tab_financing') }} <em>{{ board.counts.financing }}</em></a>
+        {% if not read_only %}
+        <a href="{{ keep('agent') }}" {% if filters.view == 'agent' %}aria-current="page"{% endif %}>{{ t('reservation_tab_agent') }}</a>
+        {% endif %}
+        <a href="{{ keep('history') }}" {% if filters.view == 'history' %}aria-current="page"{% endif %}>{{ t('reservation_tab_history') }} <em>{{ board.counts.history }}</em></a>
+    </nav>
+
+    {% if not reservations %}
+    <p class="empty-message">{{ t('reservation_empty') }}</p>
+    {% else %}
+    <div class="res-table-wrap">
+        <table class="res-table">
+            <thead>
+                <tr>
+                    <th>{{ t('reservation_col_property') }}</th>
+                    <th>{{ t('reservation_col_client') }}</th>
+                    {% if not read_only %}<th>{{ t('reservation_col_agent') }}</th>{% endif %}
+                    <th>{{ t('reservation_col_operation') }}</th>
+                    <th>{{ t('reservation_col_agreed') }}</th>
+                    <th>{{ t('reservation_col_amount') }}</th>
+                    <th>{{ t('reservation_col_commission') }}</th>
+                    <th>{{ t('reservation_col_status') }}</th>
+                    <th>{{ t('reservation_col_milestone') }}</th>
+                    <th>{{ t('reservation_col_close') }}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if board.groups %}
+                {% for group in board.groups %}
+                <tr class="res-group"><th colspan="{% if read_only %}10{% else %}11{% endif %}">{{ group.agent_name }}</th></tr>
+                {% for row in group.rows %}
+                {% include "reservations/_row.html" %}
+                {% endfor %}
+                {% endfor %}
+                {% else %}
+                {% for row in reservations %}
+                {% include "reservations/_row.html" %}
+                {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="res-cards">
+        {% for row in reservations %}
+        <article class="res-card" data-status="{{ row.reservation_status }}">
+            <div class="res-property">
+                {% include "reservations/_thumb.html" %}
+                <div>
+                    <strong>{{ row.property_address or row.property_id }}</strong>
+                    {% if row.zone or row.external_ref %}<small>{{ row.zone }}{% if row.zone and row.external_ref %} · {% endif %}{{ row.external_ref }}</small>{% endif %}
+                    <span>{{ row.contact_name or '—' }}</span>
+                </div>
+                <em class="res-badge" data-status="{{ row.reservation_status }}">{{ t(row.status_label_key) }}</em>
+            </div>
+            <p><span>{{ row.agreed_label or '—' }}</span><span>{{ t('reservation_col_amount') }} {{ row.amount_label or '—' }}</span></p>
+            <p><span>{{ t('reservation_col_milestone') }}</span><strong>{% if row.next_milestone %}{{ t('visit_close_milestone_' ~ row.next_milestone) }}{% else %}—{% endif %}</strong></p>
+            <p><span>{{ t('reservation_col_close') }}</span><strong>{{ row.close_display or '—' }}</strong></p>
+            <p class="res-commission">
+                {% if row.commission_state == 'pending_operation' %}
+                {{ t('reservation_commission_pending') }}
+                {% else %}
+                {{ row.commission_agent_label or '—' }} · {{ t('reservation_paid') if row.operation_paid else t('reservation_unpaid') }}
+                {% endif %}
+            </p>
+            {% if row.alerts %}
+            <ul class="res-alerts">
+                {% for key in row.alerts %}<li>{{ t(key) }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+            <a class="btn btn-secondary" href="{{ url_for('reservations_detail', reservation_id=row.id) }}">{{ t('reservation_follow') }}</a>
+        </article>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <aside class="res-panel" data-res-panel hidden></aside>
 </section>
 
-<section class="panel">
-    <form class="reservations-filters" method="get" action="{{ url_for('reservations_list') }}">
+<aside class="res-drawer" data-res-drawer hidden>
+    <div class="res-drawer__head">
+        <h3>{{ t('reservation_filters') }}</h3>
+        <button type="button" class="btn btn-secondary" data-res-filters-close>{{ t('reservation_close') }}</button>
+    </div>
+    <div class="res-drawer__body">
         <label>
             <span>{{ t('reservation_filter_status') }}</span>
-            <select name="status">
+            <select name="status" form="res-filters">
                 <option value="">{{ t('reservation_filter_all') }}</option>
                 {% for status in statuses %}
                 <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ t('reservation_status_' ~ status) }}</option>
@@ -28,78 +176,86 @@
         {% if not read_only %}
         <label>
             <span>{{ t('reservation_filter_agent') }}</span>
-            <select name="agent_id">
-                <option value="">{{ t('reservation_filter_all') }}</option>
-                {% for agent in agents %}
-                <option value="{{ agent.id }}" {% if filters.agent_id|string == agent.id|string %}selected{% endif %}>{{ agent.name }}</option>
-                {% endfor %}
-            </select>
+            <input type="hidden" name="agent_id" form="res-filters" value="{{ filters.agent_id }}" data-res-agent-id>
+            <input type="text" name="agent_query" form="res-filters" value="{{ ns.agent or filters.agent_query }}" placeholder="{{ t('reservation_agent_pick') }}" autocomplete="off" data-res-agent-input>
+            <ul class="res-suggest" data-res-agent-list hidden></ul>
         </label>
         {% endif %}
         <label>
-            <span>{{ t('reservation_filter_property') }}</span>
-            <input type="number" name="property_id" value="{{ filters.property_id }}" min="1">
+            <span>{{ t('reservation_filter_address') }}</span>
+            <input type="text" name="address" form="res-filters" value="{{ filters.address }}">
         </label>
         <label>
-            <span>{{ t('reservation_filter_from') }}</span>
-            <input type="date" name="date_from" value="{{ filters.date_from }}">
+            <span>{{ t('reservation_filter_client') }}</span>
+            <input type="text" name="client" form="res-filters" value="{{ filters.client }}">
         </label>
         <label>
-            <span>{{ t('reservation_filter_to') }}</span>
-            <input type="date" name="date_to" value="{{ filters.date_to }}">
+            <span>{{ t('reservation_filter_purpose') }}</span>
+            <select name="purpose" form="res-filters">
+                <option value="">{{ t('reservation_filter_all') }}</option>
+                <option value="sale" {% if filters.purpose == 'sale' %}selected{% endif %}>{{ t('reservation_purpose_sale') }}</option>
+                <option value="rent" {% if filters.purpose == 'rent' %}selected{% endif %}>{{ t('reservation_purpose_rent') }}</option>
+            </select>
         </label>
-        <button type="submit" class="btn btn-secondary">{{ t('reservation_filter_apply') }}</button>
-    </form>
-
-    {% if not reservations %}
-    <p class="empty-message">{{ t('reservation_empty') }}</p>
-    {% else %}
-    <div class="reservations-table-wrap">
-        <table class="reservations-table">
-            <thead>
-                <tr>
-                    <th>{{ t('reservation_col_property') }}</th>
-                    <th>{{ t('reservation_col_client') }}</th>
-                    {% if not read_only %}<th>{{ t('reservation_col_agent') }}</th>{% endif %}
-                    <th>{{ t('reservation_col_agreed') }}</th>
-                    <th>{{ t('reservation_col_amount') }}</th>
-                    <th>{{ t('reservation_col_status') }}</th>
-                    {% if not read_only %}<th>{{ t('reservation_col_payment') }}</th>{% endif %}
-                    <th>{{ t('reservation_col_close') }}</th>
-                    {% if not read_only %}<th>{{ t('reservation_col_operation') }}</th>{% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in reservations %}
-                <tr>
-                    <td><a href="{{ url_for('reservations_detail', reservation_id=row.id) }}">{{ row.property_address or row.property_id }}</a></td>
-                    <td>{{ row.contact_name or '—' }}</td>
-                    {% if not read_only %}<td>{{ row.agent_name or '—' }}</td>{% endif %}
-                    <td>{{ row.agreed_label or '—' }}</td>
-                    <td>{{ row.amount_label or '—' }}</td>
-                    <td>{{ t('reservation_status_' ~ row.reservation_status) }}</td>
-                    {% if not read_only %}<td>{{ t('visit_close_payment_' ~ row.payment_method) if row.payment_method else '—' }}</td>{% endif %}
-                    <td>{{ row.estimated_closing_date or '—' }}</td>
-                    {% if not read_only %}
-                    <td>{% if row.operation_id %}COM-{{ '%06d'|format(row.operation_id) }}{% else %}—{% endif %}</td>
-                    {% endif %}
-                </tr>
+        <label>
+            <span>{{ t('reservation_filter_payment') }}</span>
+            <select name="payment_method" form="res-filters">
+                <option value="">{{ t('reservation_filter_all') }}</option>
+                {% for method in payments %}
+                <option value="{{ method }}" {% if filters.payment_method == method %}selected{% endif %}>{{ t('visit_close_payment_' ~ method) }}</option>
                 {% endfor %}
-            </tbody>
-        </table>
+            </select>
+        </label>
+        <label>
+            <span>{{ t('reservation_filter_credit') }}</span>
+            <select name="credit" form="res-filters">
+                <option value="">{{ t('reservation_filter_all') }}</option>
+                <option value="yes" {% if filters.credit == 'yes' %}selected{% endif %}>{{ t('reservation_filter_credit_yes') }}</option>
+                <option value="no" {% if filters.credit == 'no' %}selected{% endif %}>{{ t('reservation_filter_credit_no') }}</option>
+            </select>
+        </label>
+        <label>
+            <span>{{ t('reservation_filter_milestone') }}</span>
+            <select name="next_milestone" form="res-filters">
+                <option value="">{{ t('reservation_filter_all') }}</option>
+                {% for milestone in milestones %}
+                <option value="{{ milestone }}" {% if filters.next_milestone == milestone %}selected{% endif %}>{{ t('visit_close_milestone_' ~ milestone) }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>{{ t('reservation_filter_close_from') }}</span>
+            <input type="date" name="close_from" form="res-filters" value="{{ filters.close_from }}">
+        </label>
+        <label>
+            <span>{{ t('reservation_filter_close_to') }}</span>
+            <input type="date" name="close_to" form="res-filters" value="{{ filters.close_to }}">
+        </label>
+        <label>
+            <span>{{ t('reservation_filter_reserved_from') }}</span>
+            <input type="date" name="reserved_from" form="res-filters" value="{{ filters.reserved_from }}">
+        </label>
+        <label>
+            <span>{{ t('reservation_filter_reserved_to') }}</span>
+            <input type="date" name="reserved_to" form="res-filters" value="{{ filters.reserved_to }}">
+        </label>
+        <label>
+            <span>{{ t('reservation_filter_has_operation') }}</span>
+            <select name="has_operation" form="res-filters">
+                <option value="">{{ t('reservation_filter_all') }}</option>
+                <option value="yes" {% if filters.has_operation == 'yes' %}selected{% endif %}>{{ t('reservation_filter_operation_yes') }}</option>
+                <option value="no" {% if filters.has_operation == 'no' %}selected{% endif %}>{{ t('reservation_filter_operation_no') }}</option>
+            </select>
+        </label>
     </div>
-    <div class="reservations-cards">
-        {% for row in reservations %}
-        <a class="reservations-card" href="{{ url_for('reservations_detail', reservation_id=row.id) }}">
-            <strong>{{ row.property_address or row.property_id }}</strong>
-            <span>{{ row.contact_name or '—' }}</span>
-            <span>{{ t('reservation_status_' ~ row.reservation_status) }}</span>
-            <span>{{ row.agreed_label or '—' }}</span>
-            <span>{{ row.amount_label or '—' }}</span>
-            <span>{{ row.estimated_closing_date or '—' }}</span>
-        </a>
-        {% endfor %}
+    <div class="res-drawer__foot">
+        <a class="btn btn-secondary" href="{{ url_for('reservations_list', view=filters.view) }}">{{ t('reservation_filters_clear') }}</a>
+        <button type="submit" class="btn btn-primary" form="res-filters">{{ t('reservation_filters_apply') }}</button>
     </div>
-    {% endif %}
-</section>
+</aside>
+<script type="application/json" id="res-agents">{{ agents|tojson }}</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/reservations.js') }}"></script>
 {% endblock %}

@@ -1,0 +1,220 @@
+{% set reservation = detail.reservation %}
+<article class="res-detail{% if panel %} res-detail--panel{% else %} res-detail--page{% endif %}">
+    <header class="res-detail__head">
+        <div class="res-property">
+            {% with row=reservation %}
+            {% include "reservations/_thumb.html" %}
+            {% endwith %}
+            <div>
+                <h2>{{ reservation.property_address or reservation.property_id }}</h2>
+                {% if reservation.zone or reservation.external_ref %}
+                <small>{{ reservation.zone }}{% if reservation.zone and reservation.external_ref %} · {% endif %}{{ reservation.external_ref }}</small>
+                {% endif %}
+                <p>{{ reservation.contact_name or '—' }}{% if reservation.agent_name %} · {{ reservation.agent_name }}{% endif %}</p>
+            </div>
+        </div>
+        <em class="res-badge" data-status="{{ reservation.reservation_status }}">{{ t(reservation.status_label_key) }}</em>
+        {% if panel %}
+        <button type="button" class="btn btn-secondary" data-res-close>{{ t('reservation_close') }}</button>
+        {% endif %}
+    </header>
+
+    {% if reservation.alerts %}
+    <ul class="res-alerts res-alerts--block">
+        {% for key in reservation.alerts %}<li>{{ t(key) }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if reservation.gaps %}
+    <section class="res-gaps">
+        <h3>{{ t('reservation_gap_title') }}</h3>
+        <ul>
+            {% for key in reservation.gaps %}<li>{{ t(key) }}</li>{% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    <div class="res-detail__grid">
+        <section>
+            <h3>{{ t('reservation_section_summary') }}</h3>
+            <dl class="res-facts">
+                <div><dt>{{ t('reservation_col_property') }}</dt><dd>{{ reservation.property_address or reservation.property_id }}</dd></div>
+                <div><dt>{{ t('reservation_col_client') }}</dt><dd>{{ reservation.contact_name or '—' }}</dd></div>
+                <div><dt>{{ t('reservation_col_agent') }}</dt><dd>{{ reservation.agent_name or '—' }}</dd></div>
+                <div><dt>{{ t('reservation_original_price') }}</dt><dd>{{ reservation.original_label or '—' }}</dd></div>
+                <div><dt>{{ t('reservation_col_agreed') }}</dt><dd>{{ reservation.agreed_label or '—' }}</dd></div>
+                <div><dt>{{ t('reservation_col_amount') }}</dt><dd>{{ reservation.amount_label or '—' }}</dd></div>
+                <div><dt>{{ t('visit_close_payment') }}</dt><dd>{% if reservation.payment_method %}{{ t('visit_close_payment_' ~ reservation.payment_method) }}{% else %}—{% endif %}</dd></div>
+            </dl>
+        </section>
+
+        <section>
+            <h3>{{ t('reservation_section_progress') }}</h3>
+            {% if reservation.progress.cancelled %}
+            <p class="res-muted">{{ t('reservation_status_cancelled') }}</p>
+            {% endif %}
+            <ol class="res-progress">
+                {% for step in reservation.progress.steps %}
+                <li class="res-step res-step--{{ step.state }}">
+                    <span>{{ t(step.label_key) }}</span>
+                    {% if step.detail_key %}<small>{{ t(step.detail_key) }}</small>{% endif %}
+                </li>
+                {% endfor %}
+            </ol>
+        </section>
+
+        <section>
+            <h3>{{ t('reservation_section_plan') }}</h3>
+            <dl class="res-facts">
+                <div>
+                    <dt>{{ t('reservation_col_milestone') }}</dt>
+                    <dd>{% if reservation.next_milestone %}{{ t('visit_close_milestone_' ~ reservation.next_milestone) }}{% else %}—{% endif %}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('reservation_col_close') }}</dt>
+                    <dd>{{ reservation.close_display or '—' }}</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section>
+            <h3>{{ t('reservation_section_operation') }}</h3>
+            {% if reservation.operation_id and reservation.commission_state != 'pending_operation' %}
+            <dl class="res-facts">
+                <div><dt>{{ t('reservation_col_operation') }}</dt><dd>COM-{{ '%06d'|format(reservation.operation_id) }}</dd></div>
+                <div><dt>{{ t('reservation_col_agreed') }}</dt><dd>{{ reservation.operation_amount_label or '—' }}</dd></div>
+                <div><dt>{{ t('reservation_commission_total') }}</dt><dd>{{ reservation.commission_total_label or '—' }}</dd></div>
+                <div><dt>{{ t('reservation_commission_agent') }}</dt><dd>{{ reservation.commission_agent_label or '—' }}</dd></div>
+                <div><dt>{{ t('reservation_commission_status') }}</dt><dd>{{ t('reservation_paid') if reservation.operation_paid else t('reservation_unpaid') }}</dd></div>
+            </dl>
+            {% else %}
+            <p class="res-muted">{{ t('reservation_commission_pending') }}</p>
+            {% endif %}
+        </section>
+
+        <section class="res-span">
+            <h3>{{ t('reservation_section_notes') }}</h3>
+            <ol class="res-timeline">
+                {% for event in detail.events %}
+                <li>
+                    <time>{{ event.created_at }}</time>
+                    <strong>
+                        {% if event.event_type == 'created' %}{{ t('reservation_event_created') }}
+                        {% elif event.event_type == 'updated' %}{{ t('reservation_event_updated') }}
+                        {% elif event.event_type == 'cancelled' %}{{ t('reservation_event_cancelled') }}
+                        {% elif event.event_type == 'operation_linked' %}{{ t('reservation_event_operation_linked') }}
+                        {% else %}{{ event.event_type }}{% endif %}
+                    </strong>
+                    {% if event.payload and event.payload.price_decision %}<span>{{ event.payload.price_decision }}</span>{% endif %}
+                </li>
+                {% endfor %}
+                {% for note in detail.notes %}
+                <li>
+                    <time>{{ note.created_at }}</time>
+                    <span>{{ note.body }}</span>
+                </li>
+                {% endfor %}
+            </ol>
+        </section>
+
+        <section class="res-span">
+            <h3>{{ t('reservation_documents') }}</h3>
+            <p class="res-muted">{{ t('reservation_document_optional') }}</p>
+            <ul class="res-docs">
+                {% for doc_type in document_types %}
+                <li>
+                    <strong>{{ t('reservation_doc_' ~ doc_type) }}</strong>
+                    {% for document in detail.documents if document.doc_type == doc_type %}
+                    <a href="{{ url_for('reservations_document_download', reservation_id=reservation.id, document_id=document.id) }}">{{ document.original_filename }}</a>
+                    {% else %}
+                    <span>{{ t('reservation_doc_missing') }}</span>
+                    {% endfor %}
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+    </div>
+
+    {% if not read_only and reservation.reservation_status not in ['closed', 'cancelled'] %}
+    <div class="res-actions">
+        {% if reservation.reservation_status not in ['in_operation'] %}
+        <a class="btn btn-primary" href="{{ url_for('operations_new', reservation_id=reservation.id) }}">{{ t('reservation_prepare') }}</a>
+        {% endif %}
+        <details>
+            <summary>{{ t('reservation_edit') }}</summary>
+            <form method="post" action="{{ url_for('reservations_update', reservation_id=reservation.id) }}" class="res-form">
+                <label>
+                    <span>{{ t('reservation_col_status') }}</span>
+                    <select name="reservation_status">
+                        {% for status in statuses %}
+                        <option value="{{ status }}" {% if reservation.reservation_status == status %}selected{% endif %}>{{ t('reservation_status_' ~ status) }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    <span>{{ t('visit_close_payment') }}</span>
+                    <select name="payment_method">
+                        {% for method in ['cash', 'mortgage', 'mixed', 'other'] %}
+                        <option value="{{ method }}" {% if reservation.payment_method == method %}selected{% endif %}>{{ t('visit_close_payment_' ~ method) }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    <span>{{ t('visit_close_milestone') }}</span>
+                    <select name="next_milestone">
+                        {% for milestone in detail.milestones %}
+                        <option value="{{ milestone }}" {% if reservation.next_milestone == milestone %}selected{% endif %}>{{ t('visit_close_milestone_' ~ milestone) }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    <span>{{ t('visit_close_estimated_close') }}</span>
+                    <input type="date" name="estimated_closing_date" value="{{ reservation.estimated_closing_date or '' }}">
+                </label>
+                <label>
+                    <span>{{ t('visit_close_reservation_notes') }}</span>
+                    <textarea name="notes" rows="3">{{ reservation.notes or '' }}</textarea>
+                </label>
+                <button type="submit" class="btn btn-primary">{{ t('reservation_save') }}</button>
+            </form>
+        </details>
+        <details>
+            <summary>{{ t('reservation_note_add') }}</summary>
+            <form method="post" action="{{ url_for('reservations_note', reservation_id=reservation.id) }}" class="res-form">
+                <label>
+                    <span>{{ t('reservation_note_add') }}</span>
+                    <textarea name="body" rows="2" maxlength="500" placeholder="{{ t('reservation_note_placeholder') }}"></textarea>
+                </label>
+                <button type="submit" class="btn btn-secondary">{{ t('reservation_note_add') }}</button>
+            </form>
+        </details>
+        <details>
+            <summary>{{ t('reservation_upload') }}</summary>
+            <form method="post" action="{{ url_for('reservations_document_upload', reservation_id=reservation.id) }}" enctype="multipart/form-data" class="res-form">
+                <label>
+                    <span>{{ t('reservation_documents') }}</span>
+                    <select name="doc_type">
+                        {% for doc_type in document_types %}
+                        <option value="{{ doc_type }}">{{ t('reservation_doc_' ~ doc_type) }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <input type="file" name="document" required>
+                <button type="submit" class="btn btn-secondary">{{ t('reservation_upload') }}</button>
+            </form>
+        </details>
+        <details>
+            <summary>{{ t('reservation_cancel') }}</summary>
+            <form method="post" action="{{ url_for('reservations_cancel', reservation_id=reservation.id) }}" class="res-form">
+                <label class="res-check">
+                    <input type="checkbox" name="keep_negotiated_price" value="1">
+                    <span>{{ t('reservation_keep_price') }}</span>
+                </label>
+                <button type="submit" class="btn btn-secondary">{{ t('reservation_cancel') }}</button>
+            </form>
+        </details>
+    </div>
+    {% elif read_only %}
+    <p class="res-muted">{{ t('reservation_readonly') }}</p>
+    {% endif %}
+</article>

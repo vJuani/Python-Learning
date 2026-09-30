@@ -6,16 +6,19 @@ from flask import abort, redirect, render_template, request, send_file, url_for
 
 from modules.auth import admin_required, get_current_user, is_admin, is_agent, is_guest_session, login_required
 from modules.database.agents_repository import get_agents
+from modules.reservation_board import (
+    board_filter_choices,
+    build_reservation_board,
+    present_reservation,
+    property_cover_url,
+)
 from modules.reservations import (
     DOCUMENT_TYPES,
     OPEN_STATUSES,
     ReservationError,
-    STATUSES,
     add_note,
     cancel_reservation,
     document_path,
-    format_money,
-    list_visible_reservations,
     load_reservation_detail,
     save_document,
     update_reservation,
@@ -39,45 +42,76 @@ def register_reservation_routes(app, helpers):
             return user, organization_id, user["agent_id"]
         abort(403)
 
-    def _decorate(row):
-        item = dict(row)
-        item["agreed_label"] = format_money(
-            row.get("agreed_property_price"),
-            row.get("agreed_currency"),
+    def _present_detail(organization_id, detail):
+        from modules.property_sync.media import list_covers_for_properties
+
+        property_row = detail.get("property") or {}
+        reservation = dict(detail["reservation"])
+        reservation["neighborhood"] = property_row.get("neighborhood")
+        reservation["property_external_id"] = property_row.get("external_id")
+        reservation["listing_purpose"] = property_row.get("listing_purpose")
+        property_id = reservation.get("property_id")
+        covers = list_covers_for_properties(organization_id, [property_id] if property_id else [])
+        try:
+            cover = covers.get(int(property_id)) if property_id else None
+        except (TypeError, ValueError):
+            cover = None
+        return present_reservation(
+            reservation,
+            cover_url=property_cover_url(cover, property_id),
+            operation=detail.get("operation"),
         )
-        item["amount_label"] = format_money(
-            row.get("reservation_amount"),
-            row.get("reservation_currency"),
-        )
-        return item
 
     @app.route("/reservations", methods=["GET"])
     @login_required
     def reservations_list():
         user, organization_id, agent_id = _viewer()
-        filters = {
-            "status": request.args.get("status") or "",
-            "property_id": request.args.get("property_id") or "",
-            "date_from": request.args.get("date_from") or "",
-            "date_to": request.args.get("date_to") or "",
-        }
+        filters = {"status": request.args.get("status") or ""}
         if agent_id is None:
             raw_agent = request.args.get("agent_id") or ""
             try:
-                filters["agent_id"] = int(raw_agent) if raw_agent else None
+                filters["agent_id"] = int(raw_agent) if raw_agent else ""
             except ValueError:
-                filters["agent_id"] = None
-        rows = list_visible_reservations(
+                filters["agent_id"] = ""
+        for key in (
+            "view",
+            "q",
+            "address",
+            "client",
+            "purpose",
+            "payment_method",
+            "credit",
+            "next_milestone",
+            "close_from",
+            "close_to",
+            "reserved_from",
+            "reserved_to",
+            "has_operation",
+            "agent_query",
+        ):
+            filters[key] = request.args.get(key) or ""
+        board = build_reservation_board(
             organization_id,
-            agent_id=agent_id if agent_id is not None else filters.get("agent_id"),
+            agent_id=agent_id,
             filters=filters,
         )
+        choices = board_filter_choices()
+        agents = []
+        if agent_id is None:
+            agents = [
+                {"id": agent["id"], "name": agent["name"]}
+                for agent in get_agents(organization_id)
+                if agent.get("name")
+            ]
         return render_template(
             "reservations/list.html",
-            reservations=[_decorate(row) for row in rows],
-            filters=filters,
-            statuses=STATUSES,
-            agents=[] if agent_id is not None else get_agents(organization_id),
+            board=board,
+            reservations=board["rows"],
+            filters=board["filters"],
+            statuses=choices["statuses"],
+            payments=choices["payments"],
+            milestones=choices["milestones"],
+            agents=agents,
             read_only=agent_id is not None,
             viewer=user,
         )
@@ -93,28 +127,20 @@ def register_reservation_routes(app, helpers):
         )
         if detail is None:
             abort(404)
-        detail["reservation"] = _decorate(detail["reservation"])
-        operation = detail.get("operation")
-        if operation:
-            detail["commission"] = {
-                "sale_price": format_money(operation.get("sale_price"), operation.get("currency")),
-                "total_commission": format_money(
-                    operation.get("total_commission"),
-                    operation.get("currency"),
-                ),
-                "agent_payment": format_money(
-                    operation.get("agent_payment"),
-                    operation.get("currency"),
-                ),
-                "was_invoiced": operation.get("was_invoiced") or "no",
-            }
+        detail["reservation"] = _present_detail(organization_id, detail)
+        template = (
+            "reservations/_detail_panel.html"
+            if request.args.get("panel") == "1"
+            else "reservations/detail.html"
+        )
         return render_template(
-            "reservations/detail.html",
+            template,
             detail=detail,
             statuses=OPEN_STATUSES,
             document_types=DOCUMENT_TYPES,
             read_only=agent_id is not None,
             viewer=user,
+            panel=request.args.get("panel") == "1",
         )
 
     @app.route("/reservations/<int:reservation_id>", methods=["POST"])
