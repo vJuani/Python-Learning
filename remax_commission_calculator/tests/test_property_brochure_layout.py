@@ -32,6 +32,10 @@ def _page_count(payload):
     return len(re.findall(rb"/Type\s*/Page(?!s)", payload))
 
 
+def _row_span(row):
+    return max(frame[0] + frame[2] for frame in row) - min(frame[0] for frame in row)
+
+
 def _jpeg(size, color):
     buffer = io.BytesIO()
     Image.new("RGB", size, color).save(buffer, format="JPEG", quality=90)
@@ -111,23 +115,24 @@ class BrochureLayoutTests(unittest.TestCase):
         sizes = [(1600, 900), (800, 1200), (1000, 750), (2000, 800)]
         frames, height = collage_frames(sizes, 480, max_height=1000)
         self.assertEqual(len(frames), 4)
-        image_area = 0.0
         for (src_w, src_h), frame in zip(sizes, frames):
             x, y, w, h = frame
             self.assertAlmostEqual(w / h, src_w / src_h, places=2)
-            image_area += w * h
             self.assertGreaterEqual(x, -0.01)
             self.assertGreaterEqual(y, -0.01)
             self.assertLessEqual(x + w, 480 + 0.5)
             self.assertLessEqual(y + h, height + 0.5)
-        hero = frames[3]
-        bottom = frames[0]
-        self.assertEqual(hero[0], 0)
-        self.assertGreater(hero[2], frames[1][2])
-        self.assertAlmostEqual(bottom[2], 480, places=1)
-        self.assertGreater(bottom[1], hero[1])
-        self.assertAlmostEqual(frames[1][0] - (hero[0] + hero[2]), _COLLAGE_GAP, places=2)
-        self.assertGreater(image_area / (480 * height), 0.85)
+        top = frames[:2]
+        bottom = frames[2:]
+        self.assertAlmostEqual(top[0][1], top[1][1], places=2)
+        self.assertAlmostEqual(bottom[0][1], bottom[1][1], places=2)
+        self.assertGreater(bottom[0][1], top[0][1])
+        self.assertAlmostEqual(_row_span(top), 480, delta=1.5)
+        self.assertAlmostEqual(_row_span(bottom), 480, delta=1.5)
+        self.assertAlmostEqual(top[1][0] - (top[0][0] + top[0][2]), _COLLAGE_GAP, places=2)
+        top_share = top[0][3] / (top[0][3] + bottom[0][3])
+        self.assertGreaterEqual(top_share, 0.58)
+        self.assertLessEqual(top_share, 0.62)
 
     def test_portrait_column_is_narrower_than_the_wide_hero(self):
         sizes = [(1800, 800), (700, 1100), (900, 700)]
@@ -162,24 +167,27 @@ class BrochureLayoutTests(unittest.TestCase):
         self.assertAlmostEqual(_ratio(draw_w, draw_h), 4.0, places=3)
         self.assertLess(draw_h, 14 * mm)
 
-    def test_collage_stays_within_forty_percent_of_the_page(self):
+    def test_four_photo_rows_share_the_collage_height(self):
         limit = collage_height_limit()
         content = brochure_content_height()
         self.assertGreaterEqual(limit, content * 0.35)
         self.assertLessEqual(limit, content * 0.40)
         sizes = [(592, 504), (460, 260), (312, 138), (312, 138)]
-        frames, height = collage_frames(sizes, 520, max_height=limit)
-        self.assertLessEqual(height, limit + 0.5)
-        image_area = 0.0
+        frames, _height = collage_frames(sizes, 520, max_height=content * 0.50)
+        top = frames[:2]
+        bottom = frames[2:]
+        self.assertAlmostEqual(_row_span(top), 520, delta=1.5)
+        self.assertAlmostEqual(_row_span(bottom), 520, delta=1.5)
+        top_share = top[0][3] / (top[0][3] + bottom[0][3])
+        bottom_share = bottom[0][3] / (top[0][3] + bottom[0][3])
+        self.assertGreaterEqual(top_share, 0.58)
+        self.assertLessEqual(top_share, 0.62)
+        self.assertGreaterEqual(bottom_share, 0.38)
+        self.assertLessEqual(bottom_share, 0.42)
         for (src_w, src_h), frame in zip(sizes, frames):
-            x, y, w, h = frame
+            _x, _y, w, h = frame
             self.assertAlmostEqual(w / h, src_w / src_h, places=2)
-            self.assertGreaterEqual(min(w, h), 48)
-            image_area += w * h
-            self.assertGreaterEqual(x, -0.01)
-            self.assertLessEqual(x + w, 520 + 0.5)
-            self.assertLessEqual(y + h, height + 0.5)
-        self.assertGreater(image_area / (520 * limit), 0.75)
+            self.assertGreaterEqual(min(w, h), 80)
 
     def test_four_photo_sheet_is_one_page(self):
         gallery = [

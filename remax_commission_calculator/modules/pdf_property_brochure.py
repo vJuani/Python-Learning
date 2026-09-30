@@ -136,7 +136,7 @@ def _hero_stack(width, hero_ratio, top_ratio, bottom_ratio, gap):
 
 
 def _row_cells(indices, ratio, y, width, row_h, gap):
-    """One row. Height stays at or below the ratio's full-width height."""
+    """One full row. Photos keep their ratio and share the row height."""
     if row_h <= 0 or len(indices) < 2:
         return None
     ratio_sum = sum(ratio[index] for index in indices)
@@ -154,117 +154,46 @@ def _row_cells(indices, ratio, y, width, row_h, gap):
     return placed, row_h
 
 
-def _two_row_fit(width, max_height, ratio, gap, rows):
+def _four_grid(count, width, ratio, gap, max_height):
+    """Two full-width rows, gallery order. Top about 60%, bottom about 40%."""
+    ids = [index for index in range(count) if index in ratio]
+    if len(ids) != 4:
+        return None
+    top_ids = ids[:2]
+    bottom_ids = ids[2:]
+
     def natural(row):
-        return (width - gap) / (ratio[row[0]] + ratio[row[1]])
+        return (width - gap) / sum(ratio[index] for index in row)
 
-    def ordered(row):
-        return tuple(sorted(row, key=lambda index: (-ratio[index], index)))
-
-    best = None
-    budget = max_height - gap
-    for first, second in (rows, tuple(reversed(rows))):
-        first, second = ordered(first), ordered(second)
-        h1_nat, h2_nat = natural(first), natural(second)
-        if h1_nat + h2_nat <= budget:
-            heights = (h1_nat, h2_nat)
-        else:
-            short_is_first = h1_nat <= h2_nat
-            short_h = h1_nat if short_is_first else h2_nat
-            tall_h = h2_nat if short_is_first else h1_nat
-            if short_h + 36 <= budget:
-                tall_h = budget - short_h
-            else:
-                share = budget / (short_h + tall_h)
-                short_h *= share
-                tall_h = budget - short_h
-            heights = (short_h, tall_h) if short_is_first else (tall_h, short_h)
-        top = _row_cells(first, ratio, 0.0, width, heights[0], gap)
-        if top is None:
-            continue
-        top_placed, top_h = top
-        bottom = _row_cells(second, ratio, top_h + gap, width, heights[1], gap)
-        if bottom is None:
-            continue
-        bottom_placed, bottom_h = bottom
-        placed = {**top_placed, **bottom_placed}
-        height = top_h + gap + bottom_h
-        area = sum(cell_w * cell_h for _x, _y, cell_w, cell_h in placed.values())
-        top_span = max(x + cell_w for x, _y, cell_w, _h in top_placed.values())
-        top_span -= min(x for x, _y, _w, _h in top_placed.values())
-        if best is None or area > best[0] + 0.5 or (abs(area - best[0]) <= 0.5 and top_span > best[3]):
-            best = (area, placed, height, top_span)
-    return None if best is None else best[:3]
-
-
-def _two_column_fit(width, max_height, ratio, gap, columns):
-    def ordered(column):
-        return tuple(sorted(column, key=lambda index: (-ratio[index], index)))
-
-    def col_width(pair, height):
-        return (height - gap) / (1 / ratio[pair[0]] + 1 / ratio[pair[1]])
-
-    left, right = ordered(columns[0]), ordered(columns[1])
-    height = max_height
-    if height <= gap + 36:
+    top_h = natural(top_ids)
+    bottom_h = natural(bottom_ids)
+    photo_h = top_h + bottom_h
+    if photo_h > 0 and top_h / photo_h > 0.62:
+        top_h = bottom_h * 0.60 / 0.40
+    top = _row_cells(top_ids, ratio, 0.0, width, top_h, gap)
+    if top is None:
         return None
-    left_w = col_width(left, height)
-    right_w = col_width(right, height)
-    if left_w + right_w + gap > width:
-        scale = (width - gap) / (left_w + right_w)
-        left_w *= scale
-        right_w *= scale
-        height = gap + (height - gap) * scale
-    used = left_w + gap + right_w
-    x0 = max(0.0, (width - used) / 2.0)
-
-    def stack(pair, x, col_w):
-        top_h = col_w / ratio[pair[0]]
-        bottom_h = col_w / ratio[pair[1]]
-        if min(col_w, top_h, bottom_h) < 36:
-            return None
-        return {
-            pair[0]: (x, 0.0, col_w, top_h),
-            pair[1]: (x, top_h + gap, col_w, bottom_h),
+    top_placed, top_h = top
+    bottom = _row_cells(bottom_ids, ratio, top_h + gap, width, bottom_h, gap)
+    if bottom is None:
+        return None
+    bottom_placed, bottom_h = bottom
+    placed = {**top_placed, **bottom_placed}
+    height = top_h + gap + bottom_h
+    if height > max_height > 0:
+        scale = max_height / height
+        placed = {
+            index: (x * scale, y * scale, w * scale, h * scale)
+            for index, (x, y, w, h) in placed.items()
         }
-
-    placed = stack(left, x0, left_w)
-    other = stack(right, x0 + left_w + gap, right_w)
-    if placed is None or other is None:
-        return None
-    placed.update(other)
-    block_h = max(y + cell_h for _x, y, _w, cell_h in placed.values())
-    if block_h > max_height + 0.5:
-        return None
-    area = sum(cell_w * cell_h for _x, _y, cell_w, cell_h in placed.values())
-    return area, placed, block_h
-
-
-def _best_four_fit(width, max_height, ratio, gap, diagram, diagram_height, count):
-    """When the banner collage is too tall, pick a fuller arrangement."""
-    scale = max_height / diagram_height if diagram_height > max_height > 0 else 1.0
-    diagram_area = sum(cell_w * cell_h for _x, _y, cell_w, cell_h in diagram.values())
-    diagram_area *= scale * scale
-    ids = sorted(ratio)
-    pairings = (
-        ((ids[0], ids[1]), (ids[2], ids[3])),
-        ((ids[0], ids[2]), (ids[1], ids[3])),
-        ((ids[0], ids[3]), (ids[1], ids[2])),
-    )
-    best_area = diagram_area * 1.12
-    best = None
-    for rows in pairings:
-        for result in (
-            _two_row_fit(width, max_height, ratio, gap, rows),
-            _two_column_fit(width, max_height, ratio, gap, rows),
-        ):
-            if result is None or result[0] <= best_area:
-                continue
-            best_area = result[0]
-            best = result
-    if best is None:
-        return None
-    _area, placed, height = best
+        used = max(x + w for x, _y, w, _h in placed.values())
+        pad = max(0.0, (width - used) / 2.0)
+        if pad:
+            placed = {
+                index: (x + pad, y, w, h)
+                for index, (x, y, w, h) in placed.items()
+            }
+        height = max_height
     frames = [placed.get(index) for index in range(count)]
     return frames, height
 
@@ -272,8 +201,7 @@ def _best_four_fit(width, max_height, ratio, gap, diagram, diagram_height, count
 def collage_frames(sizes, width, *, gap=_COLLAGE_GAP, max_height=None):
     """Cells follow each photo. Nothing is cropped or stretched.
 
-    Four photos: the widest is the left hero, the next widest is the full
-    bottom row, and the other two stack on the right. y grows downward.
+    Four photos sit in two full-width rows, in gallery order. y grows downward.
     """
     usable = [
         (index, float(src_w), float(src_h))
@@ -331,6 +259,11 @@ def collage_frames(sizes, width, *, gap=_COLLAGE_GAP, max_height=None):
             row_h,
         )
 
+    if len(usable) == 4:
+        grid = _four_grid(len(sizes), width, ratio, gap, max_height)
+        if grid is not None:
+            return grid
+
     widest = sorted(usable, key=lambda item: (-ratio[item[0]], item[0]))
     hero = widest[0][0]
     rest = [item[0] for item in usable if item[0] != hero]
@@ -370,10 +303,6 @@ def collage_frames(sizes, width, *, gap=_COLLAGE_GAP, max_height=None):
         y += row_h
     else:
         y -= gap
-    if len(usable) == 4 and y > max_height:
-        fitted = _best_four_fit(width, max_height, ratio, gap, placed, y, len(sizes))
-        if fitted is not None:
-            return fitted
     return finish(placed, y)
 
 
@@ -821,7 +750,10 @@ def build_property_brochure_pdf(payload):
         pack.append(Paragraph(_escape(payload["location_line"]), styles["BrPlace"]))
     collage = None
     if gallery:
-        collage = PhotoCollage(gallery, usable_width, max_height=collage_height_limit(frame_height))
+        photo_limit = collage_height_limit(frame_height)
+        if len(gallery) == 4:
+            photo_limit = frame_height * 0.50
+        collage = PhotoCollage(gallery, usable_width, max_height=photo_limit)
         pack.append(Spacer(1, 4 * mm))
         pack.append(collage)
     if payload.get("price"):
