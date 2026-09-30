@@ -23,7 +23,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from modules.pdf_images import compose_on_color, uncropped_raster
+from modules.pdf_images import _open_image, compose_on_color, uncropped_raster
 from modules.pdf_svg import draw_svg
 
 
@@ -88,75 +88,164 @@ class ChipRow(Flowable):
                 self.canv.drawString(x + 5, y + 4, label)
 
 
-class PhotoCollage(Flowable):
-    """Editorial cover collage. Adapts from 1 to 5 photos. Never a thumbnail page."""
+_COLLAGE_GAP = 8
+_COLLAGE_MAX_H = 168 * mm
 
-    def __init__(self, images, width, height=88 * mm):
+
+def _hero_stack(width, hero_ratio, top_ratio, bottom_ratio, gap):
+    """Left photo plus two stacked photos. Every cell matches its image."""
+    denom = 1 + hero_ratio * (1 / top_ratio + 1 / bottom_ratio)
+    numer = width - gap * (1 + hero_ratio)
+    if denom <= 0 or numer <= 0:
+        return None
+    side_w = numer / denom
+    top_h = side_w / top_ratio
+    bottom_h = side_w / bottom_ratio
+    hero_h = top_h + gap + bottom_h
+    hero_w = hero_ratio * hero_h
+    if min(hero_w, hero_h, side_w, top_h, bottom_h) < 36:
+        return None
+    return hero_w, hero_h, side_w, top_h, bottom_h
+
+
+def collage_frames(sizes, width, *, gap=_COLLAGE_GAP, max_height=_COLLAGE_MAX_H):
+    """Cells follow each photo. Nothing is cropped or stretched.
+
+    Four photos: the widest is the left hero, the next widest is the full
+    bottom row, and the other two stack on the right. y grows downward.
+    """
+    usable = [
+        (index, float(src_w), float(src_h))
+        for index, (src_w, src_h) in enumerate(sizes or [])
+        if src_w and src_h
+    ]
+    if not usable or width <= gap:
+        return [None] * len(sizes or []), 0.0
+    ratio = {index: src_w / src_h for index, src_w, src_h in usable}
+
+    def finish(placed, height):
+        if height > max_height > 0:
+            scale = max_height / height
+            placed = {
+                index: (x * scale, y * scale, w * scale, h * scale)
+                for index, (x, y, w, h) in placed.items()
+            }
+            height *= scale
+        frames = [placed.get(index) for index in range(len(sizes))]
+        return frames, height
+
+    def stacked():
+        placed = {}
+        y = 0.0
+        for index, src_w, src_h in usable:
+            row_h = width / (src_w / src_h)
+            placed[index] = (0.0, y, width, row_h)
+            y += row_h + gap
+        return finish(placed, y - gap if placed else 0.0)
+
+    if len(usable) == 1:
+        index, src_w, src_h = usable[0]
+        row_h = min(width / ratio[index], max_height)
+        return finish({index: (0.0, 0.0, row_h * ratio[index], row_h)}, row_h)
+
+    if len(usable) == 2:
+        (first, _, _), (second, _, _) = usable
+        row_h = (width - gap) / (ratio[first] + ratio[second])
+        first_w = row_h * ratio[first]
+        second_w = row_h * ratio[second]
+        return finish(
+            {
+                first: (0.0, 0.0, first_w, row_h),
+                second: (first_w + gap, 0.0, second_w, row_h),
+            },
+            row_h,
+        )
+
+    widest = sorted(usable, key=lambda item: (-ratio[item[0]], item[0]))
+    hero = widest[0][0]
+    rest = [item[0] for item in usable if item[0] != hero]
+    if len(usable) == 4:
+        bottom_ids = [max(rest, key=lambda index: (ratio[index], -index))]
+        side_ids = [index for index in rest if index not in bottom_ids]
+    elif len(usable) >= 5:
+        side_ids = sorted(rest, key=lambda index: (ratio[index], index))[:2]
+        bottom_ids = [index for index in rest if index not in side_ids]
+    else:
+        side_ids = list(rest)
+        bottom_ids = []
+    side_ids = sorted(side_ids)
+    bottom_ids = sorted(bottom_ids)
+    if len(side_ids) != 2:
+        return stacked()
+    stack = _hero_stack(width, ratio[hero], ratio[side_ids[0]], ratio[side_ids[1]], gap)
+    if stack is None:
+        return stacked()
+    hero_w, hero_h, side_w, top_h, bottom_h = stack
+    placed = {
+        hero: (0.0, 0.0, hero_w, hero_h),
+        side_ids[0]: (hero_w + gap, 0.0, side_w, top_h),
+        side_ids[1]: (hero_w + gap, top_h + gap, side_w, bottom_h),
+    }
+    y = hero_h + gap
+    if len(bottom_ids) == 1:
+        row_h = width / ratio[bottom_ids[0]]
+        placed[bottom_ids[0]] = (0.0, y, width, row_h)
+        y += row_h
+    elif len(bottom_ids) >= 2:
+        pair = bottom_ids[:2]
+        row_h = (width - gap) / (ratio[pair[0]] + ratio[pair[1]])
+        left_w = row_h * ratio[pair[0]]
+        placed[pair[0]] = (0.0, y, left_w, row_h)
+        placed[pair[1]] = (left_w + gap, y, row_h * ratio[pair[1]], row_h)
+        y += row_h
+    else:
+        y -= gap
+    return finish(placed, y)
+
+
+class PhotoCollage(Flowable):
+    """Up to five photos. Each cell follows that photo. Nothing is cropped."""
+
+    def __init__(self, images, width):
         super().__init__()
         self.images = [item for item in images if item is not None][:5]
         self.box_width = width
-        self.box_height = height
+        self._sources = []
+        self._frames = []
 
     def wrap(self, avail_width, avail_height):
         self.width = min(self.box_width, avail_width)
-        self.height = self.box_height if self.images else 0
+        sources = []
+        sizes = []
+        for source in self.images:
+            image = _open_image(source)
+            if image is None:
+                continue
+            src_w, src_h = image.size
+            if src_w <= 0 or src_h <= 0:
+                continue
+            sources.append(source)
+            sizes.append((src_w, src_h))
+        self._sources = sources
+        self._frames, self.height = collage_frames(sizes, self.width)
         return self.width, self.height
 
-    def _slots(self):
-        w, h, g = self.width, self.height, 2.2 * mm
-        if len(self.images) == 1:
-            return [(0, 0, w, h)]
-        if len(self.images) == 2:
-            left = w * 0.62
-            return [(0, 0, left, h), (left + g, 0, w - left - g, h)]
-        if len(self.images) == 3:
-            left = w * 0.62
-            half = (h - g) / 2
-            return [
-                (0, 0, left, h),
-                (left + g, half + g, w - left - g, half),
-                (left + g, 0, w - left - g, half),
-            ]
-        if len(self.images) == 4:
-            left = w * 0.62
-            top = h * 0.62
-            half = (top - g) / 2
-            return [
-                (0, h - top, left, top),
-                (left + g, h - half, w - left - g, half),
-                (left + g, h - top, w - left - g, half),
-                (0, 0, w, h - top - g),
-            ]
-        left = w * 0.64
-        top = h * 0.62
-        half = (top - g) / 2
-        bottom = h - top - g
-        mid = w * 0.42
-        return [
-            (0, h - top, left, top),
-            (left + g, h - half, w - left - g, half),
-            (left + g, h - top, w - left - g, half),
-            (0, 0, mid, bottom),
-            (mid + g, 0, w - mid - g, bottom),
-        ]
-
     def draw(self):
-        for source, (x, y, w, h) in zip(self.images, self._slots()):
-            prepared = uncropped_raster(
-                source,
-                max(1, int(w * 3)),
-                max(1, int(h * 3)),
-            )
+        if not self._frames:
+            self.wrap(self.box_width, 0)
+        for source, frame in zip(self._sources, self._frames):
+            if not frame:
+                continue
+            x, y_top, w, h = frame
+            prepared = uncropped_raster(source, max(1, int(w * 3)), max(1, int(h * 3)))
             if not prepared:
                 continue
             src_w, src_h = prepared["source_size"]
             offset_x, offset_y, draw_w, draw_h = contained_draw_box(src_w, src_h, w, h)
-            self.canv.setFillColor(colors.HexColor("#F7F8FA"))
-            self.canv.roundRect(x, y, w, h, 3.2, fill=1, stroke=0)
             self.canv.drawImage(
                 ImageReader(prepared["buffer"]),
                 x + offset_x,
-                y + offset_y,
+                self.height - y_top - h + offset_y,
                 width=draw_w,
                 height=draw_h,
                 preserveAspectRatio=True,

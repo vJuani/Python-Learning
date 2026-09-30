@@ -11,8 +11,10 @@ from reportlab.lib.units import mm
 
 from modules.pdf_images import uncropped_raster
 from modules.pdf_property_brochure import (
+    _COLLAGE_GAP,
     _CONTACT_ICON_FILES,
     build_property_brochure_pdf,
+    collage_frames,
     contained_draw_box,
     logo_draw_size,
 )
@@ -91,6 +93,37 @@ class BrochureLayoutTests(unittest.TestCase):
             self.assertLessEqual(abs(out_w * src_h - out_h * src_w), max(src_w, src_h))
         self.assertLessEqual(wide_out["size"][0], 300)
         self.assertLessEqual(tall_out["size"][1], 300)
+
+    def test_four_photos_fill_cells_that_match_their_ratios(self):
+        sizes = [(1600, 900), (800, 1200), (1000, 750), (2000, 800)]
+        frames, height = collage_frames(sizes, 480)
+        self.assertEqual(len(frames), 4)
+        image_area = 0.0
+        for (src_w, src_h), frame in zip(sizes, frames):
+            x, y, w, h = frame
+            self.assertAlmostEqual(w / h, src_w / src_h, places=2)
+            image_area += w * h
+            self.assertGreaterEqual(x, -0.01)
+            self.assertGreaterEqual(y, -0.01)
+            self.assertLessEqual(x + w, 480 + 0.5)
+            self.assertLessEqual(y + h, height + 0.5)
+        hero = frames[3]
+        bottom = frames[0]
+        self.assertEqual(hero[0], 0)
+        self.assertGreater(hero[2], frames[1][2])
+        self.assertAlmostEqual(bottom[2], 480, places=1)
+        self.assertGreater(bottom[1], hero[1])
+        self.assertAlmostEqual(frames[1][0] - (hero[0] + hero[2]), _COLLAGE_GAP, places=2)
+        self.assertGreater(image_area / (480 * height), 0.85)
+
+    def test_portrait_column_is_narrower_than_the_wide_hero(self):
+        sizes = [(1800, 800), (700, 1100), (900, 700)]
+        frames, _height = collage_frames(sizes, 480)
+        hero = frames[0]
+        portrait = frames[1]
+        self.assertEqual(hero[0], 0)
+        self.assertLess(portrait[2], hero[2])
+        self.assertAlmostEqual(portrait[2] / portrait[3], 700 / 1100, places=2)
 
     def test_brochure_with_mixed_photos_is_a_pdf(self):
         wide = io.BytesIO()
