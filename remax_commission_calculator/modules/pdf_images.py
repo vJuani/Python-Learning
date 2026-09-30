@@ -130,6 +130,34 @@ def prepare_image(
     return {"buffer": buffer, "size": fitted.size, "format": fmt}
 
 
+def uncropped_raster(source, max_px_w, max_px_h):
+    """Resize without cropping. The result keeps the source aspect ratio."""
+    image = _open_image(source)
+    if image is None:
+        return None
+    src_w, src_h = image.size
+    if src_w <= 0 or src_h <= 0:
+        return None
+    scale = min(max(1, int(max_px_w)) / src_w, max(1, int(max_px_h)) / src_h)
+    out_w = max(1, int(round(src_w * scale)))
+    out_h = max(1, int(round(src_h * scale)))
+    if image.mode == "RGBA":
+        base = Image.new("RGB", image.size, (255, 255, 255))
+        base.paste(image, mask=image.split()[-1])
+        image = base
+    elif image.mode != "RGB":
+        image = image.convert("RGB")
+    resized = image.resize((out_w, out_h), Image.Resampling.LANCZOS)
+    buffer = io.BytesIO()
+    resized.save(buffer, format="JPEG", quality=92, optimize=True)
+    buffer.seek(0)
+    return {
+        "buffer": buffer,
+        "size": resized.size,
+        "source_size": (src_w, src_h),
+    }
+
+
 def compose_on_color(source, rgb, *, max_width_px, max_height_px):
     """Flatten a (possibly transparent) photo onto an RGB background."""
     return prepare_image(

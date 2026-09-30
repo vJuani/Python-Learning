@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 import re
+from pathlib import Path
+from xml.etree import ElementTree
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_JUSTIFY, TA_RIGHT
@@ -21,7 +23,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from modules.pdf_images import compose_on_color, pdf_image_flowable, prepare_image
+from modules.pdf_images import compose_on_color, uncropped_raster
+from modules.pdf_svg import draw_svg
 
 
 NAVY = colors.HexColor("#0A1633")
@@ -32,12 +35,18 @@ WHITE = colors.white
 NAVY_RGB = (10, 22, 51)
 FOOTER_H = 52 * mm
 WHATSAPP_GREEN = colors.HexColor("#25D366")
-INSTAGRAM_ORANGE = colors.HexColor("#F77737")
-INSTAGRAM_PINK = colors.HexColor("#E1306C")
-INSTAGRAM_PURPLE = colors.HexColor("#833AB4")
 _CONTACT_ICON = 3.15 * mm
 _CONTACT_ICON_GAP = 1.25 * mm
 _CONTACT_ROW = 4.05 * mm
+_ICON_DIR = Path(__file__).resolve().parent.parent / "static" / "assets" / "icons"
+_CONTACT_ICON_FILES = {
+    "mail": _ICON_DIR / "email.svg",
+    "whatsapp": _ICON_DIR / "whatsapp.svg",
+    "instagram": _ICON_DIR / "instagram.svg",
+}
+_LOGO_MAX_W = 42 * mm
+_LOGO_MAX_H = 14 * mm
+_LOGO_MIN_DPI = 144
 
 
 class ChipRow(Flowable):
@@ -133,29 +142,121 @@ class PhotoCollage(Flowable):
 
     def draw(self):
         for source, (x, y, w, h) in zip(self.images, self._slots()):
-            prepared = prepare_image(
+            prepared = uncropped_raster(
                 source,
-                max_width_px=max(160, int(w * 2.2)),
-                max_height_px=max(120, int(h * 2.2)),
-                mode="cover",
-                background=(232, 238, 246),
+                max(1, int(w * 3)),
+                max(1, int(h * 3)),
             )
             if not prepared:
                 continue
-            self.canv.saveState()
-            path = self.canv.beginPath()
-            path.roundRect(x, y, w, h, 3.2)
-            self.canv.clipPath(path, stroke=0, fill=0)
+            src_w, src_h = prepared["source_size"]
+            offset_x, offset_y, draw_w, draw_h = contained_draw_box(src_w, src_h, w, h)
+            self.canv.setFillColor(colors.HexColor("#F7F8FA"))
+            self.canv.roundRect(x, y, w, h, 3.2, fill=1, stroke=0)
             self.canv.drawImage(
                 ImageReader(prepared["buffer"]),
-                x,
-                y,
-                width=w,
-                height=h,
-                preserveAspectRatio=False,
+                x + offset_x,
+                y + offset_y,
+                width=draw_w,
+                height=draw_h,
+                preserveAspectRatio=True,
+                anchor="c",
                 mask="auto",
             )
-            self.canv.restoreState()
+
+
+def contained_draw_box(src_w, src_h, cell_w, cell_h):
+    """object-fit: contain. The whole image stays inside the cell."""
+    if src_w <= 0 or src_h <= 0 or cell_w <= 0 or cell_h <= 0:
+        return 0.0, 0.0, 0.0, 0.0
+    scale = min(cell_w / float(src_w), cell_h / float(src_h))
+    draw_w = float(src_w) * scale
+    draw_h = float(src_h) * scale
+    return (cell_w - draw_w) / 2.0, (cell_h - draw_h) / 2.0, draw_w, draw_h
+
+
+def logo_draw_size(src_w, src_h, max_w, max_h, *, min_dpi=_LOGO_MIN_DPI):
+    """Fit inside the max box. A raster is never drawn larger than its own pixels."""
+    if src_w <= 0 or src_h <= 0 or max_w <= 0 or max_h <= 0:
+        return 0.0, 0.0
+    cap_w = float(src_w) * 72.0 / float(min_dpi)
+    cap_h = float(src_h) * 72.0 / float(min_dpi)
+    scale = min(max_w / cap_w, max_h / cap_h, 1.0)
+    return cap_w * scale, cap_h * scale
+
+
+class _SvgLogo(Flowable):
+    def __init__(self, svg_text, width, height):
+        super().__init__()
+        self.svg_text = svg_text
+        self.drawWidth = width
+        self.drawHeight = height
+
+    def wrap(self, avail_width, avail_height):
+        return self.drawWidth, self.drawHeight
+
+    def draw(self):
+        draw_svg(
+            self.canv,
+            self.svg_text,
+            0,
+            0,
+            self.drawWidth,
+            self.drawHeight,
+            current_color=NAVY,
+        )
+
+
+def _logo_flowable(source):
+    """Original logo file, contained. Never stretched and never upscaled."""
+    if isinstance(source, (bytes, bytearray)):
+        path = None
+        payload = bytes(source)
+    else:
+        path = Path(str(source))
+        if not path.is_file():
+            return None
+        payload = None
+    if path is not None and path.suffix.lower() == ".svg":
+        svg_text = path.read_text(encoding="utf-8")
+        root = ElementTree.fromstring(svg_text)
+        raw = (root.attrib.get("viewBox") or "").replace(",", " ").split()
+        if len(raw) == 4:
+            view_w, view_h = float(raw[2]), float(raw[3])
+        else:
+            view_w = float(root.attrib.get("width") or 0)
+            view_h = float(root.attrib.get("height") or 0)
+        if view_w <= 0 or view_h <= 0:
+            return None
+        scale = min(_LOGO_MAX_W / view_w, _LOGO_MAX_H / view_h)
+        return _SvgLogo(svg_text, view_w * scale, view_h * scale)
+
+    from PIL import Image
+    from modules.pdf_images import _open_image
+
+    image = _open_image(payload if payload is not None else path)
+    if image is None:
+        return None
+    src_w, src_h = image.size
+    draw_w, draw_h = logo_draw_size(src_w, src_h, _LOGO_MAX_W, _LOGO_MAX_H)
+    if draw_w <= 0 or draw_h <= 0:
+        return None
+    pixel_scale = min(1.0, (draw_w * _LOGO_MIN_DPI / 72.0) / src_w)
+    out_w = max(1, int(round(src_w * pixel_scale)))
+    out_h = max(1, int(round(src_h * pixel_scale)))
+    if image.mode not in {"RGB", "RGBA"}:
+        image = image.convert("RGBA")
+    resized = image.resize((out_w, out_h), Image.Resampling.LANCZOS)
+    buffer = io.BytesIO()
+    resized.save(buffer, format="PNG")
+    buffer.seek(0)
+    from reportlab.platypus import Image as RLImage
+
+    flowable = RLImage(buffer, mask="auto")
+    flowable.drawWidth = draw_w
+    flowable.drawHeight = draw_h
+    flowable.hAlign = "LEFT"
+    return flowable
 
 
 def _org_accent(payload):
@@ -227,87 +328,19 @@ def _agent_contact_rows(agent):
     return rows
 
 
-def _paint_mail_icon(canvas):
-    canvas.setStrokeColor(WHITE)
-    canvas.setLineWidth(1.65)
-    canvas.setLineJoin(1)
-    canvas.setLineCap(1)
-    canvas.roundRect(1.2, 4.0, 21.6, 16.0, 2.2, stroke=1, fill=0)
-    flap = canvas.beginPath()
-    flap.moveTo(2.4, 18.6)
-    flap.lineTo(12, 11.4)
-    flap.lineTo(21.6, 18.6)
-    canvas.drawPath(flap, stroke=1, fill=0)
-
-
-def _paint_whatsapp_icon(canvas):
-    canvas.setFillColor(WHATSAPP_GREEN)
-    canvas.circle(12.6, 12.8, 9.5, stroke=0, fill=1)
-    tail = canvas.beginPath()
-    tail.moveTo(5.2, 7.4)
-    tail.lineTo(2.0, 2.4)
-    tail.lineTo(8.6, 6.6)
-    tail.close()
-    canvas.drawPath(tail, stroke=0, fill=1)
-    canvas.saveState()
-    canvas.translate(12.8, 12.6)
-    canvas.rotate(-38)
-    canvas.setFillColor(WHITE)
-    canvas.roundRect(-7.4, 1.2, 4.6, 6.4, 2.2, stroke=0, fill=1)
-    canvas.roundRect(2.6, -7.6, 4.6, 6.4, 2.2, stroke=0, fill=1)
-    canvas.setStrokeColor(WHITE)
-    canvas.setFillColor(WHITE)
-    canvas.setLineWidth(2.2)
-    canvas.setLineCap(1)
-    canvas.line(-4.8, 4.0, 4.6, -4.2)
-    canvas.restoreState()
-
-
-def _paint_instagram_icon(canvas):
-    canvas.saveState()
-    clip = canvas.beginPath()
-    clip.roundRect(0.8, 0.8, 22.4, 22.4, 6.0)
-    canvas.clipPath(clip, stroke=0, fill=0)
-    canvas.setFillColor(INSTAGRAM_ORANGE)
-    canvas.rect(0, 0, 24, 24, stroke=0, fill=1)
-    pink = canvas.beginPath()
-    pink.moveTo(0, 24)
-    pink.lineTo(24, 24)
-    pink.lineTo(24, 0)
-    pink.close()
-    canvas.setFillColor(INSTAGRAM_PINK)
-    canvas.drawPath(pink, stroke=0, fill=1)
-    purple = canvas.beginPath()
-    purple.moveTo(0, 9)
-    purple.lineTo(15, 24)
-    purple.lineTo(0, 24)
-    purple.close()
-    canvas.setFillColor(INSTAGRAM_PURPLE)
-    canvas.drawPath(purple, stroke=0, fill=1)
-    canvas.restoreState()
-    canvas.setStrokeColor(WHITE)
-    canvas.setLineWidth(1.7)
-    canvas.circle(12, 12, 4.15, stroke=1, fill=0)
-    canvas.setFillColor(WHITE)
-    canvas.circle(17.15, 17.15, 1.15, stroke=0, fill=1)
-
-
-_CONTACT_ICON_PAINTERS = {
-    "mail": _paint_mail_icon,
-    "whatsapp": _paint_whatsapp_icon,
-    "instagram": _paint_instagram_icon,
-}
-
-
 def _draw_contact_icon(canvas, kind, x, y, size):
-    painter = _CONTACT_ICON_PAINTERS.get(kind)
-    if painter is None:
+    asset = _CONTACT_ICON_FILES.get(kind)
+    if asset is None or not asset.is_file():
         return
-    canvas.saveState()
-    canvas.translate(x, y)
-    canvas.scale(size / 24.0, size / 24.0)
-    painter(canvas)
-    canvas.restoreState()
+    draw_svg(
+        canvas,
+        asset.read_text(encoding="utf-8"),
+        x,
+        y,
+        size,
+        size,
+        current_color=WHITE,
+    )
 
 
 def _wrap_words(canvas, text, font_name, font_size, max_width):
@@ -485,13 +518,7 @@ def build_property_brochure_pdf(payload):
     org = payload.get("organization") or {}
     left = []
     if org.get("logo"):
-        logo = pdf_image_flowable(
-            org.get("logo"),
-            42 * mm,
-            14 * mm,
-            mode="contain",
-            preserve_alpha=True,
-        )
+        logo = _logo_flowable(org.get("logo"))
         if logo:
             left.append(logo)
     if org.get("name"):

@@ -31,10 +31,8 @@ from modules.database.properties_repository import STATUS_APPROVED
 from modules.database.users_repository import get_user_by_id
 from modules.organization_marketing_logo import marketing_logo_logical_key
 from modules.pdf_property_brochure import (
-    INSTAGRAM_ORANGE,
-    INSTAGRAM_PINK,
-    INSTAGRAM_PURPLE,
     WHATSAPP_GREEN,
+    _CONTACT_ICON_FILES,
     _agent_contact_rows,
     _draw_contact_icon,
     build_property_brochure_pdf,
@@ -231,7 +229,6 @@ class PropertyBrochureBrandingTests(unittest.TestCase):
         self.assertNotIn("WhatsApp:", text)
         self.assertNotIn("Instagram:", text)
         self.assertTrue(_pdf_has_color(result["pdf_bytes"], WHATSAPP_GREEN))
-        self.assertTrue(_pdf_has_color(result["pdf_bytes"], INSTAGRAM_PURPLE))
         self.assertTrue(result["pdf_bytes"].startswith(b"%PDF"))
         self.assertIn("Martín Prueba", text)
         self.assertIn("QA-0000", text)
@@ -368,7 +365,6 @@ class PropertyBrochureBrandingTests(unittest.TestCase):
         self.assertIn("+54 9 11 5555 9999", text)
         self.assertNotIn("nico@achard.test · +54 9 11 5555 9999", text)
         self.assertTrue(_pdf_has_color(result["pdf_bytes"], WHATSAPP_GREEN))
-        self.assertFalse(_pdf_has_color(result["pdf_bytes"], INSTAGRAM_PURPLE))
         self.assertTrue(result["pdf_bytes"].startswith(b"%PDF"))
 
     def test_missing_phone_is_not_invented(self):
@@ -400,8 +396,6 @@ class PropertyBrochureBrandingTests(unittest.TestCase):
         self.assertIn("sin.telefono@achard.test", text)
         self.assertNotIn("+54", text)
         self.assertFalse(_pdf_has_color(result["pdf_bytes"], WHATSAPP_GREEN))
-        self.assertFalse(_pdf_has_color(result["pdf_bytes"], INSTAGRAM_PURPLE))
-        self.assertIn("1.65 w", _pdf_text(result["pdf_bytes"]))
         self.assertTrue(result["pdf_bytes"].startswith(b"%PDF"))
 
     def test_phone_is_used_when_whatsapp_is_missing(self):
@@ -457,21 +451,19 @@ class PropertyBrochureBrandingTests(unittest.TestCase):
         )
         self.assertEqual(_agent_contact_rows({"email": "   ", "phone": "", "instagram": None}), [])
 
-    def test_contact_icons_are_vectors_in_the_pdf(self):
-        mail = _pdf_text(_icon_pdf("mail"))
-        whatsapp = _pdf_text(_icon_pdf("whatsapp"))
-        instagram = _pdf_text(_icon_pdf("instagram"))
-        self.assertIn("1.65 w", mail)
-        self.assertFalse(_pdf_has_color(_icon_pdf("mail"), WHATSAPP_GREEN))
-        self.assertTrue(_icon_pdf("mail").startswith(b"%PDF"))
+    def test_contact_icons_use_the_web_svg_assets(self):
+        from modules.property_marketing import ICON_EMAIL, ICON_IG, ICON_WA
+
+        self.assertEqual(_CONTACT_ICON_FILES["whatsapp"].read_text(encoding="utf-8").strip(), ICON_WA)
+        self.assertEqual(_CONTACT_ICON_FILES["instagram"].read_text(encoding="utf-8").strip(), ICON_IG)
+        self.assertEqual(_CONTACT_ICON_FILES["mail"].read_text(encoding="utf-8").strip(), ICON_EMAIL)
         self.assertTrue(_pdf_has_color(_icon_pdf("whatsapp"), WHATSAPP_GREEN))
-        self.assertNotIn("1.65 w", whatsapp)
-        self.assertTrue(_pdf_has_color(_icon_pdf("instagram"), INSTAGRAM_ORANGE))
-        self.assertTrue(_pdf_has_color(_icon_pdf("instagram"), INSTAGRAM_PINK))
-        self.assertTrue(_pdf_has_color(_icon_pdf("instagram"), INSTAGRAM_PURPLE))
-        self.assertNotIn("1.65 w", instagram)
+        self.assertFalse(_pdf_has_color(_icon_pdf("mail"), WHATSAPP_GREEN))
+        self.assertFalse(_pdf_has_color(_icon_pdf("instagram"), WHATSAPP_GREEN))
         for kind in ("mail", "whatsapp", "instagram"):
-            self.assertNotIn("/XObject", _icon_pdf(kind).decode("latin-1"))
+            payload = _icon_pdf(kind)
+            self.assertTrue(payload.startswith(b"%PDF"))
+            self.assertNotIn("/XObject", payload.decode("latin-1"))
 
     def test_missing_email_omits_the_mail_row(self):
         pdf_bytes = build_property_brochure_pdf(_contact_payload({
@@ -487,7 +479,5 @@ class PropertyBrochureBrandingTests(unittest.TestCase):
         self.assertIn("Departamento luminoso con balcón.", text)
         self.assertIn("Martín Prueba", text)
         self.assertIn("Powered by JRH One", text)
-        self.assertNotIn("1.65 w", text)
         self.assertNotIn("Mail:", text)
         self.assertTrue(_pdf_has_color(pdf_bytes, WHATSAPP_GREEN))
-        self.assertTrue(_pdf_has_color(pdf_bytes, INSTAGRAM_PURPLE))
