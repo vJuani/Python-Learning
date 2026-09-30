@@ -715,36 +715,6 @@ html[data-theme="dark"] .matches-card {
     margin-bottom: 4px;
 }
 
-.shortlist-share-toast {
-    position: fixed;
-    left: 16px;
-    right: 16px;
-    bottom: 24px;
-    z-index: 40;
-    max-width: 28rem;
-    margin: 0 auto;
-    padding: 12px 14px;
-    border-radius: 12px;
-    background: #0a1633;
-    color: #f4f7fb;
-    box-shadow: 0 8px 24px rgba(10, 22, 51, 0.28);
-}
-
-.shortlist-share-toast p {
-    margin: 0 0 8px;
-}
-
-.shortlist-share-toast p:last-child,
-.shortlist-share-toast button[hidden] + p {
-    margin-bottom: 0;
-}
-
-@media (max-width: 768px) {
-    body.has-mobile-bottom-nav .shortlist-share-toast {
-        bottom: calc(var(--m-nav-h, 74px) + 76px);
-    }
-}
-
 .shortlist-draft textarea {
     width: 100%;
     min-height: 220px;

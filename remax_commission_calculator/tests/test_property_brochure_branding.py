@@ -30,6 +30,15 @@ from modules.database.organization_settings_repository import (
 from modules.database.properties_repository import STATUS_APPROVED
 from modules.database.users_repository import get_user_by_id
 from modules.organization_marketing_logo import marketing_logo_logical_key
+from modules.pdf_property_brochure import (
+    INSTAGRAM_ORANGE,
+    INSTAGRAM_PINK,
+    INSTAGRAM_PURPLE,
+    WHATSAPP_GREEN,
+    _agent_contact_rows,
+    _draw_contact_icon,
+    build_property_brochure_pdf,
+)
 from modules.property_brochure import generate_property_brochure
 from web_app import app
 
@@ -49,6 +58,51 @@ def _pdf_text(payload):
         parts.append(raw)
     text = b"\n".join(parts).decode("latin-1", "ignore")
     return re.sub(r"\\([0-7]{3})", lambda match: chr(int(match.group(1), 8)), text)
+
+
+def _pdf_has_color(payload, color):
+    from reportlab.pdfgen.canvas import fp_str
+
+    token = fp_str(color.red, color.green, color.blue)
+    return token in _pdf_text(payload)
+
+
+def _icon_pdf(kind):
+    from reportlab.pdfgen import canvas as pdfcanvas
+
+    buffer = io.BytesIO()
+    canv = pdfcanvas.Canvas(buffer)
+    _draw_contact_icon(canv, kind, 20, 20, 24)
+    canv.save()
+    return buffer.getvalue()
+
+
+def _contact_payload(agent):
+    return {
+        "title": "Calle Iconos 10",
+        "location_line": "Martínez",
+        "price": "USD 100.000,00",
+        "description": "Departamento luminoso con balcón.",
+        "chips": ["2 dormitorios"],
+        "highlights": [("Sup.", "80 m²")],
+        "features": ["Cochera"],
+        "about_label": "La propiedad",
+        "features_label": "Características",
+        "location_label": "Ubicación",
+        "advisor_label": "Agente responsable",
+        "sheet_label": "FICHA DE PROPIEDAD",
+        "powered_by": "Powered by JRH One",
+        "broker_label": "Martillero",
+        "license_label": "Matrícula",
+        "organization": {
+            "name": "Achard Propiedades QA",
+            "accent_color": "#0f766e",
+            "legal_broker_name": "Martín Prueba",
+            "legal_broker_license": "QA-0000",
+            "legal_footer_line": "Pie legal Achard QA",
+        },
+        "agent": {"name": "Agente Iconos", "role": "Agente", **agent},
+    }
 
 
 class PropertyBrochureBrandingTests(unittest.TestCase):
@@ -170,9 +224,15 @@ class PropertyBrochureBrandingTests(unittest.TestCase):
         self.assertIn("Achard Propiedades QA", text)
         self.assertIn("Emilio Perez", text)
         self.assertIn("emilio@achard.test", text)
-        self.assertIn("+54 11 4444-0000", text)
         self.assertIn("+54 9 11 5555 4321", text)
+        self.assertNotIn("+54 11 4444-0000", text)
         self.assertIn("@emilio.achard", text)
+        self.assertNotIn("Mail:", text)
+        self.assertNotIn("WhatsApp:", text)
+        self.assertNotIn("Instagram:", text)
+        self.assertTrue(_pdf_has_color(result["pdf_bytes"], WHATSAPP_GREEN))
+        self.assertTrue(_pdf_has_color(result["pdf_bytes"], INSTAGRAM_PURPLE))
+        self.assertTrue(result["pdf_bytes"].startswith(b"%PDF"))
         self.assertIn("Martín Prueba", text)
         self.assertIn("QA-0000", text)
         self.assertIn("Pie legal Achard QA", text)
@@ -304,7 +364,12 @@ class PropertyBrochureBrandingTests(unittest.TestCase):
         result = generate_property_brochure(prop, self.org_a, True, get_user_by_id(user_id))
         text = _pdf_text(result["pdf_bytes"])
         self.assertEqual(result["agent"]["whatsapp"], "+54 9 11 5555 9999")
-        self.assertIn("nico@achard.test · +54 9 11 5555 9999", text)
+        self.assertIn("nico@achard.test", text)
+        self.assertIn("+54 9 11 5555 9999", text)
+        self.assertNotIn("nico@achard.test · +54 9 11 5555 9999", text)
+        self.assertTrue(_pdf_has_color(result["pdf_bytes"], WHATSAPP_GREEN))
+        self.assertFalse(_pdf_has_color(result["pdf_bytes"], INSTAGRAM_PURPLE))
+        self.assertTrue(result["pdf_bytes"].startswith(b"%PDF"))
 
     def test_missing_phone_is_not_invented(self):
         agent_id = add_agent("Sin", "Alto", self.org_a)
@@ -334,3 +399,95 @@ class PropertyBrochureBrandingTests(unittest.TestCase):
         self.assertIsNone(result["agent"].get("whatsapp"))
         self.assertIn("sin.telefono@achard.test", text)
         self.assertNotIn("+54", text)
+        self.assertFalse(_pdf_has_color(result["pdf_bytes"], WHATSAPP_GREEN))
+        self.assertFalse(_pdf_has_color(result["pdf_bytes"], INSTAGRAM_PURPLE))
+        self.assertIn("1.65 w", _pdf_text(result["pdf_bytes"]))
+        self.assertTrue(result["pdf_bytes"].startswith(b"%PDF"))
+
+    def test_phone_is_used_when_whatsapp_is_missing(self):
+        agent_id = add_agent("Solo", "Alto", self.org_a)
+        user_id = add_user(
+            "solo_phone",
+            hash_password("Password1"),
+            ROLE_AGENT,
+            self.org_a,
+            agent_id=agent_id,
+            is_active=True,
+            first_name="Solo",
+            last_name="Telefono",
+            phone="+54 11 4444-2222",
+            email="solo.telefono@achard.test",
+        )
+        prop = add_property(
+            "Calle Solo 3",
+            "Buenos Aires",
+            self.org_a,
+            agent_id=agent_id,
+            status=STATUS_APPROVED,
+            listing_price=100000,
+            listing_currency="USD",
+        )
+        result = generate_property_brochure(prop, self.org_a, True, get_user_by_id(user_id))
+        text = _pdf_text(result["pdf_bytes"])
+        self.assertIsNone(result["agent"].get("whatsapp"))
+        self.assertIn("+54 11 4444-2222", text)
+        self.assertIn("solo.telefono@achard.test", text)
+        self.assertTrue(_pdf_has_color(result["pdf_bytes"], WHATSAPP_GREEN))
+        self.assertTrue(result["pdf_bytes"].startswith(b"%PDF"))
+
+    def test_contact_rows_drop_missing_channels(self):
+        full = _agent_contact_rows({
+            "email": "agente@email.com",
+            "whatsapp": "+54 9 11 5555 1111",
+            "phone": "+54 11 4444-0000",
+            "instagram": "usuario",
+        })
+        self.assertEqual(full, [
+            ("mail", "agente@email.com"),
+            ("whatsapp", "+54 9 11 5555 1111"),
+            ("instagram", "@usuario"),
+        ])
+        self.assertEqual(
+            _agent_contact_rows({"email": "agente@email.com", "phone": "+54 11 4000-0000"}),
+            [("mail", "agente@email.com"), ("whatsapp", "+54 11 4000-0000")],
+        )
+        self.assertEqual(
+            _agent_contact_rows({"whatsapp": "+54 9 11 5555 1111", "instagram": "@usuario"}),
+            [("whatsapp", "+54 9 11 5555 1111"), ("instagram", "@usuario")],
+        )
+        self.assertEqual(_agent_contact_rows({"email": "   ", "phone": "", "instagram": None}), [])
+
+    def test_contact_icons_are_vectors_in_the_pdf(self):
+        mail = _pdf_text(_icon_pdf("mail"))
+        whatsapp = _pdf_text(_icon_pdf("whatsapp"))
+        instagram = _pdf_text(_icon_pdf("instagram"))
+        self.assertIn("1.65 w", mail)
+        self.assertFalse(_pdf_has_color(_icon_pdf("mail"), WHATSAPP_GREEN))
+        self.assertTrue(_icon_pdf("mail").startswith(b"%PDF"))
+        self.assertTrue(_pdf_has_color(_icon_pdf("whatsapp"), WHATSAPP_GREEN))
+        self.assertNotIn("1.65 w", whatsapp)
+        self.assertTrue(_pdf_has_color(_icon_pdf("instagram"), INSTAGRAM_ORANGE))
+        self.assertTrue(_pdf_has_color(_icon_pdf("instagram"), INSTAGRAM_PINK))
+        self.assertTrue(_pdf_has_color(_icon_pdf("instagram"), INSTAGRAM_PURPLE))
+        self.assertNotIn("1.65 w", instagram)
+        for kind in ("mail", "whatsapp", "instagram"):
+            self.assertNotIn("/XObject", _icon_pdf(kind).decode("latin-1"))
+
+    def test_missing_email_omits_the_mail_row(self):
+        pdf_bytes = build_property_brochure_pdf(_contact_payload({
+            "phone": "+54 11 4444-3333",
+            "instagram": "@sin.mail",
+        }))
+        text = _pdf_text(pdf_bytes)
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+        self.assertIn("+54 11 4444-3333", text)
+        self.assertIn("@sin.mail", text)
+        self.assertIn("Calle Iconos 10", text)
+        self.assertIn("USD 100.000,00", text)
+        self.assertIn("Departamento luminoso con balcón.", text)
+        self.assertIn("Martín Prueba", text)
+        self.assertIn("Powered by JRH One", text)
+        self.assertNotIn("1.65 w", text)
+        self.assertNotIn("Mail:", text)
+        self.assertTrue(_pdf_has_color(pdf_bytes, WHATSAPP_GREEN))
+        self.assertTrue(_pdf_has_color(pdf_bytes, INSTAGRAM_PURPLE))

@@ -5,7 +5,7 @@
 {% block title %}{{ t('shortlist_title', name=first_name) }} | {{ t('contacts_title') }}{% endblock %}
 
 {% block content %}
-<article class="shortlist-page" data-shortlist-share data-copied="{{ t('shortlist_share_copied') }}" data-copy-miss="{{ t('shortlist_share_copy_miss') }}">
+<article class="shortlist-page" data-shortlist-share>
     <p class="contacts-back"><a href="{{ url_for('contacts_detail', contact_id=contact.id) }}">{{ contact.name }}</a></p>
     <header class="matches-hero">
         <h1>{{ contact.name }}</h1>
@@ -31,7 +31,7 @@
                     {% endif %}
                 </div>
                 <div class="shortlist-item__actions">
-                    <button type="button" class="btn btn-small btn-primary" data-share-sheet data-property-id="{{ item.property_id }}">{{ t('shortlist_share_sheet') }}</button>
+                    <button type="button" class="btn btn-small btn-primary" data-share-sheet data-property-id="{{ item.property_id }}">{{ t('shortlist_share_open') }}</button>
                     <a class="btn btn-small btn-secondary" href="{{ url_for('property_brochure', property_id=item.property_id) }}">{{ t('shortlist_download_sheet') }}</a>
                     <a class="btn btn-small btn-secondary" href="{{ url_for('agenda_new', type='visit', property_id=item.property_id, contact_id=contact.id) }}">{{ t('shortlist_schedule_visit') }}</a>
                     <button type="submit" name="action" value="up:{{ loop.index0 }}" class="btn btn-small btn-secondary" {% if loop.first %}disabled{% endif %}>{{ t('shortlist_up') }}</button>
@@ -44,14 +44,15 @@
         <p>
             <a class="btn btn-small btn-secondary" href="{{ url_for('contacts_property_matches', contact_id=contact.id) }}">{{ t('shortlist_add') }}</a>
         </p>
-        <p id="shortlist-share-notice" class="contact-panel__muted" hidden>{{ t('shortlist_share_fallback') }}</p>
-        <div id="shortlist-share-toast" class="shortlist-share-toast" hidden role="status">
-            <p data-share-toast-text></p>
-            <button type="button" class="btn btn-small btn-secondary" data-share-copy hidden>{{ t('shortlist_share_copy') }}</button>
-        </div>
-        <label for="shortlist-message">{{ t('shortlist_message') }}</label>
-        <textarea id="shortlist-message" name="message" rows="10">{{ message }}</textarea>
     </form>
+    <p id="shortlist-share-notice" class="contact-panel__muted" hidden>{{ t('shortlist_share_fallback') }}</p>
+    <div data-whatsapp-cloud-share hidden>
+        <label for="shortlist-include-message">
+            <input id="shortlist-include-message" type="checkbox" checked>
+            {{ t('shortlist_share_include') }}
+        </label>
+        <textarea id="shortlist-share-text" rows="8">{% if share_items|length == 1 %}{{ share_items[0].text }}{% endif %}</textarea>
+    </div>
     <form method="post" action="{{ url_for('contacts_property_shortlist_mark_sent', contact_id=contact.id) }}" class="shortlist-bar">
         <button type="submit" class="btn btn-secondary">{{ t('shortlist_mark_sent') }}</button>
     </form>

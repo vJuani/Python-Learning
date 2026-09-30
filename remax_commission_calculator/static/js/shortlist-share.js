@@ -13,11 +13,7 @@
     });
 
     var notice = document.getElementById("shortlist-share-notice");
-    var toast = document.getElementById("shortlist-share-toast");
-    var toastText = toast ? toast.querySelector("[data-share-toast-text]") : null;
-    var copyButton = toast ? toast.querySelector("[data-share-copy]") : null;
     var cache = {};
-    var pendingText = "";
 
     function filenameFrom(response) {
         var header = response.headers.get("Content-Disposition") || "";
@@ -64,95 +60,26 @@
         }, 1500);
     }
 
-    function whatsappUrl(item, text) {
-        if (!item.whatsapp_url || text === item.text) {
-            return item.whatsapp_url || "";
-        }
-        try {
-            var url = new URL(item.whatsapp_url);
-            url.searchParams.set("text", text);
-            return url.toString();
-        } catch (error) {
-            return item.whatsapp_url;
-        }
-    }
-
-    function shareText(item) {
-        var box = document.getElementById("shortlist-message");
-        if (box && items.length === 1) {
-            return box.value || item.text || "";
-        }
-        return item.text || "";
-    }
-
-    function copyText(text) {
-        pendingText = text || "";
-        if (!navigator.clipboard || !navigator.clipboard.writeText) {
-            return Promise.resolve(false);
-        }
-        return navigator.clipboard.writeText(pendingText).then(function () {
-            return true;
-        }).catch(function () {
-            return false;
-        });
-    }
-
-    function showToast(copied) {
-        if (!toast || !toastText) {
-            return;
-        }
-        toastText.textContent = copied
-            ? (root.getAttribute("data-copied") || "")
-            : (root.getAttribute("data-copy-miss") || "");
-        if (copyButton) {
-            copyButton.hidden = !!copied;
-        }
-        toast.hidden = false;
-    }
-
-    function showDownloadNotice() {
-        if (notice) {
-            notice.hidden = false;
-        }
-    }
-
-    function fallback(item, file, text) {
-        if (file) {
-            downloadFile(file);
-        }
-        var target = whatsappUrl(item, text);
-        if (target) {
-            window.open(target, "_blank", "noopener");
-        }
-        showDownloadNotice();
-    }
-
-    function shareFile(file, item, text, copied) {
+    function shareFile(file, item) {
         var shareData = {
             files: [file],
-            title: item.title || "",
-            text: text
+            title: item.title || ""
         };
         if (!(navigator.canShare && navigator.canShare(shareData))) {
-            fallback(item, file, text);
+            downloadFile(file);
+            if (notice) {
+                notice.hidden = false;
+            }
             return;
         }
-        showToast(copied);
         return navigator.share(shareData).catch(function (error) {
             if (error && error.name === "AbortError") {
                 return;
             }
-            fallback(item, file, text);
-        });
-    }
-
-    if (copyButton) {
-        copyButton.addEventListener("click", function () {
-            copyText(pendingText).then(function (copied) {
-                if (copied) {
-                    showToast(true);
-                }
-            });
+            downloadFile(file);
+            if (notice) {
+                notice.hidden = false;
+            }
         });
     }
 
@@ -172,13 +99,9 @@
             if (!item || button.disabled) {
                 return;
             }
-            var text = shareText(item);
-            var copyPromise = copyText(text);
             button.disabled = true;
             loadPdf(item).then(function (file) {
-                return copyPromise.then(function (copied) {
-                    return shareFile(file, item, text, copied);
-                });
+                return shareFile(file, item);
             }).catch(function () {
                 delete cache[String(item.property_id)];
             }).then(function () {

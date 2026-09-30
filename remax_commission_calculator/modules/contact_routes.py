@@ -855,7 +855,6 @@ def register_contact_routes(app, helpers):
         return f"property_shortlist_{int(contact_id)}"
 
     def _shortlist_share_items(contact, items, *, language):
-        from modules.property_match import whatsapp_share_url
         from modules.property_shortlist import draft_whatsapp_message
 
         payload = []
@@ -873,7 +872,6 @@ def register_contact_routes(app, helpers):
                         contact_id=contact["id"],
                         property_id=item["property_id"],
                     ),
-                    "whatsapp_url": whatsapp_share_url(contact.get("phone"), text) or "",
                     "title": item.get("address") or "",
                     "text": text,
                 }

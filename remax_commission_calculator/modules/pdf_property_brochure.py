@@ -31,6 +31,13 @@ INK = colors.HexColor("#33415C")
 WHITE = colors.white
 NAVY_RGB = (10, 22, 51)
 FOOTER_H = 52 * mm
+WHATSAPP_GREEN = colors.HexColor("#25D366")
+INSTAGRAM_ORANGE = colors.HexColor("#F77737")
+INSTAGRAM_PINK = colors.HexColor("#E1306C")
+INSTAGRAM_PURPLE = colors.HexColor("#833AB4")
+_CONTACT_ICON = 3.15 * mm
+_CONTACT_ICON_GAP = 1.25 * mm
+_CONTACT_ROW = 4.05 * mm
 
 
 class ChipRow(Flowable):
@@ -200,18 +207,107 @@ def _stored_text(value):
     return text or None
 
 
-def _contact_lines(agent):
-    """Email with the agent's real phone or WhatsApp. Nothing is invented."""
+def _agent_contact_rows(agent):
+    """One row per stored channel. A missing value drops the icon and the line."""
+    agent = agent or {}
     email = _stored_text(agent.get("email"))
     phone = _stored_text(agent.get("phone"))
     whatsapp = _stored_text(agent.get("whatsapp"))
-    if whatsapp and whatsapp == phone:
-        whatsapp = None
-    numbers = [item for item in (phone, whatsapp) if item]
+    number = whatsapp or phone
     instagram = _stored_text(agent.get("instagram"))
     if instagram and not instagram.startswith("@"):
         instagram = f"@{instagram}"
-    return email, numbers, instagram
+    rows = []
+    if email:
+        rows.append(("mail", email))
+    if number:
+        rows.append(("whatsapp", number))
+    if instagram:
+        rows.append(("instagram", instagram))
+    return rows
+
+
+def _paint_mail_icon(canvas):
+    canvas.setStrokeColor(WHITE)
+    canvas.setLineWidth(1.65)
+    canvas.setLineJoin(1)
+    canvas.setLineCap(1)
+    canvas.roundRect(1.2, 4.0, 21.6, 16.0, 2.2, stroke=1, fill=0)
+    flap = canvas.beginPath()
+    flap.moveTo(2.4, 18.6)
+    flap.lineTo(12, 11.4)
+    flap.lineTo(21.6, 18.6)
+    canvas.drawPath(flap, stroke=1, fill=0)
+
+
+def _paint_whatsapp_icon(canvas):
+    canvas.setFillColor(WHATSAPP_GREEN)
+    canvas.circle(12.6, 12.8, 9.5, stroke=0, fill=1)
+    tail = canvas.beginPath()
+    tail.moveTo(5.2, 7.4)
+    tail.lineTo(2.0, 2.4)
+    tail.lineTo(8.6, 6.6)
+    tail.close()
+    canvas.drawPath(tail, stroke=0, fill=1)
+    canvas.saveState()
+    canvas.translate(12.8, 12.6)
+    canvas.rotate(-38)
+    canvas.setFillColor(WHITE)
+    canvas.roundRect(-7.4, 1.2, 4.6, 6.4, 2.2, stroke=0, fill=1)
+    canvas.roundRect(2.6, -7.6, 4.6, 6.4, 2.2, stroke=0, fill=1)
+    canvas.setStrokeColor(WHITE)
+    canvas.setFillColor(WHITE)
+    canvas.setLineWidth(2.2)
+    canvas.setLineCap(1)
+    canvas.line(-4.8, 4.0, 4.6, -4.2)
+    canvas.restoreState()
+
+
+def _paint_instagram_icon(canvas):
+    canvas.saveState()
+    clip = canvas.beginPath()
+    clip.roundRect(0.8, 0.8, 22.4, 22.4, 6.0)
+    canvas.clipPath(clip, stroke=0, fill=0)
+    canvas.setFillColor(INSTAGRAM_ORANGE)
+    canvas.rect(0, 0, 24, 24, stroke=0, fill=1)
+    pink = canvas.beginPath()
+    pink.moveTo(0, 24)
+    pink.lineTo(24, 24)
+    pink.lineTo(24, 0)
+    pink.close()
+    canvas.setFillColor(INSTAGRAM_PINK)
+    canvas.drawPath(pink, stroke=0, fill=1)
+    purple = canvas.beginPath()
+    purple.moveTo(0, 9)
+    purple.lineTo(15, 24)
+    purple.lineTo(0, 24)
+    purple.close()
+    canvas.setFillColor(INSTAGRAM_PURPLE)
+    canvas.drawPath(purple, stroke=0, fill=1)
+    canvas.restoreState()
+    canvas.setStrokeColor(WHITE)
+    canvas.setLineWidth(1.7)
+    canvas.circle(12, 12, 4.15, stroke=1, fill=0)
+    canvas.setFillColor(WHITE)
+    canvas.circle(17.15, 17.15, 1.15, stroke=0, fill=1)
+
+
+_CONTACT_ICON_PAINTERS = {
+    "mail": _paint_mail_icon,
+    "whatsapp": _paint_whatsapp_icon,
+    "instagram": _paint_instagram_icon,
+}
+
+
+def _draw_contact_icon(canvas, kind, x, y, size):
+    painter = _CONTACT_ICON_PAINTERS.get(kind)
+    if painter is None:
+        return
+    canvas.saveState()
+    canvas.translate(x, y)
+    canvas.scale(size / 24.0, size / 24.0)
+    painter(canvas)
+    canvas.restoreState()
 
 
 def _wrap_words(canvas, text, font_name, font_size, max_width):
@@ -297,25 +393,17 @@ def _draw_fitted(canvas, text, x, y, font_name, font_size, max_width):
     return y - (3.6 * mm)
 
 
-def _draw_agent_contacts(canvas, x, y, max_width, email, numbers, instagram):
-    canvas.setFillColor(WHITE)
+def _draw_agent_contacts(canvas, x, y, max_width, rows):
     font_name = "Helvetica"
     font_size = 7.5
-    if email and numbers:
-        together = "  ·  ".join([email, *numbers])
-        if canvas.stringWidth(_escape(together), font_name, font_size) <= max_width:
-            y = _draw_fitted(canvas, together, x, y, font_name, font_size, max_width)
-        else:
-            y = _draw_fitted(canvas, email, x, y, font_name, font_size, max_width)
-            for number in numbers:
-                y = _draw_fitted(canvas, number, x, y, font_name, font_size, max_width)
-    elif email:
-        y = _draw_fitted(canvas, email, x, y, font_name, font_size, max_width)
-    else:
-        for number in numbers:
-            y = _draw_fitted(canvas, number, x, y, font_name, font_size, max_width)
-    if instagram:
-        y = _draw_fitted(canvas, instagram, x, y, font_name, font_size, max_width)
+    text_x = x + _CONTACT_ICON + _CONTACT_ICON_GAP
+    text_width = max(8, max_width - _CONTACT_ICON - _CONTACT_ICON_GAP)
+    for kind, label in rows:
+        mid = y + (font_size * 0.36)
+        _draw_contact_icon(canvas, kind, x, mid - (_CONTACT_ICON / 2), _CONTACT_ICON)
+        canvas.setFillColor(WHITE)
+        _draw_fitted(canvas, label, text_x, y, font_name, font_size, text_width)
+        y -= _CONTACT_ROW
     return y
 
 
@@ -368,10 +456,9 @@ def _draw_footer(canvas, payload):
             y = 27.5 * mm
         canvas.setFillColor(WHITE)
         canvas.setFont("Helvetica", 7.5)
-        email, numbers, instagram = _contact_lines(agent)
         contact_width = (118 * mm) - x - (4 * mm)
         y = _draw_agent_contacts(
-            canvas, x, y, contact_width, email, numbers, instagram,
+            canvas, x, y, contact_width, _agent_contact_rows(agent),
         )
         legal_x = 118 * mm
         _draw_legal(canvas, payload, legal_x, 44 * mm, width - legal_x - (12 * mm))
