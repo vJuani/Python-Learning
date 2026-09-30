@@ -15,7 +15,7 @@
     <td>{{ row.amount_label or '—' }}</td>
     <td>
         {% if row.commission_state == 'pending_operation' %}
-        <span class="res-muted" title="{{ t('reservation_commission_pending') }}">{{ t('reservation_commission_pending') }}</span>
+        <span class="res-muted res-tip" tabindex="0">{{ t('reservation_commission_table') }}<span class="res-warn__tip">{{ t('reservation_commission_pending_tip') }}</span></span>
         {% else %}
         {{ row.commission_agent_label or '—' }}
         <small>{{ t('reservation_paid') if row.operation_paid else t('reservation_unpaid') }}</small>

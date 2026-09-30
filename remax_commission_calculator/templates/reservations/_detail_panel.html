@@ -35,7 +35,7 @@
         <div class="res-hero__body">
             <div>
                 <h2>{{ reservation.property_address or reservation.property_id }}</h2>
-                <p>{{ reservation.contact_name or reservation.zone or '—' }}{% if reservation.external_ref %} · #{{ reservation.external_ref }}{% endif %}</p>
+                <p>{% if reservation.zone %}{{ reservation.zone }}{% endif %}{% if reservation.zone and reservation.external_ref %} · {% endif %}{% if reservation.external_ref %}#{{ reservation.external_ref }}{% endif %}</p>
             </div>
             <em class="res-badge" data-status="{{ reservation.reservation_status }}">{{ t(reservation.status_label_key) }}</em>
         </div>
@@ -53,7 +53,7 @@
 
     <div class="res-panes">
         <section data-res-pane="summary">
-            <div class="res-block">
+            <div class="res-block res-block--state">
                 <h3>{{ t('reservation_state_now') }}</h3>
                 <p class="res-block__lead">{{ t(reservation.status_label_key) }}</p>
                 <ol class="res-track res-track--inline">
@@ -63,7 +63,7 @@
                 </ol>
             </div>
 
-            <div class="res-block">
+            <div class="res-block res-block--commercial">
                 <h3>{{ t('reservation_commercial') }}</h3>
                 <dl class="res-grid">
                     <div><dt>{{ t('reservation_col_client') }}</dt><dd>{{ reservation.contact_name or '—' }}</dd></div>

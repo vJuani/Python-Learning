@@ -256,6 +256,35 @@ def _commission(row, operation):
     }
 
 
+def load_party_names(organization_id, reservation):
+    """Names already joined on the list. The detail row only has the ids."""
+    if (reservation.get("contact_name") or "").strip() or (reservation.get("agent_name") or "").strip():
+        return reservation
+    contact_id = reservation.get("contact_id")
+    agent_id = reservation.get("agent_id")
+    if not contact_id and not agent_id:
+        return reservation
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT
+                (SELECT name FROM contacts WHERE id = ? AND organization_id = ?),
+                (SELECT name FROM agents WHERE id = ? AND organization_id = ?)
+            """,
+            (contact_id, organization_id, agent_id, organization_id),
+        )
+        row = cursor.fetchone()
+    finally:
+        connection.close()
+    if row:
+        reservation["contact_name"] = row[0] or ""
+        reservation["agent_name"] = row[1] or ""
+    return reservation
+
+
 def present_reservation(row, *, cover_url=None, operation=None, today=None):
     today = today or date.today()
     item = dict(row)

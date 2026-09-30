@@ -9,6 +9,7 @@ from modules.database.agents_repository import get_agents
 from modules.reservation_board import (
     board_filter_choices,
     build_reservation_board,
+    load_party_names,
     present_reservation,
     property_cover_url,
 )
@@ -50,6 +51,7 @@ def register_reservation_routes(app, helpers):
         reservation["neighborhood"] = property_row.get("neighborhood")
         reservation["property_external_id"] = property_row.get("external_id")
         reservation["listing_purpose"] = property_row.get("listing_purpose")
+        load_party_names(organization_id, reservation)
         property_id = reservation.get("property_id")
         covers = list_covers_for_properties(organization_id, [property_id] if property_id else [])
         try:
