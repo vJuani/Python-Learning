@@ -1438,87 +1438,272 @@ html[data-theme="dark"] .agenda-reschedule input {
 }
 
 .visit-close {
-    border: 0;
+    display: flex;
+    flex-direction: column;
+    width: min(760px, calc(100vw - 2rem));
+    max-height: min(92vh, 920px);
+    margin: auto;
     padding: 0;
-    width: min(32rem, calc(100vw - 1.5rem));
-    max-height: min(40rem, calc(100vh - 1.5rem));
-    overflow: auto;
+    overflow: hidden;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
     background: var(--surface);
     color: var(--text);
-    border-radius: 1rem 1rem 0 0;
+    box-shadow: var(--shadow-lg);
 }
 
 .visit-close--page {
-    width: min(32rem, 100%);
-    margin: 0 auto;
-    padding: 1rem;
+    width: min(760px, 100%);
+    max-height: none;
+    margin: 1rem auto 2rem;
+    overflow: visible;
 }
 
 .visit-close::backdrop {
-    background: rgba(15, 23, 42, 0.45);
+    background: color-mix(in srgb, var(--navy, #0d1220) 55%, transparent);
 }
 
-.visit-close form,
-.visit-close--page {
+.visit-close form {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
-    padding: 1rem;
+    min-height: 0;
+    max-height: inherit;
+    gap: 0;
+    padding: 0;
+}
+
+.visit-close--page form {
+    max-height: none;
+}
+
+.visit-close__header {
+    padding: 1.35rem 1.5rem 0.35rem;
 }
 
 .visit-close__header h1,
-.visit-close__header h2,
-.visit-close__header p {
+.visit-close__header h2 {
     margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+}
+
+.visit-close__who,
+.visit-close__lead {
+    margin: 0.35rem 0 0;
+}
+
+.visit-close__who {
+    font-weight: 600;
+}
+
+.visit-close__lead {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+}
+
+.visit-close__body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.85rem 1.5rem 1.15rem;
+}
+
+.visit-close--page .visit-close__body {
+    overflow: visible;
+}
+
+.visit-close__results,
+.visit-close__next {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-inline-size: 0;
+}
+
+.visit-close__next {
+    padding: 0.95rem;
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface));
+}
+
+.visit-close__section-title {
+    margin: 0 0 0.7rem;
+    padding: 0;
+    font-size: 0.98rem;
+    font-weight: 650;
 }
 
 .visit-close__choices {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+    gap: 0.6rem;
 }
 
 .visit-close__choice {
-    display: inline-flex;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 3rem;
+    margin: 0;
+    padding: 0.65rem 2rem 0.65rem 0.75rem;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
 }
 
 .visit-close__choice input {
     position: absolute;
+    width: 1px;
+    height: 1px;
     opacity: 0;
 }
 
-.visit-close__choice span {
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 0.45rem 0.75rem;
+.visit-close__choice:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    box-shadow: 0 0 0 1px var(--accent);
 }
 
-.visit-close__choice input:checked + span,
-.visit-close__choice input:focus-visible + span {
-    border-color: var(--accent, #1d4ed8);
-    background: color-mix(in srgb, var(--accent, #1d4ed8) 12%, transparent);
+.visit-close__choice:has(input:focus-visible) {
+    box-shadow: var(--shadow-focus);
 }
 
-.visit-close__field,
-.visit-close__when label {
+.visit-close__icon,
+.visit-close__check {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.visit-close__icon circle {
+    fill: none;
+}
+
+.visit-close__icon--dots circle {
+    fill: currentColor;
+    stroke: none;
+}
+
+.visit-close__check {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.45rem;
+    width: 0.95rem;
+    height: 0.95rem;
+    opacity: 0;
+}
+
+.visit-close__choice:has(input:checked) .visit-close__check {
+    opacity: 1;
+}
+
+.visit-close__field {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.visit-close__field input,
+.visit-close__field textarea {
+    width: 100%;
+    margin: 0;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    box-shadow: none;
+}
+
+.visit-close__field textarea {
+    min-height: 4.6rem;
+    resize: vertical;
+}
+
+.visit-close__field input:focus,
+.visit-close__field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus);
 }
 
 .visit-close__when {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.visit-close__quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.visit-close__quick-btn {
+    min-height: 2.6rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.visit-close__quick-btn.is-selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+}
+
+.visit-close__time {
+    max-width: 9rem;
+}
+
+.visit-close__summary {
+    margin: 0;
+    padding: 0.9rem 1rem;
+    border-radius: var(--radius);
+    background: var(--surface-secondary);
+}
+
+.visit-close__summary p,
+.visit-close__summary ul {
+    margin: 0;
+}
+
+.visit-close__summary p {
+    font-weight: 650;
+}
+
+.visit-close__summary ul {
+    margin-top: 0.4rem;
+    padding-left: 1.15rem;
 }
 
 .visit-close__actions {
     display: flex;
-    gap: 0.5rem;
+    justify-content: space-between;
+    gap: 0.75rem;
     position: sticky;
     bottom: 0;
+    padding: 0.85rem 1.5rem;
+    border-top: 1px solid var(--border-soft);
     background: var(--surface);
-    padding-top: 0.75rem;
 }
 
 .visit-close__changes {
@@ -1528,15 +1713,39 @@ html[data-theme="dark"] .agenda-reschedule input {
 
 @media (max-width: 720px) {
     .visit-close {
-        margin: auto 0 0;
-        width: 100vw;
-        max-width: 100vw;
+        width: 95vw;
+        max-width: 95vw;
+        height: 96dvh;
+        max-height: 96dvh;
+        overflow: hidden;
     }
-}
 
-@media (min-width: 721px) {
-    .visit-close {
-        border-radius: 1rem;
-        margin: auto;
+    .visit-close--page {
+        width: 100%;
+        height: auto;
+        max-height: none;
+    }
+
+    .visit-close__header,
+    .visit-close__body,
+    .visit-close__actions {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .visit-close__choices {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .visit-close__choice,
+    .visit-close__quick-btn,
+    .visit-close__field input,
+    .visit-close__field textarea,
+    .visit-close__actions .btn {
+        min-height: 48px;
+    }
+
+    .visit-close__actions .btn-primary {
+        flex: 1;
     }
 }

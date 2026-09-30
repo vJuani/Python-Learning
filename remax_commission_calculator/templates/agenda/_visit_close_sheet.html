@@ -1,19 +1,16 @@
-<dialog id="visit-close-sheet" class="visit-close">
+<dialog id="visit-close-sheet" class="visit-close" aria-labelledby="visit-close-title">
     <form method="post" data-visit-close-form>
         <header class="visit-close__header">
-            <h2>{{ t('visit_close_title') }}</h2>
-            <p data-visit-close-label></p>
+            <h2 id="visit-close-title">{{ t('visit_close_title') }}</h2>
+            <p class="visit-close__who" data-visit-close-label></p>
+            <p class="visit-close__lead">{{ t('visit_close_lead') }}</p>
         </header>
-        {% set results = [
-            'liked', 'interested', 'negotiate', 'second_visit', 'disliked', 'no_show', 'other'
-        ] %}
-        {% set steps = [
-            'call', 'whatsapp', 'send_properties', 'second_visit', 'negotiate', 'none', 'custom'
-        ] %}
-        {% include "agenda/_visit_close_fields.html" %}
+        <div class="visit-close__body">
+            {% include "agenda/_visit_close_fields.html" %}
+        </div>
         <div class="visit-close__actions">
-            <button type="submit" class="btn btn-primary">{{ t('visit_close_save') }}</button>
             <button type="button" class="btn btn-secondary" data-visit-close-cancel>{{ t('cancel') }}</button>
+            <button type="submit" class="btn btn-primary">{{ t('visit_close_submit') }}</button>
         </div>
     </form>
 </dialog>

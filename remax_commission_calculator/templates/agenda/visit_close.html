@@ -6,17 +6,24 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/agenda-page.css') }}">
 {% endblock %}
 
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/visit-close.js') }}" defer></script>
+{% endblock %}
+
 {% block content %}
-<section class="visit-close visit-close--page">
-    <header class="visit-close__header">
-        <h1>{{ t('visit_close_title') }}</h1>
-        <p>{{ task.contact_name or '' }}{% if task.property_address %} · {{ task.property_address }}{% elif task.title %} · {{ task.title }}{% endif %}</p>
-    </header>
+<section class="visit-close visit-close--page" aria-labelledby="visit-close-title">
     <form method="post">
-        {% include "agenda/_visit_close_fields.html" %}
+        <header class="visit-close__header">
+            <h1 id="visit-close-title">{{ t('visit_close_title') }}</h1>
+            <p class="visit-close__who">{{ task.contact_name or '' }}{% if task.property_address %} · {{ task.property_address }}{% elif task.title %} · {{ task.title }}{% endif %}</p>
+            <p class="visit-close__lead">{{ t('visit_close_lead') }}</p>
+        </header>
+        <div class="visit-close__body">
+            {% include "agenda/_visit_close_fields.html" %}
+        </div>
         <div class="visit-close__actions">
-            <button type="submit" class="btn btn-primary">{{ t('visit_close_save') }}</button>
             <a class="btn btn-secondary" href="{{ url_for('agenda_index') }}">{{ t('cancel') }}</a>
+            <button type="submit" class="btn btn-primary">{{ t('visit_close_submit') }}</button>
         </div>
     </form>
 </section>

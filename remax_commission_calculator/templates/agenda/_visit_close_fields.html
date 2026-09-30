@@ -1,42 +1,95 @@
+{% set result_order = ['liked', 'interested', 'negotiate', 'second_visit', 'disliked', 'no_show', 'other'] %}
+{% set step_order = ['call', 'whatsapp', 'second_visit', 'send_properties', 'negotiate', 'custom', 'none'] %}
+{% set result_icons = {
+    'liked': '<path d="M8 11.2V19h8.2l1.6-6.2V10h-3.4l.7-3.2A1.5 1.5 0 0 0 13.6 5L8 11.2Z"/><path d="M8 11H5.5A1.5 1.5 0 0 0 4 12.5V17.5A1.5 1.5 0 0 0 5.5 19H8"/>',
+    'interested': '<path d="M12 4.2 14.1 9l5.2.5-3.9 3.4 1.2 5L12 15.4 7.4 17.9l1.2-5L4.7 9.5 9.9 9 12 4.2Z"/>',
+    'negotiate': '<path d="M8 14.5 11 11l2 2 3.2-3.2"/><path d="M7 18h10"/><path d="M9 8.5h.01M15 8.5h.01"/><path d="M8.2 6.8a2.2 2.2 0 1 1 1.6 3.8M14.2 6.8a2.2 2.2 0 1 1 1.6 3.8"/>',
+    'second_visit': '<path d="M20 12a8 8 0 1 1-2.2-5.5"/><path d="M20 4.8V9h-4.2"/>',
+    'disliked': '<path d="M8 12.8V5h8.2L18 11.2V14h-3.4l.7 3.2A1.5 1.5 0 0 1 13.8 19L8 12.8Z"/><path d="M8 13H5.5A1.5 1.5 0 0 1 4 11.5V6.5A1.5 1.5 0 0 1 5.5 5H8"/>',
+    'no_show': '<circle cx="12" cy="12" r="7"/><path d="M8.2 15.8 15.8 8.2"/>',
+    'other': '<circle cx="6.5" cy="12" r="1.15"/><circle cx="12" cy="12" r="1.15"/><circle cx="17.5" cy="12" r="1.15"/>'
+} %}
+{% set step_icons = {
+    'call': '<path d="M8 5.5h2.2l1 2.8-1.7 1a11 11 0 0 0 4.7 4.7l1-1.7 2.8 1V18a1.5 1.5 0 0 1-1.5 1.5A12.5 12.5 0 0 1 4.5 7 1.5 1.5 0 0 1 6 5.5H8Z"/>',
+    'whatsapp': '<path d="M7 16.8V8.2A1.8 1.8 0 0 1 8.8 6.4h7.4A1.8 1.8 0 0 1 18 8.2v5.2a1.8 1.8 0 0 1-1.8 1.8H9.2L7 16.8Z"/>',
+    'second_visit': '<rect x="4.5" y="5.5" width="15" height="14" rx="2"/><path d="M4.5 10h15M9 3.8v3.2M15 3.8v3.2"/>',
+    'send_properties': '<path d="M7 4.5h7l4 4V19.5H7Z"/><path d="M14 4.5V8.5h4"/><path d="M10 13h5M10 16h3"/>',
+    'negotiate': '<path d="M8 14.5 11 11l2 2 3.2-3.2"/><path d="M7 18h10"/>',
+    'custom': '<circle cx="12" cy="12" r="7"/><path d="M12 8.5V12l2.4 1.6"/>',
+    'none': '<path d="M6.5 12.2 10.2 16 17.5 8"/>'
+} %}
+{% set step_labels = {
+    'send_properties': t('visit_close_chip_send'),
+    'negotiate': t('visit_close_chip_negotiate'),
+    'custom': t('visit_close_chip_follow'),
+    'none': t('visit_close_chip_none')
+} %}
+
 <fieldset class="visit-close__results">
-    <legend>{{ t('visit_close_result') }}</legend>
-    <div class="visit-close__choices">
-        {% for key in results %}
+    <legend class="visit-close__section-title">{{ t('visit_close_result') }}</legend>
+    <div class="visit-close__choices" data-visit-results>
+        {% for key in result_order %}
         <label class="visit-close__choice">
             <input type="radio" name="result" value="{{ key }}" {% if key == 'liked' %}required{% endif %}>
-            <span>{{ t('visit_result_' ~ key) }}</span>
+            <svg class="visit-close__icon{% if key == 'other' %} visit-close__icon--dots{% endif %}" viewBox="0 0 24 24" aria-hidden="true">{{ result_icons[key] | safe }}</svg>
+            <span data-visit-label-text>{% if key == 'second_visit' %}{{ t('visit_close_chip_result_second') }}{% else %}{{ t('visit_result_' ~ key) }}{% endif %}</span>
+            <svg class="visit-close__check" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.2 10.2 16 17.5 8"/></svg>
         </label>
         {% endfor %}
     </div>
 </fieldset>
+
 <label class="visit-close__field">
-    <span>{{ t('visit_close_note') }}</span>
-    <textarea name="note" rows="3" maxlength="500"></textarea>
+    <span>{{ t('visit_close_note_label') }}</span>
+    <textarea name="note" rows="3" maxlength="500" placeholder="{{ t('visit_close_note_placeholder') }}"></textarea>
 </label>
 <label class="visit-close__field">
-    <span>{{ t('visit_close_objections') }}</span>
-    <textarea name="objections" rows="2" maxlength="500"></textarea>
+    <span>{{ t('visit_close_objections_label') }}</span>
+    <textarea name="objections" rows="2" maxlength="500" placeholder="{{ t('visit_close_objections_placeholder') }}"></textarea>
 </label>
-<label class="visit-close__field">
-    <span>{{ t('visit_close_step') }}</span>
-    <select name="next_step">
-        <option value="">{{ t('followup_unset') }}</option>
-        {% for key in steps %}
-        <option value="{{ key }}">{{ t('visit_step_' ~ key) }}</option>
+
+<section class="visit-close__next">
+    <h3 class="visit-close__section-title">{{ t('visit_close_step') }}</h3>
+    <div class="visit-close__choices" data-visit-steps>
+        {% for key in step_order %}
+        <label class="visit-close__choice">
+            <input type="radio" name="next_step" value="{{ key }}">
+            <svg class="visit-close__icon" viewBox="0 0 24 24" aria-hidden="true">{{ step_icons[key] | safe }}</svg>
+            <span data-visit-label-text>{{ step_labels.get(key, t('visit_step_' ~ key)) }}</span>
+            <svg class="visit-close__check" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.2 10.2 16 17.5 8"/></svg>
+        </label>
         {% endfor %}
-    </select>
-</label>
-<div class="visit-close__when">
-    <label>
-        <span>{{ t('visit_close_when') }}</span>
-        <input type="date" name="next_step_date">
+    </div>
+</section>
+
+<div class="visit-close__when" data-visit-when data-visit-show-unless="none" hidden>
+    <div class="visit-close__quick" role="group" aria-label="{{ t('visit_close_when') }}">
+        <button type="button" class="visit-close__quick-btn" data-visit-offset="1">{{ t('visit_close_when_tomorrow') }}</button>
+        <button type="button" class="visit-close__quick-btn" data-visit-offset="2">{{ t('visit_close_when_2') }}</button>
+        <button type="button" class="visit-close__quick-btn" data-visit-offset="7">{{ t('visit_close_when_7') }}</button>
+        <button type="button" class="visit-close__quick-btn" data-visit-pick>{{ t('visit_close_when_pick') }}</button>
+    </div>
+    <label class="visit-close__field" data-visit-date-field hidden>
+        <span>{{ t('visit_close_when_pick') }}</span>
+        <input type="date" name="next_step_date" disabled>
     </label>
-    <label>
-        <span>{{ t('agent_task_field_time') }}</span>
-        <input type="time" name="next_step_time">
+    <label class="visit-close__field visit-close__time">
+        <span>{{ t('visit_close_time_label') }}</span>
+        <input type="time" name="next_step_time" value="10:00" disabled>
     </label>
 </div>
-<label class="visit-close__field">
+
+<label class="visit-close__field" data-visit-step-note hidden>
     <span>{{ t('visit_close_step_note') }}</span>
-    <input type="text" name="next_step_note" maxlength="200">
+    <input type="text" name="next_step_note" maxlength="200" placeholder="{{ t('visit_close_step_note_placeholder') }}" disabled>
 </label>
+
+<aside class="visit-close__summary" data-visit-summary>
+    <p>{{ t('visit_close_summary_title') }}</p>
+    <ul>
+        <li>{{ t('visit_close_summary_done') }}</li>
+        <li data-visit-summary-result hidden>{{ t('visit_close_summary_result') }}: <span data-visit-summary-value></span></li>
+        <li data-visit-summary-step hidden>{{ t('visit_close_summary_step') }}: <span data-visit-summary-value></span></li>
+        <li data-visit-summary-when hidden><span data-visit-summary-value></span></li>
+    </ul>
+</aside>
