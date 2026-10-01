@@ -1,5 +1,17 @@
 <section class="summary-panel">
     <div class="summary-grid">
+        {% if reservation_trace and reservation_trace.reservation_id %}
+        {% if reservation_trace.client_name %}
+        <div class="summary-item">
+            <span class="summary-label">{{ t('operation_preview_client') }}</span>
+            <strong>{{ reservation_trace.client_name }}</strong>
+        </div>
+        {% endif %}
+        <div class="summary-item">
+            <span class="summary-label">{{ t('operation_preview_origin') }}</span>
+            <strong>{{ reservation_trace.origin_label }}</strong>
+        </div>
+        {% endif %}
         <div class="summary-item">
             <span class="summary-label">{{ t('operation_id') }}</span>
             <strong>{{ operation.id }}</strong>

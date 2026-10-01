@@ -1969,6 +1969,46 @@ def get_new_operation_form_values(form):
         "seller_vat_amount": form.get("seller_vat_amount", "0"),
         "buyer_vat_amount": form.get("buyer_vat_amount", "0"),
         "reservation_id": form.get("reservation_id", ""),
+        "contact_id": form.get("contact_id", ""),
+    }
+
+
+def _operation_reservation_trace(organization_id, form_values):
+    """Client and reservation labels for the commission preview. Does not calculate commission."""
+    from modules.database.contacts_repository import get_contact
+    from modules.reservations import load_reservation_detail
+
+    raw_reservation = str(form_values.get("reservation_id") or "").strip()
+    if not raw_reservation:
+        return None
+    try:
+        reservation_id = int(raw_reservation)
+    except (TypeError, ValueError):
+        return None
+    detail = load_reservation_detail(organization_id, reservation_id)
+    if detail is None:
+        return None
+    reservation = detail["reservation"]
+    raw_contact = str(form_values.get("contact_id") or "").strip()
+    if not raw_contact and reservation.get("contact_id"):
+        raw_contact = str(reservation["contact_id"])
+        form_values["contact_id"] = raw_contact
+    client_name = ""
+    if raw_contact:
+        try:
+            contact = get_contact(int(raw_contact), organization_id)
+        except (TypeError, ValueError):
+            contact = None
+        if contact:
+            client_name = contact.get("name") or ""
+    return {
+        "client_name": client_name,
+        "reservation_id": str(reservation["id"]),
+        "origin_label": translate(
+            "operation_preview_from_reservation",
+            get_current_language(),
+            id=reservation["id"],
+        ),
     }
 
 
@@ -6993,6 +7033,10 @@ def operations_new():
                 operation=operation,
                 form_values=form_values,
                 parsed=parsed,
+                reservation_trace=_operation_reservation_trace(
+                    organization_id,
+                    form_values,
+                ),
                 is_edit=False,
                 operation_id=None,
                 commission_lines=build_commission_lines(
@@ -7126,6 +7170,7 @@ def operations_new():
                 else:
                     prefill["original_amount"] = str(agreed)
             prefill["reservation_id"] = str(reservation["id"])
+            prefill["contact_id"] = str(reservation.get("contact_id") or "")
             from modules.operation_prefill import preliminary_commission_rate
 
             seller_rate = preliminary_commission_rate(

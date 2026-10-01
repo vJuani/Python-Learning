@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import unittest
 from datetime import datetime
@@ -770,4 +771,166 @@ class ReservationTests(unittest.TestCase):
             get_property_record(property_id, self.org)["commercial_status"],
             "available",
         )
+
+    def _hidden_fields(self, html):
+        fields = {}
+        for tag in re.findall(r"<input\b[^>]*>", html):
+            if not re.search(r'\btype="hidden"', tag):
+                continue
+            name = re.search(r'\bname="([^"]+)"', tag)
+            value = re.search(r'\bvalue="([^"]*)"', tag)
+            if name and value:
+                fields[name.group(1)] = value.group(1)
+        return fields
+
+    def _reservation_count(self, property_id):
+        connection = get_connection()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM reservations
+                WHERE organization_id = ? AND property_id = ?
+                """,
+                (self.org, property_id),
+            )
+            return cursor.fetchone()[0]
+        finally:
+            connection.close()
+
+    def test_preview_keeps_reservation_ids_until_save(self):
+        emilio = add_agent("Emilio", "Alto", self.org)
+        emilio_user = add_user(
+            "reserva_emilio",
+            hash_password("Password1"),
+            ROLE_AGENT,
+            self.org,
+            agent_id=emilio,
+        )
+        property_id = add_property(
+            "Calle Rocio 20",
+            "CABA",
+            self.org,
+            agent_id=emilio,
+            listing_price=185000,
+            listing_currency="USD",
+            listing_purpose="sale",
+        )
+        contact = create_agent_contact(
+            self.org,
+            emilio,
+            {
+                "name": "Rocio Garay",
+                "phone": "1155550099",
+                "status": "lead",
+                "source": "manual",
+            },
+        )
+        visit = create_task(
+            self.org,
+            emilio,
+            {
+                "title": "Visita Rocio",
+                "task_type": "visit",
+                "due_date": "2026-09-24",
+                "due_time": "11:00",
+                "contact_id": contact["id"],
+                "contact_name": contact["name"],
+                "property_id": property_id,
+            },
+            created_by_user_id=emilio_user,
+        )
+        visit = complete_task(
+            self.org,
+            visit["id"],
+            agent_id=emilio,
+            actor_user_id=emilio_user,
+        )
+        apply_visit_close(
+            visit,
+            {
+                "result": "reserved",
+                "price_change": "keep",
+                "reservation_amount": "2.000",
+                "reservation_currency": "USD",
+                "estimated_closing_date": "2026-10-15",
+                "note": "seña",
+            },
+            organization_id=self.org,
+            agent_id=emilio,
+            actor_user_id=emilio_user,
+            now=self._now(),
+            tz=self.tz,
+            language="es",
+        )
+        reservation = get_open_reservation_for_property(self.org, property_id)
+        self.assertEqual(reservation["contact_id"], contact["id"])
+        self.assertEqual(self._reservation_count(property_id), 1)
+        price_before = get_property_record(property_id, self.org)["listing_price"]
+        amount_before = reservation["reservation_amount"]
+
+        staff = app.test_client()
+        self._login(staff, "reserva_admin")
+        form = staff.get(f"/operations/new?reservation_id={reservation['id']}")
+        form_html = form.get_data(as_text=True)
+        self.assertEqual(form.status_code, 200)
+        form_fields = self._hidden_fields(form_html)
+        self.assertEqual(form_fields["reservation_id"], str(reservation["id"]))
+        self.assertEqual(form_fields["contact_id"], str(contact["id"]))
+        self.assertEqual(form_fields["property_id"], str(property_id))
+        self.assertRegex(
+            form_html,
+            rf'name="agent_id"[\s\S]*value="{emilio}"\s+selected',
+        )
+
+        preview = staff.post(
+            "/operations/new",
+            data={
+                "action": "preview",
+                "search_mode": "agent",
+                "agent_id": str(emilio),
+                "property_id": str(property_id),
+                "reservation_id": str(reservation["id"]),
+                "contact_id": str(contact["id"]),
+                "operation_date": "01/10/2026",
+                "currency": "USD",
+                "original_amount": "185000",
+                "exchange_rate": "",
+                "seller_side_active": "1",
+                "buyer_side_active": "1",
+                "seller_commission_rate": "3",
+                "buyer_commission_rate": "3",
+                "seller_vat_amount": "0",
+                "buyer_vat_amount": "0",
+            },
+        )
+        preview_html = preview.get_data(as_text=True)
+        self.assertEqual(preview.status_code, 200)
+        self.assertIn("Vista previa de comisión", preview_html)
+        self.assertIn("Rocio Garay", preview_html)
+        self.assertIn(f"Reserva #{reservation['id']}", preview_html)
+        preview_fields = self._hidden_fields(preview_html)
+        self.assertEqual(preview_fields["reservation_id"], str(reservation["id"]))
+        self.assertEqual(preview_fields["contact_id"], str(contact["id"]))
+        self.assertEqual(preview_fields["property_id"], str(property_id))
+        self.assertEqual(preview_fields["agent_id"], str(emilio))
+        self.assertEqual(preview_fields["action"], "save")
+        self.assertEqual(self._reservation_count(property_id), 1)
+
+        saved = staff.post("/operations/new", data=preview_fields)
+        self.assertEqual(saved.status_code, 302)
+        stored = get_reservation(reservation["id"], self.org)
+        self.assertEqual(stored["reservation_status"], "in_operation")
+        self.assertEqual(stored["contact_id"], contact["id"])
+        self.assertEqual(stored["reservation_amount"], amount_before)
+        self.assertIsNotNone(stored["operation_id"])
+        operation = get_operation_record(stored["operation_id"], self.org)
+        self.assertEqual(operation["agent_db_id"], emilio)
+        self.assertEqual(operation["property_db_id"], property_id)
+        self.assertEqual(
+            get_property_record(property_id, self.org)["listing_price"],
+            price_before,
+        )
+        self.assertEqual(self._reservation_count(property_id), 1)
 
