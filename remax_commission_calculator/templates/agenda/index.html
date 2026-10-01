@@ -5,15 +5,15 @@
 {% block body_class %}is-agenda-page {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/agenda-page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agenda-page.css') }}?v=wizard2">
 {% endblock %}
 
 {% block mobile_topbar_title %}{{ t('agenda_title') }}{% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/jrh-voice.js') }}" defer></script>
-<script src="{{ url_for('static', filename='js/visit-close.js') }}" defer></script>
-<script src="{{ url_for('static', filename='js/agenda.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/visit-close.js') }}?v=wizard2" defer></script>
+<script src="{{ url_for('static', filename='js/agenda.js') }}?v=wizard2" defer></script>
 {% endblock %}
 
 {% block content %}

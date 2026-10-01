@@ -142,6 +142,7 @@ def progress_for(row):
     if rent:
         index = {
             "reserved": 0,
+            "confirmed": 0,
             "documentation": 1,
             "contract": 2,
             "deed_scheduled": 3,
@@ -151,6 +152,7 @@ def progress_for(row):
     else:
         index = {
             "reserved": 0,
+            "confirmed": 0,
             "documentation": 1,
             "financing": 2,
             "contract": 2,
@@ -302,6 +304,14 @@ def present_reservation(row, *, cover_url=None, operation=None, today=None):
     item["original_label"] = format_money(
         row.get("original_property_price"),
         row.get("original_currency"),
+    )
+    item["seller_commission_label"] = format_money(
+        row.get("seller_commission_amount"),
+        row.get("seller_commission_currency"),
+    )
+    item["buyer_commission_label"] = format_money(
+        row.get("buyer_commission_amount"),
+        row.get("buyer_commission_currency"),
     )
     item["close_display"] = display_date(row.get("estimated_closing_date"))
     item["reserved_display"] = display_date(row.get("reserved_at"))

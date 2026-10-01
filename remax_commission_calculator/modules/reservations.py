@@ -11,12 +11,16 @@ from modules.database.reservations_repository import (
     OPEN_STATUSES,
     add_reservation_event,
     add_reservation_note,
+    attach_reservation_documents_to_operation,
     get_open_reservation_for_property,
     get_reservation,
     get_reservation_by_operation,
     get_reservation_document,
+    insert_reservation_deposit,
     insert_reservation_document,
+    list_reservation_deposits,
     list_reservation_documents,
+    list_reservation_documents_for_operation,
     list_reservation_events,
     list_reservation_notes,
     list_reservations,
@@ -32,14 +36,16 @@ STATUSES = OPEN_STATUSES + ("closed", "cancelled")
 PRICE_RESTORE = "restore_original"
 PRICE_KEEP = "keep_agreed"
 DOCUMENT_TYPES = (
-    "reservation_receipt",
-    "invoice",
     "uif",
+    "invoice",
+    "reservation_receipt",
+    "reinforcement",
     "boleto",
     "deed",
     "credit",
     "other",
 )
+DEPOSIT_CURRENCIES = ("USD", "ARS")
 
 
 class ReservationError(Exception):
@@ -98,6 +104,7 @@ def load_reservation_detail(organization_id, reservation_id, *, agent_id=None):
     notes = list_reservation_notes(organization_id, reservation_id)
     events = list_reservation_events(organization_id, reservation_id)
     documents = list_reservation_documents(organization_id, reservation_id)
+    deposits = list_reservation_deposits(organization_id, reservation_id)
     operation = None
     if row.get("operation_id"):
         from modules.database.operations_repository import get_operation_record
@@ -109,6 +116,8 @@ def load_reservation_detail(organization_id, reservation_id, *, agent_id=None):
         "notes": notes,
         "events": events,
         "documents": documents,
+        "deposits": deposits,
+        "deposit_totals": grouped_deposit_totals(row, deposits),
         "operation": operation,
         "milestones": milestones_for_purpose(
             (property_row or {}).get("listing_purpose")
@@ -123,6 +132,8 @@ def update_reservation(organization_id, reservation_id, fields, *, actor_user_id
     if current["reservation_status"] in ("closed", "cancelled"):
         raise ReservationError("reservation_err_closed")
     status = fields.get("reservation_status") or current["reservation_status"]
+    if status == "confirmed" and current["reservation_status"] != "confirmed":
+        status = current["reservation_status"]
     if status not in STATUSES or status in ("closed", "cancelled", "in_operation"):
         status = current["reservation_status"]
     milestone = fields.get("next_milestone") or current.get("next_milestone")
@@ -313,6 +324,9 @@ def link_operation(organization_id, reservation_id, operation_id, *, actor_user_
         payload={"operation_id": operation_id},
         created_at=instant,
     )
+    attach_reservation_documents_to_operation(
+        organization_id, reservation_id, operation_id
+    )
     return updated
 
 
@@ -378,8 +392,109 @@ def sync_reservation_from_operation(organization_id, operation_id):
     return get_reservation(reservation["id"], organization_id)
 
 
+def confirm_reservation(organization_id, reservation_id, *, actor_user_id):
+    current = get_reservation(reservation_id, organization_id)
+    if current is None:
+        raise ReservationError("reservation_err_missing")
+    if current["reservation_status"] != "reserved":
+        raise ReservationError("reservation_err_confirm")
+    instant = to_utc_iso(now_utc())
+    updated = update_reservation_fields(
+        organization_id,
+        reservation_id,
+        {
+            "reservation_status": "confirmed",
+            "confirmed_at": instant,
+            "confirmed_by_user_id": actor_user_id,
+            "updated_at": instant,
+        },
+    )
+    add_reservation_event(
+        organization_id,
+        reservation_id,
+        "confirmed",
+        actor_user_id=actor_user_id,
+        payload={"reservation_status": "confirmed"},
+        created_at=instant,
+    )
+    return updated
+
+
+def add_reinforcement(
+    organization_id,
+    reservation_id,
+    *,
+    amount,
+    currency,
+    note,
+    deposited_at,
+    actor_user_id,
+):
+    from modules.visit_outcome import parse_jrh_money
+
+    current = get_reservation(reservation_id, organization_id)
+    if current is None:
+        raise ReservationError("reservation_err_missing")
+    if current["reservation_status"] in ("closed", "cancelled"):
+        raise ReservationError("reservation_err_closed")
+    parsed = parse_jrh_money(amount)
+    if parsed is None:
+        raise ReservationError("reservation_err_deposit")
+    code = str(currency or "").strip().upper()
+    if code not in DEPOSIT_CURRENCIES:
+        raise ReservationError("reservation_err_deposit")
+    instant = to_utc_iso(now_utc())
+    insert_reservation_deposit(
+        organization_id,
+        {
+            "reservation_id": reservation_id,
+            "deposit_type": "reinforcement",
+            "amount": parsed,
+            "currency": code,
+            "note": (note or "").strip() or None,
+            "deposited_at": (deposited_at or "").strip() or None,
+            "created_by_user_id": actor_user_id,
+            "created_at": instant,
+        },
+    )
+    add_reservation_event(
+        organization_id,
+        reservation_id,
+        "reinforcement",
+        actor_user_id=actor_user_id,
+        payload={"amount": parsed, "currency": code},
+        created_at=instant,
+    )
+    return get_reservation(reservation_id, organization_id)
+
+
+def grouped_deposit_totals(reservation, deposits):
+    from decimal import Decimal, InvalidOperation
+
+    buckets = {}
+
+    def add(currency, amount):
+        if amount in (None, ""):
+            return
+        try:
+            number = Decimal(str(amount))
+        except InvalidOperation:
+            return
+        key = currency or "USD"
+        buckets[key] = buckets.get(key, Decimal("0")) + number
+
+    add(reservation.get("reservation_currency"), reservation.get("reservation_amount"))
+    for item in deposits or []:
+        add(item.get("currency"), item.get("amount"))
+    return [
+        {"currency": key, "amount": value, "label": format_money(value, key)}
+        for key, value in buckets.items()
+    ]
+
+
 def save_document(organization_id, reservation_id, upload, doc_type, *, actor_user_id):
-    if get_reservation(reservation_id, organization_id) is None:
+    reservation = get_reservation(reservation_id, organization_id)
+    if reservation is None:
         raise ReservationError("reservation_err_missing")
     if doc_type not in DOCUMENT_TYPES:
         raise ReservationError("reservation_err_document")
@@ -417,6 +532,7 @@ def save_document(organization_id, reservation_id, upload, doc_type, *, actor_us
             "size_bytes": len(payload),
             "uploaded_by_user_id": actor_user_id,
             "created_at": instant,
+            "operation_id": reservation.get("operation_id"),
         },
     )
 

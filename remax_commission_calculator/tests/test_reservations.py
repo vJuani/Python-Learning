@@ -8,6 +8,7 @@ import unittest
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import urlparse
 
 _TEST_TMP = tempfile.TemporaryDirectory()
 os.environ["DATABASE_PATH"] = str(Path(_TEST_TMP.name) / "test_reservations.db")
@@ -123,6 +124,7 @@ class ReservationTests(unittest.TestCase):
                 "reservation_currency": "USD",
                 "agreed_property_price": "178.000",
                 "agreed_property_currency": "USD",
+                "estimated_closing_date": "2026-10-15",
                 "payment_method": "cash",
                 "next_milestone": "boleto" if purpose == "sale" else "keys",
                 "note": "seña",
@@ -146,8 +148,12 @@ class ReservationTests(unittest.TestCase):
     def test_agent_sees_only_own_reservations_and_cannot_edit(self):
         _own_property, own = self._reserve("Calle Propia")
         _other_property, other = self._reserve("Calle Ajena", agent=self.other_agent)
-        visible = list_visible_reservations(self.org, agent_id=self.agent)
-        self.assertEqual([row["id"] for row in visible], [own["id"]])
+        visible_ids = [
+            row["id"]
+            for row in list_visible_reservations(self.org, agent_id=self.agent)
+        ]
+        self.assertIn(own["id"], visible_ids)
+        self.assertNotIn(other["id"], visible_ids)
         self.assertIsNone(load_reservation_detail(self.org, other["id"], agent_id=self.agent))
         client = app.test_client()
         self._login(client, "reserva_agent")
@@ -562,4 +568,206 @@ class ReservationTests(unittest.TestCase):
         self.assertIn("Qué falta para cerrar", own_html)
         self.assertNotIn("Editar reserva", own_html)
         self.assertNotIn("Cancelar reserva", own_html)
+
+    def _assert_forbidden(self, response):
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(urlparse(response.headers["Location"]).path, "/")
+
+    def test_agent_and_staff_clients_keep_reservation_permissions(self):
+        address = "Calle Permisos 20"
+        property_id = add_property(
+            address,
+            "CABA",
+            self.org,
+            agent_id=self.agent,
+            listing_price=185000,
+            listing_currency="USD",
+            listing_purpose="sale",
+        )
+        contact = create_agent_contact(
+            self.org,
+            self.agent,
+            {"name": address, "phone": "1155550002", "status": "lead", "source": "manual"},
+        )
+        visit = create_task(
+            self.org,
+            self.agent,
+            {
+                "title": address,
+                "task_type": "visit",
+                "due_date": "2026-09-24",
+                "due_time": "11:00",
+                "contact_id": contact["id"],
+                "contact_name": contact["name"],
+                "property_id": property_id,
+            },
+            created_by_user_id=self.agent_user,
+        )
+        agent = app.test_client()
+        staff = app.test_client()
+        other = app.test_client()
+        self._login(agent, "reserva_agent")
+        self._login(staff, "reserva_admin")
+        self._login(other, "reserva_other")
+
+        created = agent.post(
+            f"/agenda/{visit['id']}/visit-close",
+            data={
+                "result": "reserved",
+                "price_change": "keep",
+                "reservation_amount": "2.000",
+                "reservation_currency": "USD",
+                "estimated_closing_date": "2026-10-15",
+                "note": "seña",
+            },
+        )
+        self.assertEqual(created.status_code, 302)
+        self.assertFalse(
+            urlparse(created.headers["Location"]).path.endswith("/visit-close")
+        )
+        reservation = get_open_reservation_for_property(self.org, property_id)
+        self.assertIsNotNone(reservation)
+        reservation_id = reservation["id"]
+
+        visible = agent.get(f"/reservations/{reservation_id}")
+        self.assertEqual(visible.status_code, 200)
+        self.assertIn(address, visible.get_data(as_text=True))
+        self.assertEqual(other.get(f"/reservations/{reservation_id}").status_code, 404)
+        self.assertEqual(staff.get("/reservations/999999").status_code, 404)
+        self.assertEqual(agent.get("/reservations/999999").status_code, 404)
+
+        self._assert_forbidden(agent.post(f"/reservations/{reservation_id}/confirm"))
+        self._assert_forbidden(
+            agent.post(
+                f"/reservations/{reservation_id}",
+                data={
+                    "reservation_status": "documentation",
+                    "payment_method": "mortgage",
+                    "estimated_closing_date": "2026-12-01",
+                    "notes": "el agente no edita",
+                },
+            )
+        )
+        self._assert_forbidden(agent.post(f"/reservations/{reservation_id}/cancel"))
+        self._assert_forbidden(
+            agent.post(
+                f"/reservations/{reservation_id}/deposits",
+                data={
+                    "amount": "500",
+                    "currency": "ARS",
+                    "note": "no",
+                    "deposited_at": "2026-10-02",
+                },
+            )
+        )
+        untouched = get_reservation(reservation_id, self.org)
+        self.assertEqual(untouched["reservation_status"], "reserved")
+        self.assertEqual(untouched["estimated_closing_date"], "2026-10-15")
+        self.assertIsNone(untouched["confirmed_at"])
+        self.assertEqual(load_reservation_detail(self.org, reservation_id)["deposits"], [])
+        self.assertEqual(load_reservation_detail(self.org, reservation_id)["notes"], [])
+
+        uploaded = agent.post(
+            f"/reservations/{reservation_id}/documents",
+            data={
+                "doc_type": "uif",
+                "document": (BytesIO(b"agent-uif"), "uif.pdf"),
+            },
+        )
+        self.assertEqual(uploaded.status_code, 302)
+        self.assertEqual(
+            urlparse(uploaded.headers["Location"]).path,
+            f"/reservations/{reservation_id}",
+        )
+        self._assert_forbidden(
+            other.post(
+                f"/reservations/{reservation_id}/documents",
+                data={
+                    "doc_type": "other",
+                    "document": (BytesIO(b"ajeno"), "ajeno.pdf"),
+                },
+            )
+        )
+        self.assertEqual(
+            len(load_reservation_detail(self.org, reservation_id)["documents"]),
+            1,
+        )
+
+        confirmed = staff.post(f"/reservations/{reservation_id}/confirm")
+        self.assertEqual(confirmed.status_code, 302)
+        self.assertEqual(
+            urlparse(confirmed.headers["Location"]).path,
+            f"/reservations/{reservation_id}",
+        )
+        stored = get_reservation(reservation_id, self.org)
+        self.assertEqual(stored["reservation_status"], "confirmed")
+        self.assertEqual(stored["confirmed_by_user_id"], self.admin)
+        self.assertTrue(stored["confirmed_at"])
+
+        edited = staff.post(
+            f"/reservations/{reservation_id}",
+            data={
+                "reservation_status": "confirmed",
+                "payment_method": "cash",
+                "estimated_closing_date": "2026-11-20",
+                "notes": "ajuste staff",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(edited.status_code, 200)
+        stored = get_reservation(reservation_id, self.org)
+        self.assertEqual(stored["reservation_status"], "confirmed")
+        self.assertEqual(stored["payment_method"], "cash")
+        self.assertEqual(stored["estimated_closing_date"], "2026-11-20")
+        self.assertEqual(stored["notes"], "ajuste staff")
+
+        reinforced = staff.post(
+            f"/reservations/{reservation_id}/deposits",
+            data={
+                "amount": "500",
+                "currency": "ARS",
+                "note": "refuerzo",
+                "deposited_at": "2026-10-02",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(reinforced.status_code, 200)
+        detail = load_reservation_detail(self.org, reservation_id)
+        self.assertEqual(len(detail["deposits"]), 1)
+        self.assertEqual(detail["deposits"][0]["deposit_type"], "reinforcement")
+        self.assertEqual(int(get_reservation(reservation_id, self.org)["reservation_amount"]), 2000)
+
+        staff_upload = staff.post(
+            f"/reservations/{reservation_id}/documents",
+            data={
+                "doc_type": "boleto",
+                "document": (BytesIO(b"staff-boleto"), "boleto.pdf"),
+            },
+        )
+        self.assertEqual(staff_upload.status_code, 302)
+        self.assertEqual(
+            len(load_reservation_detail(self.org, reservation_id)["documents"]),
+            2,
+        )
+
+        prepared = staff.get(f"/operations/new?reservation_id={reservation_id}")
+        prepared_html = prepared.get_data(as_text=True)
+        self.assertEqual(prepared.status_code, 200)
+        self.assertIn(f'name="reservation_id" value="{reservation_id}"', prepared_html)
+        self.assertIn('value="185000"', prepared_html)
+
+        cancelled = staff.post(f"/reservations/{reservation_id}/cancel")
+        self.assertEqual(cancelled.status_code, 302)
+        self.assertEqual(
+            get_reservation(reservation_id, self.org)["reservation_status"],
+            "cancelled",
+        )
+        self.assertEqual(
+            get_reservation(reservation_id, self.org)["cancelled_by_user_id"],
+            self.admin,
+        )
+        self.assertEqual(
+            get_property_record(property_id, self.org)["commercial_status"],
+            "available",
+        )
 

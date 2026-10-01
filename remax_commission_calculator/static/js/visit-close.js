@@ -68,7 +68,7 @@
             second_visit: ["note"],
             disliked: ["objections", "steps"],
             no_show: ["steps"],
-            reserved: ["reservation", "steps"],
+            reserved: ["reservation"],
             other: ["note", "steps"]
         };
         var limitedSteps = {
@@ -109,6 +109,14 @@
             });
             var showReservation = active.indexOf("reservation") >= 0;
             showNode(reservation, showReservation);
+            if (showReservation) {
+                if (!form.dataset.wizardStep || form.dataset.wizardStep === "1") {
+                    form.dataset.wizardStep = "2";
+                }
+            } else {
+                form.dataset.wizardStep = "1";
+            }
+            paintWizard(showReservation);
             var purpose = form.getAttribute("data-listing-purpose") || "sale";
             var milestoneSet = purpose === "rental" || purpose === "temporary_rental" ? "rent" : "sale";
             form.querySelectorAll("[data-visit-milestones]").forEach(function (group) {
@@ -203,6 +211,188 @@
                 }
             }
         }
+
+        function groupedAmount(raw) {
+            var digits = String(raw || "").replace(/\D/g, "");
+            if (!digits) {
+                return "";
+            }
+            return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
+
+        function listingPrice() {
+            var raw = String(form.getAttribute("data-listing-price") || "").trim();
+            if (!raw) {
+                return "";
+            }
+            var number = Number(raw);
+            if (!isFinite(number) || number <= 0) {
+                return "";
+            }
+            if (Math.abs(number - Math.round(number)) < 0.0001) {
+                return String(Math.round(number));
+            }
+            return String(number);
+        }
+
+        function listingCurrency() {
+            return form.getAttribute("data-listing-currency") || "USD";
+        }
+
+        function listingLabel() {
+            var amount = listingPrice();
+            if (!amount) {
+                return "—";
+            }
+            return listingCurrency() + " " + groupedAmount(amount);
+        }
+
+        function checkedValue(name) {
+            var input = form.querySelector("input[name='" + name + "']:checked");
+            return input ? input.value : "";
+        }
+
+        function fieldValue(name) {
+            var input = form.querySelector("[name='" + name + "']");
+            return input && input.value ? input.value.trim() : "";
+        }
+
+        function paintWizard(showReservation) {
+            var step = showReservation ? (form.dataset.wizardStep || "2") : "1";
+            var step2 = form.querySelector("[data-wizard-step='2']");
+            var step3 = form.querySelector("[data-wizard-step='3']");
+            if (step2) {
+                step2.hidden = !showReservation || step !== "2";
+            }
+            if (step3) {
+                step3.hidden = !showReservation || step !== "3";
+            }
+            var current = form.querySelector("[data-wizard-current-price]");
+            var keep = form.querySelector("[data-wizard-keep-price]");
+            if (current) {
+                current.textContent = listingLabel();
+            }
+            if (keep) {
+                keep.textContent = listingLabel();
+            }
+            var priceBox = form.querySelector("[data-wizard-price-input]");
+            var changing = checkedValue("price_change") === "change";
+            if (priceBox) {
+                priceBox.hidden = !changing;
+            }
+            var agreed = form.querySelector("[name='agreed_property_price']");
+            if (agreed && changing && !agreed.value && listingPrice()) {
+                agreed.value = listingPrice();
+            }
+            var brokerage = form.querySelector("[data-wizard-brokerage]");
+            var shared = checkedValue("is_shared_transaction") === "1";
+            if (brokerage) {
+                brokerage.hidden = !shared;
+            }
+            var actions = form.querySelector(".visit-close__actions");
+            var submit = actions && actions.querySelector("[type='submit']");
+            var back = form.querySelector("[data-wizard-back]");
+            var labels = form.querySelector("[data-visit-reservation]");
+            if (submit && labels) {
+                if (!submit.dataset.defaultLabel) {
+                    submit.dataset.defaultLabel = submit.textContent;
+                }
+                if (!showReservation) {
+                    submit.textContent = labels.getAttribute("data-label-submit") || submit.dataset.defaultLabel;
+                } else if (step === "3") {
+                    submit.textContent = labels.getAttribute("data-label-confirm") || submit.textContent;
+                } else {
+                    submit.textContent = labels.getAttribute("data-label-continue") || submit.textContent;
+                }
+            }
+            if (back) {
+                back.hidden = !showReservation;
+            }
+        }
+
+        function summaryText(key, value) {
+            var node = form.querySelector("[data-wizard-summary='" + key + "']");
+            if (node) {
+                node.textContent = value || "—";
+            }
+        }
+
+        function fillWizardSummary() {
+            var changing = checkedValue("price_change") === "change";
+            var agreed = changing ? fieldValue("agreed_property_price") : listingPrice();
+            var agreedCurrency = changing
+                ? (checkedValue("agreed_property_currency") || listingCurrency())
+                : listingCurrency();
+            var shared = checkedValue("is_shared_transaction") === "1";
+            summaryText("property", form.getAttribute("data-property-label") || "—");
+            summaryText("current", listingLabel());
+            summaryText(
+                "agreed",
+                changing
+                    ? (agreed ? agreedCurrency + " " + agreed : "—")
+                    : listingLabel()
+            );
+            summaryText("operation", selectedLabel(form, "is_shared_transaction") || (shared ? "Compartida" : "Propia"));
+            summaryText("brokerage", shared ? fieldValue("shared_brokerage_name") : "—");
+            summaryText(
+                "seller",
+                fieldValue("seller_commission_amount")
+                    ? (checkedValue("seller_commission_currency") || "USD") + " " + fieldValue("seller_commission_amount")
+                    : "—"
+            );
+            summaryText(
+                "buyer",
+                fieldValue("buyer_commission_amount")
+                    ? (checkedValue("buyer_commission_currency") || "USD") + " " + fieldValue("buyer_commission_amount")
+                    : "—"
+            );
+            var deposit = fieldValue("reservation_amount");
+            var depositKind = selectedLabel(form, "deposit_type") || "Reserva";
+            summaryText(
+                "deposit",
+                deposit
+                    ? depositKind + " " + (checkedValue("reservation_currency") || "USD") + " " + deposit
+                    : "—"
+            );
+            summaryText("closing", fieldValue("estimated_closing_date"));
+        }
+
+        form.addEventListener("submit", function (event) {
+            var resultInput = form.querySelector("input[name='result']:checked");
+            var result = resultInput ? resultInput.value : "";
+            if (result !== "reserved" || form.dataset.wizardStep === "3") {
+                return;
+            }
+            event.preventDefault();
+            fillWizardSummary();
+            form.dataset.wizardStep = "3";
+            sync();
+        });
+
+        var backButton = document.createElement("button");
+        backButton.type = "button";
+        backButton.className = "btn btn-secondary";
+        backButton.setAttribute("data-wizard-back", "");
+        backButton.hidden = true;
+        backButton.textContent = (form.querySelector("[data-visit-reservation]") || {}).getAttribute
+            ? form.querySelector("[data-visit-reservation]").getAttribute("data-label-back") || "Volver"
+            : "Volver";
+        var actionRow = form.querySelector(".visit-close__actions");
+        if (actionRow) {
+            actionRow.insertBefore(backButton, actionRow.firstChild);
+        }
+        backButton.addEventListener("click", function () {
+            if (form.dataset.wizardStep === "3") {
+                form.dataset.wizardStep = "2";
+            } else {
+                var reservedRadio = form.querySelector("input[name='result'][value='reserved']");
+                if (reservedRadio) {
+                    reservedRadio.checked = false;
+                }
+                form.dataset.wizardStep = "1";
+            }
+            sync();
+        });
 
         form.addEventListener("change", sync);
         form.addEventListener("input", sync);

@@ -10,6 +10,7 @@ from .tenant import require_organization_id
 
 OPEN_STATUSES = (
     "reserved",
+    "confirmed",
     "documentation",
     "financing",
     "contract",
@@ -43,6 +44,15 @@ RESERVATION_COLUMNS = (
     "created_by_user_id",
     "created_at",
     "updated_at",
+    "is_shared_transaction",
+    "shared_brokerage_name",
+    "seller_commission_amount",
+    "seller_commission_currency",
+    "buyer_commission_amount",
+    "buyer_commission_currency",
+    "deposit_type",
+    "confirmed_at",
+    "confirmed_by_user_id",
 )
 
 
@@ -72,8 +82,15 @@ def insert_reservation(cursor, payload):
                 original_currency, agreed_property_price, agreed_currency,
                 reservation_amount, reservation_currency, payment_method,
                 next_milestone, estimated_closing_date, notes, reserved_at,
-                created_by_user_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_by_user_id, created_at, updated_at,
+                is_shared_transaction, shared_brokerage_name,
+                seller_commission_amount, seller_commission_currency,
+                buyer_commission_amount, buyer_commission_currency,
+                deposit_type
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?
+            )
             """,
             (
                 payload["organization_id"],
@@ -97,6 +114,13 @@ def insert_reservation(cursor, payload):
                 payload.get("created_by_user_id"),
                 payload["created_at"],
                 payload["updated_at"],
+                1 if payload.get("is_shared_transaction") else 0,
+                payload.get("shared_brokerage_name"),
+                payload.get("seller_commission_amount"),
+                payload.get("seller_commission_currency"),
+                payload.get("buyer_commission_amount"),
+                payload.get("buyer_commission_currency"),
+                payload.get("deposit_type"),
             ),
         )
     except IntegrityError as error:
@@ -232,6 +256,15 @@ def list_reservations(
                 reservations.created_by_user_id,
                 reservations.created_at,
                 reservations.updated_at,
+                reservations.is_shared_transaction,
+                reservations.shared_brokerage_name,
+                reservations.seller_commission_amount,
+                reservations.seller_commission_currency,
+                reservations.buyer_commission_amount,
+                reservations.buyer_commission_currency,
+                reservations.deposit_type,
+                reservations.confirmed_at,
+                reservations.confirmed_by_user_id,
                 properties.address,
                 properties.neighborhood,
                 properties.external_id,
@@ -286,6 +319,15 @@ def update_reservation_fields(organization_id, reservation_id, fields):
         "agreed_currency",
         "reservation_amount",
         "reservation_currency",
+        "is_shared_transaction",
+        "shared_brokerage_name",
+        "seller_commission_amount",
+        "seller_commission_currency",
+        "buyer_commission_amount",
+        "buyer_commission_currency",
+        "deposit_type",
+        "confirmed_at",
+        "confirmed_by_user_id",
     }
     assignments = []
     params = []
@@ -472,8 +514,9 @@ def insert_reservation_document(organization_id, payload):
             """
             INSERT INTO reservation_documents (
                 organization_id, reservation_id, doc_type, original_filename,
-                stored_name, content_type, size_bytes, uploaded_by_user_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                stored_name, content_type, size_bytes, uploaded_by_user_id,
+                created_at, operation_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 organization_id,
@@ -485,6 +528,7 @@ def insert_reservation_document(organization_id, payload):
                 payload.get("size_bytes"),
                 payload.get("uploaded_by_user_id"),
                 payload["created_at"],
+                payload.get("operation_id"),
             ),
         )
         connection.commit()
@@ -504,28 +548,15 @@ def list_reservation_documents(organization_id, reservation_id):
         cursor.execute(
             """
             SELECT id, organization_id, reservation_id, doc_type, original_filename,
-                stored_name, content_type, size_bytes, uploaded_by_user_id, created_at
+                stored_name, content_type, size_bytes, uploaded_by_user_id, created_at,
+                operation_id
             FROM reservation_documents
             WHERE organization_id = ? AND reservation_id = ?
             ORDER BY id
             """,
             (organization_id, reservation_id),
         )
-        return [
-            {
-                "id": row[0],
-                "organization_id": row[1],
-                "reservation_id": row[2],
-                "doc_type": row[3],
-                "original_filename": row[4],
-                "stored_name": row[5],
-                "content_type": row[6],
-                "size_bytes": row[7],
-                "uploaded_by_user_id": row[8],
-                "created_at": row[9],
-            }
-            for row in cursor.fetchall()
-        ]
+        return [_document_row(row) for row in cursor.fetchall()]
     finally:
         connection.close()
 
@@ -538,26 +569,141 @@ def get_reservation_document(organization_id, document_id):
         cursor.execute(
             """
             SELECT id, organization_id, reservation_id, doc_type, original_filename,
-                stored_name, content_type, size_bytes, uploaded_by_user_id, created_at
+                stored_name, content_type, size_bytes, uploaded_by_user_id, created_at,
+                operation_id
             FROM reservation_documents
             WHERE organization_id = ? AND id = ?
             """,
             (organization_id, document_id),
         )
-        row = cursor.fetchone()
-        if row is None:
-            return None
-        return {
-            "id": row[0],
-            "organization_id": row[1],
-            "reservation_id": row[2],
-            "doc_type": row[3],
-            "original_filename": row[4],
-            "stored_name": row[5],
-            "content_type": row[6],
-            "size_bytes": row[7],
-            "uploaded_by_user_id": row[8],
-            "created_at": row[9],
-        }
+        return _document_row(cursor.fetchone())
+    finally:
+        connection.close()
+
+
+def _document_row(row):
+    if row is None:
+        return None
+    return {
+        "id": row[0],
+        "organization_id": row[1],
+        "reservation_id": row[2],
+        "doc_type": row[3],
+        "original_filename": row[4],
+        "stored_name": row[5],
+        "content_type": row[6],
+        "size_bytes": row[7],
+        "uploaded_by_user_id": row[8],
+        "created_at": row[9],
+        "operation_id": row[10] if len(row) > 10 else None,
+    }
+
+
+def list_reservation_documents_for_operation(organization_id, operation_id):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT id, organization_id, reservation_id, doc_type, original_filename,
+                stored_name, content_type, size_bytes, uploaded_by_user_id, created_at,
+                operation_id
+            FROM reservation_documents
+            WHERE organization_id = ? AND operation_id = ?
+            ORDER BY id
+            """,
+            (organization_id, operation_id),
+        )
+        return [_document_row(row) for row in cursor.fetchall()]
+    finally:
+        connection.close()
+
+
+def attach_reservation_documents_to_operation(organization_id, reservation_id, operation_id):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            UPDATE reservation_documents
+            SET operation_id = ?
+            WHERE organization_id = ? AND reservation_id = ?
+            """,
+            (operation_id, organization_id, reservation_id),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def insert_reservation_deposit(organization_id, payload):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        deposit_id = execute_insert(
+            cursor,
+            """
+            INSERT INTO reservation_deposits (
+                organization_id, reservation_id, deposit_type, amount, currency,
+                note, deposited_at, created_by_user_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                organization_id,
+                payload["reservation_id"],
+                payload["deposit_type"],
+                payload["amount"],
+                payload["currency"],
+                payload.get("note"),
+                payload.get("deposited_at"),
+                payload.get("created_by_user_id"),
+                payload["created_at"],
+            ),
+        )
+        connection.commit()
+        return deposit_id
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_reservation_deposits(organization_id, reservation_id):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT id, organization_id, reservation_id, deposit_type, amount,
+                currency, note, deposited_at, created_by_user_id, created_at
+            FROM reservation_deposits
+            WHERE organization_id = ? AND reservation_id = ?
+            ORDER BY id
+            """,
+            (organization_id, reservation_id),
+        )
+        return [
+            {
+                "id": row[0],
+                "organization_id": row[1],
+                "reservation_id": row[2],
+                "deposit_type": row[3],
+                "amount": row[4],
+                "currency": row[5],
+                "note": row[6],
+                "deposited_at": row[7],
+                "created_by_user_id": row[8],
+                "created_at": row[9],
+            }
+            for row in cursor.fetchall()
+        ]
     finally:
         connection.close()

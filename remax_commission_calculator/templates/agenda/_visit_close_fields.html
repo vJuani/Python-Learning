@@ -68,77 +68,136 @@
     </div>
 </section>
 
-<section class="visit-close__reserve" data-visit-reservation hidden>
-    <h3 class="visit-close__section-title">{{ t('visit_close_reserved_title') }}</h3>
-    <div class="visit-close__field">
-        <span>{{ t('visit_close_reservation_amount') }}</span>
-        <div class="visit-close__money">
-            <div class="visit-close__currency" role="radiogroup" aria-label="{{ t('visit_close_reservation_amount') }}">
-                <label class="visit-close__currency-option">
-                    <input type="radio" name="reservation_currency" value="USD" checked disabled>
-                    <span>USD</span>
+<section class="visit-close__reserve" data-visit-reservation hidden
+    data-label-continue="{{ t('visit_wizard_continue') }}"
+    data-label-confirm="{{ t('visit_wizard_confirm') }}"
+    data-label-submit="{{ t('visit_close_submit') }}"
+    data-label-back="{{ t('visit_wizard_back') }}">
+    <div data-wizard-step="2">
+        <h3 class="visit-close__section-title">{{ t('visit_close_reserved_title') }}</h3>
+        <div class="visit-wizard__group">
+            <span class="visit-wizard__label">{{ t('visit_wizard_current_price') }}</span>
+            <p class="visit-wizard__price" data-wizard-current-price>—</p>
+            <div class="visit-close__choices">
+                <label class="visit-close__choice">
+                    <input type="radio" name="price_change" value="keep" checked disabled>
+                    <span data-visit-label-text>{{ t('visit_wizard_keep_price') }} <span data-wizard-keep-price></span></span>
                 </label>
-                <label class="visit-close__currency-option">
-                    <input type="radio" name="reservation_currency" value="ARS" disabled>
-                    <span>ARS</span>
-                </label>
-            </div>
-            <input type="text" name="reservation_amount" inputmode="decimal" maxlength="20" placeholder="2.000" autocomplete="off" disabled>
-        </div>
-    </div>
-    <div class="visit-close__field">
-        <span>{{ t('visit_close_agreed_price') }}</span>
-        <div class="visit-close__money">
-            <div class="visit-close__currency" role="radiogroup" aria-label="{{ t('visit_close_agreed_price') }}">
-                <label class="visit-close__currency-option">
-                    <input type="radio" name="agreed_property_currency" value="USD" checked disabled>
-                    <span>USD</span>
-                </label>
-                <label class="visit-close__currency-option">
-                    <input type="radio" name="agreed_property_currency" value="ARS" disabled>
-                    <span>ARS</span>
+                <label class="visit-close__choice">
+                    <input type="radio" name="price_change" value="change" disabled>
+                    <span data-visit-label-text>{{ t('visit_wizard_change_price') }}</span>
                 </label>
             </div>
-            <input type="text" name="agreed_property_price" inputmode="decimal" maxlength="20" placeholder="178.000" autocomplete="off" disabled>
+            <div class="visit-close__money" data-wizard-price-input hidden>
+                <div class="visit-close__currency" role="radiogroup" aria-label="{{ t('visit_close_agreed_price') }}">
+                    <label class="visit-close__currency-option">
+                        <input type="radio" name="agreed_property_currency" value="USD" checked disabled>
+                        <span>USD</span>
+                    </label>
+                    <label class="visit-close__currency-option">
+                        <input type="radio" name="agreed_property_currency" value="ARS" disabled>
+                        <span>ARS</span>
+                    </label>
+                </div>
+                <input type="text" name="agreed_property_price" inputmode="decimal" maxlength="20" autocomplete="off" disabled>
+            </div>
         </div>
-    </div>
-    <label class="visit-close__field">
-        <span>{{ t('visit_close_payment') }}</span>
-        <select name="payment_method" disabled>
-            <option value="">{{ t('visit_close_milestone_undefined') }}</option>
-            <option value="cash">{{ t('visit_close_payment_cash') }}</option>
-            <option value="mortgage">{{ t('visit_close_payment_mortgage') }}</option>
-            <option value="mixed">{{ t('visit_close_payment_mixed') }}</option>
-            <option value="other">{{ t('visit_close_payment_other') }}</option>
-        </select>
-    </label>
-    <div class="visit-close__field">
-        <span>{{ t('visit_close_milestone') }}</span>
-        <div class="visit-close__choices" data-visit-milestones="sale">
-            {% for key in ['boleto', 'mortgage', 'deed', 'possession', 'undefined', 'other'] %}
-            <label class="visit-close__choice">
-                <input type="radio" name="next_milestone" value="{{ key }}" disabled>
-                <span data-visit-label-text>{{ t('visit_close_milestone_' ~ key) }}</span>
+        <div class="visit-wizard__group">
+            <span class="visit-wizard__label">{{ t('visit_wizard_operation') }}</span>
+            <div class="visit-close__choices">
+                <label class="visit-close__choice">
+                    <input type="radio" name="is_shared_transaction" value="0" checked disabled>
+                    <span data-visit-label-text>{{ t('visit_wizard_own') }}</span>
+                </label>
+                <label class="visit-close__choice">
+                    <input type="radio" name="is_shared_transaction" value="1" disabled>
+                    <span data-visit-label-text>{{ t('visit_wizard_shared') }}</span>
+                </label>
+            </div>
+            <label class="visit-close__field" data-wizard-brokerage hidden>
+                <span>{{ t('visit_wizard_brokerage') }}</span>
+                <input type="text" name="shared_brokerage_name" maxlength="120" autocomplete="off" disabled>
             </label>
-            {% endfor %}
         </div>
-        <div class="visit-close__choices" data-visit-milestones="rent" hidden>
-            {% for key in ['paperwork', 'contract_sign', 'keys', 'move_in', 'undefined', 'other'] %}
-            <label class="visit-close__choice">
-                <input type="radio" name="next_milestone" value="{{ key }}" disabled>
-                <span data-visit-label-text>{{ t('visit_close_milestone_' ~ key) }}</span>
-            </label>
-            {% endfor %}
+        <div class="visit-wizard__group">
+            <span class="visit-wizard__label">{{ t('visit_wizard_seller_commission') }}</span>
+            <div class="visit-close__money">
+                <div class="visit-close__currency">
+                    <label class="visit-close__currency-option">
+                        <input type="radio" name="seller_commission_currency" value="USD" checked disabled>
+                        <span>USD</span>
+                    </label>
+                    <label class="visit-close__currency-option">
+                        <input type="radio" name="seller_commission_currency" value="ARS" disabled>
+                        <span>ARS</span>
+                    </label>
+                </div>
+                <input type="text" name="seller_commission_amount" inputmode="decimal" maxlength="20" placeholder="5.340" autocomplete="off" disabled>
+            </div>
+            <span class="visit-wizard__label">{{ t('visit_wizard_buyer_commission') }}</span>
+            <div class="visit-close__money">
+                <div class="visit-close__currency">
+                    <label class="visit-close__currency-option">
+                        <input type="radio" name="buyer_commission_currency" value="USD" checked disabled>
+                        <span>USD</span>
+                    </label>
+                    <label class="visit-close__currency-option">
+                        <input type="radio" name="buyer_commission_currency" value="ARS" disabled>
+                        <span>ARS</span>
+                    </label>
+                </div>
+                <input type="text" name="buyer_commission_amount" inputmode="decimal" maxlength="20" placeholder="5.340" autocomplete="off" disabled>
+            </div>
         </div>
+        <label class="visit-close__field">
+            <span>{{ t('visit_wizard_closing') }}</span>
+            <input type="date" name="estimated_closing_date" disabled>
+        </label>
+        <div class="visit-wizard__group">
+            <span class="visit-wizard__label">{{ t('visit_wizard_delivery') }}</span>
+            <div class="visit-close__choices">
+                <label class="visit-close__choice">
+                    <input type="radio" name="deposit_type" value="reservation" checked disabled>
+                    <span data-visit-label-text>{{ t('visit_wizard_deposit_reservation') }}</span>
+                </label>
+                <label class="visit-close__choice">
+                    <input type="radio" name="deposit_type" value="reinforcement" disabled>
+                    <span data-visit-label-text>{{ t('visit_wizard_deposit_reinforcement') }}</span>
+                </label>
+            </div>
+            <div class="visit-close__money">
+                <div class="visit-close__currency" role="radiogroup" aria-label="{{ t('visit_close_reservation_amount') }}">
+                    <label class="visit-close__currency-option">
+                        <input type="radio" name="reservation_currency" value="USD" checked disabled>
+                        <span>USD</span>
+                    </label>
+                    <label class="visit-close__currency-option">
+                        <input type="radio" name="reservation_currency" value="ARS" disabled>
+                        <span>ARS</span>
+                    </label>
+                </div>
+                <input type="text" name="reservation_amount" inputmode="decimal" maxlength="20" placeholder="2.000" autocomplete="off" disabled>
+            </div>
+        </div>
+        <label class="visit-close__field">
+            <span>{{ t('visit_close_reservation_notes') }}</span>
+            <textarea name="reservation_notes" rows="3" maxlength="500" placeholder="{{ t('visit_wizard_notes_placeholder') }}" disabled></textarea>
+        </label>
     </div>
-    <label class="visit-close__field">
-        <span>{{ t('visit_close_estimated_close') }}</span>
-        <input type="date" name="estimated_closing_date" disabled>
-    </label>
-    <label class="visit-close__field">
-        <span>{{ t('visit_close_reservation_notes') }}</span>
-        <textarea name="reservation_notes" rows="2" maxlength="500" disabled></textarea>
-    </label>
+    <div data-wizard-step="3" hidden>
+        <h3 class="visit-close__section-title">{{ t('visit_wizard_summary_title') }}</h3>
+        <dl class="visit-wizard__summary">
+            <div><dt>{{ t('reservation_col_property') }}</dt><dd data-wizard-summary="property">—</dd></div>
+            <div><dt>{{ t('visit_wizard_current_price') }}</dt><dd data-wizard-summary="current">—</dd></div>
+            <div><dt>{{ t('visit_close_agreed_price') }}</dt><dd data-wizard-summary="agreed">—</dd></div>
+            <div><dt>{{ t('visit_wizard_operation') }}</dt><dd data-wizard-summary="operation">—</dd></div>
+            <div><dt>{{ t('visit_wizard_brokerage') }}</dt><dd data-wizard-summary="brokerage">—</dd></div>
+            <div><dt>{{ t('visit_wizard_seller_commission') }}</dt><dd data-wizard-summary="seller">—</dd></div>
+            <div><dt>{{ t('visit_wizard_buyer_commission') }}</dt><dd data-wizard-summary="buyer">—</dd></div>
+            <div><dt>{{ t('visit_wizard_delivery') }}</dt><dd data-wizard-summary="deposit">—</dd></div>
+            <div><dt>{{ t('visit_wizard_closing') }}</dt><dd data-wizard-summary="closing">—</dd></div>
+        </dl>
+    </div>
 </section>
 
 <section class="visit-close__next" data-visit-panel="steps" hidden>

@@ -74,6 +74,24 @@
                     <div><dt>{{ t('reservation_col_amount') }}</dt><dd>{{ reservation.amount_label or '—' }}</dd></div>
                     <div><dt>{{ t('visit_close_payment') }}</dt><dd>{% if reservation.payment_method %}{{ t('visit_close_payment_' ~ reservation.payment_method) }}{% else %}—{% endif %}</dd></div>
                     <div><dt>{{ t('reservation_col_close') }}</dt><dd>{{ reservation.close_display or '—' }}</dd></div>
+                    <div><dt>{{ t('reservation_operation_kind') }}</dt><dd>{% if reservation.is_shared_transaction %}{{ t('visit_wizard_shared') }}{% else %}{{ t('visit_wizard_own') }}{% endif %}</dd></div>
+                    {% if reservation.shared_brokerage_name %}
+                    <div><dt>{{ t('reservation_shared_with') }}</dt><dd>{{ reservation.shared_brokerage_name }}</dd></div>
+                    {% endif %}
+                    <div><dt>{{ t('reservation_seller_commission') }}</dt><dd>{{ reservation.seller_commission_label or '—' }}</dd></div>
+                    <div><dt>{{ t('reservation_buyer_commission') }}</dt><dd>{{ reservation.buyer_commission_label or '—' }}</dd></div>
+                </dl>
+            </div>
+            <div class="res-block">
+                <h3>{{ t('reservation_deposit_total') }}</h3>
+                <dl class="res-grid">
+                    <div><dt>{{ t('reservation_deposit_initial') }}</dt><dd>{{ reservation.amount_label or '—' }}</dd></div>
+                    {% for deposit in detail.deposits or [] %}
+                    <div><dt>{{ t('reservation_deposit_later') }}</dt><dd>{{ deposit.currency }} {{ deposit.amount }}{% if deposit.note %} · {{ deposit.note }}{% endif %}</dd></div>
+                    {% endfor %}
+                    {% for total in detail.deposit_totals or [] %}
+                    <div><dt>{{ t('reservation_deposit_total') }} {{ total.currency }}</dt><dd>{{ total.label }}</dd></div>
+                    {% endfor %}
                 </dl>
             </div>
 
@@ -125,7 +143,7 @@
 
         <section data-res-pane="documents" hidden>
             <ul class="res-docs">
-                {% for doc_type in ['reservation_receipt', 'uif', 'invoice', 'boleto', 'deed', 'credit', 'other'] %}
+                {% for doc_type in ['uif', 'invoice', 'reservation_receipt', 'reinforcement', 'boleto', 'deed', 'credit', 'other'] %}
                 <li class="res-doc">
                     <span class="res-doc__icon" aria-hidden="true"></span>
                     <span class="res-doc__name">{{ t('reservation_doc_' ~ doc_type) }}</span>
@@ -154,6 +172,7 @@
                         {% elif event.event_type == 'updated' %}{{ t('reservation_event_updated') }}
                         {% elif event.event_type == 'cancelled' %}{{ t('reservation_event_cancelled') }}
                         {% elif event.event_type == 'operation_linked' %}{{ t('reservation_event_operation_linked') }}
+                        {% elif event.event_type == 'confirmed' %}{{ t('reservation_event_confirmed') }}
                         {% else %}{{ event.event_type }}{% endif %}
                     </strong>
                 </li>
@@ -179,7 +198,7 @@
         <form method="post" action="{{ url_for('reservations_update', reservation_id=reservation.id) }}" class="res-form" data-res-sheet="edit" hidden>
             <label><span>{{ t('reservation_col_status') }}</span>
                 <select name="reservation_status">
-                    {% for status in statuses %}
+                    {% for status in statuses if status != 'confirmed' or reservation.reservation_status == 'confirmed' %}
                     <option value="{{ status }}" {% if reservation.reservation_status == status %}selected{% endif %}>{{ t('reservation_status_' ~ status) }}</option>
                     {% endfor %}
                 </select>
@@ -230,18 +249,54 @@
             </label>
             <button type="submit" class="btn btn-secondary">{{ t('reservation_cancel') }}</button>
         </form>
+        <form method="post" action="{{ url_for('reservations_deposit', reservation_id=reservation.id) }}" class="res-form" data-res-sheet="deposit" hidden>
+            <label><span>{{ t('reservation_add_deposit') }}</span>
+                <input type="date" name="deposited_at">
+            </label>
+            <label><span>{{ t('visit_close_reservation_amount') }}</span>
+                <select name="currency">
+                    <option value="USD">USD</option>
+                    <option value="ARS">ARS</option>
+                </select>
+                <input type="text" name="amount" inputmode="decimal" required>
+            </label>
+            <label><span>{{ t('visit_close_reservation_notes') }}</span>
+                <input type="text" name="note" maxlength="240">
+            </label>
+            <button type="submit" class="btn btn-secondary">{{ t('reservation_add_deposit') }}</button>
+        </form>
     </div>
     <footer class="res-dock">
+        {% if reservation.reservation_status == 'reserved' %}
+        <form method="post" action="{{ url_for('reservations_confirm', reservation_id=reservation.id) }}">
+            <button type="submit" class="btn btn-primary">{{ t('reservation_confirm') }}</button>
+        </form>
+        {% endif %}
         <button type="button" class="btn btn-secondary" data-res-form="edit">{{ t('reservation_edit') }}</button>
         <button type="button" class="btn btn-secondary" data-res-form="note">{{ t('reservation_note_add') }}</button>
         <button type="button" class="btn btn-secondary" data-res-form="upload">{{ t('reservation_upload_document') }}</button>
-        {% if reservation.reservation_status not in ['in_operation'] %}
+        <button type="button" class="btn btn-secondary" data-res-form="deposit">{{ t('reservation_add_deposit') }}</button>
+        {% if reservation.reservation_status == 'confirmed' %}
         <a class="btn btn-primary" href="{{ url_for('operations_new', reservation_id=reservation.id) }}">{{ t('reservation_prepare') }}</a>
+        {% elif reservation.reservation_status not in ['reserved', 'in_operation', 'closed', 'cancelled'] %}
+        <a class="btn btn-secondary" href="{{ url_for('operations_new', reservation_id=reservation.id) }}">{{ t('reservation_prepare') }}</a>
         {% endif %}
         <button type="button" class="btn btn-secondary res-dock__more" data-res-more aria-label="{{ t('reservation_cancel') }}">···</button>
         <div class="res-more" data-res-more-menu hidden>
             <button type="button" data-res-form="cancel">{{ t('reservation_cancel') }}</button>
         </div>
     </footer>
+    {% elif read_only and reservation.reservation_status not in ['closed', 'cancelled'] %}
+    <form method="post" action="{{ url_for('reservations_document_upload', reservation_id=reservation.id) }}" enctype="multipart/form-data" class="res-form">
+        <label><span>{{ t('reservation_documents') }}</span>
+            <select name="doc_type">
+                {% for doc_type in document_types %}
+                <option value="{{ doc_type }}">{{ t('reservation_doc_' ~ doc_type) }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <input type="file" name="document" required>
+        <button type="submit" class="btn btn-secondary">{{ t('reservation_upload') }}</button>
+    </form>
     {% endif %}
 </article>

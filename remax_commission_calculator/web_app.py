@@ -6328,6 +6328,17 @@ def operations_detail(operation_id):
         organization_id,
         operation_id,
     )
+    from modules.database.reservations_repository import (
+        get_reservation_by_operation,
+        list_reservation_documents_for_operation,
+    )
+
+    linked_reservation = get_reservation_by_operation(organization_id, operation_id)
+    reservation_documents = (
+        list_reservation_documents_for_operation(organization_id, operation_id)
+        if linked_reservation
+        else []
+    )
 
     return render_template(
         "operations/detail.html",
@@ -6371,6 +6382,8 @@ def operations_detail(operation_id):
         ),
         entity_property_id=None,
         entity_operation_id=operation_id,
+        linked_reservation=linked_reservation,
+        reservation_documents=reservation_documents,
     )
 
 
@@ -7082,12 +7095,14 @@ def operations_new():
         "buyer_vat_amount": "0",
     }
     reservation_id = request.args.get("reservation_id")
-    if reservation_id and not scoped_id:
+    if reservation_id:
         from modules.reservations import load_reservation_detail
 
         try:
             detail = load_reservation_detail(
-                organization_id, int(reservation_id)
+                organization_id,
+                int(reservation_id),
+                agent_id=scoped_id,
             )
         except (TypeError, ValueError):
             detail = None
@@ -7111,6 +7126,25 @@ def operations_new():
                 else:
                     prefill["original_amount"] = str(agreed)
             prefill["reservation_id"] = str(reservation["id"])
+            from modules.operation_prefill import preliminary_commission_rate
+
+            seller_rate = preliminary_commission_rate(
+                reservation.get("seller_commission_amount"),
+                agreed,
+            )
+            buyer_rate = preliminary_commission_rate(
+                reservation.get("buyer_commission_amount"),
+                agreed,
+            )
+            if seller_rate:
+                prefill["seller_commission_rate"] = seller_rate
+            if buyer_rate:
+                prefill["buyer_commission_rate"] = buyer_rate
+            if reservation.get("is_shared_transaction"):
+                prefill["is_referred"] = "1"
+                prefill["shared_brokerage_name"] = (
+                    reservation.get("shared_brokerage_name") or ""
+                )
 
     return render_operation_form(
         "New Operation",

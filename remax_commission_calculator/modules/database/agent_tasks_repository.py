@@ -78,7 +78,9 @@ _TASK_SELECT = """
         task.contact_id,
         task.external_listing_id,
         listing.external_url,
-        property.listing_purpose
+        property.listing_purpose,
+        property.listing_price,
+        property.listing_currency
     FROM agent_tasks AS task
     LEFT JOIN agents AS agent
         ON agent.id = task.agent_id
@@ -145,6 +147,8 @@ def _build_task(row):
         "external_listing_id": row[32] if len(row) > 32 else None,
         "external_url": row[33] if len(row) > 33 else None,
         "listing_purpose": row[34] if len(row) > 34 else None,
+        "listing_price": row[35] if len(row) > 35 else None,
+        "listing_currency": row[36] if len(row) > 36 else None,
         "source": "jrh",
     }
 

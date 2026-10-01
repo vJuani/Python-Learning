@@ -1815,3 +1815,43 @@ dialog.visit-close[open],
         flex: 1;
     }
 }
+
+.visit-wizard__group {
+    display: grid;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+}
+
+.visit-wizard__label {
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.visit-wizard__price {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.visit-wizard__summary {
+    display: grid;
+    gap: 0.65rem;
+    margin: 0;
+}
+
+.visit-wizard__summary div {
+    display: grid;
+    gap: 0.15rem;
+}
+
+.visit-wizard__summary dt {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.visit-wizard__summary dd {
+    margin: 0;
+    font-weight: 650;
+}

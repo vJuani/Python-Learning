@@ -18,7 +18,9 @@ from modules.reservations import (
     OPEN_STATUSES,
     ReservationError,
     add_note,
+    add_reinforcement,
     cancel_reservation,
+    confirm_reservation,
     document_path,
     load_reservation_detail,
     save_document,
@@ -202,10 +204,53 @@ def register_reservation_routes(app, helpers):
             flash_i18n("reservation_cancelled", "success")
         return redirect(url_for("reservations_detail", reservation_id=reservation_id))
 
-    @app.route("/reservations/<int:reservation_id>/documents", methods=["POST"])
+    @app.route("/reservations/<int:reservation_id>/confirm", methods=["POST"])
     @admin_required
-    def reservations_document_upload(reservation_id):
+    def reservations_confirm(reservation_id):
         user, organization_id, _agent_id = _viewer()
+        try:
+            confirm_reservation(
+                organization_id,
+                reservation_id,
+                actor_user_id=user["id"],
+            )
+        except ReservationError as error:
+            flash_i18n(error.message_key, "error")
+        else:
+            flash_i18n("reservation_confirmed", "success")
+        return redirect(url_for("reservations_detail", reservation_id=reservation_id))
+
+    @app.route("/reservations/<int:reservation_id>/deposits", methods=["POST"])
+    @admin_required
+    def reservations_deposit(reservation_id):
+        user, organization_id, _agent_id = _viewer()
+        try:
+            add_reinforcement(
+                organization_id,
+                reservation_id,
+                amount=request.form.get("amount"),
+                currency=request.form.get("currency"),
+                note=request.form.get("note"),
+                deposited_at=request.form.get("deposited_at"),
+                actor_user_id=user["id"],
+            )
+        except ReservationError as error:
+            flash_i18n(error.message_key, "error")
+        else:
+            flash_i18n("reservation_deposit_saved", "success")
+        return redirect(url_for("reservations_detail", reservation_id=reservation_id))
+
+    @app.route("/reservations/<int:reservation_id>/documents", methods=["POST"])
+    @login_required
+    def reservations_document_upload(reservation_id):
+        user, organization_id, agent_id = _viewer()
+        from modules.database.reservations_repository import get_reservation
+
+        reservation = get_reservation(reservation_id, organization_id)
+        if reservation is None:
+            abort(404)
+        if agent_id is not None and reservation.get("agent_id") != agent_id:
+            abort(403)
         upload = request.files.get("document")
         try:
             if upload is None:

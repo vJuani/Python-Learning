@@ -180,6 +180,9 @@
                     {{ t('operation_referred') }}
                 </label>
             </div>
+            {% if form_values.shared_brokerage_name %}
+            <p class="field-help">{{ t('reservation_shared_with') }} {{ form_values.shared_brokerage_name }}</p>
+            {% endif %}
 
             <div
                 class="form-group"
@@ -206,7 +209,7 @@
                         <label for="seller_commission_rate">{{ t('operation_seller_commission_rate') }}</label>
                         <input
                             type="number"
-                            step="0.01"
+                            step="{% if form_values.reservation_id %}any{% else %}0.01{% endif %}"
                             min="0"
                             id="seller_commission_rate"
                             name="seller_commission_rate"
@@ -238,7 +241,7 @@
                         <label for="buyer_commission_rate">{{ t('operation_buyer_commission_rate') }}</label>
                         <input
                             type="number"
-                            step="0.01"
+                            step="{% if form_values.reservation_id %}any{% else %}0.01{% endif %}"
                             min="0"
                             id="buyer_commission_rate"
                             name="buyer_commission_rate"

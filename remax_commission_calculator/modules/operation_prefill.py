@@ -119,6 +119,51 @@ def suggest_available_properties(
     return results
 
 
+def preliminary_commission_rate(amount, price):
+    """Turn a preliminary amount into the rate field Operations already calculates.
+
+    Operations still does original_amount * rate / 100. The form value needs
+    enough decimals for that product to land on the preliminary cents.
+    Four decimal places are not enough (5340 / 185000 -> 2.8865 -> 5340.03).
+    """
+    from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+
+    if amount in (None, "") or price in (None, ""):
+        return None
+    try:
+        amount_value = Decimal(str(amount))
+        price_value = Decimal(str(price))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if amount_value <= 0 or price_value <= 0:
+        return None
+
+    target = amount_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    exact = amount_value / price_value * Decimal("100")
+    price_float = float(price_value)
+    chosen = None
+    for places in range(4, 13):
+        candidate = exact.quantize(
+            Decimal("1").scaleb(-places),
+            rounding=ROUND_HALF_UP,
+        )
+        rebuilt = price_float * float(candidate) / 100.0
+        rebuilt_cents = Decimal(rebuilt).quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
+        )
+        if (
+            rebuilt_cents == target
+            and abs(Decimal(rebuilt) - target) <= Decimal("0.01")
+        ):
+            chosen = candidate
+            break
+    if chosen is None:
+        chosen = exact.quantize(Decimal("0.000000000001"), rounding=ROUND_HALF_UP)
+    text = format(chosen, "f").rstrip("0").rstrip(".")
+    return text or None
+
+
 def get_property_operation_prefill(
     property_id,
     organization_id,

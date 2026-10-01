@@ -46,6 +46,9 @@
             data-visit-close="{{ url_for('agenda_visit_close', task_id=task.id) }}"
             data-visit-label="{{ task.contact_name or '' }}{% if task.relation_label %} · {{ task.relation_label }}{% endif %}"
             data-listing-purpose="{{ task.listing_purpose or 'sale' }}"
+            data-listing-price="{{ task.listing_price if task.listing_price is not none else '' }}"
+            data-listing-currency="{{ task.listing_currency or 'USD' }}"
+            data-property-label="{{ task.property_address or '' }}"
         >{{ t('visit_close_open') }}</button>
         {% endif %}
 
@@ -157,6 +160,9 @@
                     data-visit-close="{{ url_for('agenda_visit_close', task_id=task.id) }}"
                     data-visit-label="{{ task.contact_name or '' }}{% if task.relation_label %} · {{ task.relation_label }}{% endif %}"
                     data-listing-purpose="{{ task.listing_purpose or 'sale' }}"
+                    data-listing-price="{{ task.listing_price if task.listing_price is not none else '' }}"
+                    data-listing-currency="{{ task.listing_currency or 'USD' }}"
+                    data-property-label="{{ task.property_address or '' }}"
                 >
                     {{ t('visit_close_open') }}
                 </button>

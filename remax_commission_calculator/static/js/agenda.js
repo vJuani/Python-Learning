@@ -101,6 +101,18 @@
                         "data-listing-purpose",
                         button.getAttribute("data-listing-purpose") || "sale"
                     );
+                    form.setAttribute(
+                        "data-listing-price",
+                        button.getAttribute("data-listing-price") || ""
+                    );
+                    form.setAttribute(
+                        "data-listing-currency",
+                        button.getAttribute("data-listing-currency") || "USD"
+                    );
+                    form.setAttribute(
+                        "data-property-label",
+                        button.getAttribute("data-property-label") || ""
+                    );
                     form.dispatchEvent(new Event("change"));
                 }
                 if (label) {

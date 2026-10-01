@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
+from decimal import Decimal
 
 from modules.contact_follow_up import (
     STAGE_FOLLOWING,
@@ -182,7 +183,11 @@ def apply_visit_close(
         data["next_step"] = "second_visit"
         data = _with_default_when(data, now=instant, tz=tz)
     if data.get("result") == "reserved":
-        _assert_can_reserve(task, organization_id=organization_id, agent_id=agent_id)
+        property_row = _assert_can_reserve(
+            task, organization_id=organization_id, agent_id=agent_id
+        )
+        _prepare_reserved_outcome(data, property_row)
+        _validate_reserved_outcome(data)
     previous_outcome = task.get("outcome_json") or ""
     updated = save_visit_outcome(
         organization_id,
@@ -312,6 +317,43 @@ def _timeline_line(place, outcome):
     return line
 
 
+def _prepare_reserved_outcome(data, property_row):
+    listing_price = (property_row or {}).get("listing_price")
+    listing_currency = (property_row or {}).get("listing_currency") or "USD"
+    if data.get("price_change") != "change":
+        data["price_change"] = "keep"
+        data["agreed_property_price"] = listing_price
+        data["agreed_property_currency"] = listing_currency
+        data.pop("agreed_property_price_invalid", None)
+    else:
+        data["price_change"] = "change"
+    if data.get("is_shared_transaction"):
+        data["shared_brokerage_name"] = (data.get("shared_brokerage_name") or "").strip()
+    else:
+        data["is_shared_transaction"] = 0
+        data["shared_brokerage_name"] = None
+    if data.get("reservation_amount") is not None and not data.get("deposit_type"):
+        data["deposit_type"] = "reservation"
+
+
+def _validate_reserved_outcome(data):
+    closing = str(data.get("estimated_closing_date") or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", closing):
+        raise VisitCloseError("visit_close_err_closing_date")
+    if data.get("agreed_property_price_invalid") or data.get("agreed_currency_invalid"):
+        raise VisitCloseError("visit_close_err_agreed_price")
+    agreed = data.get("agreed_property_price")
+    if agreed in (None, "") or Decimal(str(agreed)) <= 0:
+        raise VisitCloseError("visit_close_err_agreed_price")
+    if data.get("reservation_amount_invalid") or data.get("reservation_currency_invalid"):
+        raise VisitCloseError("visit_close_err_amount")
+    amount = data.get("reservation_amount")
+    if amount is not None and Decimal(str(amount)) <= 0:
+        raise VisitCloseError("visit_close_err_amount")
+    if data.get("is_shared_transaction") and not data.get("shared_brokerage_name"):
+        raise VisitCloseError("visit_close_err_shared_brokerage")
+
+
 def _assert_can_reserve(task, *, organization_id, agent_id):
     from modules.database.properties_repository import get_property_record
 
@@ -371,7 +413,8 @@ def _commit_property_reservation(
         params = ["reserved"]
         new_price = previous_price
         new_currency = previous_currency
-        if agreed is not None:
+        update_price = outcome.get("price_change") == "change" and agreed is not None
+        if update_price:
             new_price = agreed
             new_currency = outcome.get("agreed_property_currency") or previous_currency or "USD"
             assignments.append("listing_price = ?")
@@ -402,8 +445,8 @@ def _commit_property_reservation(
                 "commercial_status": "reserved",
                 "previous_price": previous_price,
                 "previous_currency": previous_currency,
-                "listing_price": new_price if agreed is not None else None,
-                "listing_currency": new_currency if agreed is not None else None,
+                "listing_price": new_price if update_price else None,
+                "listing_currency": new_currency if update_price else None,
                 "reservation_amount": outcome.get("reservation_amount"),
                 "reservation_currency": outcome.get("reservation_currency"),
                 "created_at": created_at,
@@ -428,9 +471,11 @@ def _commit_property_reservation(
                     "reservation_status": "reserved",
                     "original_property_price": previous_price,
                     "original_currency": previous_currency,
-                    "agreed_property_price": agreed,
+                    "agreed_property_price": agreed if agreed is not None else previous_price,
                     "agreed_currency": (
-                        outcome.get("agreed_property_currency") if agreed is not None else None
+                        outcome.get("agreed_property_currency")
+                        or previous_currency
+                        or "USD"
                     ),
                     "reservation_amount": outcome.get("reservation_amount"),
                     "reservation_currency": outcome.get("reservation_currency"),
@@ -438,6 +483,13 @@ def _commit_property_reservation(
                     "next_milestone": outcome.get("next_milestone"),
                     "estimated_closing_date": outcome.get("estimated_closing_date"),
                     "notes": outcome.get("reservation_notes"),
+                    "is_shared_transaction": 1 if outcome.get("is_shared_transaction") else 0,
+                    "shared_brokerage_name": outcome.get("shared_brokerage_name"),
+                    "seller_commission_amount": outcome.get("seller_commission_amount"),
+                    "seller_commission_currency": outcome.get("seller_commission_currency"),
+                    "buyer_commission_amount": outcome.get("buyer_commission_amount"),
+                    "buyer_commission_currency": outcome.get("buyer_commission_currency"),
+                    "deposit_type": outcome.get("deposit_type"),
                     "reserved_at": created_at,
                     "created_by_user_id": actor_user_id,
                     "created_at": created_at,
@@ -473,7 +525,7 @@ def _commit_property_reservation(
         "commercial_status": previous_status,
         "listing_price": previous_price,
         "listing_currency": previous_currency,
-        "price_changed": agreed is not None,
+        "price_changed": update_price,
         "reservation_id": reservation_id,
     }
 

@@ -165,7 +165,13 @@
         });
     }
 
+    function reservationAmountsLocked() {
+        var field = document.querySelector("[name='reservation_id']");
+        return Boolean(field && field.value);
+    }
+
     function applyPrefill(data) {
+        var keepReservationAmounts = reservationAmountsLocked();
         resetManualOverrides();
 
         if (propertyIdInput) {
@@ -191,24 +197,25 @@
         }
 
         if (
-            originalAmountInput
+            !keepReservationAmounts
+            && originalAmountInput
             && data.operation_value !== null
             && data.operation_value !== undefined
         ) {
             originalAmountInput.value = String(data.operation_value);
         }
 
-        if (sellerRateInput && data.seller_commission_rate !== undefined) {
+        if (!keepReservationAmounts && sellerRateInput && data.seller_commission_rate !== undefined) {
             sellerRateInput.value = String(data.seller_commission_rate);
         }
-        if (buyerRateInput && data.buyer_commission_rate !== undefined) {
+        if (!keepReservationAmounts && buyerRateInput && data.buyer_commission_rate !== undefined) {
             buyerRateInput.value = String(data.buyer_commission_rate);
         }
 
-        if (sellerVatInput) {
+        if (!keepReservationAmounts && sellerVatInput) {
             sellerVatInput.value = "0";
         }
-        if (buyerVatInput) {
+        if (!keepReservationAmounts && buyerVatInput) {
             buyerVatInput.value = "0";
         }
 

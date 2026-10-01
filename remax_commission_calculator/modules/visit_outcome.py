@@ -272,6 +272,16 @@ def normalize_visit_outcome(raw):
     next_milestone = str(raw.get("next_milestone") or "").strip()
     estimated_closing_date = str(raw.get("estimated_closing_date") or "").strip()
     reservation_notes = str(raw.get("reservation_notes") or "").strip()
+    price_change = str(raw.get("price_change") or "").strip()
+    shared_flag = str(raw.get("is_shared_transaction") or "").strip().lower()
+    shared_name = str(raw.get("shared_brokerage_name") or "").strip()
+    deposit_type = str(raw.get("deposit_type") or "").strip()
+    seller_amount = parse_jrh_money(raw.get("seller_commission_amount"))
+    seller_currency = _currency(raw.get("seller_commission_currency"))
+    buyer_amount = parse_jrh_money(raw.get("buyer_commission_amount"))
+    buyer_currency = _currency(raw.get("buyer_commission_currency"))
+    amount_informed = str(raw.get("reservation_amount") or "").strip()
+    agreed_informed = str(raw.get("agreed_property_price") or "").strip()
 
     outcome = {}
     if note:
@@ -302,14 +312,41 @@ def normalize_visit_outcome(raw):
         outcome["offer_amount"] = offer_amount
         outcome["offer_currency"] = offer_currency or "USD"
     if result == "reserved":
-        if reservation_amount is not None:
+        if amount_informed and reservation_amount is None:
+            outcome["reservation_amount_invalid"] = True
+        elif reservation_amount is not None:
             outcome["reservation_amount"] = reservation_amount
             outcome["reservation_currency"] = reservation_currency or "USD"
-        if agreed_price is not None:
+            raw_currency = str(raw.get("reservation_currency") or "").strip()
+            if raw_currency and not reservation_currency:
+                outcome["reservation_currency_invalid"] = True
+        if price_change in ("keep", "change"):
+            outcome["price_change"] = price_change
+        elif agreed_price is not None or agreed_informed:
+            outcome["price_change"] = "change"
+        if agreed_informed and agreed_price is None:
+            outcome["agreed_property_price_invalid"] = True
+        elif agreed_price is not None:
             outcome["agreed_property_price"] = agreed_price
             outcome["agreed_property_currency"] = (
                 agreed_currency or reservation_currency or "USD"
             )
+            raw_agreed_currency = str(raw.get("agreed_property_currency") or "").strip()
+            if raw_agreed_currency and not agreed_currency:
+                outcome["agreed_currency_invalid"] = True
+        outcome["is_shared_transaction"] = 1 if shared_flag in ("1", "true", "shared") else 0
+        if outcome["is_shared_transaction"]:
+            outcome["shared_brokerage_name"] = shared_name
+        if deposit_type in ("reservation", "reinforcement"):
+            outcome["deposit_type"] = deposit_type
+        elif reservation_amount is not None:
+            outcome["deposit_type"] = "reservation"
+        if seller_amount is not None:
+            outcome["seller_commission_amount"] = seller_amount
+            outcome["seller_commission_currency"] = seller_currency or "USD"
+        if buyer_amount is not None:
+            outcome["buyer_commission_amount"] = buyer_amount
+            outcome["buyer_commission_currency"] = buyer_currency or "USD"
         if payment_method:
             outcome["payment_method"] = payment_method
         if next_milestone:
@@ -419,6 +456,22 @@ def outcome_from_form(form):
         base["estimated_closing_date"] = form.get("estimated_closing_date")
     if form.get("reservation_notes") is not None:
         base["reservation_notes"] = form.get("reservation_notes")
+    if form.get("price_change") is not None:
+        base["price_change"] = form.get("price_change")
+    if form.get("is_shared_transaction") is not None:
+        base["is_shared_transaction"] = form.get("is_shared_transaction")
+    if form.get("shared_brokerage_name") is not None:
+        base["shared_brokerage_name"] = form.get("shared_brokerage_name")
+    if form.get("deposit_type") is not None:
+        base["deposit_type"] = form.get("deposit_type")
+    if form.get("seller_commission_amount") is not None:
+        base["seller_commission_amount"] = form.get("seller_commission_amount")
+    if form.get("seller_commission_currency") is not None:
+        base["seller_commission_currency"] = form.get("seller_commission_currency")
+    if form.get("buyer_commission_amount") is not None:
+        base["buyer_commission_amount"] = form.get("buyer_commission_amount")
+    if form.get("buyer_commission_currency") is not None:
+        base["buyer_commission_currency"] = form.get("buyer_commission_currency")
     if form.get("next_action") is not None:
         base["next_action"] = form.get("next_action")
     if form.get("suggested_task_prompt"):
