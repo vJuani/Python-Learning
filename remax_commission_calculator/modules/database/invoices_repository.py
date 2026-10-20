@@ -1002,6 +1002,43 @@ def count_pending_operations_to_invoice(
         connection.close()
 
 
+def billing_ready_sql(party_alias, operation_alias):
+    """Side is billable from treasury collections, or from preclose staff choice."""
+    return f"""
+        (
+            COALESCE({operation_alias}.status, 'approved')
+                IN ('preclose', 'preclose_void')
+            AND {party_alias}.billing_enabled = 1
+            OR (
+                COALESCE({operation_alias}.status, 'approved')
+                    NOT IN ('preclose', 'preclose_void')
+                AND COALESCE({party_alias}.commission_amount, 0) > 0.009
+                AND (
+                    SELECT COALESCE(SUM(cash_movements.amount), 0)
+                    FROM cash_movements
+                    WHERE cash_movements.organization_id
+                        = {party_alias}.organization_id
+                        AND cash_movements.linked_operation_id
+                            = {party_alias}.operation_id
+                        AND cash_movements.linked_party_role
+                            = {party_alias}.party_role
+                        AND cash_movements.movement_type = 'income'
+                        AND cash_movements.status = 'confirmed'
+                        AND cash_movements.category = 'commission_collection'
+                        AND cash_movements.currency
+                            = COALESCE({operation_alias}.currency, 'USD')
+                ) + 0.009 >= {party_alias}.commission_amount
+            )
+            OR (
+                COALESCE({operation_alias}.status, 'approved')
+                    NOT IN ('preclose', 'preclose_void')
+                AND COALESCE({party_alias}.commission_amount, 0) <= 0.009
+                AND {party_alias}.billing_enabled = 1
+            )
+        )
+    """
+
+
 def count_pending_parties_to_invoice(
     organization_id,
     agent_id=None,
@@ -1009,8 +1046,8 @@ def count_pending_parties_to_invoice(
     """
     Count operation parties ready to invoice.
 
-    Staff (no agent_id): participating + billing_enabled +
-    invoice_amount > 0.
+    Staff (no agent_id): participating + commission collected
+    (or preclose billing choice) + invoice_amount > 0.
 
     Agent: same, limited to the agent's operations, and
     without an active invoice for issuer_key=agent:{id}
@@ -1022,25 +1059,24 @@ def count_pending_parties_to_invoice(
     clauses = [
         "operation_parties.organization_id = ?",
         "operation_parties.is_participating = 1",
-        "operation_parties.billing_enabled = 1",
+        billing_ready_sql("operation_parties", "operations"),
         "operation_parties.invoice_amount IS NOT NULL",
         "operation_parties.invoice_amount > 0",
     ]
     params = [organization_id]
 
-    join_sql = ""
+    join_sql = """
+        INNER JOIN operations
+            ON operations.id
+                = operation_parties.operation_id
+            AND operations.organization_id
+                = operation_parties.organization_id
+    """
     if agent_id is not None:
         placeholders = ", ".join(
             "?" for _ in ACTIVE_STATUSES
         )
         issuer_key = f"agent:{agent_id}"
-        join_sql = """
-            INNER JOIN operations
-                ON operations.id
-                    = operation_parties.operation_id
-                AND operations.organization_id
-                    = operation_parties.organization_id
-        """
         clauses.append("operations.agent_id = ?")
         params.append(agent_id)
         clauses.append(

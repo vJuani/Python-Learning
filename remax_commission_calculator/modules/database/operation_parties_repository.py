@@ -635,12 +635,15 @@ def create_parties_for_new_operation(
     buyer_commission_percent,
     seller_commission_amount,
     buyer_commission_amount,
+    connection=None,
 ):
     organization_id = require_organization_id(
         organization_id
     )
     now = _now_iso()
-    connection = get_connection()
+    owns_connection = connection is None
+    if owns_connection:
+        connection = get_connection()
     cursor = connection.cursor()
 
     try:
@@ -687,13 +690,17 @@ def create_parties_for_new_operation(
                 ),
             )
 
-        connection.commit()
-        return get_parties_for_operation(
-            organization_id,
-            operation_id,
-        )
+        if owns_connection:
+            connection.commit()
+            return get_parties_for_operation(
+                organization_id,
+                operation_id,
+            )
+        return None
     except Exception:
-        connection.rollback()
+        if owns_connection:
+            connection.rollback()
         raise
     finally:
-        connection.close()
+        if owns_connection:
+            connection.close()

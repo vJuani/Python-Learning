@@ -313,7 +313,7 @@ class InvoiceAiServiceTests(unittest.TestCase):
             SIDE_BUYER,
         )
         missing = get_next_missing_client_field(party)
-        self.assertEqual(missing, "client_tax_id")
+        self.assertEqual(missing, "client_legal_name")
 
 
 if __name__ == "__main__":

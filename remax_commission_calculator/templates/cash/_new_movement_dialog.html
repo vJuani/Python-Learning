@@ -1,0 +1,191 @@
+{% set values = form_values if form_values is defined and form_values else {
+    'movement_type': 'income',
+    'currency': 'ARS',
+    'amount': '',
+    'category': '',
+    'description': '',
+    'payment_method': 'cash',
+    'movement_date': '',
+    'notes': '',
+    'treasury_account_id': '',
+    'linked_operation_id': '',
+    'linked_party_role': ''
+} %}
+<dialog
+    id="cash-new-dialog"
+    class="aa-dialog aa-payment-modal cash-new-modal"
+    aria-labelledby="cash-new-title"
+    {% if open_on_load %}data-open-on-load{% endif %}
+    {% if return_on_close %}data-return-on-close data-return-url="{{ url_for('cash_list') }}"{% endif %}
+>
+    <form class="aa-form aa-form--compact" method="post" action="{{ url_for('cash_new') }}" data-cash-new-form>
+        <header class="aa-dialog__header">
+            <div>
+                <h2 id="cash-new-title">{{ t('cash_new') }}</h2>
+                <p class="aa-payment-modal__subtitle">{{ t('cash_new_subtitle') }}</p>
+            </div>
+            <button type="button" class="aa-dialog__close" data-cash-new-close aria-label="{{ t('agent_account_close') }}">×</button>
+        </header>
+
+        <div class="aa-movement-body">
+            {% if errors is defined and errors %}
+            <div role="alert">
+                {% for error in errors %}
+                <p class="aa-payment-error">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <section class="aa-payment-block">
+                <h3>{{ t('cash_section_movement') }}</h3>
+                <label class="aa-field">
+                    <span>{{ t('cash_movement_type') }}</span>
+                    <select id="cash-new-type" name="movement_type" required data-cash-new-type>
+                        <option value="income" {% if values.movement_type == 'income' %}selected{% endif %}>{{ t('cash_type_income') }}</option>
+                        <option value="expense" {% if values.movement_type == 'expense' %}selected{% endif %}>{{ t('cash_type_expense') }}</option>
+                    </select>
+                </label>
+                <div class="aa-payment-money">
+                    <label class="aa-field aa-field--amount">
+                        <span>{{ t('cash_amount') }}</span>
+                        <div class="aa-money-input">
+                            <span class="aa-money-input__prefix" data-cash-new-prefix>{{ values.currency or 'ARS' }}</span>
+                            <input type="text" id="cash-new-amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0,00" required value="{{ values.amount }}" data-cash-new-amount>
+                        </div>
+                    </label>
+                    <label class="aa-field">
+                        <span>{{ t('cash_currency') }}</span>
+                        <select id="cash-new-currency" name="currency" required data-cash-new-currency>
+                            {% for currency in currencies %}
+                            <option value="{{ currency }}" {% if values.currency == currency %}selected{% endif %}>{{ currency }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="aa-field">
+                        <span>{{ t('cash_movement_date') }}</span>
+                        <input type="date" id="cash-new-date" name="movement_date" required value="{{ values.movement_date }}" data-cash-new-date>
+                    </label>
+                </div>
+            </section>
+
+            <section class="aa-payment-block">
+                <h3>{{ t('cash_section_classification') }}</h3>
+                <label class="aa-field">
+                    <span>{{ t('cash_category') }}</span>
+                    <select id="cash-new-category" name="category" required data-cash-new-category>
+                        <option value="">{{ t('select_type') }}</option>
+                        <optgroup label="{{ t('cash_type_income') }}" data-cash-new-group="income">
+                            {% for category in income_categories %}
+                            <option value="{{ category }}" data-cash-new-kind="income" {% if values.category == category %}selected{% endif %}>{{ t('cash_cat_' ~ category) }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="{{ t('cash_type_expense') }}" data-cash-new-group="expense">
+                            {% for category in expense_categories %}
+                            <option value="{{ category }}" data-cash-new-kind="expense" {% if values.category == category %}selected{% endif %}>{{ t('cash_cat_' ~ category) }}</option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </label>
+                <label class="aa-field">
+                    <span>{{ t('cash_description') }}</span>
+                    <input type="text" id="cash-new-description" name="description" required value="{{ values.description }}" data-cash-new-description>
+                </label>
+            </section>
+
+            <section
+                class="aa-payment-block"
+                data-cash-origin
+                hidden
+                data-cash-origin-categories="commission_collection"
+                data-cash-origin-url="{{ url_for('cash_operation_collections') }}"
+                data-description-template="{{ t('cash_origin_description') }}"
+                data-label-expected="{{ t('cash_expected_commission') }}"
+                data-label-collected="{{ t('cash_collected') }}"
+                data-label-remaining="{{ t('cash_remaining') }}"
+                data-label-count="{{ t('cash_origin_collections') }}"
+                data-label-settled="{{ t('cash_origin_settled') }}"
+                data-label-side-collected="{{ t('cash_side_collected_option') }}"
+                data-label-operation-settled="{{ t('cash_origin_operation_settled') }}"
+                data-label-exceeds="{{ t('cash_err_operation_side_exceeds') }}"
+                data-label-buyer="{{ t('cash_side_buyer') }}"
+                data-label-seller="{{ t('cash_side_seller') }}"
+            >
+                <h3>{{ t('cash_section_origin') }}</h3>
+                <label class="aa-field">
+                    <span>{{ t('cash_link_operation') }}</span>
+                    <select name="linked_operation_id" data-cash-origin-operation data-selected="{{ values.linked_operation_id }}" disabled>
+                        <option value="">{{ t('cash_operation_none') }}</option>
+                    </select>
+                </label>
+                <label class="aa-field">
+                    <span>{{ t('cash_party_side') }}</span>
+                    <select name="linked_party_role" data-cash-origin-side data-selected="{{ values.linked_party_role }}" disabled>
+                        <option value="">{{ t('cash_side_select') }}</option>
+                    </select>
+                </label>
+                <p class="aa-payment-modal__subtitle" data-cash-origin-status hidden></p>
+                <p class="aa-payment-error" data-cash-origin-error role="alert" hidden></p>
+            </section>
+
+            <section class="aa-payment-block">
+                <h3>{{ t('cash_section_treasury') }}</h3>
+                <div class="aa-payment-pair">
+                    <label class="aa-field">
+                        <span>{{ t('treasury_account') }}</span>
+                        <select id="cash-new-account" name="treasury_account_id" data-cash-new-account>
+                            <option value="">{{ t('treasury_account_auto') }}</option>
+                            {% for account in treasury_accounts %}
+                            <option value="{{ account.id }}" data-currency="{{ account.currency }}" {% if values.treasury_account_id|string == account.id|string %}selected{% endif %}>{{ account.name }} ({{ account.currency }})</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="aa-field">
+                        <span>{{ t('cash_payment_method') }}</span>
+                        <select id="cash-new-method" name="payment_method" required data-cash-new-method>
+                            {% for method in payment_methods %}
+                            <option value="{{ method }}" {% if values.payment_method == method %}selected{% endif %}>{{ t('cash_pay_' ~ method) }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+            </section>
+
+            <section class="aa-payment-block">
+                <h3>{{ t('cash_section_detail') }}</h3>
+                <label class="aa-field">
+                    <span>{{ t('cash_notes') }}</span>
+                    <textarea id="cash-new-notes" name="notes" rows="2">{{ values.notes }}</textarea>
+                </label>
+            </section>
+
+            <section class="aa-payment-block aa-payment-summary" aria-live="polite">
+                <h3>{{ t('cash_new_summary') }}</h3>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('cash_movement_type') }}</span>
+                    <strong data-cash-new-summary="type">—</strong>
+                </div>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('cash_amount') }}</span>
+                    <strong data-cash-new-summary="amount">—</strong>
+                </div>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('treasury_account') }}</span>
+                    <strong data-cash-new-summary="account">—</strong>
+                </div>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('cash_payment_method') }}</span>
+                    <strong data-cash-new-summary="method">—</strong>
+                </div>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('cash_category') }}</span>
+                    <strong data-cash-new-summary="category">—</strong>
+                </div>
+            </section>
+        </div>
+
+        <footer class="aa-dialog__footer">
+            <button type="button" class="aa-btn aa-btn--ghost" data-cash-new-close>{{ t('cancel') }}</button>
+            <button type="submit" name="action" value="save" class="aa-btn aa-btn--primary" data-cash-new-submit disabled>{{ t('cash_register_movement') }}</button>
+        </footer>
+    </form>
+</dialog>

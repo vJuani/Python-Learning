@@ -36,7 +36,7 @@
             <dd>{{ preview.subtotal | money(preview.currency) }}</dd>
         </div>
         <div>
-            <dt>{{ t('billing_vat') }} {{ (preview.vat_rate * 100) | round(2) }}%</dt>
+            <dt>{{ t('billing_voucher_vat') }} {{ (preview.vat_rate * 100) | round(2) }}%</dt>
             <dd>{{ preview.vat_amount | money(preview.currency) }}</dd>
         </div>
         <div>

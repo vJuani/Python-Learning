@@ -1,15 +1,23 @@
 {% extends "base.html" %}
 
+{% block body_class %}is-cash-page {% endblock %}
 {% block title %}{{ t('cash_transfer') }} | {{ t('app_title') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cash-page.css') }}?v=treasury2">
+{% endblock %}
+
 {% block content %}
+{% set treasury_tab = 'accounts' %}
+<div class="treasury-page">
+{% include "cash/_module_nav.html" %}
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ t('cash_transfer') }}</h2>
         <p>{{ t('cash_transfer_subtitle') }}</p>
     </div>
     <div class="page-actions">
-        <a href="{{ url_for('cash_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+        <a href="{{ url_for('cash_treasury_accounts') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
 </section>
 
@@ -47,4 +55,5 @@
         <button type="submit" class="btn btn-primary">{{ t('cash_transfer_confirm') }}</button>
     </form>
 </section>
+</div>
 {% endblock %}

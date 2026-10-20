@@ -3,7 +3,7 @@
 {% block title %}{% if read_only %}{{ t('reservation_mine') }}{% else %}{{ t('reservation_title') }}{% endif %} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/reservations.css') }}?v=board11">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reservations.css') }}?v=detail3">
 {% endblock %}
 
 {% block content %}
@@ -20,6 +20,7 @@
     purpose=filters.purpose,
     payment_method=filters.payment_method,
     credit=filters.credit,
+    bank=filters.bank,
     next_milestone=filters.next_milestone,
     close_from=filters.close_from,
     close_to=filters.close_to,
@@ -39,11 +40,16 @@
             <h2>{% if read_only %}{{ t('reservation_mine') }}{% else %}{{ t('reservation_title') }}{% endif %}</h2>
             <p>{{ t('reservation_subtitle') }}</p>
         </div>
+        <div class="res-head__tools">
+            {% if not read_only %}
+            <a class="btn btn-primary" href="{{ url_for('reservations_new') }}">{{ t('reservation_add') }}</a>
+            {% endif %}
         <form id="res-filters" class="res-search" method="get" action="{{ url_for('reservations_list') }}">
             <input type="hidden" name="view" value="{{ filters.view }}">
             <input type="search" name="q" value="{{ filters.q }}" placeholder="{{ t('reservation_search_placeholder') }}" autocomplete="off">
             <button type="button" class="btn btn-secondary" data-res-filters-open>{{ t('reservation_filters') }}</button>
         </form>
+        </div>
     </header>
 
     <div class="res-kpis">
@@ -208,7 +214,7 @@
     <aside class="res-panel" data-res-panel hidden></aside>
 </section>
 
-{% set _filter_vals = [filters.status, filters.purpose, filters.payment_method, filters.credit, filters.next_milestone, filters.address, filters.client, filters.close_from, filters.close_to, filters.reserved_from, filters.reserved_to, filters.has_operation] %}
+{% set _filter_vals = [filters.status, filters.purpose, filters.payment_method, filters.credit, filters.bank, filters.next_milestone, filters.address, filters.client, filters.close_from, filters.close_to, filters.reserved_from, filters.reserved_to, filters.has_operation] %}
 {% set fc = namespace(n=0) %}
 {% for _value in _filter_vals %}{% if _value %}{% set fc.n = fc.n + 1 %}{% endif %}{% endfor %}
 {% if not read_only and (filters.agent_id or filters.agent_query) %}{% set fc.n = fc.n + 1 %}{% endif %}
@@ -265,6 +271,15 @@
                         <option value="">{{ t('reservation_filter_all') }}</option>
                         <option value="yes" {% if filters.credit == 'yes' %}selected{% endif %}>{{ t('reservation_filter_credit_yes') }}</option>
                         <option value="no" {% if filters.credit == 'no' %}selected{% endif %}>{{ t('reservation_filter_credit_no') }}</option>
+                    </select>
+                </label>
+                <label data-res-bank-filter {% if filters.credit != 'yes' %}hidden{% endif %}>
+                    <span>{{ t('reservation_filter_bank') }}</span>
+                    <select name="bank" form="res-filters" {% if filters.credit != 'yes' %}disabled{% endif %}>
+                        <option value="">{{ t('reservation_filter_all') }}</option>
+                        {% for bank in banks %}
+                        <option value="{{ bank.id }}" {% if filters.bank == bank.id %}selected{% endif %}>{{ bank.name }}</option>
+                        {% endfor %}
                     </select>
                 </label>
                 <label class="is-wide">
@@ -361,5 +376,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/reservations.js') }}?v=board11"></script>
+<script src="{{ url_for('static', filename='js/reservations.js') }}?v=detail3"></script>
 {% endblock %}

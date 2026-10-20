@@ -36,6 +36,8 @@ from modules.database.schema import (
     _column_exists,
     _migrate_agent_account,
 )
+from modules.agent_account import build_agent_detail_view
+from modules.agent_account_presentation import movement_display_amount
 from modules.operation_commission_credit import (
     OperationCommissionError,
     build_operation_commission_state,
@@ -335,16 +337,18 @@ class OperationCommissionCreditTests(unittest.TestCase):
         )
         self.assertEqual(state["state"], "ready")
         self.assertIsNotNone(state["last_reversed_movement"])
-        technical = [
+        compensations = [
             row
             for row in list_agent_account_movements(
                 self.org_a,
                 self.agent_id,
                 include_internal_reversals=True,
             )
-            if row.get("is_internal_reversal")
+            if row.get("reversed_movement_id")
+            and row.get("movement_type") == "adjustment"
+            and not row.get("is_internal_reversal")
         ]
-        self.assertTrue(technical)
+        self.assertTrue(compensations)
 
     # 13
     def test_operation_without_valid_agent_is_not_ready(self):
@@ -444,6 +448,25 @@ class OperationCommissionCreditTests(unittest.TestCase):
             response.data,
         )
 
+    def test_manual_operation_pending_approval_is_not_ready(self):
+        operation_id = self._operation(
+            status="pending",
+            was_invoiced="no",
+        )
+        state = build_operation_commission_state(
+            self.org_a,
+            operation_id,
+        )
+        self.assertEqual(state["state"], "not_ready")
+        self.assertIn(
+            "operation_commission_not_approved",
+            state["reasons"],
+        )
+        self.assertIn(
+            "operation_commission_not_closed",
+            state["reasons"],
+        )
+
     def test_not_closed_operation_is_not_ready(self):
         operation_id = self._operation(was_invoiced="no")
         state = build_operation_commission_state(
@@ -474,6 +497,123 @@ class OperationCommissionCreditTests(unittest.TestCase):
         second = self._credit(operation_id, amount="900")
         self.assertNotEqual(first["id"], second["id"])
         self.assertTrue(second["idempotency_key"].endswith(":v2"))
+
+    def test_reversal_inserts_visible_compensation_once(self):
+        operation_id = self._operation()
+        reason = "Acreditación cargada por error - prueba QA"
+        before = get_agent_balances(self.org_a, self.agent_id)["USD"]
+        cash_before = len(list_cash_movements(self.org_a))
+        credited = self._credit(operation_id, amount="4320")
+
+        self.assertEqual(credited["movement_type"], "commission")
+        self.assertEqual(credited["status"], "confirmed")
+        self.assertEqual(credited["currency"], "USD")
+        self.assertEqual(credited["source_type"], "operation")
+        self.assertEqual(credited["source_id"], operation_id)
+        self.assertAlmostEqual(credited["amount"], 4320.0)
+
+        reverse_operation_commission(
+            self.org_a,
+            operation_id,
+            created_by_user_id=self.admin_a,
+            reason=reason,
+        )
+
+        rows = list_agent_account_movements(
+            self.org_a,
+            self.agent_id,
+            include_internal_reversals=True,
+        )
+        original = next(
+            row for row in rows if row["id"] == credited["id"]
+        )
+        compensations = [
+            row
+            for row in rows
+            if row.get("reversed_movement_id") == credited["id"]
+        ]
+        self.assertEqual(len(compensations), 1)
+        compensation = compensations[0]
+        self.assertAlmostEqual(compensation["amount"], 4320.0)
+        self.assertAlmostEqual(
+            compensation["balance_after"] - compensation["balance_before"],
+            -4320.0,
+        )
+        self.assertEqual(compensation["currency"], "USD")
+        self.assertEqual(compensation["movement_type"], "adjustment")
+        self.assertEqual(compensation["status"], "confirmed")
+        self.assertEqual(compensation["source_type"], "operation")
+        self.assertEqual(compensation["source_id"], operation_id)
+        self.assertFalse(compensation["is_internal_reversal"])
+        self.assertEqual(compensation["reversal_reason"], reason)
+        self.assertIn("COM-", compensation["description"])
+        self.assertEqual(original["status"], "reversed")
+        self.assertEqual(original["movement_type"], "commission")
+        self.assertAlmostEqual(original["amount"], 4320.0)
+        self.assertEqual(original["source_id"], operation_id)
+        self.assertEqual(original["cancellation_reason"], reason)
+        self.assertEqual(original["cancelled_by_user_id"], self.admin_a)
+        self.assertTrue(original["cancelled_at"])
+        self.assertAlmostEqual(
+            get_agent_balances(self.org_a, self.agent_id)["USD"],
+            before,
+        )
+        self.assertEqual(
+            len(list_cash_movements(self.org_a)),
+            cash_before,
+        )
+        display = movement_display_amount(compensation)
+        self.assertEqual(display["tone"], "debit")
+        self.assertTrue(display["formatted"].startswith("-"))
+
+        shown = build_agent_detail_view(
+            self.org_a,
+            self.agent_id,
+            filters={"show_cancelled": True},
+        )
+        shown_ids = {row["id"] for row in shown["movements"]}
+        self.assertIn(credited["id"], shown_ids)
+        self.assertIn(compensation["id"], shown_ids)
+
+        hidden = build_agent_detail_view(
+            self.org_a,
+            self.agent_id,
+            filters={"show_cancelled": False},
+        )
+        hidden_ids = {row["id"] for row in hidden["movements"]}
+        self.assertNotIn(credited["id"], hidden_ids)
+        self.assertIn(compensation["id"], hidden_ids)
+
+        with self.assertRaises(OperationCommissionError) as ctx:
+            reverse_operation_commission(
+                self.org_a,
+                operation_id,
+                created_by_user_id=self.admin_a,
+                reason=reason,
+            )
+        self.assertEqual(
+            ctx.exception.message_key,
+            "operation_commission_err_not_credited",
+        )
+        after_retry = [
+            row
+            for row in list_agent_account_movements(
+                self.org_a,
+                self.agent_id,
+                include_internal_reversals=True,
+            )
+            if row.get("reversed_movement_id") == credited["id"]
+        ]
+        self.assertEqual(len(after_retry), 1)
+
+        self._login()
+        response = self.client.get(
+            f"/agent-accounts/{self.agent_id}?show_cancelled=1"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(compensation["description"].encode(), response.data)
+        self.assertIn(original["description"].encode(), response.data)
+        self.assertIn("Anulado".encode(), response.data)
 
 
 if __name__ == "__main__":

@@ -70,11 +70,12 @@ body.is-cash-page .app-main-inner {
     gap: 1rem;
 }
 
-.cash-page__header h1 {
+.cash-page__header h1,
+.treasury-page__header h1 {
     margin: 0 0 0.25rem;
     font-size: 1.75rem;
     font-weight: 700;
-    color: #001c3d;
+    color: var(--text, #102017);
     letter-spacing: -0.03em;
 }
 
@@ -107,8 +108,12 @@ body.is-cash-page .app-main-inner {
 }
 
 .cash-btn--primary {
-    background: #1d4ed8;
+    background: var(--brand-600, #156A4A);
     color: #fff;
+}
+
+.cash-btn--primary:hover {
+    background: var(--brand-700, #0E4F38);
 }
 
 .cash-btn--outline {
@@ -310,16 +315,256 @@ body.is-cash-page .app-main-inner {
 .cash-treasury-card {
     display: block;
     padding: 0.9rem 1rem;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-soft, #e5e7eb);
     border-radius: 12px;
-    background: #fff;
+    background: var(--surface, #fff);
+    text-decoration: none;
+    color: var(--text, #102017);
+}
+
+.cash-treasury-card h4,
+.cash-treasury-card p,
+.cash-treasury-card strong {
+    color: inherit;
+}
+
+.cash-treasury-card .cash-badge {
+    margin: 0 0 0.35rem 0.45rem;
+    background: rgba(45, 140, 99, 0.18);
+    color: #166534;
+    vertical-align: middle;
+}
+
+[data-theme="dark"] .cash-treasury-card .cash-badge {
+    color: #c8f0dc;
+}
+
+.cash-treasury-card.is-selected {
+    border-color: var(--brand-600, #156A4A);
+    box-shadow: 0 0 0 1px var(--brand-600, #156A4A);
+}
+
+.treasury-page {
+    display: grid;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem 2rem;
+    align-content: start;
+}
+
+body.is-cash-ai-page .treasury-page {
+    padding: 0;
+}
+
+.treasury-page__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.treasury-page__header p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+}
+
+.treasury-page__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.treasury-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+    border-bottom: 1px solid var(--border-soft, #e5e7eb);
+}
+
+.treasury-tabs__item {
+    padding: 0.55rem 0.15rem 0.65rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+}
+
+.treasury-tabs__item.is-active {
+    color: var(--brand-700, #0E4F38);
+    border-bottom-color: var(--brand-600, #156A4A);
+}
+
+.treasury-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.treasury-kpi-link {
     text-decoration: none;
     color: inherit;
 }
 
-.cash-treasury-card.is-selected {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 1px #2563eb;
+.cash-kpi-card small {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.treasury-chart {
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border-soft, #e5e7eb);
+    border-radius: 0.85rem;
+    background: var(--surface);
+}
+
+.treasury-chart h2 {
+    margin: 0 0 0.55rem;
+    font-size: 1rem;
+}
+
+.treasury-chart__canvas {
+    height: 150px;
+}
+
+.treasury-chart__empty {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.treasury-filters {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem 0.75rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border-soft, #e5e7eb);
+    border-radius: 0.85rem;
+    background: var(--surface);
+}
+
+.treasury-filters label {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 0;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.treasury-filters input,
+.treasury-filters select {
+    width: 100%;
+    min-height: 2.3rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--border-soft, #e5e7eb);
+    border-radius: 0.6rem;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+}
+
+.treasury-filters__actions {
+    display: flex;
+    align-items: end;
+    gap: 0.45rem;
+}
+
+.treasury-ai-pending {
+    margin: 0;
+}
+
+.treasury-account-form {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem 1rem;
+    align-items: end;
+}
+
+.treasury-account-form .form-group {
+    margin: 0;
+}
+
+.treasury-account-form .checkbox-inline,
+.treasury-account-form .cash-btn {
+    margin-top: 0.25rem;
+}
+
+.treasury-opening-meta {
+    margin: 0.4rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.treasury-opening-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr);
+    gap: 0.75rem 1rem;
+}
+
+.treasury-opening-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin: 0.25rem 0 0;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border-soft, #e5e7eb);
+    border-radius: 0.85rem;
+    background: var(--surface, #fff);
+}
+
+.treasury-opening-summary dt {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.treasury-opening-summary dd {
+    margin: 0.2rem 0 0;
+    font-weight: 600;
+}
+
+.treasury-opening-already {
+    margin: 0;
+    color: #b45309;
+    font-size: 0.88rem;
+}
+
+@media (max-width: 900px) {
+    .treasury-opening-fields,
+    .treasury-opening-summary {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .treasury-opening-fields,
+    .treasury-opening-summary {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 960px) {
+    .treasury-kpis,
+    .treasury-filters,
+    .treasury-account-form {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .treasury-page__header {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 640px) {
+    .treasury-page {
+        padding: 1rem;
+    }
+
+    .treasury-kpis,
+    .treasury-filters,
+    .treasury-account-form {
+        grid-template-columns: 1fr;
+    }
 }
 
 .cash-treasury-card__name {
@@ -345,4 +590,38 @@ body.is-cash-page .app-main-inner {
     .cash-page__header {
         flex-direction: column;
     }
+}
+
+.cash-new-modal [data-cash-origin-status] {
+    white-space: pre-line;
+}
+
+.cash-new-modal .aa-dialog__header {
+    align-items: flex-start;
+}
+
+.cash-new-modal .aa-payment-summary {
+    background: color-mix(in srgb, var(--brand-600, #156A4A) 14%, var(--surface));
+    border-color: color-mix(in srgb, var(--brand-600, #156A4A) 35%, transparent);
+}
+
+.cash-new-modal .aa-btn--primary {
+    background: var(--brand-600, #156A4A);
+    color: #fff;
+}
+
+.cash-new-modal .aa-btn--primary:hover:not(:disabled) {
+    background: var(--brand-700, #0E4F38);
+}
+
+.cash-new-modal.aa-payment-modal .aa-field textarea {
+    min-height: 4.25rem;
+    max-height: 6rem;
+    resize: vertical;
+}
+
+.cash-origin-ref {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.8125rem;
 }

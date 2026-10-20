@@ -720,7 +720,6 @@ def list_agent_account_movements(
         clauses.append(
             "COALESCE(m.is_internal_reversal, 0) = 0"
         )
-        clauses.append("m.reversed_movement_id IS NULL")
 
     query = (
         MOVEMENTS_BASE_QUERY
@@ -1197,6 +1196,7 @@ def reverse_agent_account_movement_atomic(
     reversal_reason,
     cursor=None,
     connection=None,
+    ledger_compensation=False,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -1227,7 +1227,10 @@ def reverse_agent_account_movement_atomic(
                 description,
                 balance_before,
                 balance_after,
-                status
+                status,
+                source_type,
+                source_id,
+                reference_text
             FROM agent_account_movements
             WHERE id = ?
                 AND organization_id = ?
@@ -1265,11 +1268,38 @@ def reverse_agent_account_movement_atomic(
             ),
         )
 
+        amount = float(original[4] or 0)
+        source_type = SOURCE_MANUAL
+        source_id = movement_id
+        reference_text = None
+        internal_flag = 1
         reversal_description = (
             f"[internal] Cancellation of #{movement_id}"
         )
         if original[5]:
             reversal_description += f": {original[5]}"
+        if ledger_compensation:
+            reference_text = (original[11] or "").strip() or None
+            label = ""
+            if reference_text:
+                label = reference_text.split("·")[0].strip()
+            if not label and original[5]:
+                pieces = str(original[5]).split("·")
+                label = (
+                    pieces[-1].strip()
+                    if len(pieces) > 1
+                    else str(original[5]).strip()
+                )
+            reversal_description = (
+                f"Compensación · {label}" if label else "Compensación"
+            )
+            if (
+                original[9] == SOURCE_OPERATION
+                and original[10] is not None
+            ):
+                source_type = SOURCE_OPERATION
+                source_id = original[10]
+            internal_flag = 0
 
         reversal_id = execute_insert(
             cursor,
@@ -1291,9 +1321,10 @@ def reverse_agent_account_movement_atomic(
                 created_at,
                 reversed_movement_id,
                 reversal_reason,
-                is_internal_reversal
+                is_internal_reversal,
+                reference_text
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -1301,18 +1332,20 @@ def reverse_agent_account_movement_atomic(
                 original[1],
                 MOVEMENT_TYPE_ADJUSTMENT,
                 original[3],
-                float(original[4] or 0),
+                amount,
                 reversal_description,
                 balance_before,
                 balance_after,
                 STATUS_CONFIRMED,
-                SOURCE_MANUAL,
-                movement_id,
+                source_type,
+                source_id,
                 now[:10],
                 created_by_user_id,
                 now,
                 movement_id,
                 reversal_reason or "",
+                internal_flag,
+                reference_text,
             ),
         )
         if owns_connection:

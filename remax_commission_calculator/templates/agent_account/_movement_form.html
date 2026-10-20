@@ -1,23 +1,160 @@
 <dialog id="aa-movement-dialog" class="aa-dialog aa-dialog--compact">
-    <form method="post" action="{{ url_for('agent_account_create_movement', agent_id=agent.id) }}" class="aa-form aa-form--compact" data-aa-movement-form>
-        <header class="aa-dialog__header">
-            <h2 data-aa-form-title>{{ t('agent_account_register_payment') }}</h2>
+    <form method="post" action="{{ url_for('agent_account_create_movement', agent_id=agent.id) }}" class="aa-form aa-form--compact" data-aa-movement-form
+          data-aa-agent-name="{{ agent.name }}"
+          data-aa-balance-usd="{{ detail.balances.USD }}"
+          data-aa-balance-ars="{{ detail.balances.ARS }}"
+          data-aa-favor-label="{{ t('agent_account_balance_in_favor_short') }}"
+          data-aa-pending-label="{{ t('agent_account_balance_pending_short') }}"
+          data-aa-payment-ref-default="{{ t('agent_account_payment_reference_agent', name=agent.name) }}"
+          data-aa-submit-payment="{{ t('agent_account_register_payment') }}"
+          data-aa-submit-default="{{ t('agent_account_confirm') }}"
+          data-aa-treasury-auto="{{ t('treasury_account_auto') }}"
+          data-aa-exceeds-message="{{ t('agent_account_payment_exceeds_inline') }}"
+          data-aa-no-balance-message="{{ t('agent_account_payment_no_balance') }}"
+          data-aa-method-message="{{ t('agent_account_err_payment_method_required') }}">
+        <header class="aa-dialog__header aa-payment-modal__header">
+            <div>
+                <h2 data-aa-form-title>{{ t('agent_account_register_payment') }}</h2>
+                <p class="aa-payment-modal__context" data-aa-payment-intro hidden>
+                    <strong>{{ agent.name }}</strong>
+                    <span data-aa-payment-balance-line></span>
+                </p>
+                <p class="aa-payment-modal__subtitle" data-aa-payment-intro hidden>{{ t('agent_account_payment_subtitle') }}</p>
+            </div>
             <button type="button" class="aa-dialog__close" data-aa-dialog-close aria-label="{{ t('agent_account_close') }}">×</button>
         </header>
 
         <input type="hidden" name="idempotency_key" value="{{ form_idempotency_key }}">
         <input type="hidden" name="movement_type" value="{{ default_movement_type }}" data-aa-movement-type-input>
 
-        <div class="aa-form__section" data-aa-section="payment" hidden>
-            <label class="aa-field">
-                <span>{{ t('agent_account_apply_payment_to') }}</span>
-                <select name="applied_to_movement_id" data-aa-apply-payment>
-                    <option value="general">{{ t('agent_account_payment_general') }}</option>
-                </select>
-            </label>
+        <div class="aa-movement-body">
+        <div data-aa-payment-only hidden>
+            <input type="hidden" name="payment_direction" value="payout" disabled>
+
+            <section class="aa-payment-block">
+                <h3>{{ t('agent_account_payment_block_payment') }}</h3>
+                <label class="aa-field">
+                    <span>{{ t('agent_account_apply_payment_to') }}</span>
+                    <select name="applied_to_movement_id" data-aa-apply-payment disabled>
+                        <option value="general" data-aa-payment-ref="{{ t('agent_account_payment_reference_agent', name=agent.name) }}">{{ t('agent_account_payment_apply_balance') }}</option>
+                        {% for movement in detail.movements %}
+                        {% if movement.movement_type == 'commission' and movement.status == 'confirmed' and movement.linked_operation %}
+                        <option value="general" data-aa-currency="{{ movement.currency }}" data-aa-payment-ref="{{ t('agent_account_payment_reference_commission', code=movement.linked_operation.display_id) }}">{{ movement.linked_operation.display_id }}{% if movement.linked_operation.property %} · {{ movement.linked_operation.property }}{% endif %}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </label>
+                <div class="aa-payment-money">
+                    <label class="aa-field aa-field--amount">
+                        <span>{{ t('agent_account_amount_label') }}</span>
+                        <div class="aa-money-input" data-aa-money-input>
+                            <span class="aa-money-input__prefix" data-aa-currency-prefix>USD</span>
+                            <input type="text" name="amount" inputmode="decimal" autocomplete="off" placeholder="0,00" required data-aa-amount-input disabled>
+                        </div>
+                    </label>
+                    <label class="aa-field">
+                        <span>{{ t('agent_account_currency') }}</span>
+                        <select name="currency" required data-aa-currency-select disabled>
+                            {% for currency in currencies %}
+                            <option value="{{ currency }}" {% if currency == 'USD' %}selected{% endif %}>{{ currency }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="aa-field">
+                        <span>{{ t('date') }}</span>
+                        <input type="date" name="movement_date" value="{{ today_iso }}" required disabled>
+                    </label>
+                </div>
+                <p class="aa-payment-error" data-aa-payment-error hidden></p>
+            </section>
+
+            <section class="aa-payment-block">
+                <h3>{{ t('agent_account_payment_block_treasury') }}</h3>
+                <div class="aa-payment-pair">
+                    <label class="aa-field">
+                        <span>{{ t('agent_account_payment_method') }}</span>
+                        <select name="payment_method" required data-aa-payment-method disabled>
+                            <option value="" disabled selected>{{ t('agent_account_payment_method_placeholder') }}</option>
+                            {% for method in payment_methods %}
+                            <option value="{{ method }}">{{ t('agent_account_pay_' ~ method) }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="aa-field">
+                        <span>{{ t('agent_account_payment_origin') }}</span>
+                        <select name="treasury_account_id" data-aa-treasury-account disabled>
+                            <option value="">{{ t('treasury_account_auto') }}</option>
+                        </select>
+                    </label>
+                </div>
+                <p class="aa-form__hint">{{ t('agent_account_payment_origin_hint') }}</p>
+                <p class="aa-form__hint">{{ t('agent_account_payment_cash_notice') }}</p>
+            </section>
+
+            <section class="aa-payment-block" data-aa-payment-fx hidden>
+                <h3>{{ t('agent_account_payment_block_fx') }}</h3>
+                <div class="aa-payment-pair">
+                    <label class="aa-field">
+                        <span>{{ t('agent_account_exchange_rate') }}</span>
+                        <input type="text" name="exchange_rate" inputmode="decimal" placeholder="1.480,00" data-aa-fx-rate disabled>
+                    </label>
+                    <label class="aa-field">
+                        <span>{{ t('agent_account_exchange_rate_date') }}</span>
+                        <input type="date" name="exchange_rate_date" value="{{ today_iso }}" disabled>
+                    </label>
+                </div>
+                <input type="hidden" name="exchange_rate_source" value="manual" disabled>
+                <p class="aa-form__hint" data-aa-fx-equivalent hidden></p>
+            </section>
+
+            <section class="aa-payment-block">
+                <h3>{{ t('agent_account_payment_block_detail') }}</h3>
+                <label class="aa-field">
+                    <span>{{ t('agent_account_concept') }}</span>
+                    <textarea name="description" rows="2" placeholder="{{ t('agent_account_concept_placeholder') }}" disabled></textarea>
+                </label>
+                <div class="aa-payment-pair">
+                    <label class="aa-field">
+                        <span>{{ t('agent_account_reference_optional') }}</span>
+                        <input type="text" name="reference_text" placeholder="{{ t('agent_account_payment_reference_placeholder') }}" data-aa-payment-reference disabled>
+                    </label>
+                    <label class="aa-field">
+                        <span>{{ t('agent_account_notes_optional') }}</span>
+                        <input type="text" name="notes" placeholder="{{ t('agent_account_optional') }}" disabled>
+                    </label>
+                </div>
+            </section>
+
+            <section class="aa-payment-block aa-payment-summary" data-aa-payment-confirm>
+                <h3>{{ t('agent_account_payment_summary') }}</h3>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('agent_account_payment_current_balance') }}</span>
+                    <strong data-aa-confirm-current>—</strong>
+                </div>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('agent_account_payment_block_payment') }}</span>
+                    <strong data-aa-confirm-payment>—</strong>
+                </div>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('agent_account_payment_after_balance') }}</span>
+                    <strong data-aa-confirm-after>—</strong>
+                </div>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('agent_account_payment_confirm_cash_expense') }}</span>
+                    <strong data-aa-confirm-cash>—</strong>
+                </div>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('agent_account_payment_origin') }}</span>
+                    <strong data-aa-confirm-treasury>—</strong>
+                </div>
+                <div class="aa-payment-summary__row">
+                    <span>{{ t('agent_account_payment_method') }}</span>
+                    <strong data-aa-confirm-method>—</strong>
+                </div>
+            </section>
         </div>
 
-        <label class="aa-field aa-field--amount">
+        <label class="aa-field aa-field--amount" data-aa-shared>
             <span>{{ t('agent_account_amount_label') }}</span>
             <div class="aa-money-input" data-aa-money-input>
                 <span class="aa-money-input__prefix" data-aa-currency-prefix>USD</span>
@@ -25,7 +162,7 @@
             </div>
         </label>
 
-        <div class="aa-form__grid">
+        <div class="aa-form__grid" data-aa-shared>
             <label class="aa-field">
                 <span>{{ t('agent_account_currency') }}</span>
                 <select name="currency" required data-aa-currency-select>
@@ -38,28 +175,6 @@
                 <span>{{ t('date') }}</span>
                 <input type="date" name="movement_date" value="{{ today_iso }}" required>
             </label>
-        </div>
-
-        <div class="aa-form__section" data-aa-section="payment" hidden>
-            <label class="aa-field">
-                <span>{{ t('treasury_account_destination') }}</span>
-                <select name="treasury_account_id" data-aa-treasury-account required>
-                    <option value="">{{ t('treasury_account_auto') }}</option>
-                </select>
-            </label>
-        </div>
-
-        <div class="aa-form__section" data-aa-section="payment" hidden>
-            <label class="aa-field">
-                <span>{{ t('agent_account_payment_method') }}</span>
-                <select name="payment_method" required data-aa-payment-method>
-                    <option value="">{{ t('agent_account_optional') }}</option>
-                    {% for method in payment_methods %}
-                    <option value="{{ method }}">{{ t('agent_account_pay_' ~ method) }}</option>
-                    {% endfor %}
-                </select>
-            </label>
-            <p class="aa-form__hint">{{ t('agent_account_payment_cash_notice') }}</p>
         </div>
 
         <div class="aa-form__section" data-aa-section="commission" hidden>
@@ -81,7 +196,7 @@
             </label>
         </div>
 
-        <div class="aa-form__section aa-form__section--fx" data-aa-fx-block hidden>
+        <div class="aa-form__section aa-form__section--fx" data-aa-fx-block data-aa-shared hidden>
             <div class="aa-form__grid">
                 <label class="aa-field">
                     <span>{{ t('agent_account_exchange_rate') }}</span>
@@ -96,12 +211,12 @@
             <p class="aa-form__hint" data-aa-fx-equivalent hidden></p>
         </div>
 
-        <label class="aa-field">
+        <label class="aa-field" data-aa-shared>
             <span>{{ t('agent_account_concept') }}</span>
             <textarea name="description" rows="2" placeholder="{{ t('agent_account_concept_placeholder') }}"></textarea>
         </label>
 
-        <div class="aa-form__grid">
+        <div class="aa-form__grid" data-aa-shared>
             <label class="aa-field">
                 <span>{{ t('agent_account_reference_optional') }}</span>
                 <input type="text" name="reference_text" placeholder="{{ t('agent_account_reference_placeholder') }}">
@@ -111,31 +226,6 @@
                 <input type="text" name="notes" placeholder="{{ t('agent_account_optional') }}">
             </label>
         </div>
-
-        <div class="aa-form__section aa-payment-confirm" data-aa-payment-confirm hidden>
-            <h3>{{ t('agent_account_payment_confirm_title') }}</h3>
-            <div class="aa-vat-summary">
-                <div class="aa-vat-summary__row">
-                    <span>{{ t('agent_account_register_payment') }}</span>
-                    <strong data-aa-confirm-payment>—</strong>
-                </div>
-                <div class="aa-vat-summary__row">
-                    <span>{{ t('agent_account_payment_confirm_applied_to') }}</span>
-                    <strong data-aa-confirm-applied>—</strong>
-                </div>
-                <div class="aa-vat-summary__row">
-                    <span>{{ t('agent_account_payment_confirm_cash_income') }}</span>
-                    <strong data-aa-confirm-cash>—</strong>
-                </div>
-                <div class="aa-vat-summary__row">
-                    <span>{{ t('treasury_account_destination') }}</span>
-                    <strong data-aa-confirm-treasury>—</strong>
-                </div>
-                <div class="aa-vat-summary__row">
-                    <span>{{ t('agent_account_payment_method') }}</span>
-                    <strong data-aa-confirm-method>—</strong>
-                </div>
-            </div>
         </div>
 
         <footer class="aa-dialog__footer">

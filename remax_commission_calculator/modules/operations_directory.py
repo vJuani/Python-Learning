@@ -85,6 +85,11 @@ def _operation_bucket(operation, stage):
 def _workflow_status(operation, bucket, language):
     status = operation.get("status") or "approved"
 
+    if status == "closed":
+        return {
+            "label": _t("operations_state_closed", language),
+            "tone": "closed",
+        }
     if status == "pending":
         return {
             "label": _t("operations_status_pending", language),
@@ -117,8 +122,66 @@ def _workflow_status(operation, bucket, language):
 
 
 def _operation_type_label(operation, language):
-  # No dedicated operation type in DB; default to sale.
+    purpose = str(operation.get("listing_purpose") or "").strip()
+    if purpose in ("rental", "temporary_rental"):
+        return _t("operations_type_rental", language)
     return _t("operations_type_sale", language)
+
+
+def _faces_for_operations(organization_id, operations):
+    """Client comes from the reservation contact. Purpose comes from the property."""
+    from modules.database.connection import get_connection
+
+    operation_ids = []
+    property_ids = []
+    for operation in operations:
+        try:
+            operation_ids.append(int(operation.get("db_id")))
+        except (TypeError, ValueError):
+            pass
+        try:
+            property_ids.append(int(operation.get("property_db_id")))
+        except (TypeError, ValueError):
+            pass
+    clients = {}
+    purposes = {}
+    if not operation_ids and not property_ids:
+        return clients, purposes
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        if property_ids:
+            marks = ", ".join("?" for _ in property_ids)
+            cursor.execute(
+                f"""
+                SELECT id, listing_purpose
+                FROM properties
+                WHERE organization_id = ? AND id IN ({marks})
+                """,
+                (organization_id, *property_ids),
+            )
+            for row in cursor.fetchall():
+                purposes[row[0]] = row[1]
+        if operation_ids:
+            marks = ", ".join("?" for _ in operation_ids)
+            cursor.execute(
+                f"""
+                SELECT reservations.operation_id, contacts.name
+                FROM reservations
+                LEFT JOIN contacts
+                    ON contacts.id = reservations.contact_id
+                    AND contacts.organization_id = reservations.organization_id
+                WHERE reservations.organization_id = ?
+                    AND reservations.operation_id IN ({marks})
+                """,
+                (organization_id, *operation_ids),
+            )
+            for row in cursor.fetchall():
+                if row[1]:
+                    clients[row[0]] = row[1]
+    finally:
+        connection.close()
+    return clients, purposes
 
 
 def build_operations_directory(
@@ -135,8 +198,12 @@ def build_operations_directory(
 
     rows = []
     bucket_counts = {bucket: 0 for bucket in TAB_BUCKETS}
+    clients, purposes = _faces_for_operations(organization_id, operations)
 
     for operation in operations:
+        purpose = purposes.get(operation.get("property_db_id"))
+        if purpose:
+            operation = {**operation, "listing_purpose": purpose}
         stage = _stage_for_operation(operation, language)
         bucket = _operation_bucket(operation, stage)
         bucket_counts["all"] += 1
@@ -159,9 +226,16 @@ def build_operations_directory(
                 "display_id": operation.get("id") or f"OP-{operation.get('db_id'):04d}",
                 "property_title": operation.get("property") or "—",
                 "property_subtitle": operation.get("jurisdiction") or "—",
-                "client_name": "—",
+                "client_name": clients.get(operation.get("db_id")) or "—",
                 "type_label": _operation_type_label(operation, language),
-                "type_tone": "sale",
+                "type_tone": (
+                    "rental"
+                    if str(operation.get("listing_purpose") or "") in (
+                        "rental",
+                        "temporary_rental",
+                    )
+                    else "sale"
+                ),
                 "stage_label": stage.get("label") or "—",
                 "stage_tone": css_tone,
                 "workflow_status": _workflow_status(

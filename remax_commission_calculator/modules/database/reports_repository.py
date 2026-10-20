@@ -117,6 +117,8 @@ def aggregate_status_counts(filters):
     }
 
     for status, count in rows:
+        if status in ("preclose", "preclose_void", "closed"):
+            continue
         key = status if status in counts else "approved"
         counts[key] = int(count or 0)
 

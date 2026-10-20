@@ -25,11 +25,14 @@ from modules.database import add_agent, add_organization, add_property, add_user
 from modules.database.connection import get_connection
 from modules.database.operations_repository import get_operation_record
 from modules.database.properties_repository import get_property_record
+from modules.database.reservations_migration import migrate_reservations
 from modules.database.reservations_repository import (
     get_open_reservation_for_property,
     get_reservation,
     get_reservation_document,
 )
+from modules.mortgage_banks import MORTGAGE_BANKS
+from modules.reservation_board import build_reservation_board
 from modules.organization_time import UTC, organization_timezone
 from modules.property_inventory import is_commercially_available
 from modules.property_match import passes_hard_filters
@@ -422,8 +425,8 @@ class ReservationTests(unittest.TestCase):
             },
             today=today,
         )
-        self.assertEqual(linked["commission_total_label"], "USD 8.900")
-        self.assertEqual(linked["commission_agent_label"], "USD 5.000")
+        self.assertEqual(linked["commission_total_label"], "USD 8.900,00")
+        self.assertEqual(linked["commission_agent_label"], "USD 5.000,00")
         self.assertEqual(linked["commission_state"], "unpaid")
         self.assertEqual(linked["close_display"], "10/10/2026")
         self.assertTrue(linked["closing_soon"])
@@ -461,8 +464,8 @@ class ReservationTests(unittest.TestCase):
         deposits = {line["currency"]: line["label"] for line in board["kpis"]["deposits"]}
         self.assertIn("USD", agreed["USD"])
         self.assertNotIn("ARS", agreed["USD"])
-        self.assertEqual(agreed["ARS"], "ARS 1.000.000")
-        self.assertEqual(deposits["ARS"], "ARS 250.000")
+        self.assertEqual(agreed["ARS"], "ARS 1.000.000,00")
+        self.assertEqual(deposits["ARS"], "ARS 250.000,00")
         visible_ids = [row["id"] for row in board["rows"]]
         self.assertEqual(len(visible_ids), len(set(visible_ids)))
         self.assertIn(pesos["id"], visible_ids)
@@ -933,4 +936,255 @@ class ReservationTests(unittest.TestCase):
             price_before,
         )
         self.assertEqual(self._reservation_count(property_id), 1)
+
+    def _available(self, address, *, purpose="sale", agent=None, org=None):
+        organization_id = org or self.org
+        agent_id = agent or self.agent
+        property_id = add_property(
+            address,
+            "CABA",
+            organization_id,
+            agent_id=agent_id,
+            listing_price=185000,
+            listing_currency="USD",
+            listing_purpose=purpose,
+        )
+        contact = create_agent_contact(
+            organization_id,
+            agent_id,
+            {"name": "Cliente " + address, "phone": "1155550000", "status": "lead", "source": "manual"},
+        )
+        return property_id, contact["id"]
+
+    def _manual_payload(self, property_id, contact_id, agent_id, **extra):
+        data = {
+            "property_id": str(property_id),
+            "contact_id": str(contact_id),
+            "agent_id": str(agent_id),
+            "purpose": "sale",
+            "price_change": "keep",
+            "currency": "USD",
+            "deal_kind": "own",
+            "reservation_amount": "3.000",
+            "seller_commission_amount": "4.000",
+            "buyer_commission_amount": "2.000",
+            "estimated_closing_date": "2026-12-01",
+            "payment_method": "cash",
+            "purchase_with_credit": "0",
+            "notes": "alta manual",
+        }
+        data.update(extra)
+        return data
+
+    def test_manual_reservation_is_staff_only_and_agent_stays_scoped(self):
+        property_id, contact_id = self._available("Calle Manual Staff")
+        agent = app.test_client()
+        self._login(agent, "reserva_agent")
+        for method in ("get", "post"):
+            denied = getattr(agent, method)(
+                "/reservations/new",
+                data=self._manual_payload(property_id, contact_id, self.agent),
+            )
+            self.assertEqual(denied.status_code, 302)
+            self.assertEqual(urlparse(denied.headers["Location"]).path, "/")
+        self.assertIsNone(get_open_reservation_for_property(self.org, property_id))
+        agent_board = agent.get("/reservations")
+        self.assertNotIn("+ Agregar reserva", agent_board.get_data(as_text=True))
+
+        staff = app.test_client()
+        self._login(staff, "reserva_admin")
+        page = staff.get("/reservations")
+        self.assertIn("+ Agregar reserva", page.get_data(as_text=True))
+        form = staff.get("/reservations/new")
+        self.assertEqual(form.status_code, 200)
+        self.assertIn("Calle Manual Staff", form.get_data(as_text=True))
+        created = staff.post(
+            "/reservations/new",
+            data=self._manual_payload(property_id, contact_id, self.other_agent),
+        )
+        self.assertEqual(created.status_code, 302)
+        self.assertIn("/reservations/", created.headers["Location"])
+        stored = get_open_reservation_for_property(self.org, property_id)
+        self.assertEqual(stored["reservation_status"], "reserved")
+        self.assertEqual(stored["agent_id"], self.other_agent)
+        self.assertEqual(stored["contact_id"], contact_id)
+        self.assertEqual(stored["next_milestone"], "boleto")
+        self.assertEqual(stored["deposit_type"], "reservation")
+        self.assertEqual(int(stored["purchase_with_credit"] or 0), 0)
+        self.assertIsNone(stored["financing_bank"])
+        property_row = get_property_record(property_id, self.org)
+        self.assertEqual(property_row["commercial_status"], "reserved")
+        self.assertEqual(property_row["status"], "approved")
+        self.assertEqual(int(property_row["listing_price"]), 185000)
+        own_view = agent.get("/reservations")
+        self.assertNotIn("Calle Manual Staff", own_view.get_data(as_text=True))
+
+    def test_manual_reservation_rejects_other_organization_ids(self):
+        property_id, contact_id = self._available("Calle Misma Org")
+        foreign_agent = add_agent("Agente Otra Org", "Alto", self.other_org)
+        foreign_property, foreign_contact = self._available(
+            "Calle Otra Org",
+            agent=foreign_agent,
+            org=self.other_org,
+        )
+        staff = app.test_client()
+        self._login(staff, "reserva_admin")
+        before = self._reservation_count(property_id)
+        cases = (
+            self._manual_payload(foreign_property, contact_id, self.agent),
+            self._manual_payload(property_id, foreign_contact, self.agent),
+            self._manual_payload(property_id, contact_id, foreign_agent),
+        )
+        for payload in cases:
+            denied = staff.post("/reservations/new", data=payload)
+            self.assertEqual(denied.status_code, 200)
+            self.assertIn("inmobiliaria", denied.get_data(as_text=True))
+        self.assertEqual(self._reservation_count(property_id), before)
+        self.assertIsNone(get_open_reservation_for_property(self.other_org, foreign_property))
+        self.assertEqual(get_property_record(property_id, self.org)["commercial_status"], "available")
+
+    def test_manual_reservation_blocks_a_second_open_reservation_and_sold(self):
+        property_id, contact_id = self._available("Calle Conflicto")
+        staff = app.test_client()
+        self._login(staff, "reserva_admin")
+        first = staff.post(
+            "/reservations/new",
+            data=self._manual_payload(property_id, contact_id, self.agent),
+        )
+        self.assertEqual(first.status_code, 302)
+        again = staff.post(
+            "/reservations/new",
+            data=self._manual_payload(property_id, contact_id, self.agent),
+        )
+        self.assertEqual(again.status_code, 200)
+        self.assertIn("reserva abierta", again.get_data(as_text=True))
+        self.assertEqual(self._reservation_count(property_id), 1)
+
+        sold_id, sold_contact = self._available("Calle Vendida")
+        connection = get_connection()
+        try:
+            connection.execute(
+                """
+                UPDATE properties
+                SET commercial_status = 'sold'
+                WHERE id = ? AND organization_id = ?
+                """,
+                (sold_id, self.org),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        sold = staff.post(
+            "/reservations/new",
+            data=self._manual_payload(sold_id, sold_contact, self.agent),
+        )
+        self.assertEqual(sold.status_code, 200)
+        self.assertIn("no está disponible", sold.get_data(as_text=True))
+        self.assertIsNone(get_open_reservation_for_property(self.org, sold_id))
+        self.assertEqual(get_property_record(sold_id, self.org)["commercial_status"], "sold")
+
+    def test_manual_credit_catalog_price_change_and_board_filters(self):
+        migrate_reservations()
+        migrate_reservations()
+        _visit_property, visit = self._reserve("Calle Visita Sin Credito")
+        self.assertEqual(int(visit["purchase_with_credit"] or 0), 0)
+        self.assertIsNone(visit["financing_bank"])
+
+        sale_id, sale_contact = self._available("Calle Con Credito")
+        rent_id, rent_contact = self._available("Calle Alquiler", purpose="rental")
+        keep_id, keep_contact = self._available("Calle Precio Igual")
+        staff = app.test_client()
+        self._login(staff, "reserva_admin")
+        rent_form = staff.get("/reservations/new")
+        body = rent_form.get_data(as_text=True)
+        self.assertIn("data-credit-block", body)
+        self.assertIn("Banco Hipotecario", body)
+        self.assertIn("Banco Nación", body)
+
+        created = staff.post(
+            "/reservations/new",
+            data=self._manual_payload(
+                sale_id,
+                sale_contact,
+                self.agent,
+                purchase_with_credit="1",
+                financing_bank="nacion",
+                price_change="change",
+                agreed_property_price="190.000",
+                deal_kind="shared",
+                shared_brokerage_name="Inmobiliaria Norte",
+            ),
+        )
+        self.assertEqual(created.status_code, 302)
+        credit = get_open_reservation_for_property(self.org, sale_id)
+        self.assertEqual(int(credit["purchase_with_credit"]), 1)
+        self.assertEqual(credit["financing_bank"], "nacion")
+        self.assertEqual(int(credit["is_shared_transaction"]), 1)
+        self.assertEqual(credit["shared_brokerage_name"], "Inmobiliaria Norte")
+        self.assertEqual(int(credit["agreed_property_price"]), 190000)
+        changed = get_property_record(sale_id, self.org)
+        self.assertEqual(changed["commercial_status"], "reserved")
+        self.assertEqual(changed["status"], "approved")
+        self.assertEqual(int(changed["listing_price"]), 190000)
+        detail = staff.get(f"/reservations/{credit['id']}")
+        detail_body = detail.get_data(as_text=True)
+        self.assertIn("Banco Nación", detail_body)
+        self.assertIn("Financiación", detail_body)
+
+        rental = staff.post(
+            "/reservations/new",
+            data=self._manual_payload(
+                rent_id,
+                rent_contact,
+                self.agent,
+                purpose="rent",
+                purchase_with_credit="1",
+                financing_bank="nacion",
+            ),
+        )
+        self.assertEqual(rental.status_code, 302)
+        rented = get_open_reservation_for_property(self.org, rent_id)
+        self.assertEqual(int(rented["purchase_with_credit"] or 0), 0)
+        self.assertIsNone(rented["financing_bank"])
+        self.assertEqual(rented["next_milestone"], "keys")
+
+        kept = staff.post(
+            "/reservations/new",
+            data=self._manual_payload(keep_id, keep_contact, self.agent, price_change="keep"),
+        )
+        self.assertEqual(kept.status_code, 302)
+        self.assertEqual(int(get_property_record(keep_id, self.org)["listing_price"]), 185000)
+
+        financing = build_reservation_board(self.org, filters={"view": "financing"})
+        financing_ids = [row["id"] for row in financing["rows"]]
+        self.assertIn(credit["id"], financing_ids)
+        self.assertNotIn(visit["id"], financing_ids)
+        self.assertNotIn(rented["id"], financing_ids)
+        by_bank = build_reservation_board(
+            self.org,
+            filters={"credit": "yes", "bank": "nacion"},
+        )
+        self.assertEqual([row["id"] for row in by_bank["rows"]], [credit["id"]])
+        other_bank = build_reservation_board(
+            self.org,
+            filters={"credit": "yes", "bank": "galicia"},
+        )
+        self.assertEqual(other_bank["rows"], [])
+        without_credit = build_reservation_board(self.org, filters={"credit": "no"})
+        without_ids = [row["id"] for row in without_credit["rows"]]
+        self.assertNotIn(credit["id"], without_ids)
+        self.assertIn(rented["id"], without_ids)
+        ignored_bank = build_reservation_board(self.org, filters={"bank": "nacion"})
+        ignored_ids = [row["id"] for row in ignored_bank["rows"]]
+        self.assertIn(credit["id"], ignored_ids)
+        self.assertIn(rented["id"], ignored_ids)
+
+        catalog_page = staff.get("/reservations?credit=yes")
+        catalog_html = catalog_page.get_data(as_text=True)
+        self.assertIn("Banco Hipotecario", catalog_html)
+        self.assertNotIn("data-res-bank-filter hidden", catalog_html)
+        hidden_bank = staff.get("/reservations?credit=no")
+        self.assertIn("data-res-bank-filter hidden", hidden_bank.get_data(as_text=True))
+        for _bank_id, bank_name in MORTGAGE_BANKS:
+            self.assertIn(bank_name, catalog_html)
 

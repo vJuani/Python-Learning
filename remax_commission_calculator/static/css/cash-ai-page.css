@@ -85,20 +85,24 @@ body.is-cash-ai-page .app-main-inner {
 }
 
 .cash-ai-btn--primary {
-    background: var(--accent);
+    background: var(--brand-600, #156A4A);
     color: #fff;
+}
+
+.cash-ai-btn--primary:hover {
+    background: var(--brand-700, #0E4F38);
 }
 
 .cash-ai-btn--outline {
     background: var(--surface);
-    border-color: #dbeafe;
-    color: var(--accent);
+    border-color: var(--border-soft, #d7e3db);
+    color: var(--brand-700, #0E4F38);
 }
 
 .cash-ai-btn--soft {
     background: var(--card-muted);
-    border-color: #dbeafe;
-    color: var(--accent);
+    border-color: var(--border-soft, #d7e3db);
+    color: var(--brand-700, #0E4F38);
 }
 
 .cash-ai-btn--block {
@@ -652,8 +656,8 @@ body.is-cash-ai-page .app-main-inner {
 }
 
 .cash-ai-step.is-active {
-    border-color: #bfd3ff;
-    box-shadow: 0 0 0 1px rgba(13, 71, 255, 0.1), 0 12px 32px rgba(13, 71, 255, 0.06);
+    border-color: #b7d7c8;
+    box-shadow: 0 0 0 1px rgba(21, 106, 74, 0.12), 0 12px 32px rgba(21, 106, 74, 0.06);
 }
 
 .cash-ai-step.is-complete {
@@ -671,8 +675,8 @@ body.is-cash-ai-page .app-main-inner {
     width: 1.55rem;
     height: 1.55rem;
     border-radius: 999px;
-    background: #e8f0ff;
-    color: var(--accent);
+    background: #e5f3ec;
+    color: var(--brand-700, #0E4F38);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -723,8 +727,8 @@ body.is-cash-ai-page .app-main-inner {
     width: 2rem;
     height: 2rem;
     border-radius: 999px;
-    background: #e8f0ff;
-    color: var(--accent);
+    background: #e5f3ec;
+    color: var(--brand-700, #0E4F38);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1374,4 +1378,14 @@ body.is-cash-ai-page .app-main-inner {
         align-items: center;
         gap: 0.5rem;
     }
+}
+
+[data-theme="dark"] .cash-ai-page .cash-ai-btn--primary {
+    background: var(--brand-600, #2d8c63);
+    border-color: var(--brand-700, #0E4F38);
+    color: #fff;
+}
+
+[data-theme="dark"] .cash-ai-page .cash-ai-btn--primary:hover {
+    background: var(--brand-700, #0E4F38);
 }

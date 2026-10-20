@@ -2,7 +2,12 @@
 
 {% block title %}{{ operation.id }} | {{ t('app_title') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jrh-one.css') }}?v=opdetail9">
+{% endblock %}
+
 {% block content %}
+<div class="op-detail">
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ t('detail_title') }}</h2>
@@ -23,6 +28,37 @@
         <h3>{{ t('status') }}</h3>
         <span class="badge status-{{ operation.status }}">{{ t('status_' ~ operation.status) }}</span>
     </div>
+
+    {% if operation.status == 'closed' %}
+    {% set op_currency = operation.currency or 'USD' %}
+    <div class="op-exec">
+        <div class="op-exec__item">
+            <span>{{ t('operation_value') }}</span>
+            <strong class="money">{{ (operation.original_amount or operation.sale_price) | money(op_currency) }}</strong>
+        </div>
+        <div class="op-exec__item">
+            <span>{{ t('total_commission') }}</span>
+            <strong class="money">{{ operation.total_commission | money(op_currency) }}</strong>
+            {% if collection_state %}
+            <small class="op-exec__collect">
+                <span>{{ t('operation_collection_total_collected') }} <b>{{ collection_state.collected_total | money(op_currency) }}</b></span>
+                <span>{{ t('operation_collection_total_pending') }} <b>{{ collection_state.pending_total | money(op_currency) }}</b></span>
+                {% if collection_state.surplus_total > 0.009 %}
+                <span>{{ t('operation_collection_surplus') }} <b>{{ collection_state.surplus_total | money(op_currency) }}</b></span>
+                {% endif %}
+            </small>
+            {% endif %}
+        </div>
+        <div class="op-exec__item">
+            <span>{{ t('agent_payment') }}</span>
+            <strong class="money">{{ operation.agent_payment | money(op_currency) }}</strong>
+        </div>
+        <div class="op-exec__item op-exec__item--net">
+            <span>{{ t('office_net_payment') }}</span>
+            <strong class="money">{{ operation.office_payment | money(op_currency) }}</strong>
+        </div>
+    </div>
+    {% endif %}
 
     {% if operation.rejection_reason %}
     <p class="danger-text">
@@ -111,12 +147,23 @@
         {% set party = side.party if side else none %}
         {% set vat_side = operation.seller_vat_original if side_key == 'seller' else operation.buyer_vat_original %}
         {% set op_currency = operation.currency or 'USD' %}
+        {% set collect = collection_state[side_key] if collection_state else none %}
 
         {% if party and party.is_participating %}
         <article class="operation-side-card operation-side-card--active">
             <div class="operation-side-card-header">
                 <h4>{{ t('operation_side_' ~ side_key) }}</h4>
-                <span class="badge">{{ t('operation_participating_yes') }}</span>
+                <span class="operation-side-card-badges">
+                    <span class="badge">{{ t('operation_participating_yes') }}</span>
+                    {% if collect %}
+                    <span class="badge op-collect-badge op-collect-badge--{{ collect.status }}">{{ t('operation_collection_status_' ~ collect.status) }}</span>
+                    {% endif %}
+                    {% if side and side.billing_ready %}
+                    <span class="badge op-collect-badge op-collect-badge--collected">{{ t('operation_billing_ready') }}</span>
+                    {% elif collect %}
+                    <span class="badge badge-soft">{{ t('operation_billing_not_ready') }}</span>
+                    {% endif %}
+                </span>
             </div>
             <dl class="operation-side-metrics">
                 <div>
@@ -128,9 +175,25 @@
                     <dd class="money">{{ party.commission_amount | money(op_currency) }}</dd>
                 </div>
                 <div>
-                    <dt>{{ t('operation_' ~ side_key ~ '_vat') }}</dt>
+                    <dt>{{ t('operation_vat_loaded') }}</dt>
                     <dd class="money">{{ vat_side | money(op_currency) }}</dd>
                 </div>
+                {% if collect %}
+                <div>
+                    <dt>{{ t('operation_collection_collected') }}</dt>
+                    <dd class="money">{{ collect.collected | money(op_currency) }}</dd>
+                </div>
+                <div>
+                    <dt>{{ t('operation_collection_pending') }}</dt>
+                    <dd class="money">{{ collect.pending | money(op_currency) }}</dd>
+                </div>
+                {% if collect.surplus > 0.009 %}
+                <div>
+                    <dt>{{ t('operation_collection_surplus') }}</dt>
+                    <dd class="money">{{ collect.surplus | money(op_currency) }}</dd>
+                </div>
+                {% endif %}
+                {% endif %}
             </dl>
         </article>
         {% else %}
@@ -149,7 +212,7 @@
 
 <section class="panel billing-operation-panel">
     <div class="panel-header">
-        <h3>{{ t('billing_vat_section') }}</h3>
+        <h3>{{ t('billing_status_label') }}</h3>
         <a href="{{ url_for('billing_list') }}" class="btn btn-secondary btn-sm">✨ {{ t('billing_ai_title') }}</a>
     </div>
 
@@ -159,84 +222,56 @@
     {% set party = side.party %}
     {% set vat_side = operation.seller_vat_original if side_key == 'seller' else operation.buyer_vat_original %}
     {% set op_currency = operation.currency or 'USD' %}
-    {% set display_status = side.display_status if side.display_status is defined else side.state %}
-    <article class="billing-side-block billing-side-operation">
-        <div class="billing-side-operation-header">
-            <h4>{{ t('billing_side_' ~ side_key) }}</h4>
-            <span class="badge badge-soft">{{ t('billing_side_state_' ~ display_status) }}</span>
+    {% set raw_status = side.display_status if side.display_status is defined else '' %}
+    {% if raw_status == 'issued' %}
+        {% set billing_label = t('billing_state_issued') %}
+    {% elif raw_status in ['draft', 'ready'] %}
+        {% set billing_label = t('billing_state_prepared') %}
+    {% else %}
+        {% set billing_label = t('billing_state_not_prepared') %}
+    {% endif %}
+    <article class="billing-side-block billing-side-operation op-bill-row">
+        <strong class="op-bill-row__side">{{ t('billing_side_' ~ side_key) }}</strong>
+        <div>
+            <span class="op-bill-row__label">{{ t('operation_commission_label') }}</span>
+            <strong class="money">{{ party.commission_amount | money(op_currency) }}</strong>
         </div>
-
-        <dl class="billing-side-metrics">
-            <div>
-                <dt>{{ t('operation_commission_calculated') }}</dt>
-                <dd class="money">{{ party.commission_amount | money(op_currency) }}</dd>
-            </div>
-            <div>
-                <dt>{{ t('operation_' ~ side_key ~ '_vat') }}</dt>
-                <dd class="money">{{ vat_side | money(op_currency) }}</dd>
-            </div>
-            {% if party.invoice_amount %}
-            <div>
-                <dt>{{ t('billing_invoice_amount_label') }}</dt>
-                <dd class="money">{{ party.invoice_amount | money(party.invoice_currency or 'ARS') }}</dd>
-            </div>
+        <div>
+            <span class="op-bill-row__label">{{ t('operation_vat_loaded') }}</span>
+            <strong class="money">{{ vat_side | money(op_currency) }}</strong>
+        </div>
+        <span class="badge badge-soft op-bill-row__status">{{ billing_label }}</span>
+        <div class="op-bill-row__action">
+            {% if raw_status == 'issued' and side.invoices %}
+            <a class="btn btn-secondary" href="{{ url_for('billing_detail', invoice_id=side.invoices[0].id) }}">{{ t('billing_view_invoice') }}</a>
+            {% elif can_create_invoice %}
+            <a class="btn btn-primary" href="{{ url_for('billing_prepare', operation_id=operation.db_id, side=side_key) }}">{{ t('billing_prepare_invoice') }}</a>
             {% endif %}
-        </dl>
-
-        {% if can_create_invoice and side.can_create_draft %}
-        <a class="btn btn-primary" href="{{ url_for('billing_prepare', operation_id=operation.db_id, side=side_key) }}">{{ t('billing_invoice_' ~ side_key) }} →</a>
-        {% elif side.invoices %}
-        <a class="btn btn-secondary" href="{{ url_for('billing_detail', invoice_id=side.invoices[0].id) }}">{{ t('billing_view_invoice') }}</a>
-        {% endif %}
-
-        {% if can_set_invoice_amount %}
-        <form method="post" action="{{ url_for('operations_set_party_invoice_amount', operation_id=operation.db_id, side=side_key) }}" class="billing-side-amount-form">
-            <div class="form-group">
-                <label for="invoice_amount_{{ side_key }}">{{ t('billing_invoice_amount_label') }}</label>
-                <input
-                    type="text"
-                    id="invoice_amount_{{ side_key }}"
-                    name="invoice_amount"
-                    class="form-input"
-                    inputmode="decimal"
-                    value="{{ party.invoice_amount or '' }}"
-                    placeholder="{{ vat_side }}"
-                >
-            </div>
-            <div class="form-group">
-                <label for="invoice_currency_{{ side_key }}">{{ t('billing_currency') }}</label>
-                <select id="invoice_currency_{{ side_key }}" name="invoice_currency" class="form-input">
-                    <option value="ARS" {% if (party.invoice_currency or 'ARS') == 'ARS' %}selected{% endif %}>ARS</option>
-                    <option value="USD" {% if party.invoice_currency == 'USD' %}selected{% endif %}>USD</option>
-                </select>
-            </div>
-            <label class="checkbox-label">
-                <input type="checkbox" name="enable_billing" value="1" {% if party.billing_enabled %}checked{% endif %}>
-                {{ t('billing_enable_side') }}
-            </label>
-            <div class="billing-side-form-actions">
-                <button type="submit" class="btn btn-primary btn-sm">{{ t('billing_save_amount') }}</button>
-                <a href="{{ url_for('vat_calculator', operation_id=operation.db_id) }}" class="btn btn-ghost btn-sm">{{ t('billing_calculate_vat') }}</a>
-            </div>
-        </form>
-        {% endif %}
+        </div>
     </article>
     {% endif %}
     {% endfor %}
 </section>
 
-<section class="panel">
-    {% include "operations/_summary.html" %}
-</section>
+<details class="panel op-docs op-finance">
+    <summary class="op-docs__summary">
+        <span>{{ t('operation_financial_detail') }}</span>
+    </summary>
+    <div class="op-docs__body">
+        {% set hide_exec_kpis = operation.status == 'closed' %}
+        {% include "operations/_summary.html" %}
+    </div>
+</details>
 
+{% set operation_docs_collapsed = true %}
 {% include "operations/_documents.html" %}
 {% if linked_reservation %}
-<section class="panel">
+<section class="panel op-inherited">
     <div class="panel-header">
         <h3>{{ t('reservation_operation_docs') }}</h3>
     </div>
     {% if reservation_documents %}
-    <ul>
+    <ul class="op-inherited__list">
         {% for document in reservation_documents %}
         <li>
             {{ t('reservation_doc_' ~ document.doc_type) }} —
@@ -246,8 +281,8 @@
     </ul>
     {% endif %}
     {% if can_manage_documents %}
-    <form method="post" action="{{ url_for('reservations_document_upload', reservation_id=linked_reservation.id) }}" enctype="multipart/form-data">
-        <label>
+    <form class="op-upload" method="post" action="{{ url_for('reservations_document_upload', reservation_id=linked_reservation.id) }}" enctype="multipart/form-data">
+        <label class="op-upload__field">
             <span>{{ t('reservation_documents') }}</span>
             <select name="doc_type">
                 {% for doc_type in ['uif', 'invoice', 'reservation_receipt', 'reinforcement', 'boleto', 'deed', 'credit', 'other'] %}
@@ -255,12 +290,20 @@
                 {% endfor %}
             </select>
         </label>
-        <input type="file" name="document" required>
-        <button type="submit" class="btn btn-secondary">{{ t('reservation_upload') }}</button>
+        <label class="op-upload__field">
+            <span>{{ t('operation_upload_file') }}</span>
+            <span class="op-upload__file">
+                <input class="op-upload__input" type="file" name="document" required>
+                <span class="op-upload__choose">{{ t('operation_upload_choose') }}</span>
+                <span class="op-upload__name" data-op-file-name data-empty="{{ t('operation_upload_empty') }}">{{ t('operation_upload_empty') }}</span>
+            </span>
+        </label>
+        <button type="submit" class="btn btn-primary">{{ t('reservation_upload') }}</button>
     </form>
     {% endif %}
 </section>
 {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -271,6 +314,9 @@
         if (!dialog) return;
         var open = document.querySelector(openSelector);
         if (open) open.addEventListener("click", function () {
+            if (dialog.parentElement !== document.body) {
+                document.body.appendChild(dialog);
+            }
             dialog.showModal();
         });
         dialog.querySelectorAll(closeSelector).forEach(function (button) {
@@ -289,6 +335,14 @@
         "[data-operation-commission-reverse-dialog]",
         "[data-operation-commission-reverse-close]"
     );
+    document.querySelectorAll(".op-upload__input").forEach(function (input) {
+        input.addEventListener("change", function () {
+            var target = input.parentElement.querySelector("[data-op-file-name]");
+            if (!target) return;
+            var file = input.files && input.files[0];
+            target.textContent = file ? file.name : target.getAttribute("data-empty");
+        });
+    });
 })();
 </script>
 {% endblock %}

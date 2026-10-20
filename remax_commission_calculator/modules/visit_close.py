@@ -409,6 +409,8 @@ def _commit_property_reservation(
         if owner is not None and agent_id is not None and int(owner) != int(agent_id):
             raise VisitCloseError("visit_close_err_property_forbidden")
         previous_status, previous_price, previous_currency = row[0], row[1], row[2]
+        if previous_status in ("sold", "rented", "withdrawn"):
+            raise VisitCloseError("visit_close_err_property_unavailable")
         assignments = ["commercial_status = ?"]
         params = ["reserved"]
         new_price = previous_price

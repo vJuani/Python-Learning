@@ -123,15 +123,15 @@
     <span class="app-nav-link__label">{{ t('nav_agent_account') }}</span>
 </a>
 <a
-    href="{{ url_for('cash_ai_new') }}"
-    class="nav-link app-nav-link app-nav-link--cash-ai{% if request.endpoint and request.endpoint.startswith('cash_ai') %} active{% endif %}"
+    href="{{ url_for('cash_list') }}"
+    class="nav-link app-nav-link app-nav-link--cash-ai{% if request.endpoint and (request.endpoint.startswith('cash_') or request.endpoint.startswith('cash_ai')) %} active{% endif %}"
 >
     <svg class="app-nav-link__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <rect x="3" y="7" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.75"/>
         <path d="M3 10h18" stroke="currentColor" stroke-width="1.75"/>
         <path d="M12 13v3M10.5 14.5h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     </svg>
-    <span class="app-nav-link__label">{{ t('nav_cash_ai') }}</span>
+    <span class="app-nav-link__label">{{ t('nav_cash') }}</span>
 </a>
 {% endif %}
 {% if not is_guest_session() %}

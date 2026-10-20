@@ -105,9 +105,32 @@
         }
     }
 
+    var creditSelect = drawer ? drawer.querySelector("select[name='credit']") : null;
+    var bankFilter = drawer ? drawer.querySelector("[data-res-bank-filter]") : null;
+    var bankSelect = bankFilter ? bankFilter.querySelector("select") : null;
+
+    function syncBankFilter() {
+        if (!creditSelect || !bankFilter) {
+            return;
+        }
+        var show = creditSelect.value === "yes";
+        bankFilter.hidden = !show;
+        if (bankSelect) {
+            bankSelect.disabled = !show;
+            if (!show) {
+                bankSelect.value = "";
+            }
+        }
+        paintFilters();
+    }
+
+    if (creditSelect) {
+        creditSelect.addEventListener("change", syncBankFilter);
+    }
     if (drawer) {
         drawer.addEventListener("input", paintFilters);
         drawer.addEventListener("change", paintFilters);
+        syncBankFilter();
         paintFilters();
     }
 

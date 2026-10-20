@@ -15,7 +15,7 @@
         {% endif %}
     </div>
     <div class="page-actions">
-        <a href="{{ url_for('billing_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        <a href="{{ preclose_url or url_for('billing_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
 </section>
 

@@ -330,6 +330,38 @@ class RoleMatrixTests(unittest.TestCase):
         )
 
     @classmethod
+    def _collect_commission(cls, organization_id, operation_id, side, user_id):
+        from modules.cash_treasury import (
+            confirm_movement,
+            validate_movement_payload,
+        )
+        from modules.database import get_operation_party, get_operation_record
+
+        party = get_operation_party(organization_id, operation_id, side)
+        amount = float((party or {}).get("commission_amount") or 0)
+        if amount <= 0.009:
+            return
+        operation = get_operation_record(operation_id, organization_id)
+        errors, values = validate_movement_payload(
+            {
+                "movement_type": "income",
+                "currency": (operation or {}).get("currency") or "USD",
+                "amount": str(amount),
+                "category": "commission_collection",
+                "description": "Cobro de comisión",
+                "payment_method": "cash",
+                "movement_date": "2026-10-15",
+                "notes": "",
+                "treasury_account_id": "",
+                "linked_operation_id": str(operation_id),
+                "linked_party_role": side,
+            }
+        )
+        if errors:
+            raise AssertionError(errors)
+        confirm_movement(organization_id, values, user_id=user_id)
+
+    @classmethod
     def _ready_invoice(cls, organization_id, operation_id, user):
         ensure_parties_for_operation(organization_id, operation_id)
         set_operation_party_client_fields(
@@ -342,6 +374,7 @@ class RoleMatrixTests(unittest.TestCase):
             client_fiscal_address="Cliente 123",
             client_email="cliente@example.com",
         )
+        cls._collect_commission(organization_id, operation_id, SIDE_BUYER, user["id"])
         set_party_invoice_amount(
             organization_id,
             operation_id,

@@ -86,6 +86,27 @@ def _load_operation(organization_id, operation_id):
     return operation
 
 
+def _closed_from_reservation(organization_id, operation):
+    """Staff already validated the deal by closing the reservation.
+
+    A manual operation still needs status=approved and was_invoiced=yes.
+    This path does not. The reservation close writes status=closed directly.
+    """
+    if (operation.get("status") or "") != "closed":
+        return False
+    from modules.database.reservations_repository import (
+        get_reservation_by_operation,
+    )
+
+    reservation = get_reservation_by_operation(
+        organization_id,
+        operation.get("db_id"),
+    )
+    if reservation is None:
+        return False
+    return reservation.get("reservation_status") == "closed"
+
+
 def build_operation_commission_state(
     organization_id,
     operation_id,
@@ -137,10 +158,16 @@ def build_operation_commission_state(
     )
 
     reasons = []
-    if operation.get("status") != "approved":
-        reasons.append("operation_commission_not_approved")
-    if operation.get("was_invoiced") != "yes":
-        reasons.append("operation_commission_not_closed")
+    # Manual operations keep the legacy gate: approved, and invoiced
+    # (stored as was_invoiced=yes, shown as "cerrada o escriturada").
+    # A reservation closed by Staff is already validated; status=closed
+    # is the commercial close and does not require a second approval
+    # or an invoice.
+    if not _closed_from_reservation(organization_id, operation):
+        if operation.get("status") != "approved":
+            reasons.append("operation_commission_not_approved")
+        if operation.get("was_invoiced") != "yes":
+            reasons.append("operation_commission_not_closed")
     if operation.get("currency_raw") not in CURRENCIES:
         reasons.append("operation_commission_currency_missing")
     if agent is None:

@@ -387,10 +387,12 @@ def build_property_detail_view(property_row, *, organization_id, user, language=
     )
     history = price_history_rows(organization_id, row.get("id"), language) if row.get("id") else []
     extra_count = max(0, int(row.get("media_total") or 0) - int(row.get("gallery_count") or 0))
-    status_label = row.get("commercial_status_label") or translate(
+    publication_label = translate(
         f"property_status_{row.get('status') or 'approved'}",
         language=language,
     )
+    commercial_label = row.get("commercial_status_label")
+    status_label = commercial_label or publication_label
     return {
         "title": compact_property_title(row),
         "location_line": compact_property_location(row),
@@ -419,6 +421,7 @@ def build_property_detail_view(property_row, *, organization_id, user, language=
         "sync_ago": relative_sync_label(row.get("last_synced_at"), language),
         "extra_photo_count": extra_count,
         "status_label": status_label,
+        "publication_label": publication_label if commercial_label else None,
         "sync_warning": bool(row.get("sync_error")),
         "category_label": (
             translate("properties_category_residential", language=language)

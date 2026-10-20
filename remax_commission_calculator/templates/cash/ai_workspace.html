@@ -2,89 +2,36 @@
 
 {% block body_class %}is-cash-ai-page {% endblock %}
 
-{% block title %}{{ t('cash_ai_page_title') }} | {{ t('app_title') }}{% endblock %}
+{% block title %}{{ t('cash_page_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/cash-ai-page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cash-page.css') }}?v=treasury4">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cash-ai-page.css') }}?v=treasury4">
 {% endblock %}
 
 {% block content %}
-<div class="cash-ai-page">
-    <header class="cash-ai-page__header">
+{% set treasury_tab = 'ai' %}
+<div class="cash-ai-page treasury-page">
+    <header class="treasury-page__header">
         <div>
-            <nav class="cash-ai-breadcrumb" aria-label="Breadcrumb">
-                <a href="{{ url_for('dashboard') }}">{{ t('nav_home_short') }}</a>
-                <span aria-hidden="true">/</span>
-                <span>{{ t('cash_ai_page_title') }}</span>
-            </nav>
-            <h1>{{ t('cash_ai_page_title') }}</h1>
+            <h1>{{ t('cash_page_title') }}</h1>
             <p>{{ t('cash_ai_page_subtitle') }}</p>
         </div>
-        <div class="cash-ai-page__actions">
-            <span class="cash-ai-page__date">{{ cash_ai_panel.date_label }}</span>
-            <a href="{{ url_for('agent_payment_ai_new') }}" class="cash-ai-btn cash-ai-btn--outline">{{ t('agent_payment_ai_cta') }}</a>
-            <a href="{{ url_for('cash_list') }}" class="cash-ai-btn cash-ai-btn--outline">{{ t('cash_ai_page_view_treasury') }}</a>
-            <a href="{{ url_for('cash_list') }}" class="cash-ai-btn cash-ai-btn--outline cash-ai-btn--icon">{{ t('cash_ai_page_export') }}</a>
+        <div class="treasury-page__actions">
+            <a href="{{ url_for('cash_new') }}" class="cash-btn cash-btn--outline">{{ t('cash_ai_manual_fallback') }}</a>
         </div>
     </header>
+    {% include "cash/_module_nav.html" %}
 
     {% if errors %}
     <div class="cash-ai-flash">{% for error in errors %}<p>{{ error }}</p>{% endfor %}</div>
     {% endif %}
 
-    <section class="cash-ai-kpis" aria-label="{{ t('cash_ai_page_kpis_aria') }}">
-        <article class="cash-ai-kpi-card cash-ai-kpi-card--income">
-            <span class="cash-ai-kpi-card__icon" aria-hidden="true"></span>
-            <div>
-                <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_income') }}</span>
-                <strong>{{ cash_ai_panel.kpis.income_today | money('ARS') }}</strong>
-                {% if cash_ai_panel.kpis.income_change is not none %}
-                <em class="cash-ai-kpi-card__delta cash-ai-kpi-card__delta--up">↑ {{ cash_ai_panel.kpis.income_change }}% {{ t('cash_ai_page_vs_yesterday') }}</em>
-                {% endif %}
-                <small>{{ t('cash_ai_page_movements_count', count=cash_ai_panel.kpis.income_count) }}</small>
-            </div>
-        </article>
-        <article class="cash-ai-kpi-card cash-ai-kpi-card--expense">
-            <span class="cash-ai-kpi-card__icon" aria-hidden="true"></span>
-            <div>
-                <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_expense') }}</span>
-                <strong>{{ cash_ai_panel.kpis.expense_today | money('ARS') }}</strong>
-                {% if cash_ai_panel.kpis.expense_change is not none %}
-                <em class="cash-ai-kpi-card__delta cash-ai-kpi-card__delta--down">↓ {{ cash_ai_panel.kpis.expense_change | abs }}% {{ t('cash_ai_page_vs_yesterday') }}</em>
-                {% endif %}
-                <small>{{ t('cash_ai_page_movements_count', count=cash_ai_panel.kpis.expense_count) }}</small>
-            </div>
-        </article>
-        <article class="cash-ai-kpi-card cash-ai-kpi-card--net">
-            <span class="cash-ai-kpi-card__icon" aria-hidden="true"></span>
-            <div>
-                <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_net') }}</span>
-                <strong>{{ cash_ai_panel.kpis.net_today | money('ARS') }}</strong>
-                <small>{{ t('cash_ai_page_net_vs_yesterday', amount=cash_ai_panel.kpis.net_yesterday | money('ARS')) }}</small>
-            </div>
-        </article>
-        <article class="cash-ai-kpi-card cash-ai-kpi-card--pending cash-ai-kpi-card--action">
-            <button
-                type="button"
-                class="cash-ai-kpi-card__trigger"
-                data-cash-ai-pending-open
-                aria-expanded="false"
-                aria-controls="cash-ai-pending-panel"
-                aria-label="{{ t('cash_ai_page_pending_review_open') }}"
-            >
-                <span class="cash-ai-kpi-card__icon" aria-hidden="true"></span>
-                <div class="cash-ai-kpi-card__content">
-                    <span class="cash-ai-kpi-card__label">{{ t('cash_ai_page_kpi_pending') }}</span>
-                    <strong>{{ cash_ai_panel.kpis.pending_amount | money('ARS') }}</strong>
-                    <small>{{ t('cash_ai_page_receipts_count', count=cash_ai_panel.kpis.pending_receipts) }}</small>
-                </div>
-                {% if cash_ai_panel.kpis.pending_count %}
-                <span class="cash-ai-kpi-card__badge">{{ cash_ai_panel.kpis.pending_count }}</span>
-                {% endif %}
-                <span class="cash-ai-kpi-card__chevron" aria-hidden="true">›</span>
-            </button>
-        </article>
-    </section>
+    <p class="treasury-ai-pending">
+        <button type="button" class="cash-btn cash-btn--outline" data-cash-ai-pending-open aria-expanded="false" aria-controls="cash-ai-pending-panel">
+            {{ t('treasury_pending_review') }}{% if cash_ai_panel.kpis.pending_count %} · {{ cash_ai_panel.kpis.pending_count }}{% endif %}
+        </button>
+    </p>
 
     <div class="cash-ai-pending-panel" id="cash-ai-pending-panel" hidden>
         <button type="button" class="cash-ai-pending-panel__backdrop" data-cash-ai-pending-close aria-label="{{ t('nav_close') }}"></button>
@@ -117,48 +64,6 @@
             </ul>
         </section>
     </div>
-
-    <section class="cash-ai-evolution-row">
-        <article class="cash-ai-evolution-card">
-            <h2>{{ t('cash_ai_page_evolution_title') }}</h2>
-            <div class="cash-ai-evolution-card__body">
-                <div class="cash-ai-evolution-card__chart">
-                    <p class="cash-ai-card__hint">{{ t('cash_ai_page_evolution_hint') }}</p>
-                    <canvas id="cash-ai-evolution-chart" height="240"></canvas>
-                </div>
-                <div class="cash-ai-evolution-card__summary">
-                    <div>
-                        <span>{{ t('cash_ai_page_period_start') }} ({{ cash_ai_panel.balances.period_start_label }})</span>
-                        <strong>{{ cash_ai_panel.balances.period_start | money('ARS') }}</strong>
-                    </div>
-                    <div>
-                        <span>{{ t('cash_ai_page_period_end') }} ({{ cash_ai_panel.balances.period_end_label }})</span>
-                        <strong>{{ cash_ai_panel.balances.period_end | money('ARS') }}</strong>
-                    </div>
-                    <div class="cash-ai-evolution-card__variation">
-                        <span>{{ t('cash_ai_page_period_change') }}</span>
-                        {% if cash_ai_panel.balances.period_change is not none %}
-                        <em class="cash-ai-kpi-card__delta cash-ai-kpi-card__delta--up">↑ {{ cash_ai_panel.balances.period_change }}%</em>
-                        {% endif %}
-                        <strong>{{ cash_ai_panel.balances.period_change_amount | money('ARS') }}</strong>
-                    </div>
-                </div>
-            </div>
-        </article>
-        <article class="cash-ai-saldos-card">
-            <h2>{{ t('cash_ai_page_balances_title') }}</h2>
-            <ul class="cash-ai-balances">
-                <li>
-                    <span class="cash-ai-balances__label"><span class="cash-ai-balances__flag">🇦🇷</span> ARS</span>
-                    <strong>{{ cash_ai_panel.balances.ARS | money('ARS') }}</strong>
-                </li>
-                <li>
-                    <span class="cash-ai-balances__label"><span class="cash-ai-balances__flag">🇺🇸</span> USD</span>
-                    <strong>{{ cash_ai_panel.balances.USD | money('USD') }}</strong>
-                </li>
-            </ul>
-        </article>
-    </section>
 
     <section class="cash-ai-workflow" aria-label="{{ t('cash_ai_page_workflow_aria') }}">
         <article class="cash-ai-step {% if not draft %}is-active{% endif %}">
@@ -326,91 +231,8 @@
         </article>
     </section>
 
-    <div class="cash-ai-bottom">
-        <section class="cash-ai-card cash-ai-card--table hide-mobile">
-            <h2>{{ t('cash_ai_page_recent_movements') }}</h2>
-            <div class="cash-ai-table-wrap">
-                <table class="cash-ai-table">
-                    <thead>
-                        <tr>
-                            <th>{{ t('cash_movement_date') }}</th>
-                            <th>{{ t('cash_movement_type') }}</th>
-                            <th>{{ t('cash_ai_page_col_concept') }}</th>
-                            <th>{{ t('cash_category') }}</th>
-                            <th>{{ t('cash_payment_method') }}</th>
-                            <th>{{ t('cash_amount') }}</th>
-                            <th>{{ t('cash_currency') }}</th>
-                            <th>{{ t('status') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for movement in cash_ai_panel.recent_movements %}
-                        <tr>
-                            <td>{{ movement.date | short_date }}</td>
-                            <td><span class="cash-ai-pill cash-ai-pill--{{ movement.type }}">{{ t('cash_type_' ~ movement.type) }}</span></td>
-                            <td>{{ movement.merchant }}</td>
-                            <td>{% if movement.category %}{{ t('cash_cat_' ~ movement.category) }}{% else %}—{% endif %}</td>
-                            <td>{% if movement.payment_method %}{{ t('cash_pay_' ~ movement.payment_method) }}{% else %}—{% endif %}</td>
-                            <td>{{ movement.amount | money(movement.currency) }}</td>
-                            <td>{{ movement.currency }}</td>
-                            <td><span class="cash-ai-status cash-ai-status--success">{{ t('cash_status_' ~ movement.status) }}</span></td>
-                        </tr>
-                        {% else %}
-                        <tr><td colspan="8">{{ t('cash_ai_page_no_movements') }}</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="cash-ai-card cash-ai-mobile-movements hide-desktop">
-            <div class="cash-ai-mobile-movements__head">
-                <h2>{{ t('cash_ai_page_recent_movements') }}</h2>
-                <a href="{{ url_for('cash_list') }}">{{ t('dashboard_mobile_view_all') }} →</a>
-            </div>
-            <ul class="cash-ai-mobile-movements__list">
-                {% for movement in cash_ai_panel.recent_movements %}
-                <li class="cash-ai-mobile-movement">
-                    <span class="cash-ai-mobile-movement__icon cash-ai-mobile-movement__icon--{{ movement.type }}" aria-hidden="true">
-                        {% if movement.type == 'income' %}↑{% else %}↓{% endif %}
-                    </span>
-                    <div class="cash-ai-mobile-movement__body">
-                        <strong>{{ movement.merchant }}</strong>
-                        <span>{{ movement.date | short_date }}{% if movement.category %} · {{ t('cash_cat_' ~ movement.category) }}{% endif %}</span>
-                    </div>
-                    <div class="cash-ai-mobile-movement__amount">
-                        <strong>{{ movement.amount | money(movement.currency) }}</strong>
-                        <span class="cash-ai-status cash-ai-status--success">{{ t('cash_status_' ~ movement.status) }}</span>
-                    </div>
-                </li>
-                {% else %}
-                <li class="cash-ai-empty">{{ t('cash_ai_page_no_movements') }}</li>
-                {% endfor %}
-            </ul>
-        </section>
-
-        <section class="cash-ai-card cash-ai-card--activity hide-mobile">
-            <h2>{{ t('cash_ai_page_activity_title') }}</h2>
-            <ul class="cash-ai-activity">
-                {% for item in cash_ai_panel.activity %}
-                <li class="cash-ai-activity__item cash-ai-activity__item--{{ item.tone }}">
-                    <span class="cash-ai-activity__dot" aria-hidden="true"></span>
-                    <div>
-                        <p>{{ item.text }}</p>
-                        <span>{{ item.time }}{% if item.confidence %} · {{ item.confidence }}%{% endif %}</span>
-                    </div>
-                </li>
-                {% else %}
-                <li class="cash-ai-empty">{{ t('cash_ai_page_no_activity') }}</li>
-                {% endfor %}
-            </ul>
-        </section>
-    </div>
 </div>
 
-<script id="cash-ai-panel-data" type="application/json">{{ cash_ai_panel | tojson }}</script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="{{ url_for('static', filename='js/cash-ai-page.js') }}"></script>
 <script>
 (function () {
     document.querySelectorAll("[data-cash-ai-confirm]").forEach(function (form) {

@@ -129,6 +129,39 @@ class InvoiceAiV2Tests(unittest.TestCase):
             cls.admin,
             enable_billing=True,
         )
+        cls._collect_commission(cls.op_lib_a, SIDE_BUYER)
+
+    @classmethod
+    def _collect_commission(cls, operation_id, side):
+        from modules.cash_treasury import (
+            confirm_movement,
+            validate_movement_payload,
+        )
+        from modules.database import get_operation_party, get_operation_record
+
+        party = get_operation_party(cls.org, operation_id, side)
+        amount = float((party or {}).get("commission_amount") or 0)
+        if amount <= 0.009:
+            return
+        operation = get_operation_record(operation_id, cls.org)
+        errors, values = validate_movement_payload(
+            {
+                "movement_type": "income",
+                "currency": (operation or {}).get("currency") or "USD",
+                "amount": str(amount),
+                "category": "commission_collection",
+                "description": "Cobro de comisión",
+                "payment_method": "cash",
+                "movement_date": "2026-10-15",
+                "notes": "",
+                "treasury_account_id": "",
+                "linked_operation_id": str(operation_id),
+                "linked_party_role": side,
+            }
+        )
+        if errors:
+            raise AssertionError(errors)
+        confirm_movement(cls.org, values, user_id=cls.admin)
 
     @classmethod
     def _charge(cls, agent_id, description, category, amount, *, org=None):

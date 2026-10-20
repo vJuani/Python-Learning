@@ -22,6 +22,25 @@ from .treasury_accounts_repository import (
 )
 
 
+OPERATION_COLLECTION_CATEGORY = "commission_collection"
+PARTY_ROLES = ("buyer", "seller")
+_CLOSED_OPERATION_STATUSES = ("preclose", "preclose_void")
+
+
+def _money(value):
+    return round(float(value or 0), 2)
+
+
+def _operation_link_label(operation_id, address):
+    if operation_id is None:
+        return None
+    code = f"COM-{int(operation_id):06d}"
+    address = (address or "").strip()
+    if address:
+        return f"{code} · {address}"
+    return code
+
+
 def _now_iso():
     return datetime.utcnow().replace(
         microsecond=0
@@ -82,6 +101,12 @@ def _build_movement_dict(row):
             if row[2] is not None
             else None
         ),
+        "linked_operation_id": row[31],
+        "linked_party_role": row[32],
+        "linked_operation_label": _operation_link_label(
+            row[31],
+            row[33],
+        ),
     }
 
 
@@ -117,13 +142,22 @@ MOVEMENTS_BASE_QUERY = """
         m.attachment_original_name,
         u.username,
         m.treasury_account_id,
-        ta.name
+        ta.name,
+        m.linked_operation_id,
+        m.linked_party_role,
+        linked_property.address
     FROM cash_movements AS m
     LEFT JOIN users AS u
         ON m.created_by_user_id = u.id
     LEFT JOIN treasury_accounts AS ta
         ON m.treasury_account_id = ta.id
         AND ta.organization_id = m.organization_id
+    LEFT JOIN operations AS linked_operation
+        ON linked_operation.id = m.linked_operation_id
+        AND linked_operation.organization_id = m.organization_id
+    LEFT JOIN properties AS linked_property
+        ON linked_property.id = linked_operation.property_id
+        AND linked_property.organization_id = m.organization_id
 """
 
 
@@ -463,6 +497,244 @@ def _sync_consolidated_cash_account(
     )
 
 
+def _lock_operation_row(cursor, organization_id, operation_id):
+    """Serialize concurrent collections of the same operation.
+
+    SQLite writers already queue on BEGIN IMMEDIATE. Postgres needs
+    a row lock so the pending sum is read after the other transaction
+    commits.
+    """
+    if get_database_backend() != BACKEND_POSTGRES:
+        return
+    cursor.execute(
+        """
+        SELECT id
+        FROM operations
+        WHERE id = ?
+            AND organization_id = ?
+        FOR UPDATE
+        """,
+        (int(operation_id), organization_id),
+    )
+
+
+def collection_block_reason(state, amount, currency):
+    """Return a ValueError code when a collection cannot be posted."""
+    if state is None or state.get("closed"):
+        return "invalid_operation"
+    if not state.get("participating"):
+        return "invalid_operation_side"
+    if state.get("currency") != currency:
+        return "operation_currency_mismatch"
+    if state.get("expected", 0) <= 0.009:
+        return "operation_commission_missing"
+    if state.get("remaining", 0) <= 0.009:
+        return "operation_side_settled"
+    if float(amount) > float(state["remaining"]) + 0.009:
+        return "operation_side_exceeded"
+    return None
+
+
+def _read_operation_side(cursor, organization_id, operation_id, party_role):
+    cursor.execute(
+        """
+        SELECT
+            operations.id,
+            COALESCE(operations.currency, 'USD'),
+            COALESCE(operations.status, 'approved'),
+            properties.address
+        FROM operations
+        JOIN properties
+            ON properties.id = operations.property_id
+        WHERE operations.id = ?
+            AND operations.organization_id = ?
+        """,
+        (operation_id, organization_id),
+    )
+    operation = cursor.fetchone()
+    if operation is None:
+        return None
+
+    cursor.execute(
+        """
+        SELECT is_participating, commission_amount
+        FROM operation_parties
+        WHERE organization_id = ?
+            AND operation_id = ?
+            AND party_role = ?
+        """,
+        (organization_id, operation_id, party_role),
+    )
+    party = cursor.fetchone()
+    participating = bool(party[0]) if party is not None else False
+    expected = _money(party[1]) if participating else 0.0
+
+    cursor.execute(
+        """
+        SELECT
+            COALESCE(SUM(amount), 0),
+            COUNT(*)
+        FROM cash_movements
+        WHERE organization_id = ?
+            AND linked_operation_id = ?
+            AND linked_party_role = ?
+            AND currency = ?
+            AND movement_type = 'income'
+            AND status = 'confirmed'
+            AND category = ?
+        """,
+        (
+            organization_id,
+            operation_id,
+            party_role,
+            operation[1],
+            OPERATION_COLLECTION_CATEGORY,
+        ),
+    )
+    collected_row = cursor.fetchone()
+    collected = _money(collected_row[0])
+    remaining = _money(max(0.0, expected - collected))
+    status = operation[2] or "approved"
+    return {
+        "operation_id": operation[0],
+        "display_id": f"COM-{int(operation[0]):06d}",
+        "property": (operation[3] or "").strip(),
+        "label": _operation_link_label(operation[0], operation[3]),
+        "currency": operation[1] or "USD",
+        "status": status,
+        "closed": status in _CLOSED_OPERATION_STATUSES,
+        "party_role": party_role,
+        "participating": participating,
+        "expected": expected,
+        "collected": collected,
+        "remaining": remaining,
+        "count": int(collected_row[1] or 0),
+    }
+
+
+def get_operation_side_collection(
+    organization_id,
+    operation_id,
+    party_role,
+):
+    organization_id = require_organization_id(organization_id)
+    if party_role not in PARTY_ROLES:
+        return None
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        return _read_operation_side(
+            cursor,
+            organization_id,
+            int(operation_id),
+            party_role,
+        )
+    finally:
+        connection.close()
+
+
+def list_participating_operation_sides(organization_id):
+    organization_id = require_organization_id(organization_id)
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT
+                operations.id,
+                COALESCE(operations.currency, 'USD'),
+                properties.address,
+                operation_parties.party_role,
+                operation_parties.commission_amount
+            FROM operations
+            JOIN properties
+                ON properties.id = operations.property_id
+            JOIN operation_parties
+                ON operation_parties.operation_id = operations.id
+                AND operation_parties.organization_id = operations.organization_id
+            WHERE operations.organization_id = ?
+                AND COALESCE(operations.status, 'approved')
+                    NOT IN ('preclose', 'preclose_void')
+                AND operation_parties.is_participating = 1
+                AND COALESCE(operation_parties.commission_amount, 0) > 0
+            ORDER BY operations.id DESC,
+                CASE operation_parties.party_role
+                    WHEN 'buyer' THEN 0
+                    WHEN 'seller' THEN 1
+                    ELSE 2
+                END
+            """,
+            (organization_id,),
+        )
+        rows = cursor.fetchall()
+        cursor.execute(
+            """
+            SELECT
+                linked_operation_id,
+                linked_party_role,
+                currency,
+                COALESCE(SUM(amount), 0),
+                COUNT(*)
+            FROM cash_movements
+            WHERE organization_id = ?
+                AND movement_type = 'income'
+                AND status = 'confirmed'
+                AND category = ?
+                AND linked_operation_id IS NOT NULL
+            GROUP BY
+                linked_operation_id,
+                linked_party_role,
+                currency
+            """,
+            (organization_id, OPERATION_COLLECTION_CATEGORY),
+        )
+        collected = {
+            (row[0], row[1], row[2]): (
+                _money(row[3]),
+                int(row[4] or 0),
+            )
+            for row in cursor.fetchall()
+        }
+    finally:
+        connection.close()
+
+    grouped = []
+    by_id = {}
+    for operation_id, currency, address, role, expected_raw in rows:
+        expected = _money(expected_raw)
+        collected_amount, count = collected.get(
+            (operation_id, role, currency),
+            (0.0, 0),
+        )
+        operation = by_id.get(operation_id)
+        if operation is None:
+            operation = {
+                "id": operation_id,
+                "display_id": f"COM-{int(operation_id):06d}",
+                "property": (address or "").strip(),
+                "label": _operation_link_label(
+                    operation_id,
+                    address,
+                ),
+                "currency": currency or "USD",
+                "sides": [],
+            }
+            by_id[operation_id] = operation
+            grouped.append(operation)
+        remaining = _money(
+            max(0.0, expected - collected_amount)
+        )
+        operation["sides"].append({
+            "role": role,
+            "expected": expected,
+            "collected": collected_amount,
+            "remaining": remaining,
+            "selectable": remaining > 0.009,
+            "count": count,
+        })
+    return grouped
+
+
 def create_cash_movement_atomic(
     organization_id,
     *,
@@ -487,6 +759,8 @@ def create_cash_movement_atomic(
     allow_negative=False,
     treasury_account_id=None,
     payment_method_for_default=None,
+    linked_operation_id=None,
+    linked_party_role=None,
     connection=None,
     manage_transaction=True,
 ):
@@ -551,6 +825,28 @@ def create_cash_movement_atomic(
                 connection.rollback()
             raise ValueError("treasury_currency_mismatch")
 
+        if linked_operation_id is not None:
+            _lock_operation_row(
+                cursor,
+                organization_id,
+                int(linked_operation_id),
+            )
+            state = _read_operation_side(
+                cursor,
+                organization_id,
+                int(linked_operation_id),
+                linked_party_role,
+            )
+            reason = collection_block_reason(
+                state,
+                amount,
+                currency,
+            )
+            if reason:
+                if manage_transaction:
+                    connection.rollback()
+                raise ValueError(reason)
+
         balance_before = treasury_account["cached_balance"]
         balance_after = balance_before + signed_delta
 
@@ -600,12 +896,14 @@ def create_cash_movement_atomic(
                 attachment_hash,
                 attachment_content_type,
                 attachment_original_name,
-                treasury_account_id
+                treasury_account_id,
+                linked_operation_id,
+                linked_party_role
             )
             VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 'confirmed', ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -632,6 +930,8 @@ def create_cash_movement_atomic(
                 attachment_content_type,
                 attachment_original_name,
                 resolved_account_id,
+                linked_operation_id,
+                linked_party_role,
             ),
         )
 

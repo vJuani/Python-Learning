@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation
 from modules.database.connection import get_connection
 from modules.database.reservations_repository import OPEN_STATUSES
 from modules.database.tenant import require_organization_id
+from modules.mortgage_banks import bank_label, is_mortgage_bank, mortgage_banks
 from modules.reservations import (
     PAYMENT_METHODS,
     RENT_MILESTONES,
@@ -25,7 +26,6 @@ from modules.reservations import (
 
 VIEWS = ("active", "closing", "financing", "agent", "history", "delayed")
 CLOSING_WINDOW_DAYS = 14
-CREDIT_PAYMENTS = ("mortgage", "mixed")
 RENT_PURPOSES = ("rental", "temporary_rental")
 SKIPPED_COVER_SOURCES = frozenset({"acm", "comparable", "mock_network"})
 
@@ -99,6 +99,13 @@ def _purpose_key(listing_purpose):
     return "sale"
 
 
+def _has_credit(row):
+    try:
+        return int(row.get("purchase_with_credit") or 0) == 1
+    except (TypeError, ValueError):
+        return False
+
+
 def _is_open(row):
     return row.get("reservation_status") in OPEN_STATUSES
 
@@ -147,6 +154,7 @@ def progress_for(row):
             "contract": 2,
             "deed_scheduled": 3,
             "in_operation": 4,
+            "pre_close": 4,
             "closed": 5,
         }.get(status)
     else:
@@ -158,6 +166,7 @@ def progress_for(row):
             "contract": 2,
             "deed_scheduled": 3,
             "in_operation": 4,
+            "pre_close": 4,
             "closed": 5,
         }.get(status)
     cancelled = status == "cancelled"
@@ -207,7 +216,7 @@ def closing_gaps(row):
         gaps.append("reservation_gap_deed")
     if purpose == "rent" and status == "deed_scheduled":
         gaps.append("reservation_gap_handover")
-    if not row.get("operation_id"):
+    if not row.get("operation_id") and status not in ("pre_close", "confirmed", "closed"):
         gaps.append("reservation_gap_prepare")
     return gaps
 
@@ -224,7 +233,7 @@ def row_alerts(row, today):
     milestone = str(row.get("next_milestone") or "").strip()
     if not milestone or milestone == "undefined":
         alerts.append("reservation_alert_no_milestone")
-    if not row.get("operation_id"):
+    if not row.get("operation_id") and (row.get("reservation_status") or "") != "pre_close":
         alerts.append("reservation_alert_no_operation")
     return alerts
 
@@ -313,6 +322,8 @@ def present_reservation(row, *, cover_url=None, operation=None, today=None):
         row.get("buyer_commission_amount"),
         row.get("buyer_commission_currency"),
     )
+    item["purchase_with_credit"] = 1 if _has_credit(row) else 0
+    item["financing_bank_label"] = bank_label(row.get("financing_bank"))
     item["close_display"] = display_date(row.get("estimated_closing_date"))
     item["reserved_display"] = display_date(row.get("reserved_at"))
     item["thumbnail_url"] = cover_url or None
@@ -383,6 +394,9 @@ def _blank_filters(raw):
     credit = str(raw.get("credit") or "").strip()
     if credit not in ("yes", "no"):
         credit = ""
+    bank = str(raw.get("bank") or "").strip()
+    if credit != "yes" or not is_mortgage_bank(bank):
+        bank = ""
     has_operation = str(raw.get("has_operation") or "").strip()
     if has_operation not in ("yes", "no"):
         has_operation = ""
@@ -400,6 +414,7 @@ def _blank_filters(raw):
         "purpose": purpose,
         "payment_method": str(raw.get("payment_method") or "").strip(),
         "credit": credit,
+        "bank": bank,
         "next_milestone": str(raw.get("next_milestone") or "").strip(),
         "close_from": str(raw.get("close_from") or "").strip(),
         "close_to": str(raw.get("close_to") or "").strip(),
@@ -421,7 +436,7 @@ def _in_view(row, view, today):
     if view == "history":
         return status in ("closed", "cancelled")
     if view == "financing":
-        return status == "financing"
+        return _has_credit(row)
     if view == "closing":
         return is_closing_soon(row, today)
     if view == "delayed":
@@ -462,9 +477,11 @@ def _matches_filters(row, filters):
         return False
     if filters["payment_method"] and row.get("payment_method") != filters["payment_method"]:
         return False
-    if filters["credit"] == "yes" and row.get("payment_method") not in CREDIT_PAYMENTS:
+    if filters["credit"] == "yes" and not _has_credit(row):
         return False
-    if filters["credit"] == "no" and row.get("payment_method") in CREDIT_PAYMENTS:
+    if filters["credit"] == "no" and _has_credit(row):
+        return False
+    if filters.get("bank") and row.get("financing_bank") != filters["bank"]:
         return False
     if filters["next_milestone"] and row.get("next_milestone") != filters["next_milestone"]:
         return False
@@ -540,7 +557,7 @@ def _counts(rows, today):
     return {
         "active": sum(1 for row in rows if row.get("reservation_status") in OPEN_STATUSES),
         "closing": sum(1 for row in rows if is_closing_soon(row, today)),
-        "financing": sum(1 for row in rows if row.get("reservation_status") == "financing"),
+        "financing": sum(1 for row in rows if _has_credit(row)),
         "history": sum(
             1 for row in rows if row.get("reservation_status") in ("closed", "cancelled")
         ),
@@ -648,4 +665,5 @@ def board_filter_choices():
         "statuses": STATUSES,
         "payments": PAYMENT_METHODS,
         "milestones": board_milestones(),
+        "banks": mortgage_banks(),
     }

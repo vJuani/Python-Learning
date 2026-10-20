@@ -25,6 +25,7 @@ from modules.database.invoices_repository import (
     apply_fiscal_issue_success,
     claim_invoice_for_fiscal_issue,
     count_invoices_by_status,
+    billing_ready_sql,
     count_pending_parties_to_invoice,
     create_invoice_atomic,
     get_active_invoice_for_operation,
@@ -66,6 +67,10 @@ from modules.invoice_provider import (
     get_invoice_provider,
     get_invoice_provider_name,
 )
+from modules.cash_treasury import collection_settles_commission
+from modules.database.cash_treasury_repository import (
+    get_operation_side_collection,
+)
 from modules.notifications_service import (
     emit_invoice_created,
     notify_operation_invoice_amount_ready,
@@ -74,6 +79,144 @@ from modules.notifications_service import (
 
 
 logger = logging.getLogger(__name__)
+
+_PRECLOSE_OPERATION_STATUSES = ("preclose", "preclose_void")
+
+
+def side_ready_for_billing(organization_id, operation_id, party, *, operation_status=None):
+    """Whether a side may be invoiced.
+
+    Confirmed treasury collections are the financial source whenever
+    the side has an expected commission. Reservation preclose still
+    uses the stored choice because a collection cannot be posted
+    until the operation leaves preclose. A participating side with
+    no commission has nothing to collect, so the stored choice remains.
+    """
+    if party is None or not party.get("is_participating"):
+        return False
+    role = party.get("party_role")
+    state = get_operation_side_collection(
+        organization_id,
+        operation_id,
+        role,
+    )
+    if (
+        state
+        and state.get("participating")
+        and collection_settles_commission(
+            state.get("expected"),
+            state.get("collected"),
+        )
+    ):
+        return True
+    stored = bool(party.get("billing_enabled"))
+    status = (operation_status or "").strip()
+    if status in _PRECLOSE_OPERATION_STATUSES:
+        return stored
+    expected = float((state or {}).get("expected") or 0)
+    if expected <= 0.009:
+        return stored
+    return False
+
+
+def _money(value):
+    try:
+        return round(float(value or 0), 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _active_side_invoice_total(organization_id, operation_id, side, currency):
+    """Sum active vouchers for this side in one currency.
+
+    Draft, ready, issued and error invoices count. Cancelled
+    invoices do not. A second issuer can still exist; this total
+    is the fiscal amount already committed, not a treasury balance.
+    """
+    if not side:
+        return 0.0
+    wanted = (currency or "").strip().upper()
+    total = 0.0
+    for invoice in list_invoices_for_operation(
+        organization_id,
+        operation_id,
+        side,
+    ):
+        if invoice.get("status") not in ACTIVE_STATUSES:
+            continue
+        invoice_currency = (invoice.get("currency") or "").strip().upper()
+        if wanted and invoice_currency != wanted:
+            continue
+        total += _money(invoice.get("total_amount"))
+    return round(total, 2)
+
+
+def side_billing_position(
+    organization_id,
+    operation_id,
+    party,
+    *,
+    operation_status=None,
+):
+    """One read model for a side's commercial and fiscal amounts.
+
+    Expected, collected and pending come from confirmed treasury
+    collections. Invoiced is the sum of active vouchers. Billable
+    is the commission not yet on an active voucher. The proposal is
+    that remainder only when nobody has saved a fiscal total yet
+    and there is no active voucher: a partial voucher is not
+    continued with a second invoice for the same issuer.
+    """
+    role = (party or {}).get("party_role")
+    collection = {}
+    if role:
+        collection = get_operation_side_collection(
+            organization_id,
+            operation_id,
+            role,
+        ) or {}
+    expected = _money(collection.get("expected"))
+    collected = _money(collection.get("collected"))
+    if collection.get("pending") is None:
+        pending = round(max(0.0, expected - collected), 2)
+    else:
+        pending = _money(collection.get("pending"))
+    currency = (
+        collection.get("currency")
+        or (party or {}).get("invoice_currency")
+        or "USD"
+    )
+    invoiced = _active_side_invoice_total(
+        organization_id,
+        operation_id,
+        role,
+        currency,
+    )
+    billable = round(max(0.0, expected - invoiced), 2)
+    ready = side_ready_for_billing(
+        organization_id,
+        operation_id,
+        party,
+        operation_status=operation_status,
+    )
+    proposal = None
+    if (
+        ready
+        and not party_has_invoice_amount(party)
+        and invoiced <= 0.009
+        and billable > 0.009
+    ):
+        proposal = billable
+    return {
+        "expected": expected,
+        "collected": collected,
+        "pending": pending,
+        "invoiced": invoiced,
+        "billable": billable,
+        "proposal": proposal,
+        "currency": (currency or "USD").strip().upper(),
+        "ready": ready,
+    }
 
 DEFAULT_DESCRIPTION = "Asesoramiento Integral de Gestión"
 DEFAULT_SERVICE_TYPE = "services"
@@ -242,9 +385,9 @@ def party_client_ready(party):
 
 
 CLIENT_FIELD_PRIORITY = (
+    "client_legal_name",
     "client_tax_id",
     "client_tax_condition",
-    "client_legal_name",
     "client_fiscal_address",
 )
 
@@ -469,10 +612,16 @@ def get_operation_sides_state(
             for inv in all_invoices
             if inv.get("side") == side
         ]
+        billing_ready = side_ready_for_billing(
+            organization_id,
+            operation["db_id"],
+            party,
+            operation_status=operation.get("status"),
+        )
         has_amount = (
             party is not None
             and bool(party.get("is_participating"))
-            and bool(party.get("billing_enabled"))
+            and billing_ready
             and party_has_invoice_amount(party)
         )
         client_ok, _ = party_client_ready(party)
@@ -500,6 +649,7 @@ def get_operation_sides_state(
             can_create,
         )
         side_info["party"] = party
+        side_info["billing_ready"] = billing_ready
         side_info["invoices"] = side_invoices
         side_info["side"] = side
         side_info["display_status"] = (
@@ -515,7 +665,10 @@ def get_side_billing_display_status(side_info):
     party = (side_info or {}).get("party") or {}
     if not party.get("is_participating"):
         return "not_participating"
-    if not party.get("billing_enabled"):
+    ready = side_info.get("billing_ready")
+    if ready is None:
+        ready = bool(party.get("billing_enabled"))
+    if not ready:
         return "not_enabled"
     state = (side_info or {}).get("state")
     mapping = {
@@ -1271,7 +1424,12 @@ def build_draft_preview_for_side(
     )
     if party is None or not party.get("is_participating"):
         raise InvoicingError("invoice_err_party_not_participating")
-    if not party.get("billing_enabled"):
+    if not side_ready_for_billing(
+        organization_id,
+        operation_id,
+        party,
+        operation_status=operation.get("status"),
+    ):
         raise InvoicingError(
             "invoice_err_side_billing_disabled"
         )
@@ -1918,7 +2076,7 @@ def list_pending_operations(
     clauses = [
         "op.organization_id = ?",
         "op.is_participating = 1",
-        "op.billing_enabled = 1",
+        billing_ready_sql("op", "o"),
         "op.invoice_amount IS NOT NULL",
         "op.invoice_amount > 0",
     ]

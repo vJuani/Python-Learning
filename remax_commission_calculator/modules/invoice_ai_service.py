@@ -27,6 +27,7 @@ from modules.invoicing import (
     VALID_SIDES,
     get_charge_invoice_context,
     list_billable_agent_charges,
+    side_ready_for_billing,
 )
 from modules.jrh_ai_classify import (
     ORIGIN_CHARGE,
@@ -395,12 +396,19 @@ def _available_sides(organization_id, operation_id):
         parties = get_parties_for_operation(organization_id, operation_id) or []
     except Exception:
         parties = []
+    operation = get_operation_record(operation_id, organization_id)
+    status = (operation or {}).get("status")
     sides = []
     for party in parties:
         role = party.get("party_role") or party.get("side")
         if role not in VALID_SIDES:
             continue
-        if party.get("billing_enabled") in (0, False):
+        if not side_ready_for_billing(
+            organization_id,
+            operation_id,
+            party,
+            operation_status=status,
+        ):
             continue
         amount = party.get("invoice_amount")
         if amount in (None, "", 0, "0"):

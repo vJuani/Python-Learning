@@ -178,6 +178,7 @@ from modules.cash_treasury import (
     TYPE_INCOME,
     CashTreasuryError,
     build_cash_kpis,
+    build_operation_collection_status,
     categories_for_type,
     confirm_movement,
     filter_movements,
@@ -186,7 +187,9 @@ from modules.cash_treasury import (
     get_treasury_accounts,
     preview_movement,
     reverse_movement,
-    set_opening_balances,
+    opening_account_ids,
+    set_account_opening_balance,
+    list_operation_collection_options,
     validate_movement_payload,
 )
 from modules.database.treasury_accounts_repository import (
@@ -520,6 +523,22 @@ def localize_form_errors(errors):
     return localize_messages(
         errors,
         get_current_language()
+    )
+
+
+def localize_cash_treasury_error(error):
+    kwargs = {}
+    pending = (getattr(error, "kwargs", None) or {}).get("pending")
+    if pending is not None:
+        kwargs["amount"] = format_money(
+            pending,
+            currency=error.kwargs.get("currency") or "USD",
+            language=get_current_language(),
+        )
+    return translate(
+        error.message_key,
+        get_current_language(),
+        **kwargs,
     )
 
 
@@ -6220,6 +6239,14 @@ def operations_list():
     )
 
     operation_count = len(operations)
+    from modules.database.operations_repository import closed_month_totals
+
+    month_kpis = {"count": 0, "currencies": []}
+    if not scope_blocked:
+        month_kpis = closed_month_totals(
+            organization_id,
+            agent_id=agent_id,
+        )
     operations_panel = build_operations_directory(
         organization_id,
         operations,
@@ -6231,6 +6258,7 @@ def operations_list():
     return render_template(
         "operations/list.html",
         operations_panel=operations_panel,
+        month_kpis=month_kpis,
         filters=filters,
         filter_errors=localize_form_errors(filter_errors),
         operation_count=operation_count,
@@ -6261,7 +6289,10 @@ def operations_detail(operation_id):
         organization_id
     )
 
-    if operation is None:
+    if operation is None or (operation.get("status") or "") in (
+        "preclose",
+        "preclose_void",
+    ):
         abort(404)
 
     ensure_operation_scope(
@@ -6408,6 +6439,10 @@ def operations_detail(operation_id):
         commission_lines=commission_lines,
         billing_lines=billing_lines,
         sides_state=sides_state,
+        collection_state=build_operation_collection_status(
+            organization_id,
+            operation_id,
+        ),
         total_commission=total_commission,
         can_set_invoice_amount=can_set_invoice_amount,
         can_create_invoice=can_create_invoice,
@@ -7717,6 +7752,11 @@ def cash_list():
         "view",
         "consolidated",
     ).strip().lower()
+    explicit_tab = request.args.get("tab", "").strip().lower()
+    if explicit_tab == "ai":
+        return redirect(url_for("cash_ai_new"))
+    if explicit_tab == "accounts":
+        return redirect(url_for("cash_treasury_accounts"))
     treasury_account_raw = request.args.get(
         "treasury_account_id",
         "",
@@ -7833,7 +7873,45 @@ def cash_list():
     if per_page != DEFAULT_CASH_PER_PAGE:
         pagination_params["per_page"] = per_page
 
-    filters_active = any(filters.values())
+    filters_active = any(
+        value
+        for key, value in filters.items()
+        if key != "view"
+    )
+    movement_query = filters_active or view in ("ars", "usd") or bool(
+        request.args.get("page") or request.args.get("per_page")
+    )
+    if explicit_tab in ("summary", "movements"):
+        treasury_tab = explicit_tab
+    elif movement_query:
+        treasury_tab = "movements"
+    else:
+        treasury_tab = "summary"
+
+    if treasury_tab == "summary":
+        return render_template(
+            "cash/list.html",
+            treasury_tab="summary",
+            kpis=build_cash_kpis(organization_id),
+            cash_ai_panel=build_cash_ai_workspace(
+                organization_id,
+                language=get_current_language(),
+            ),
+            movements=[],
+            filters=filters,
+            movement_count=0,
+            currencies=CASH_CURRENCIES,
+            payment_methods=CASH_PAYMENT_METHODS,
+            income_categories=INCOME_CATEGORIES,
+            expense_categories=EXPENSE_CATEGORIES,
+            users=get_users(organization_id),
+            filters_active=False,
+            treasury_accounts=treasury_accounts,
+            cash_view=view,
+            selected_treasury_account_id=treasury_account_id,
+        )
+
+    pagination_params["tab"] = "movements"
 
     return render_template(
         "cash/list.html",
@@ -7857,7 +7935,20 @@ def cash_list():
         cash_view=view,
         selected_treasury_account_id=treasury_account_id,
         treasury_account_types=ACCOUNT_TYPES,
+        treasury_tab="movements",
+        cash_ai_panel=None,
     )
+
+
+@app.route("/cash/operation-collections.json")
+@admin_required
+def cash_operation_collections():
+    organization_id = require_user_organization()
+    return jsonify({
+        "operations": list_operation_collection_options(
+            organization_id
+        ),
+    })
 
 
 @app.route(
@@ -7908,6 +7999,14 @@ def cash_new():
             "treasury_account_id",
             "",
         ).strip(),
+        "linked_operation_id": request.form.get(
+            "linked_operation_id",
+            "",
+        ).strip(),
+        "linked_party_role": request.form.get(
+            "linked_party_role",
+            "",
+        ).strip(),
     }
     action = request.form.get("action", "preview")
     errors, values = validate_movement_payload(form_values)
@@ -7932,9 +8031,9 @@ def cash_new():
             "cash/form.html",
             **_cash_form_context(
                 form_values,
-                localize_form_errors(
-                    [error.message_key]
-                ),
+                [
+                    localize_cash_treasury_error(error)
+                ],
                 organization_id=organization_id,
             ),
         )
@@ -7960,9 +8059,9 @@ def cash_new():
             "cash/form.html",
             **_cash_form_context(
                 form_values,
-                localize_form_errors(
-                    [error.message_key]
-                ),
+                [
+                    localize_cash_treasury_error(error)
+                ],
                 preview=preview,
                 organization_id=organization_id,
             ),
@@ -8261,21 +8360,27 @@ def cash_treasury_accounts_json():
 def cash_opening_balance():
     organization_id = require_user_organization()
     current_user = get_current_user()
-    balances = get_balances(organization_id)
+    accounts = get_treasury_accounts(organization_id)
+    accounts_with_opening = opening_account_ids(
+        organization_id
+    )
     form_values = {
-        "amount_ars": "",
-        "amount_usd": "",
+        "treasury_account_id": request.args.get(
+            "account_id",
+            "",
+        ).strip() if request.method == "GET" else "",
+        "amount": "",
         "movement_date": date.today().isoformat(),
     }
 
     if request.method == "POST":
         form_values = {
-            "amount_ars": request.form.get(
-                "amount_ars",
+            "treasury_account_id": request.form.get(
+                "treasury_account_id",
                 "",
             ).strip(),
-            "amount_usd": request.form.get(
-                "amount_usd",
+            "amount": request.form.get(
+                "amount",
                 "",
             ).strip(),
             "movement_date": request.form.get(
@@ -8289,23 +8394,35 @@ def cash_opening_balance():
                 parse_cash_date,
             )
 
+            account_id = int(
+                form_values["treasury_account_id"]
+            )
             movement_date = parse_cash_date(
                 form_values["movement_date"]
             ) or date.today()
-            set_opening_balances(
+            set_account_opening_balance(
                 organization_id,
-                amounts_by_currency={
-                    "ARS": form_values["amount_ars"],
-                    "USD": form_values["amount_usd"],
-                },
+                treasury_account_id=account_id,
+                amount=form_values["amount"],
                 user_id=current_user["id"],
                 movement_date=movement_date,
+            )
+        except (TypeError, ValueError):
+            return render_template(
+                "cash/opening.html",
+                form_values=form_values,
+                accounts=accounts,
+                accounts_with_opening=accounts_with_opening,
+                errors=localize_form_errors(
+                    ["cash_err_treasury_account_invalid"]
+                ),
             )
         except CashTreasuryError as error:
             return render_template(
                 "cash/opening.html",
                 form_values=form_values,
-                balances=balances,
+                accounts=accounts,
+                accounts_with_opening=accounts_with_opening,
                 errors=localize_form_errors(
                     [error.message_key]
                 ),
@@ -8313,12 +8430,13 @@ def cash_opening_balance():
 
         flash_i18n("cash_opening_saved", "success")
 
-        return redirect(url_for("cash_list"))
+        return redirect(url_for("cash_treasury_accounts"))
 
     return render_template(
         "cash/opening.html",
         form_values=form_values,
-        balances=balances,
+        accounts=accounts,
+        accounts_with_opening=accounts_with_opening,
         errors=[],
     )
 
@@ -8504,6 +8622,16 @@ def cash_ai_review(draft_id):
         ).strip(),
         "notes": request.form.get("notes", "").strip(),
     }
+    if "linked_operation_id" in request.form:
+        form_values["linked_operation_id"] = request.form.get(
+            "linked_operation_id",
+            "",
+        ).strip()
+    if "linked_party_role" in request.form:
+        form_values["linked_party_role"] = request.form.get(
+            "linked_party_role",
+            "",
+        ).strip()
 
     if action == "save":
         draft = update_draft_from_form(
@@ -8608,7 +8736,6 @@ def cash_ai_review(draft_id):
             draft_id,
             error.message_key,
         )
-        flash_i18n(error.message_key, "error")
         draft = get_cash_ai_draft(
             draft_id,
             organization_id,
@@ -8617,9 +8744,9 @@ def cash_ai_review(draft_id):
             organization_id,
             draft,
             editing=True,
-            errors=localize_form_errors(
-                [error.message_key]
-            ),
+            errors=[
+                localize_cash_treasury_error(error)
+            ],
         )
 
     app.logger.info(

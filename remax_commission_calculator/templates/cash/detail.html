@@ -1,8 +1,17 @@
 {% extends "base.html" %}
+{% from "cash/_movement_label.html" import cash_movement_label with context %}
 
+{% block body_class %}is-cash-page {% endblock %}
 {% block title %}{{ movement.display_id }} | {{ t('app_title') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cash-page.css') }}?v=treasury10">
+{% endblock %}
+
 {% block content %}
+{% set treasury_tab = 'movements' %}
+<div class="treasury-page">
+{% include "cash/_module_nav.html" %}
 <section class="page-header">
     <div class="page-header-text">
         <h2>{{ movement.display_id }}</h2>
@@ -18,7 +27,7 @@
         </p>
     </div>
     <div class="page-actions">
-        <a href="{{ url_for('cash_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+        <a href="{{ url_for('cash_list', tab='movements') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
 </section>
 
@@ -99,7 +108,12 @@
 
     <div class="cash-detail-block">
         <h3>{{ t('cash_description') }}</h3>
-        <p>{{ movement.description }}</p>
+        <p>{{ cash_movement_label(movement) }}</p>
+        {% if movement.linked_operation_id %}
+        <p>
+            <a class="cash-origin-ref" href="{{ url_for('operations_detail', operation_id=movement.linked_operation_id) }}">{{ movement.linked_operation_label }} · {{ t('cash_side_' ~ movement.linked_party_role) }}</a>
+        </p>
+        {% endif %}
     </div>
 
     {% if movement.notes %}
@@ -155,4 +169,5 @@
     </form>
 </section>
 {% endif %}
+</div>
 {% endblock %}

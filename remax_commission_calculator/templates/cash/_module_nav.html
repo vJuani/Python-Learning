@@ -1,0 +1,6 @@
+<nav class="treasury-tabs" aria-label="{{ t('treasury_nav_aria') }}">
+    <a class="treasury-tabs__item{% if treasury_tab == 'summary' %} is-active{% endif %}" href="{{ url_for('cash_list') }}">{{ t('treasury_tab_summary') }}</a>
+    <a class="treasury-tabs__item{% if treasury_tab == 'movements' %} is-active{% endif %}" href="{{ url_for('cash_list', tab='movements') }}">{{ t('treasury_tab_movements') }}</a>
+    <a class="treasury-tabs__item{% if treasury_tab == 'accounts' %} is-active{% endif %}" href="{{ url_for('cash_treasury_accounts') }}">{{ t('treasury_tab_accounts') }}</a>
+    <a class="treasury-tabs__item{% if treasury_tab == 'ai' %} is-active{% endif %}" href="{{ url_for('cash_ai_new') }}">{{ t('treasury_tab_ai') }}</a>
+</nav>

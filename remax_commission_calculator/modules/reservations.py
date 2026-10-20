@@ -59,15 +59,13 @@ def format_money(amount, currency):
         return ""
     from decimal import Decimal, InvalidOperation
 
+    from modules.formatting import format_money as format_display_money
+
     try:
-        number = Decimal(str(amount))
+        Decimal(str(amount))
     except InvalidOperation:
         return ""
-    label = currency or "USD"
-    if number == number.to_integral():
-        grouped = f"{int(number):,}".replace(",", ".")
-        return f"{label} {grouped}"
-    return f"{label} {number}"
+    return format_display_money(amount, currency or "USD")
 
 
 def milestones_for_purpose(listing_purpose):
@@ -132,9 +130,11 @@ def update_reservation(organization_id, reservation_id, fields, *, actor_user_id
     if current["reservation_status"] in ("closed", "cancelled"):
         raise ReservationError("reservation_err_closed")
     status = fields.get("reservation_status") or current["reservation_status"]
+    if current["reservation_status"] == "pre_close":
+        status = "pre_close"
     if status == "confirmed" and current["reservation_status"] != "confirmed":
         status = current["reservation_status"]
-    if status not in STATUSES or status in ("closed", "cancelled", "in_operation"):
+    if status not in STATUSES or status in ("closed", "cancelled", "in_operation", "pre_close"):
         status = current["reservation_status"]
     milestone = fields.get("next_milestone") or current.get("next_milestone")
     property_row = get_property_record(current["property_id"], organization_id)
@@ -197,6 +197,15 @@ def cancel_reservation(
         raise ReservationError("reservation_err_missing")
     if current["reservation_status"] not in OPEN_STATUSES:
         raise ReservationError("reservation_err_closed")
+    if current["reservation_status"] == "pre_close":
+        from modules.reservation_close import revert_preclose
+
+        revert_preclose(
+            organization_id,
+            reservation_id,
+            actor_user_id=actor_user_id,
+        )
+        current = get_reservation(reservation_id, organization_id)
     decision = PRICE_KEEP if keep_negotiated_price else PRICE_RESTORE
     instant = to_utc_iso(now_utc())
     from modules.database.connection import get_connection

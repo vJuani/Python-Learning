@@ -93,12 +93,6 @@ def _day_net_flow(organization_id, day_from, day_to, currency="ARS"):
         movement_type=TYPE_INCOME,
         date_from=day_from,
         date_to=day_to,
-    ) + sum_movements_by_type(
-        organization_id,
-        currency=currency,
-        movement_type=TYPE_OPENING,
-        date_from=day_from,
-        date_to=day_to,
     )
     expense = sum_movements_by_type(
         organization_id,
@@ -107,7 +101,15 @@ def _day_net_flow(organization_id, day_from, day_to, currency="ARS"):
         date_from=day_from,
         date_to=day_to,
     )
-    return income, expense, income - expense
+    # Opening changes the balance. It is not operating income.
+    opening = sum_movements_by_type(
+        organization_id,
+        currency=currency,
+        movement_type=TYPE_OPENING,
+        date_from=day_from,
+        date_to=day_to,
+    )
+    return income, expense, income + opening - expense
 
 
 def _day_totals(organization_id, day, currency="ARS"):
@@ -258,6 +260,11 @@ def build_cash_ai_workspace(
         organization_id,
         today,
     )
+    income_today_usd, expense_today_usd, _net_today_usd = _day_totals(
+        organization_id,
+        today,
+        currency="USD",
+    )
     income_yesterday, expense_yesterday, net_yesterday = _day_totals(
         organization_id,
         yesterday,
@@ -267,10 +274,6 @@ def build_cash_ai_workspace(
         organization_id,
         today,
         TYPE_INCOME,
-    ) + _count_movements_for_day(
-        organization_id,
-        today,
-        TYPE_OPENING,
     )
     expense_count = _count_movements_for_day(
         organization_id,
@@ -308,19 +311,46 @@ def build_cash_ai_workspace(
 
     movement_rows = []
     for movement in recent_movements:
+        description = (movement.get("description") or "").strip()
+        if (
+            movement.get("movement_type") == TYPE_OPENING
+            or description == "Opening balance"
+        ):
+            description = _t("cash_type_opening_balance", language)
         movement_rows.append(
             {
                 "id": movement.get("id"),
                 "display_id": movement.get("display_id"),
                 "date": movement.get("movement_date"),
                 "type": movement.get("movement_type"),
-                "description": movement.get("description") or "—",
-                "merchant": movement.get("merchant") or movement.get("description") or "—",
+                "description": description or "—",
+                "merchant": (
+                    description
+                    if (
+                        movement.get("movement_type") == TYPE_OPENING
+                        or (movement.get("description") or "").strip()
+                        == "Opening balance"
+                    )
+                    else (
+                        movement.get("merchant")
+                        or movement.get("description")
+                        or "—"
+                    )
+                ),
                 "category": movement.get("category"),
                 "payment_method": movement.get("payment_method"),
                 "amount": movement.get("amount"),
                 "currency": movement.get("currency"),
                 "status": movement.get("status"),
+                "linked_operation_id": movement.get(
+                    "linked_operation_id"
+                ),
+                "linked_party_role": movement.get(
+                    "linked_party_role"
+                ),
+                "linked_operation_label": movement.get(
+                    "linked_operation_label"
+                ),
             }
         )
 
@@ -364,6 +394,8 @@ def build_cash_ai_workspace(
             "income_change": _pct_change(income_today, income_yesterday),
             "income_count": income_count,
             "expense_today": expense_today,
+            "income_today_usd": income_today_usd,
+            "expense_today_usd": expense_today_usd,
             "expense_change": _pct_change(expense_today, expense_yesterday),
             "expense_count": expense_count,
             "net_today": net_today,

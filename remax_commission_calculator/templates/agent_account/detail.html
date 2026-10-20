@@ -5,7 +5,7 @@
 {% block body_class %}is-agent-account-page is-agent-account-detail {% endblock %}
 {% block title %}{{ t('agent_account_detail_title', name=agent.name) }} | {{ t('app_title') }}{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/agent-account-page.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/agent-account-page.css') }}?v=pay5">
 {% endblock %}
 
 {% block content %}
@@ -118,5 +118,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/agent-account-page.js') }}"></script>
+<script src="{{ url_for('static', filename='js/agent-account-page.js') }}?v=pay3"></script>
 {% endblock %}

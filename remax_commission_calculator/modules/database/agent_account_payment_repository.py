@@ -34,6 +34,7 @@ from .tenant import require_organization_id
 
 CASH_SOURCE_AGENT_ACCOUNT_PAYMENT = "agent_account_payment"
 CASH_CATEGORY_AGENT_PAYMENT = "agent_fee"
+CASH_CATEGORY_AGENT_PAYOUT = "agent_payout"
 PAYMENT_TOLERANCE = 0.0001
 
 
@@ -285,11 +286,21 @@ def register_agent_payment_atomic(
     treasury_account_id=None,
     attachment=None,
     receipt_number=None,
+    payout=False,
 ):
     """
+    Register an agent-account payment and its cash movement.
+
+    ``payout=False`` is a collection: the agent pays the office,
+    the account balance increases, and Caja records an income.
+    Charge allocations and receipt confirmations use that path.
+
+    ``payout=True`` is Registrar pago: the office pays the agent,
+    the favorable balance decreases, and Caja records an expense.
+    The amount cannot exceed the favorable balance.
+
     ``attachment`` optionally carries a stored private receipt
-    (keys: path, hash, content_type, original_name) so the cash
-    income keeps a link to the image inside the same transaction.
+    (keys: path, hash, content_type, original_name).
     """
     organization_id = require_organization_id(
         organization_id
@@ -341,6 +352,9 @@ def register_agent_payment_atomic(
             agent_id,
         )
 
+        if payout:
+            charge_movement_id = None
+
         allocation_amount = 0.0
         charge_description = None
         if charge_movement_id is not None:
@@ -384,7 +398,20 @@ def register_agent_payment_atomic(
             currency,
             for_update=(backend == BACKEND_POSTGRES),
         )
-        balance_after = balance_before + amount
+        if payout:
+            applicable = _round_money(max(balance_before, 0.0))
+            if amount - applicable > PAYMENT_TOLERANCE:
+                connection.rollback()
+                raise ValueError("payment_exceeds_balance")
+            balance_after = _round_money(balance_before - amount)
+            default_description = "Pago a agente"
+            cash_movement_type = "expense"
+            cash_category = CASH_CATEGORY_AGENT_PAYOUT
+        else:
+            balance_after = balance_before + amount
+            default_description = "Pago recibido"
+            cash_movement_type = "income"
+            cash_category = CASH_CATEGORY_AGENT_PAYMENT
 
         payment_id = execute_insert(
             cursor,
@@ -424,7 +451,7 @@ def register_agent_payment_atomic(
                 MOVEMENT_TYPE_PAYMENT,
                 currency,
                 amount,
-                description or "Pago recibido",
+                description or default_description,
                 balance_before,
                 balance_after,
                 STATUS_CONFIRMED,
@@ -448,7 +475,9 @@ def register_agent_payment_atomic(
             ),
         )
 
-        cash_label = cash_description or description or "Pago recibido"
+        cash_label = (
+            cash_description or description or default_description
+        )
         if charge_description:
             cash_label = f"{agent_name or 'Agente'} — Pago {charge_description}"
         elif agent_name:
@@ -457,10 +486,10 @@ def register_agent_payment_atomic(
         attachment = attachment or {}
         cash_movement_id = create_cash_movement_atomic(
             organization_id,
-            movement_type="income",
+            movement_type=cash_movement_type,
             currency=currency,
             amount=amount,
-            category=CASH_CATEGORY_AGENT_PAYMENT,
+            category=cash_category,
             description=cash_label,
             payment_method=payment_method,
             movement_date=movement_date,

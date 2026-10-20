@@ -1,37 +1,62 @@
 <section class="panel operation-commission-panel">
     <div class="panel-header">
         <h3>{{ t('operation_commission_title') }}</h3>
-        <span class="badge status-{{ operation_commission.state }}">
+        <span class="badge status-{{ operation_commission.state }} op-credit-badge op-credit-badge--{{ operation_commission.state }}">
             {{ t('operation_commission_state_' ~ operation_commission.state) }}
         </span>
     </div>
 
-    <dl class="operation-side-metrics">
-        <div>
-            <dt>{{ t('agent') }}</dt>
-            <dd>{{ operation_commission.agent.name if operation_commission.agent else '—' }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('operation_commission_side') }}</dt>
-            <dd>{{ t('operation_commission_side_' ~ operation_commission.commission_side) }}</dd>
-        </div>
-        <div>
-            <dt>{{ t('operation_commission_amount') }}</dt>
+    <div class="op-credit-layout">
+        <dl class="operation-side-metrics op-credit-facts">
+            <div>
+                <dt>{{ t('agent') }}</dt>
+                <dd>{{ operation_commission.agent.name if operation_commission.agent else '—' }}</dd>
+            </div>
+            <div>
+                <dt>{{ t('operation_commission_side') }}</dt>
+                <dd>{{ t('operation_commission_side_' ~ operation_commission.commission_side) }}</dd>
+            </div>
+            <div>
+                <dt>{{ t('operation_commission_amount') }}</dt>
+                {% if operation_commission.active_movement %}
+                <dd class="money op-credit-amount">{{ operation_commission.active_movement.amount | money(operation_commission.active_movement.currency) }}</dd>
+                {% elif operation_commission.suggested_amount %}
+                <dd class="money op-credit-amount">{{ operation_commission.suggested_amount | money(operation_commission.suggested_currency) }}</dd>
+                {% else %}
+                <dd class="op-credit-amount">—</dd>
+                {% endif %}
+            </div>
             {% if operation_commission.active_movement %}
-            <dd class="money">{{ operation_commission.active_movement.amount | money(operation_commission.active_movement.currency) }}</dd>
-            {% elif operation_commission.suggested_amount %}
-            <dd class="money">{{ operation_commission.suggested_amount | money(operation_commission.suggested_currency) }}</dd>
-            {% else %}
-            <dd>—</dd>
+            <div>
+                <dt>{{ t('date') }}</dt>
+                <dd>{{ operation_commission.active_movement.created_at[:10] | short_date }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+
+        <div class="op-credit-actions">
+            {% if operation_commission.state == 'ready' and can_manage_operation_commission %}
+            <button type="button" class="btn btn-primary" data-operation-commission-open>
+                {{ t('operation_commission_credit_action') }}
+            </button>
+            {% elif operation_commission.state == 'credited' %}
+            <div class="form-actions">
+                {% if can_manage_operation_commission %}
+                <a class="btn btn-secondary" href="{{ url_for('agent_account_detail', agent_id=operation_commission.agent.id) }}">
+                    {{ t('operation_commission_view_account') }}
+                </a>
+                <button type="button" class="btn btn-danger" data-operation-commission-reverse-open>
+                    {{ t('operation_commission_reverse_action') }}
+                </button>
+                {% else %}
+                <a class="btn btn-secondary" href="{{ url_for('my_agent_account') }}">
+                    {{ t('operation_commission_view_account') }}
+                </a>
+                {% endif %}
+            </div>
             {% endif %}
         </div>
-        {% if operation_commission.active_movement %}
-        <div>
-            <dt>{{ t('date') }}</dt>
-            <dd>{{ operation_commission.active_movement.created_at[:10] | short_date }}</dd>
-        </div>
-        {% endif %}
-    </dl>
+    </div>
 
     {% if operation_commission.state == 'not_ready' %}
     <ul class="readiness-list">
@@ -39,25 +64,6 @@
         <li>{{ t(reason) }}</li>
         {% endfor %}
     </ul>
-    {% elif operation_commission.state == 'ready' and can_manage_operation_commission %}
-    <button type="button" class="btn btn-primary" data-operation-commission-open>
-        {{ t('operation_commission_credit_action') }}
-    </button>
-    {% elif operation_commission.state == 'credited' %}
-    <div class="form-actions">
-        {% if can_manage_operation_commission %}
-        <a class="btn btn-secondary" href="{{ url_for('agent_account_detail', agent_id=operation_commission.agent.id) }}">
-            {{ t('operation_commission_view_account') }}
-        </a>
-        <button type="button" class="btn btn-danger" data-operation-commission-reverse-open>
-            {{ t('operation_commission_reverse_action') }}
-        </button>
-        {% else %}
-        <a class="btn btn-secondary" href="{{ url_for('my_agent_account') }}">
-            {{ t('operation_commission_view_account') }}
-        </a>
-        {% endif %}
-    </div>
     {% endif %}
 
     {% if operation_commission.last_reversed_movement and operation_commission.state != 'credited' %}
@@ -69,31 +75,41 @@
 </section>
 
 {% if can_manage_operation_commission and operation_commission.state == 'ready' %}
-<dialog class="aa-dialog operation-commission-dialog" data-operation-commission-dialog>
-    <form method="post" action="{{ url_for('operations_credit_commission', operation_id=operation.db_id) }}" class="agent-form">
-        <div class="aa-dialog__header">
+<dialog class="op-credit-modal" data-operation-commission-dialog>
+    <form method="post" action="{{ url_for('operations_credit_commission', operation_id=operation.db_id) }}" class="op-credit-modal__form">
+        <div class="op-credit-modal__header">
             <h3>{{ t('operation_commission_credit_action') }}</h3>
-            <button type="button" class="aa-dialog__close" data-operation-commission-close>×</button>
+            <button type="button" class="op-credit-modal__close" data-operation-commission-close aria-label="{{ t('cancel') }}">×</button>
         </div>
-        <dl class="detail-grid">
-            <div><dt>{{ t('operation') }}</dt><dd>{{ operation.id }}</dd></div>
-            <div><dt>{{ t('agent') }}</dt><dd>{{ operation_commission.agent.name }}</dd></div>
-            <div><dt>{{ t('operation_commission_side') }}</dt><dd>{{ t('operation_commission_side_' ~ operation_commission.commission_side) }}</dd></div>
-        </dl>
-        <div class="form-group">
-            <label for="operation_commission_amount">{{ t('operation_commission_amount') }}</label>
-            <input id="operation_commission_amount" class="form-input" name="amount" type="text" inputmode="decimal" value="{{ operation_commission.suggested_amount }}" required>
-            <p class="form-hint">{{ t('operation_commission_amount_help') }}</p>
+        <div class="op-credit-modal__meta">
+            <div>
+                <span>{{ t('billing_operation') }}</span>
+                <strong>{{ operation.id }}</strong>
+            </div>
+            <div>
+                <span>{{ t('agent') }}</span>
+                <strong>{{ operation_commission.agent.name }}</strong>
+            </div>
+            <div>
+                <span>{{ t('operation_commission_side') }}</span>
+                <strong>{{ t('operation_commission_side_' ~ operation_commission.commission_side) }}</strong>
+            </div>
         </div>
-        <div class="form-group">
-            <label for="operation_commission_currency">{{ t('agent_account_currency') }}</label>
-            <select id="operation_commission_currency" class="form-input" name="currency" required>
-                <option value="USD" {% if operation_commission.suggested_currency == 'USD' %}selected{% endif %}>USD</option>
-                <option value="ARS" {% if operation_commission.suggested_currency == 'ARS' %}selected{% endif %}>ARS</option>
-            </select>
+        <div class="op-credit-modal__fields">
+            <label class="op-credit-modal__field" for="operation_commission_amount">
+                <span>{{ t('operation_commission_amount') }}</span>
+                <input id="operation_commission_amount" name="amount" type="text" inputmode="decimal" value="{% if operation_commission.suggested_amount %}{{ operation_commission.suggested_amount | number(2) }}{% endif %}" required>
+            </label>
+            <label class="op-credit-modal__field" for="operation_commission_currency">
+                <span>{{ t('agent_account_currency') }}</span>
+                <select id="operation_commission_currency" name="currency" required>
+                    <option value="USD" {% if operation_commission.suggested_currency == 'USD' %}selected{% endif %}>USD</option>
+                    <option value="ARS" {% if operation_commission.suggested_currency == 'ARS' %}selected{% endif %}>ARS</option>
+                </select>
+            </label>
         </div>
-        <p>{{ t('operation_commission_credit_warning') }}</p>
-        <div class="form-actions">
+        <p class="op-credit-modal__callout">{{ t('operation_commission_credit_warning') }}</p>
+        <div class="op-credit-modal__actions">
             <button type="button" class="btn btn-secondary" data-operation-commission-close>{{ t('cancel') }}</button>
             <button type="submit" class="btn btn-primary">{{ t('operation_commission_credit_confirm') }}</button>
         </div>
@@ -102,18 +118,40 @@
 {% endif %}
 
 {% if can_manage_operation_commission and operation_commission.state == 'credited' %}
-<dialog class="aa-dialog operation-commission-dialog" data-operation-commission-reverse-dialog>
-    <form method="post" action="{{ url_for('operations_reverse_commission', operation_id=operation.db_id) }}" class="agent-form">
-        <div class="aa-dialog__header">
+<dialog class="op-credit-modal" data-operation-commission-reverse-dialog>
+    <form method="post" action="{{ url_for('operations_reverse_commission', operation_id=operation.db_id) }}" class="op-credit-modal__form">
+        <div class="op-credit-modal__header">
             <h3>{{ t('operation_commission_reverse_action') }}</h3>
-            <button type="button" class="aa-dialog__close" data-operation-commission-reverse-close>×</button>
+            <button type="button" class="op-credit-modal__close" data-operation-commission-reverse-close aria-label="{{ t('cancel') }}">×</button>
         </div>
-        <div class="form-group">
-            <label for="operation_commission_reason">{{ t('operation_commission_reverse_reason') }}</label>
-            <textarea id="operation_commission_reason" name="reason" class="form-input" rows="3" required></textarea>
+        <div class="op-credit-modal__meta">
+            <div>
+                <span>{{ t('billing_operation') }}</span>
+                <strong>{{ operation.id }}</strong>
+            </div>
+            <div>
+                <span>{{ t('agent') }}</span>
+                <strong>{{ operation_commission.agent.name if operation_commission.agent else '—' }}</strong>
+            </div>
+            <div>
+                <span>{{ t('operation_commission_reverse_amount') }}</span>
+                <strong>{% if operation_commission.active_movement %}{{ operation_commission.active_movement.amount | number(2) }}{% else %}—{% endif %}</strong>
+            </div>
+            <div>
+                <span>{{ t('agent_account_currency') }}</span>
+                <strong>{% if operation_commission.active_movement %}{{ operation_commission.active_movement.currency }}{% else %}—{% endif %}</strong>
+            </div>
+            <div>
+                <span>{{ t('operation_commission_reverse_date') }}</span>
+                <strong>{% if operation_commission.active_movement and operation_commission.active_movement.created_at %}{{ operation_commission.active_movement.created_at[:10] | short_date }}{% else %}—{% endif %}</strong>
+            </div>
         </div>
-        <p>{{ t('operation_commission_reverse_warning') }}</p>
-        <div class="form-actions">
+        <label class="op-credit-modal__field" for="operation_commission_reason">
+            <span>{{ t('operation_commission_reverse_reason') }}</span>
+            <textarea id="operation_commission_reason" name="reason" rows="3" required placeholder="{{ t('operation_commission_reverse_placeholder') }}"></textarea>
+        </label>
+        <p class="op-credit-modal__callout op-credit-modal__callout--warn">{{ t('operation_commission_reverse_warning') }}</p>
+        <div class="op-credit-modal__actions">
             <button type="button" class="btn btn-secondary" data-operation-commission-reverse-close>{{ t('cancel') }}</button>
             <button type="submit" class="btn btn-danger">{{ t('operation_commission_reverse_confirm') }}</button>
         </div>

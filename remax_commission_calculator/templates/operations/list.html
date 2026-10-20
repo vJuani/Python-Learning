@@ -24,6 +24,25 @@
     <div class="operations-flash">{% for error in filter_errors %}<p>{{ error }}</p>{% endfor %}</div>
     {% endif %}
 
+    <section class="operations-kpis" aria-label="{{ t('operations_month_title') }}">
+        <article class="operations-kpi-card">
+            <div>
+                <span class="operations-kpi-card__label">{{ t('operations_month_count') }}</span>
+                <strong>{{ month_kpis.count }}</strong>
+            </div>
+        </article>
+        {% for item in month_kpis.currencies %}
+        <article class="operations-kpi-card">
+            <div>
+                <span class="operations-kpi-card__label">{{ item.currency }} · {{ t('operations_month_commission') }}</span>
+                <strong>{{ item.commission|money(item.currency) }}</strong>
+                <span class="operations-kpi-card__label">{{ t('operations_month_agents') }} {{ item.agent_payment|money(item.currency) }}</span>
+                <span class="operations-kpi-card__label">{{ t('operations_month_office') }} {{ item.office_net|money(item.currency) }}</span>
+            </div>
+        </article>
+        {% endfor %}
+    </section>
+
     <section class="operations-kpis" aria-label="{{ t('operations_kpis_aria') }}">
         <article class="operations-kpi-card">
             <span class="operations-kpi-card__icon operations-kpi-card__icon--active" aria-hidden="true"></span>
@@ -232,7 +251,7 @@
                         </td>
                         <td><span class="operations-type operations-type--{{ row.type_tone }}">{{ row.type_label }}</span></td>
                         <td>{{ row.currency }}</td>
-                        <td class="money">{{ row.total_commission|money }}</td>
+                        <td class="money">{{ row.total_commission|money(row.currency) }}</td>
                         <td><span class="operations-stage operations-stage--{{ row.stage_tone }}">{{ row.stage_label }}</span></td>
                         <td><span class="operations-status operations-status--{{ row.workflow_status.tone }}">{{ row.workflow_status.label }}</span></td>
                         <td>{{ row.date }}</td>
@@ -258,7 +277,7 @@
                 </div>
                 <div class="entity-card__row">
                     <span>{{ row.client_name }}</span>
-                    <span class="entity-card__price money">{{ row.total_commission|money }}</span>
+                    <span class="entity-card__price money">{{ row.total_commission|money(row.currency) }}</span>
                 </div>
                 <div class="entity-card__row">
                     <span class="entity-card__agent">

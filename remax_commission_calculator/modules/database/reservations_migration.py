@@ -163,7 +163,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_reservations_one_open_property
 ON reservations (organization_id, property_id)
 WHERE reservation_status IN (
     'reserved', 'confirmed', 'documentation', 'financing',
-    'contract', 'deed_scheduled', 'in_operation'
+    'contract', 'deed_scheduled', 'in_operation', 'pre_close'
 )
 """
 
@@ -228,6 +228,11 @@ def _ensure_wizard_schema(cursor, postgres):
             "confirmed_by_user_id",
             f"confirmed_by_user_id {user_id}{user_fk}",
         ),
+        (
+            "purchase_with_credit",
+            "purchase_with_credit INTEGER NOT NULL DEFAULT 0",
+        ),
+        ("financing_bank", "financing_bank TEXT"),
     )
     for column, definition in reservation_columns:
         _add_column(cursor, "reservations", column, definition, postgres)

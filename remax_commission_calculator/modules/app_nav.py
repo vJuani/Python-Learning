@@ -149,15 +149,6 @@ NAV_GROUPS = (
                 "icon": "cash",
                 "endpoint": "cash_list",
                 "active_prefixes": ("cash_",),
-                "exclude_prefixes": ("cash_ai",),
-                "roles": (ROLE_ADMIN,),
-            },
-            {
-                "key": "cash_ai",
-                "label_key": "nav_cash_ai",
-                "icon": "cash",
-                "endpoint": "cash_ai_new",
-                "active_prefixes": ("cash_ai",),
                 "roles": (ROLE_ADMIN,),
             },
             {

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('billing_prepare_invoice') }} | {{ t('app_title') }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="page-header-text">
+        <h2>{{ t('billing_prepare_invoice') }} — {{ t('billing_side_' ~ side) }}</h2>
+        <p>{{ operation.property }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ back_url or url_for('billing_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+    </div>
+</section>
+
+<section class="panel">
+    <form method="post" action="{{ url_for('operations_set_party_invoice_amount', operation_id=operation.db_id, side=side) }}" class="agent-form">
+        <input type="hidden" name="next" value="prepare">
+        <input type="hidden" name="enable_billing" value="1">
+        <div class="form-group">
+            <label for="invoice_amount">{{ t('billing_voucher_total') }}</label>
+            <input id="invoice_amount" name="invoice_amount" class="form-input" inputmode="decimal" value="{{ voucher_amount_value if voucher_amount_value is defined else (party.invoice_amount or '') }}" required>
+        </div>
+        <div class="form-group">
+            <label for="invoice_currency">{{ t('billing_voucher_currency') }}</label>
+            {% set voucher_currency = party.invoice_currency or operation.currency or 'USD' %}
+            <select id="invoice_currency" name="invoice_currency" class="form-input">
+                <option value="USD" {% if voucher_currency == 'USD' %}selected{% endif %}>USD</option>
+                <option value="ARS" {% if voucher_currency == 'ARS' %}selected{% endif %}>ARS</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">{{ t('billing_prepare_invoice') }}</button>
+    </form>
+</section>
+{% endblock %}

@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('reservation_new_title') }} | {{ t('app_title') }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reservations.css') }}?v=form9">
+{% endblock %}
+
+{% block content %}
+<section class="res-manual" data-res-manual>
+    <header class="res-manual__head">
+        <div>
+            <h2>{{ t('reservation_new_title') }}</h2>
+            <p>{{ t('reservation_new_subtitle') }}</p>
+        </div>
+        <span class="res-manual__badge">{{ t('reservation_new_badge') }}</span>
+    </header>
+
+    <form method="post" class="res-manual__form" action="{{ url_for('reservations_new') }}">
+        <section class="res-form-card">
+            <header>
+                <p>{{ t('reservation_field_purpose') }}</p>
+                <h3>{{ t('reservation_card_main') }}</h3>
+            </header>
+            <div class="res-form-grid res-form-grid--3">
+                <label class="res-field">
+                    <span>{{ t('reservation_field_property') }}</span>
+                    <select name="property_id" data-property required>
+                        <option value="">{{ t('reservation_pick_property') }}</option>
+                        {% for row in choices.properties %}
+                        <option value="{{ row.id }}" data-listing-purpose="{{ row.purpose_key }}" data-listing-price="{{ row.price_label }}" data-listing-currency="{{ row.listing_currency }}" data-listing-agent="{{ row.agent_name }}" {% if form.get('property_id')|string == row.id|string %}selected{% endif %}>{{ row.address }}{% if row.neighborhood %} · {{ row.neighborhood }}{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="res-field">
+                    <span>{{ t('reservation_field_client') }}</span>
+                    <select name="contact_id" required>
+                        <option value="">{{ t('reservation_pick_client') }}</option>
+                        {% for row in choices.contacts %}
+                        <option value="{{ row.id }}" {% if form.get('contact_id')|string == row.id|string %}selected{% endif %}>{{ row.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="res-field">
+                    <span>{{ t('reservation_field_agent') }}</span>
+                    <select name="agent_id" required>
+                        <option value="">{{ t('reservation_pick_agent') }}</option>
+                        {% for row in choices.agents %}
+                        <option value="{{ row.id }}" {% if form.get('agent_id')|string == row.id|string %}selected{% endif %}>{{ row.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+            <div class="res-property-chip" data-property-chip {% if not form.get('property_id') %}hidden{% endif %}>
+                <strong data-chip-address></strong>
+                <span data-chip-purpose></span>
+                <span data-chip-price></span>
+                <span data-chip-agent {% if not form.get('property_id') %}hidden{% endif %}></span>
+            </div>
+            <div class="res-form-grid res-form-grid--2">
+                <div class="res-field">
+                    <span>{{ t('reservation_field_purpose') }}</span>
+                    <div class="res-readonly{% if form.get('purpose') in ('sale', 'rent') %} is-set{% endif %}" data-purpose-label data-empty="—" data-sale="{{ t('reservation_purpose_sale') }}" data-rent="{{ t('reservation_purpose_rent') }}">{% if form.get('purpose') == 'sale' %}{{ t('reservation_purpose_sale') }}{% elif form.get('purpose') == 'rent' %}{{ t('reservation_purpose_rent') }}{% else %}—{% endif %}</div>
+                    <select class="res-purpose-input" name="purpose" data-purpose required tabindex="-1" aria-hidden="true">
+                        <option value=""></option>
+                        <option value="sale" {% if form.get('purpose') == 'sale' %}selected{% endif %}>{{ t('reservation_purpose_sale') }}</option>
+                        <option value="rent" {% if form.get('purpose') == 'rent' %}selected{% endif %}>{{ t('reservation_purpose_rent') }}</option>
+                    </select>
+                </div>
+                <label class="res-field">
+                    <span>{{ t('reservation_field_currency') }}</span>
+                    <select name="currency" data-currency required>
+                        <option value="USD" {% if form.get('currency', 'USD') == 'USD' %}selected{% endif %}>USD</option>
+                        <option value="ARS" {% if form.get('currency') == 'ARS' %}selected{% endif %}>ARS</option>
+                    </select>
+                </label>
+            </div>
+        </section>
+
+        <section class="res-form-card">
+            <header>
+                <p>{{ t('reservation_card_kicker_money') }}</p>
+                <h3>{{ t('reservation_card_terms') }}</h3>
+            </header>
+            <div class="res-price-row">
+                <div class="res-price-card">
+                    <span>{{ t('reservation_field_current_price') }}</span>
+                    <input type="text" value="" data-current-price readonly tabindex="-1" placeholder="—">
+                </div>
+                <div class="res-segment" role="radiogroup" aria-label="{{ t('reservation_field_price_change') }}">
+                    <label>
+                        <input type="radio" name="price_change" value="keep" data-price-change {% if form.get('price_change', 'keep') != 'change' %}checked{% endif %}>
+                        <span>{{ t('reservation_price_keep') }}</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="price_change" value="change" data-price-change {% if form.get('price_change') == 'change' %}checked{% endif %}>
+                        <span>{{ t('reservation_price_change') }}</span>
+                    </label>
+                </div>
+                <label class="res-field" data-agreed {% if form.get('price_change') != 'change' %}hidden{% endif %}>
+                    <span>{{ t('reservation_field_agreed') }}</span>
+                    <span class="res-money">
+                        <span class="res-money__prefix" data-money-prefix>{{ form.get('currency', 'USD') }}</span>
+                        <input type="text" name="agreed_property_price" value="{{ form.get('agreed_property_price', '') }}" inputmode="decimal" autocomplete="off">
+                    </span>
+                </label>
+            </div>
+            <div class="res-form-grid res-form-grid--3">
+                <label class="res-field">
+                    <span>{{ t('reservation_field_deposit') }}</span>
+                    <span class="res-money">
+                        <span class="res-money__prefix" data-money-prefix>{{ form.get('currency', 'USD') }}</span>
+                        <input type="text" name="reservation_amount" value="{{ form.get('reservation_amount', '') }}" inputmode="decimal" autocomplete="off" placeholder="0,00" required>
+                    </span>
+                </label>
+                <label class="res-field">
+                    <span>{{ t('reservation_seller_commission') }}</span>
+                    <span class="res-money">
+                        <span class="res-money__prefix" data-money-prefix>{{ form.get('currency', 'USD') }}</span>
+                        <input type="text" name="seller_commission_amount" value="{{ form.get('seller_commission_amount', '') }}" inputmode="decimal" autocomplete="off" placeholder="0,00">
+                    </span>
+                </label>
+                <label class="res-field">
+                    <span>{{ t('reservation_buyer_commission') }}</span>
+                    <span class="res-money">
+                        <span class="res-money__prefix" data-money-prefix>{{ form.get('currency', 'USD') }}</span>
+                        <input type="text" name="buyer_commission_amount" value="{{ form.get('buyer_commission_amount', '') }}" inputmode="decimal" autocomplete="off" placeholder="0,00">
+                    </span>
+                </label>
+            </div>
+            <div class="res-field">
+                <span>{{ t('reservation_field_deal') }}</span>
+                <div class="res-segment" role="radiogroup" aria-label="{{ t('reservation_field_deal') }}">
+                    <label>
+                        <input type="radio" name="deal_kind" value="own" data-deal {% if form.get('deal_kind', 'own') != 'shared' %}checked{% endif %}>
+                        <span>{{ t('visit_wizard_own') }}</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="deal_kind" value="shared" data-deal {% if form.get('deal_kind') == 'shared' %}checked{% endif %}>
+                        <span>{{ t('visit_wizard_shared') }}</span>
+                    </label>
+                </div>
+            </div>
+            <label class="res-field res-field--agreed" data-shared {% if form.get('deal_kind') != 'shared' %}hidden{% endif %}>
+                <span>{{ t('reservation_field_brokerage') }}</span>
+                <input type="text" name="shared_brokerage_name" value="{{ form.get('shared_brokerage_name', '') }}">
+            </label>
+        </section>
+
+        <section class="res-form-card">
+            <header>
+                <h3>{{ t('reservation_card_close') }}</h3>
+            </header>
+            <div class="res-form-grid res-form-grid--2">
+                <label class="res-field">
+                    <span>{{ t('visit_close_payment') }}</span>
+                    <select name="payment_method" required>
+                        <option value="">{{ t('reservation_pick_payment') }}</option>
+                        {% for method in choices.payments %}
+                        <option value="{{ method }}" {% if form.get('payment_method') == method %}selected{% endif %}>{{ t('visit_close_payment_' ~ method) }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="res-field">
+                    <span>{{ t('reservation_col_close') }}</span>
+                    <input type="date" name="estimated_closing_date" value="{{ form.get('estimated_closing_date', '') }}" required>
+                </label>
+            </div>
+            <div data-credit-block {% if form.get('purpose') != 'sale' %}hidden{% endif %}>
+                <div class="res-field">
+                    <span>{{ t('reservation_field_credit') }}</span>
+                    <div class="res-segment" role="radiogroup" aria-label="{{ t('reservation_field_credit') }}">
+                        <label>
+                            <input type="radio" name="purchase_with_credit" value="0" data-credit {% if form.get('purchase_with_credit') == '0' %}checked{% endif %}>
+                            <span>{{ t('reservation_filter_credit_no') }}</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="purchase_with_credit" value="1" data-credit {% if form.get('purchase_with_credit') == '1' %}checked{% endif %}>
+                            <span>{{ t('reservation_filter_credit_yes') }}</span>
+                        </label>
+                    </div>
+                </div>
+                <label class="res-field res-field--agreed" data-bank-block {% if form.get('purchase_with_credit') != '1' %}hidden{% endif %}>
+                    <span>{{ t('reservation_field_bank') }}</span>
+                    <select name="financing_bank">
+                        <option value="">{{ t('reservation_pick_bank') }}</option>
+                        {% for bank in choices.banks %}
+                        <option value="{{ bank.id }}" {% if form.get('financing_bank') == bank.id %}selected{% endif %}>{{ bank.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+            <label class="res-field">
+                <span>{{ t('reservation_field_notes') }}</span>
+                <textarea name="notes">{{ form.get('notes', '') }}</textarea>
+            </label>
+        </section>
+
+        <div class="res-manual__footer">
+            <a class="btn btn-secondary" href="{{ url_for('reservations_list') }}">{{ t('back') }}</a>
+            <button type="submit" class="btn btn-primary">{{ t('reservation_add') }}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var root = document.querySelector("[data-res-manual]");
+    if (!root) return;
+    var propertySelect = root.querySelector("[data-property]");
+    var purposeSelect = root.querySelector("select[name='purpose']");
+    var purposeLabel = root.querySelector("[data-purpose-label]");
+    var priceNode = root.querySelector("[data-current-price]");
+    var currencySelect = root.querySelector("[data-currency]");
+    var creditBlock = root.querySelector("[data-credit-block]");
+    var bankBlock = root.querySelector("[data-bank-block]");
+    var agreedBlock = root.querySelector("[data-agreed]");
+    var sharedBlock = root.querySelector("[data-shared]");
+    var propertyChip = root.querySelector("[data-property-chip]");
+
+    function selectedProperty() {
+        return propertySelect.options[propertySelect.selectedIndex] || null;
+    }
+
+    function paintPurpose() {
+        if (!purposeLabel) return;
+        var value = purposeSelect.value;
+        var text = purposeLabel.getAttribute("data-empty") || "—";
+        if (value === "sale") text = purposeLabel.getAttribute("data-sale") || text;
+        if (value === "rent") text = purposeLabel.getAttribute("data-rent") || text;
+        purposeLabel.textContent = text;
+        purposeLabel.classList.toggle("is-set", value === "sale" || value === "rent");
+    }
+
+    function paintMoney() {
+        var code = currencySelect ? (currencySelect.value || "USD") : "USD";
+        root.querySelectorAll("[data-money-prefix]").forEach(function (node) {
+            node.textContent = code;
+        });
+    }
+
+    function paintChip() {
+        if (!propertyChip) return;
+        var option = selectedProperty();
+        var ready = !!(option && option.value);
+        propertyChip.hidden = !ready;
+        if (!ready) return;
+        var address = propertyChip.querySelector("[data-chip-address]");
+        var purposeNode = propertyChip.querySelector("[data-chip-purpose]");
+        var price = propertyChip.querySelector("[data-chip-price]");
+        var agentNode = propertyChip.querySelector("[data-chip-agent]");
+        if (address) address.textContent = (option.textContent || "").trim();
+        if (purposeNode && purposeLabel) {
+            var purpose = option.getAttribute("data-listing-purpose") || "";
+            var text = purposeLabel.getAttribute("data-empty") || "—";
+            if (purpose === "sale") text = purposeLabel.getAttribute("data-sale") || text;
+            if (purpose === "rent") text = purposeLabel.getAttribute("data-rent") || text;
+            purposeNode.textContent = text;
+        }
+        if (price) price.textContent = option.getAttribute("data-listing-price") || "";
+        if (agentNode) {
+            var agent = option.getAttribute("data-listing-agent") || "";
+            agentNode.hidden = !agent;
+            agentNode.textContent = agent;
+        }
+    }
+
+    function syncProperty() {
+        var option = selectedProperty();
+        var purpose = option ? (option.getAttribute("data-listing-purpose") || "") : "";
+        if (purpose && purposeSelect.value !== purpose) {
+            purposeSelect.value = purpose;
+        }
+        if (priceNode) {
+            priceNode.value = option ? (option.getAttribute("data-listing-price") || "") : "";
+        }
+        var currency = option ? option.getAttribute("data-listing-currency") : "";
+        if (currency && currencySelect && !currencySelect.dataset.touched) {
+            currencySelect.value = currency;
+        }
+        syncPurpose();
+        paintMoney();
+        paintChip();
+    }
+
+    function syncPurpose() {
+        var sale = purposeSelect.value === "sale";
+        if (creditBlock) creditBlock.hidden = !sale;
+        if (!sale) {
+            root.querySelectorAll("[data-credit]").forEach(function (input) {
+                input.checked = false;
+            });
+            var bank = root.querySelector("[name='financing_bank']");
+            if (bank) bank.value = "";
+        }
+        syncCredit();
+        paintPurpose();
+        Array.prototype.forEach.call(propertySelect.options, function (option) {
+            var optionPurpose = option.getAttribute("data-listing-purpose") || "";
+            var hide = purposeSelect.value && option.value && optionPurpose !== purposeSelect.value;
+            option.hidden = hide;
+            option.disabled = hide;
+        });
+        var current = selectedProperty();
+        if (current && current.disabled) {
+            propertySelect.value = "";
+            if (priceNode) priceNode.value = "";
+        }
+        paintChip();
+    }
+
+    function syncCredit() {
+        var picked = root.querySelector("[data-credit]:checked");
+        var show = purposeSelect.value === "sale" && picked && picked.value === "1";
+        if (bankBlock) bankBlock.hidden = !show;
+        if (!show) {
+            var bank = root.querySelector("[name='financing_bank']");
+            if (bank && purposeSelect.value !== "sale") bank.value = "";
+        }
+    }
+
+    function syncPrice() {
+        var picked = root.querySelector("[data-price-change]:checked");
+        if (agreedBlock) agreedBlock.hidden = !picked || picked.value !== "change";
+    }
+
+    function syncDeal() {
+        var picked = root.querySelector("[data-deal]:checked");
+        if (sharedBlock) sharedBlock.hidden = !picked || picked.value !== "shared";
+    }
+
+    propertySelect.addEventListener("change", syncProperty);
+    purposeSelect.addEventListener("change", syncPurpose);
+    if (currencySelect) {
+        currencySelect.addEventListener("change", function () {
+            currencySelect.dataset.touched = "1";
+            paintMoney();
+        });
+    }
+    root.querySelectorAll("[data-credit]").forEach(function (input) {
+        input.addEventListener("change", syncCredit);
+    });
+    root.querySelectorAll("[data-price-change]").forEach(function (input) {
+        input.addEventListener("change", syncPrice);
+    });
+    root.querySelectorAll("[data-deal]").forEach(function (input) {
+        input.addEventListener("change", syncDeal);
+    });
+    syncProperty();
+    syncPrice();
+    syncDeal();
+    syncCredit();
+})();
+</script>
+{% endblock %}

@@ -163,6 +163,39 @@ class InvoicingV2Tests(unittest.TestCase):
             "agent_id": None,
         }
 
+    def _collect_commission(self, operation_id, side):
+        from modules.cash_treasury import (
+            confirm_movement,
+            validate_movement_payload,
+        )
+
+        party = get_operation_party(self.org_a, operation_id, side)
+        amount = float((party or {}).get("commission_amount") or 0)
+        if amount <= 0.009:
+            return
+        operation = get_operation_record(operation_id, self.org_a)
+        errors, values = validate_movement_payload(
+            {
+                "movement_type": "income",
+                "currency": (operation or {}).get("currency") or "USD",
+                "amount": str(amount),
+                "category": "commission_collection",
+                "description": "Cobro de comisión",
+                "payment_method": "cash",
+                "movement_date": "2026-10-15",
+                "notes": "",
+                "treasury_account_id": "",
+                "linked_operation_id": str(operation_id),
+                "linked_party_role": side,
+            }
+        )
+        self.assertEqual(errors, [])
+        return confirm_movement(
+            self.org_a,
+            values,
+            user_id=self.admin_a,
+        )
+
     def _make_ready_operation(self, *, sides=("buyer",)):
         op_id = add_operation(
             "27/08/2026",
@@ -183,6 +216,7 @@ class InvoicingV2Tests(unittest.TestCase):
         )
         ensure_parties_for_operation(self.org_a, op_id)
         for side in sides:
+            self._collect_commission(op_id, side)
             set_operation_party_client_fields(
                 self.org_a,
                 op_id,
@@ -306,6 +340,7 @@ class InvoicingV2Tests(unittest.TestCase):
             self.org_a,
         )
         ensure_parties_for_operation(self.org_a, op_id)
+        self._collect_commission(op_id, SIDE_BUYER)
         set_operation_party_billing_enabled(
             self.org_a,
             op_id,
@@ -502,6 +537,7 @@ class InvoicingV2Tests(unittest.TestCase):
             self.org_a,
         )
         ensure_parties_for_operation(self.org_a, op_id)
+        self._collect_commission(op_id, SIDE_BUYER)
         set_party_invoice_amount(
             self.org_a,
             op_id,
@@ -767,6 +803,222 @@ class InvoicingV2Tests(unittest.TestCase):
         self.assertIn("Falta un dato", body)
         self.assertIn("CUIT de Juan Perez", body)
         self.assertIn("/billing/operations/", body)
+
+    def _input_value(self, body, field_id):
+        import re
+
+        match = re.search(
+            rf'<input id="{field_id}"[^>]*value="([^"]*)"',
+            body,
+        )
+        self.assertIsNotNone(match)
+        return match.group(1)
+
+    def _two_side_operation(self):
+        from modules.database.operation_parties_repository import (
+            create_parties_for_new_operation,
+        )
+
+        operation_id = add_operation(
+            "20/10/2026",
+            self.agent_a,
+            self.property_a,
+            "no",
+            0,
+            150000,
+            3,
+            7500,
+            7500,
+            0,
+            0,
+            0,
+            0,
+            0,
+            self.org_a,
+            currency="USD",
+        )
+        create_parties_for_new_operation(
+            self.org_a,
+            operation_id,
+            seller_active=True,
+            buyer_active=True,
+            seller_commission_percent=3,
+            buyer_commission_percent=2,
+            seller_commission_amount=4500,
+            buyer_commission_amount=3000,
+        )
+        for side, name in (
+            (SIDE_BUYER, "Comprador Fiscal"),
+            (SIDE_SELLER, "Vendedor Fiscal"),
+        ):
+            set_operation_party_client_fields(
+                self.org_a,
+                operation_id,
+                side,
+                client_legal_name=name,
+                client_tax_id="20-99887766-5",
+                client_tax_condition="consumidor_final",
+                client_fiscal_address="Calle 1",
+                client_email="cliente@example.com",
+            )
+        return operation_id
+
+    def test_prepare_proposes_commission_without_treasury_fiscal_amount(self):
+        from modules.cash_treasury import reverse_movement
+        from modules.invoicing import get_invoice, side_billing_position
+
+        operation_id = self._two_side_operation()
+        self._login("bill_admin_a")
+        warning = "Tesorería todavía no definió el importe fiscal"
+        pending = "El cobro de la comisión todavía está pendiente."
+
+        for side in (SIDE_BUYER, SIDE_SELLER):
+            party = get_operation_party(self.org_a, operation_id, side)
+            position = side_billing_position(
+                self.org_a,
+                operation_id,
+                party,
+                operation_status="approved",
+            )
+            self.assertFalse(position["ready"])
+            self.assertIsNone(position["proposal"])
+            self.assertAlmostEqual(position["invoiced"], 0)
+            page = self.client.get(
+                f"/billing/operations/{operation_id}/{side}/prepare"
+            )
+            body = page.get_data(as_text=True)
+            self.assertIn(pending, body)
+            self.assertNotIn(warning, body)
+            self.assertEqual(self._input_value(body, "invoice_amount"), "")
+
+        self._collect_commission(operation_id, SIDE_BUYER)
+        seller_collection = self._collect_commission(operation_id, SIDE_SELLER)
+        for side, expected in ((SIDE_BUYER, "3000.00"), (SIDE_SELLER, "4500.00")):
+            party = get_operation_party(self.org_a, operation_id, side)
+            position = side_billing_position(
+                self.org_a,
+                operation_id,
+                party,
+                operation_status="approved",
+            )
+            self.assertTrue(position["ready"])
+            self.assertAlmostEqual(position["proposal"], float(expected))
+            self.assertAlmostEqual(position["pending"], 0)
+            page = self.client.get(
+                f"/billing/operations/{operation_id}/{side}/prepare"
+            )
+            body = page.get_data(as_text=True)
+            self.assertNotIn(warning, body)
+            self.assertNotIn(pending, body)
+            self.assertEqual(self._input_value(body, "invoice_amount"), expected)
+            self.assertIn('value="USD" selected', body)
+            self.assertIsNone(party["invoice_amount"])
+
+        partial_id = self._two_side_operation()
+        from modules.cash_treasury import confirm_movement, validate_movement_payload
+
+        errors, values = validate_movement_payload(
+            {
+                "movement_type": "income",
+                "currency": "USD",
+                "amount": "1000",
+                "category": "commission_collection",
+                "description": "Cobro parcial",
+                "payment_method": "cash",
+                "movement_date": "2026-10-15",
+                "notes": "",
+                "treasury_account_id": "",
+                "linked_operation_id": str(partial_id),
+                "linked_party_role": SIDE_BUYER,
+            }
+        )
+        self.assertEqual(errors, [])
+        confirm_movement(self.org_a, values, user_id=self.admin_a)
+        partial_party = get_operation_party(self.org_a, partial_id, SIDE_BUYER)
+        partial_position = side_billing_position(
+            self.org_a,
+            partial_id,
+            partial_party,
+            operation_status="approved",
+        )
+        self.assertFalse(partial_position["ready"])
+        self.assertAlmostEqual(partial_position["collected"], 1000)
+        self.assertAlmostEqual(partial_position["pending"], 2000)
+        self.assertIsNone(partial_position["proposal"])
+
+        foreign = side_billing_position(
+            self.org_b,
+            operation_id,
+            get_operation_party(self.org_a, operation_id, SIDE_BUYER),
+            operation_status="approved",
+        )
+        self.assertAlmostEqual(foreign["collected"], 0)
+        self.assertAlmostEqual(foreign["expected"], 0)
+        self.assertIsNone(foreign["proposal"])
+        isolated = side_billing_position(
+            self.org_a,
+            operation_id,
+            get_operation_party(self.org_a, operation_id, SIDE_BUYER),
+            operation_status="approved",
+        )
+        self.assertAlmostEqual(isolated["collected"], 3000)
+        self.assertAlmostEqual(isolated["proposal"], 3000)
+
+        set_party_invoice_amount(
+            self.org_a,
+            operation_id,
+            SIDE_BUYER,
+            "3000.00",
+            "USD",
+            None,
+            self.admin_a,
+            notify=False,
+        )
+        invoice = create_draft_for_side(
+            self.org_a,
+            operation_id,
+            SIDE_BUYER,
+            self._admin_user(),
+            issuer_mode="office",
+            issuer_profile_id=self.issuer["id"],
+        )
+        self.assertAlmostEqual(float(invoice["total_amount"]), 3000)
+        again = self.client.get(
+            f"/billing/operations/{operation_id}/buyer/prepare",
+            follow_redirects=True,
+        )
+        self.assertIn(
+            "Esta punta ya tiene un borrador o factura activa.",
+            again.get_data(as_text=True),
+        )
+        reverse_movement(
+            self.org_a,
+            seller_collection["id"],
+            user_id=self.admin_a,
+            reason="Reversión de prueba",
+        )
+        preserved = get_invoice(self.org_a, invoice["id"])
+        self.assertEqual(preserved["status"], invoice["status"])
+        self.assertAlmostEqual(float(preserved["total_amount"]), 3000)
+        after_reversal = side_billing_position(
+            self.org_a,
+            operation_id,
+            get_operation_party(self.org_a, operation_id, SIDE_SELLER),
+            operation_status="approved",
+        )
+        self.assertFalse(after_reversal["ready"])
+        self.assertAlmostEqual(after_reversal["collected"], 0)
+        self.assertAlmostEqual(after_reversal["pending"], 4500)
+        buyer_after = side_billing_position(
+            self.org_a,
+            operation_id,
+            get_operation_party(self.org_a, operation_id, SIDE_BUYER),
+            operation_status="approved",
+        )
+        self.assertTrue(buyer_after["ready"])
+        self.assertAlmostEqual(buyer_after["invoiced"], 3000)
+        self.assertAlmostEqual(buyer_after["billable"], 0)
+        self.assertIsNone(buyer_after["proposal"])
 
     def test_billing_legacy_new_from_operation_stays_in_billing(
         self,

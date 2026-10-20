@@ -593,6 +593,473 @@ body.is-agent-account-page .app-main-inner { max-width: none; }
     .aa-form__grid { grid-template-columns: 1fr; }
 }
 
+.aa-charge-modal {
+    position: fixed;
+    inset: 0;
+    width: min(640px, calc(100vw - 2rem));
+    height: fit-content;
+    max-height: calc(100dvh - 2rem);
+    margin: auto;
+    padding: 0;
+    border: 1px solid var(--border-soft, var(--border-subtle, #e5e7eb));
+    border-radius: 16px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+    overflow: auto;
+    z-index: 200;
+}
+
+.aa-charge-modal::backdrop {
+    background: rgba(8, 12, 24, 0.72);
+}
+
+.aa-charge-modal__form {
+    display: grid;
+    gap: 0.9rem;
+    padding: 1.1rem 1.3rem 1rem;
+}
+
+.aa-charge-modal__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.aa-charge-modal__header h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    letter-spacing: -0.02em;
+}
+
+.aa-charge-modal__subtitle {
+    margin: 0.3rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+}
+
+.aa-charge-modal__context {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    margin: 0.55rem 0 0;
+    font-size: 0.84rem;
+    color: var(--text-muted);
+}
+
+.aa-charge-modal__context strong {
+    color: var(--text);
+    font-weight: 650;
+}
+
+.aa-charge-modal__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.35rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.aa-charge-modal__close:hover {
+    background: var(--bg-soft, var(--content-bg));
+    color: var(--text);
+}
+
+.aa-charge-block {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.aa-charge-block > h3,
+.aa-charge-summary__title {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.aa-charge-modal .aa-field input,
+.aa-charge-modal .aa-field select {
+    min-height: 42px;
+    border-radius: 12px;
+}
+
+.aa-charge-modal .aa-money-input {
+    min-height: 42px;
+    border-radius: 12px;
+}
+
+.aa-charge-basics__money,
+.aa-charge-optional__grid,
+.aa-charge-fx {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(6.5rem, 0.7fr) minmax(9.2rem, 0.85fr);
+    gap: 0.75rem;
+}
+
+.aa-charge-optional__grid,
+.aa-charge-fx {
+    grid-template-columns: 1fr 1fr;
+}
+
+.aa-field__required {
+    margin-left: 0.35rem;
+    font-style: normal;
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.aa-charge-vat {
+    margin: 0;
+}
+
+.aa-charge-modal .aa-vat-segment {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.3rem;
+    padding: 0.28rem;
+    border-radius: 12px;
+    background: var(--bg-soft, var(--content-bg));
+}
+
+.aa-charge-modal .aa-vat-segment .aa-radio {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    margin: 0;
+    padding: 0.35rem 0.5rem;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 0.84rem;
+    cursor: pointer;
+}
+
+.aa-charge-modal .aa-vat-segment .aa-radio input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.aa-charge-modal .aa-vat-segment .aa-radio:has(input:checked) {
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 650;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+.aa-charge-modal .aa-vat-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem 1rem;
+    margin: 0;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--border-soft, var(--border-subtle, #e5e7eb));
+    border-radius: 12px;
+    background: var(--accent-soft, var(--bg-soft, var(--content-bg)));
+}
+
+.aa-charge-summary__title {
+    grid-column: 1 / -1;
+}
+
+.aa-charge-modal .aa-vat-summary__row {
+    display: grid;
+    gap: 0.15rem;
+    padding: 0;
+}
+
+.aa-charge-modal .aa-vat-summary__row--total {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font-weight: 650;
+}
+
+.aa-charge-modal .aa-vat-summary__row span {
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.aa-charge-modal .aa-vat-summary__row strong {
+    font-size: 1rem;
+    font-weight: 650;
+}
+
+.aa-charge-optional {
+    gap: 0.7rem;
+    padding-top: 0.15rem;
+}
+
+.aa-charge-fx__hint {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
+.aa-charge-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding-top: 0.15rem;
+}
+
+.aa-charge-modal__footer .aa-btn {
+    min-width: 8.5rem;
+    min-height: 42px;
+    border-radius: 12px;
+}
+
+@media (max-width: 640px) {
+    .aa-charge-basics__money,
+    .aa-charge-optional__grid,
+    .aa-charge-fx,
+    .aa-charge-modal .aa-vat-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .aa-charge-modal__footer {
+        display: grid;
+    }
+
+    .aa-charge-modal__footer .aa-btn {
+        width: 100%;
+    }
+}
+
+
+.aa-movement-body {
+    display: contents;
+}
+
+.aa-dialog.aa-payment-modal {
+    position: fixed;
+    inset: 0;
+    flex-direction: column;
+    width: min(640px, calc(100vw - 2rem));
+    height: fit-content;
+    max-height: calc(100dvh - 2rem);
+    margin: auto;
+    overflow: hidden;
+    z-index: 200;
+    border-radius: 16px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+}
+
+.aa-dialog.aa-payment-modal[open] {
+    display: flex;
+}
+
+.aa-payment-modal::backdrop {
+    background: rgba(8, 12, 24, 0.72);
+}
+
+.aa-payment-modal .aa-form--compact {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    max-height: calc(100dvh - 2rem);
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+}
+
+.aa-payment-modal .aa-dialog__header {
+    flex: 0 0 auto;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding: 1.1rem 1.3rem 0.85rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-soft, var(--border-subtle, #e5e7eb));
+}
+
+.aa-payment-modal .aa-movement-body {
+    display: grid;
+    gap: 0.9rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.95rem 1.3rem;
+}
+
+.aa-payment-modal .aa-dialog__header h2 {
+    font-size: 1.15rem;
+    letter-spacing: -0.02em;
+}
+
+.aa-payment-modal__subtitle,
+.aa-payment-modal__context {
+    margin: 0.35rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+}
+
+.aa-payment-modal__context {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+}
+
+.aa-payment-modal__context strong {
+    color: var(--text);
+    font-weight: 650;
+}
+
+.aa-payment-block {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.aa-payment-block > h3 {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.aa-payment-money,
+.aa-payment-pair {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.aa-payment-money {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 2fr) minmax(0, 3fr);
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.aa-payment-money > .aa-field {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.aa-payment-money .aa-money-input,
+.aa-payment-money .aa-field > select,
+.aa-payment-money .aa-field > input {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.aa-payment-money .aa-money-input input {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.aa-payment-pair {
+    grid-template-columns: 1fr 1fr;
+}
+
+.aa-payment-modal .aa-field input,
+.aa-payment-modal .aa-field select,
+.aa-payment-modal .aa-field textarea,
+.aa-payment-modal .aa-money-input {
+    min-height: 42px;
+    border-radius: 12px;
+}
+
+.aa-payment-error {
+    margin: 0;
+    color: var(--danger, #b42318);
+    font-size: 0.86rem;
+}
+
+.aa-payment-summary {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem 1rem;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--border-soft, var(--border-subtle, #e5e7eb));
+    border-radius: 12px;
+    background: var(--accent-soft, var(--bg-soft, var(--content-bg)));
+}
+
+.aa-payment-summary > h3 {
+    grid-column: 1 / -1;
+}
+
+.aa-payment-summary__row {
+    display: grid;
+    gap: 0.15rem;
+}
+
+.aa-payment-summary__row span {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.aa-payment-summary__row strong {
+    font-size: 0.98rem;
+    font-weight: 650;
+}
+
+.aa-payment-modal .aa-dialog__footer {
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    margin: 0;
+    padding: 0.75rem 1.3rem 1rem;
+    background: var(--surface);
+    border-top: 1px solid var(--border-soft, var(--border-subtle, #e5e7eb));
+}
+
+.aa-payment-modal .aa-dialog__footer .aa-btn {
+    min-width: 8.5rem;
+    min-height: 42px;
+    border-radius: 12px;
+}
+
+.aa-payment-modal .aa-dialog__footer .aa-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+    .aa-payment-money,
+    .aa-payment-pair,
+    .aa-payment-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .aa-payment-modal .aa-dialog__footer {
+        display: grid;
+    }
+
+    .aa-payment-modal .aa-dialog__footer .aa-btn {
+        width: 100%;
+    }
+}
+
 .aa-move-cards--always { display: grid; }
 
 html[data-theme="dark"] .aa-panel,
@@ -600,7 +1067,8 @@ html[data-theme="dark"] .aa-kpi,
 html[data-theme="dark"] .aa-balance-card,
 html[data-theme="dark"] .aa-move-card,
 html[data-theme="dark"] .aa-agent-card,
-html[data-theme="dark"] .aa-dialog {
+html[data-theme="dark"] .aa-dialog,
+html[data-theme="dark"] .aa-payment-modal {
     background: var(--surface);
     border-color: var(--border-subtle);
 }

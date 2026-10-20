@@ -16,6 +16,7 @@ OPEN_STATUSES = (
     "contract",
     "deed_scheduled",
     "in_operation",
+    "pre_close",
 )
 
 RESERVATION_COLUMNS = (
@@ -53,6 +54,8 @@ RESERVATION_COLUMNS = (
     "deposit_type",
     "confirmed_at",
     "confirmed_by_user_id",
+    "purchase_with_credit",
+    "financing_bank",
 )
 
 
@@ -86,10 +89,10 @@ def insert_reservation(cursor, payload):
                 is_shared_transaction, shared_brokerage_name,
                 seller_commission_amount, seller_commission_currency,
                 buyer_commission_amount, buyer_commission_currency,
-                deposit_type
+                deposit_type, purchase_with_credit, financing_bank
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -121,6 +124,8 @@ def insert_reservation(cursor, payload):
                 payload.get("buyer_commission_amount"),
                 payload.get("buyer_commission_currency"),
                 payload.get("deposit_type"),
+                1 if payload.get("purchase_with_credit") else 0,
+                payload.get("financing_bank") or None,
             ),
         )
     except IntegrityError as error:
@@ -265,6 +270,8 @@ def list_reservations(
                 reservations.deposit_type,
                 reservations.confirmed_at,
                 reservations.confirmed_by_user_id,
+                reservations.purchase_with_credit,
+                reservations.financing_bank,
                 properties.address,
                 properties.neighborhood,
                 properties.external_id,

@@ -216,6 +216,7 @@ def get_property_ids_used_in_operations(organization_id):
         SELECT DISTINCT property_id
         FROM operations
         WHERE organization_id = ?
+            AND COALESCE(status, 'approved') != 'preclose_void'
         """,
         (organization_id,),
     )
@@ -276,6 +277,10 @@ def list_available_properties_for_operation(
                 SELECT property_id
                 FROM operations
                 WHERE organization_id = ?
+            )
+            AND (
+                properties.commercial_status IS NULL
+                OR properties.commercial_status NOT IN ('sold', 'rented', 'withdrawn')
             )
         """
     )

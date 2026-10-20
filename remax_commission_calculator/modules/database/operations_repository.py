@@ -9,6 +9,13 @@ from .tenant import (
 )
 
 
+# Technical rows used only while a reservation is in pre-close.
+PUBLIC_OPERATION_SQL = (
+    "COALESCE(operations.status, 'approved') "
+    "NOT IN ('preclose', 'preclose_void')"
+)
+
+
 OPERATIONS_BASE_QUERY = """
     SELECT
         operations.id,
@@ -191,6 +198,7 @@ def add_operation(
     referred_side=None,
     seller_vat_original=0,
     buyer_vat_original=0,
+    connection=None,
 ):
     organization_id = require_organization_id(
         organization_id
@@ -199,18 +207,21 @@ def add_operation(
     if original_amount is None:
         original_amount = sale_price
 
-    connection = get_connection()
+    owns_connection = connection is None
+    if owns_connection:
+        connection = get_connection()
     cursor = connection.cursor()
 
-    assert_operation_pair_in_organization(
-        cursor,
-        agent_id,
-        property_id,
-        organization_id,
-        require_property_owner=require_property_owner
-    )
+    try:
+        assert_operation_pair_in_organization(
+            cursor,
+            agent_id,
+            property_id,
+            organization_id,
+            require_property_owner=require_property_owner
+        )
 
-    operation_id = execute_insert(
+        operation_id = execute_insert(
         cursor,
         """
         INSERT INTO operations (
@@ -275,12 +286,17 @@ def add_operation(
             seller_vat_original,
             buyer_vat_original,
         )
-    )
-
-    connection.commit()
-    connection.close()
-
-    return operation_id
+        )
+        if owns_connection:
+            connection.commit()
+        return operation_id
+    except Exception:
+        if owns_connection:
+            connection.rollback()
+        raise
+    finally:
+        if owns_connection:
+            connection.close()
 
 
 def get_operations(organization_id):
@@ -295,6 +311,7 @@ def get_operations(organization_id):
         OPERATIONS_BASE_QUERY
         + """
         WHERE operations.organization_id = ?
+            AND """ + PUBLIC_OPERATION_SQL + """
         ORDER BY operations.id
         """,
         (
@@ -306,6 +323,52 @@ def get_operations(organization_id):
     connection.close()
 
     return build_operation_dict(rows)
+
+
+def closed_month_totals(organization_id, *, agent_id=None, today=None):
+    """Closed deals of the current month, split by currency. Never mixes USD and ARS."""
+    from datetime import date
+
+    organization_id = require_organization_id(organization_id)
+    today = today or date.today()
+    month_key = today.strftime("%m/%Y")
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(currency, 'USD'),
+                COUNT(*),
+                COALESCE(SUM(total_commission), 0),
+                COALESCE(SUM(agent_payment), 0),
+                COALESCE(SUM(office_payment), 0)
+            FROM operations
+            WHERE organization_id = ?
+                AND status = 'closed'
+                AND substr(operation_date, 4, 7) = ?
+                AND (? IS NULL OR agent_id = ?)
+            GROUP BY COALESCE(currency, 'USD')
+            ORDER BY COALESCE(currency, 'USD')
+            """,
+            (organization_id, month_key, agent_id, agent_id),
+        )
+        rows = cursor.fetchall()
+    finally:
+        connection.close()
+    currencies = []
+    count = 0
+    for currency, deals, commission, agent_payment, office_net in rows:
+        count += int(deals or 0)
+        currencies.append(
+            {
+                "currency": currency or "USD",
+                "commission": commission or 0,
+                "agent_payment": agent_payment or 0,
+                "office_net": office_net or 0,
+            }
+        )
+    return {"count": count, "currencies": currencies}
 
 
 def search_operations_by_agent(
@@ -323,6 +386,7 @@ def search_operations_by_agent(
         OPERATIONS_BASE_QUERY
         + """
         WHERE operations.organization_id = ?
+            AND """ + PUBLIC_OPERATION_SQL + """
             AND LOWER(agents.name) LIKE LOWER(?)
         ORDER BY operations.id
         """,
@@ -365,6 +429,7 @@ def search_operations_by_id(
         + """
         WHERE operations.id = ?
             AND operations.organization_id = ?
+            AND """ + PUBLIC_OPERATION_SQL + """
         """,
         (
             database_id,
@@ -393,6 +458,7 @@ def search_operations_by_property(
         OPERATIONS_BASE_QUERY
         + """
         WHERE operations.organization_id = ?
+            AND """ + PUBLIC_OPERATION_SQL + """
             AND LOWER(properties.address)
                 LIKE LOWER(?)
         ORDER BY operations.id
@@ -424,6 +490,7 @@ def search_operations_by_date(
         OPERATIONS_BASE_QUERY
         + """
         WHERE operations.organization_id = ?
+            AND """ + PUBLIC_OPERATION_SQL + """
             AND operations.operation_date = ?
         ORDER BY operations.id
         """,
@@ -539,6 +606,7 @@ def build_operation_filter_conditions(
             conditions.append("operations.status = ?")
             params.append(status)
 
+    conditions.append(PUBLIC_OPERATION_SQL)
     return conditions, params
 
 
@@ -665,6 +733,7 @@ def list_operations_for_property(
         + """
         WHERE operations.organization_id = ?
             AND operations.property_id = ?
+            AND """ + PUBLIC_OPERATION_SQL + """
         """
     )
     params = [

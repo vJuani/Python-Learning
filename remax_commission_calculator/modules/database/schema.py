@@ -1975,6 +1975,8 @@ def _migrate_cash_treasury(cursor):
             reversal_reason TEXT,
             balance_before REAL NOT NULL,
             balance_after REAL NOT NULL,
+            linked_operation_id INTEGER,
+            linked_party_role TEXT,
 
             FOREIGN KEY (organization_id)
                 REFERENCES organizations(id)
@@ -2292,6 +2294,35 @@ def _migrate_treasury_accounts(cursor):
         ON cash_movements (
             organization_id,
             treasury_account_id,
+            status
+        )
+        """
+    )
+
+    for column_name, column_sql in (
+        ("linked_operation_id", "INTEGER"),
+        ("linked_party_role", "TEXT"),
+    ):
+        if not _column_exists(
+            cursor,
+            "cash_movements",
+            column_name,
+        ):
+            cursor.execute(
+                f"""
+                ALTER TABLE cash_movements
+                ADD COLUMN {column_name} {column_sql}
+                """
+            )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_cash_movements_operation_side
+        ON cash_movements (
+            organization_id,
+            linked_operation_id,
+            linked_party_role,
             status
         )
         """
@@ -3477,6 +3508,11 @@ def _migrate_agent_account_v2(cursor):
         SET is_internal_reversal = 1
         WHERE reversed_movement_id IS NOT NULL
             AND COALESCE(is_internal_reversal, 0) = 0
+            AND (
+                description IS NULL
+                OR description = ''
+                OR description LIKE '[internal]%'
+            )
         """
     )
 

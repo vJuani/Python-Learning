@@ -139,7 +139,7 @@ def post_wallet_for_approved_operation(
     if operation is None:
         return {"posted": [], "skipped": True}
 
-    if (operation.get("status") or "") != STATUS_APPROVED:
+    if (operation.get("status") or "") not in (STATUS_APPROVED, "closed"):
         return {"posted": [], "skipped": True}
 
     agent_id = operation["agent_db_id"]

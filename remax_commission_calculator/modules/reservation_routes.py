@@ -13,6 +13,7 @@ from modules.reservation_board import (
     present_reservation,
     property_cover_url,
 )
+from modules.reservation_manual import create_manual_reservation, manual_form_choices
 from modules.reservations import (
     DOCUMENT_TYPES,
     OPEN_STATUSES,
@@ -85,6 +86,7 @@ def register_reservation_routes(app, helpers):
             "purpose",
             "payment_method",
             "credit",
+            "bank",
             "next_milestone",
             "close_from",
             "close_to",
@@ -115,9 +117,35 @@ def register_reservation_routes(app, helpers):
             statuses=choices["statuses"],
             payments=choices["payments"],
             milestones=choices["milestones"],
+            banks=choices["banks"],
             agents=agents,
             read_only=agent_id is not None,
             viewer=user,
+        )
+
+    @app.route("/reservations/new", methods=["GET", "POST"])
+    @admin_required
+    def reservations_new():
+        user = get_current_user()
+        organization_id = require_user_organization()
+        choices = manual_form_choices(organization_id)
+        posted = request.form if request.method == "POST" else {}
+        if request.method == "POST":
+            try:
+                reservation_id = create_manual_reservation(
+                    organization_id,
+                    request.form,
+                    actor_user_id=user["id"] if user else None,
+                )
+            except ReservationError as error:
+                flash_i18n(error.message_key, "error")
+            else:
+                flash_i18n("reservation_created", "success")
+                return redirect(url_for("reservations_detail", reservation_id=reservation_id))
+        return render_template(
+            "reservations/form.html",
+            choices=choices,
+            form=posted,
         )
 
     @app.route("/reservations/<int:reservation_id>", methods=["GET"])
@@ -295,4 +323,116 @@ def register_reservation_routes(app, helpers):
             as_attachment=True,
             download_name=document["original_filename"],
             mimetype=document.get("content_type") or "application/octet-stream",
+        )
+
+    @app.route("/reservations/<int:reservation_id>/preclose", methods=["GET", "POST"])
+    @admin_required
+    def reservations_preclose(reservation_id):
+        from modules.database.operation_parties_repository import get_parties_for_operation
+        from modules.reservation_close import (
+            begin_billing,
+            confirm_close,
+            first_billing_side,
+            open_preclose,
+            operation_has_issued_invoice,
+            preclose_can_confirm,
+            preclose_side_billing,
+            revert_preclose,
+        )
+        from modules.reservations import format_money
+
+        user, organization_id, _agent_id = _viewer()
+        detail = load_reservation_detail(organization_id, reservation_id)
+        if detail is None:
+            abort(404)
+        reservation = detail["reservation"]
+        action = (request.form.get("action") or "").strip()
+        if request.method == "GET" and reservation["reservation_status"] == "confirmed":
+            action = "open"
+        try:
+            if action == "open":
+                open_preclose(organization_id, reservation_id, actor_user_id=user["id"])
+                if request.method == "POST":
+                    return redirect(url_for("reservations_preclose", reservation_id=reservation_id))
+            elif action == "bill":
+                operation_id = begin_billing(
+                    organization_id,
+                    reservation_id,
+                    actor_user_id=user["id"],
+                    seller_vat=request.form.get("seller_vat_amount") or "0",
+                    buyer_vat=request.form.get("buyer_vat_amount") or "0",
+                    exchange_rate=request.form.get("exchange_rate") or "",
+                )
+                fresh = load_reservation_detail(organization_id, reservation_id)
+                operation = (fresh or {}).get("operation") or {}
+                if operation.get("status") == "closed":
+                    return redirect(url_for("operations_detail", operation_id=operation_id))
+                side = first_billing_side((fresh or detail)["reservation"])
+                return redirect(url_for("billing_prepare", operation_id=operation_id, side=side))
+            elif action == "close":
+                operation_id = confirm_close(
+                    organization_id,
+                    reservation_id,
+                    actor_user_id=user["id"],
+                    seller_vat=request.form.get("seller_vat_amount") or "0",
+                    buyer_vat=request.form.get("buyer_vat_amount") or "0",
+                    exchange_rate=request.form.get("exchange_rate") or "",
+                )
+                flash_i18n("reservation_closed_done", "success")
+                return redirect(url_for("operations_detail", operation_id=operation_id))
+            elif action == "revert":
+                revert_preclose(organization_id, reservation_id, actor_user_id=user["id"])
+                flash_i18n("reservation_preclose_reverted", "success")
+                return redirect(url_for("reservations_detail", reservation_id=reservation_id))
+        except ReservationError as error:
+            flash_i18n(error.message_key, "error")
+            if action == "revert":
+                return redirect(url_for("reservations_preclose", reservation_id=reservation_id))
+            return redirect(url_for("reservations_preclose", reservation_id=reservation_id))
+
+        detail = load_reservation_detail(organization_id, reservation_id)
+        if detail is None:
+            abort(404)
+        reservation = detail["reservation"]
+        if reservation["reservation_status"] == "closed" and reservation.get("operation_id"):
+            return redirect(url_for("operations_detail", operation_id=reservation["operation_id"]))
+        if reservation["reservation_status"] not in ("pre_close", "confirmed"):
+            return redirect(url_for("reservations_detail", reservation_id=reservation_id))
+        operation = detail.get("operation")
+        parties = []
+        issued = False
+        side_billing = []
+        if operation:
+            if operation.get("status") == "preclose":
+                from modules.reservation_close import ensure_preclose_billing
+
+                ensure_preclose_billing(
+                    organization_id,
+                    operation["db_id"],
+                    actor_user_id=user["id"],
+                )
+                issued = operation_has_issued_invoice(organization_id, operation["db_id"])
+                side_billing = preclose_side_billing(organization_id, operation)
+            parties = get_parties_for_operation(organization_id, operation["db_id"])
+        property_row = detail.get("property") or {}
+        currency = reservation.get("agreed_currency") or "USD"
+        return render_template(
+            "reservations/preclose.html",
+            reservation=reservation,
+            property_row=property_row,
+            operation=operation,
+            parties=parties,
+            side_billing=side_billing,
+            can_confirm_close=preclose_can_confirm(side_billing),
+            issued_invoice=issued,
+            price_label=format_money(reservation.get("agreed_property_price"), currency),
+            seller_label=format_money(
+                reservation.get("seller_commission_amount"),
+                reservation.get("seller_commission_currency") or currency,
+            ),
+            buyer_label=format_money(
+                reservation.get("buyer_commission_amount"),
+                reservation.get("buyer_commission_currency") or currency,
+            ),
+            needs_exchange=currency != "USD",
         )

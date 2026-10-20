@@ -22,6 +22,7 @@ from modules.agent_account import (
     cancel_movement,
     create_movement,
 )
+from modules.agent_account_presentation import movement_display_amount
 from modules.agent_account_charges import VAT_MODE_ADD, VAT_MODE_NONE
 from modules.config import apply_config
 from modules.database import (
@@ -32,6 +33,7 @@ from modules.database import (
     get_agent_balances,
 )
 from modules.database.agent_account_payment_repository import (
+    CASH_CATEGORY_AGENT_PAYOUT,
     CASH_SOURCE_AGENT_ACCOUNT_PAYMENT,
     list_payment_allocations,
 )
@@ -40,8 +42,12 @@ from modules.database.agent_account_repository import (
     list_pending_charges,
 )
 from modules.database.cash_treasury_repository import (
+    create_cash_movement_atomic,
     get_cash_account,
     list_cash_movements,
+)
+from modules.database.treasury_accounts_repository import (
+    create_treasury_account,
 )
 from modules.database.connection import get_connection
 from modules.database.schema import (
@@ -134,6 +140,53 @@ class AgentAccountCashIntegrationTests(unittest.TestCase):
             "amount": "40",
             "movement_date": "2026-09-02",
             "payment_method": "transfer",
+        }
+        base.update(payload)
+        return create_movement(
+            self.org_a,
+            agent_id,
+            base,
+            created_by_user_id=self.admin_a,
+            idempotency_key=payload.get("idempotency_key"),
+        )
+
+    def _credit(self, amount="4320", currency="USD", agent_id=None):
+        return create_movement(
+            self.org_a,
+            agent_id or self.agent_id,
+            {
+                "movement_type": "commission",
+                "currency": currency,
+                "amount": amount,
+                "description": "Comisión",
+                "movement_date": "2026-09-01",
+            },
+            created_by_user_id=self.admin_a,
+        )
+
+    def _fund_cash(self, amount="4320", currency="USD"):
+        return create_cash_movement_atomic(
+            self.org_a,
+            movement_type="income",
+            currency=currency,
+            amount=amount,
+            category="operating_income",
+            description="Fondo para pago a agente",
+            payment_method="transfer",
+            movement_date="2026-09-01",
+            created_by_user_id=self.admin_a,
+        )
+
+    def _payout(self, agent_id=None, **payload):
+        agent_id = agent_id or self.agent_id
+        base = {
+            "movement_type": "payment",
+            "payment_direction": "payout",
+            "currency": "USD",
+            "amount": "40",
+            "movement_date": "2026-09-02",
+            "payment_method": "transfer",
+            "reference_text": "Pago a agente · Cash Agent",
         }
         base.update(payload)
         return create_movement(
@@ -406,6 +459,112 @@ class AgentAccountCashIntegrationTests(unittest.TestCase):
             if row["source_reference"] in payment_ids
         )
         self.assertAlmostEqual(payment_total, 80.0)
+
+    def test_payout_reduces_credit_and_records_cash_expense(self):
+        self._credit("4320")
+        self._fund_cash("4320")
+        cash_before = get_cash_account(self.org_a, "USD")["cached_balance"]
+        payment = self._payout(
+            amount="4320",
+            reference_text="Pago a agente · Agente Preview",
+        )
+
+        self.assertAlmostEqual(payment["balance_before"], 4320.0)
+        self.assertAlmostEqual(payment["balance_after"], 0.0)
+        self.assertAlmostEqual(
+            get_agent_balances(self.org_a, self.agent_id)["USD"],
+            0.0,
+        )
+        display = movement_display_amount(payment)
+        self.assertEqual(display["prefix"], "-")
+        self.assertTrue(display["formatted"].startswith("-"))
+
+        cash_rows = [
+            row
+            for row in list_cash_movements(self.org_a, currency="USD")
+            if row["source_reference"] == str(payment["id"])
+        ]
+        self.assertEqual(len(cash_rows), 1)
+        self.assertEqual(cash_rows[0]["movement_type"], "expense")
+        self.assertEqual(cash_rows[0]["category"], CASH_CATEGORY_AGENT_PAYOUT)
+        self.assertEqual(cash_rows[0]["source"], CASH_SOURCE_AGENT_ACCOUNT_PAYMENT)
+        self.assertAlmostEqual(cash_rows[0]["amount"], 4320.0)
+        self.assertAlmostEqual(
+            get_cash_account(self.org_a, "USD")["cached_balance"],
+            cash_before - 4320.0,
+        )
+
+    def test_payout_idempotency_does_not_double_charge_cash(self):
+        self._credit("100")
+        self._fund_cash("100")
+        key = f"payout-idem-{self.agent_id}"
+        cash_before = len(list_cash_movements(self.org_a, currency="USD"))
+        first = self._payout(amount="100", idempotency_key=key)
+        second = self._payout(amount="100", idempotency_key=key)
+        self.assertEqual(first["id"], second["id"])
+        self.assertAlmostEqual(
+            get_agent_balances(self.org_a, self.agent_id)["USD"],
+            0.0,
+        )
+        self.assertEqual(
+            len(list_cash_movements(self.org_a, currency="USD")),
+            cash_before + 1,
+        )
+
+    def test_payout_rejects_amount_above_credit_balance(self):
+        self._credit("100")
+        self._fund_cash("500")
+        cash_before = get_cash_account(self.org_a, "USD")["cached_balance"]
+        with self.assertRaises(AgentAccountError) as caught:
+            self._payout(amount="150")
+        self.assertEqual(
+            caught.exception.message_key,
+            "agent_account_err_payment_exceeds_balance",
+        )
+        self.assertAlmostEqual(
+            get_agent_balances(self.org_a, self.agent_id)["USD"],
+            100.0,
+        )
+        self.assertAlmostEqual(
+            get_cash_account(self.org_a, "USD")["cached_balance"],
+            cash_before,
+        )
+
+    def test_payout_blocks_when_source_account_has_no_funds(self):
+        self._credit("80")
+        empty = create_treasury_account(
+            self.org_a,
+            name=f"Caja vacia {self.agent_id}",
+            account_type="bank",
+            currency="USD",
+            created_by_user_id=self.admin_a,
+        )
+        with self.assertRaises(AgentAccountError) as caught:
+            self._payout(
+                amount="80",
+                treasury_account_id=str(empty["id"]),
+            )
+        self.assertEqual(
+            caught.exception.message_key,
+            "agent_account_err_insufficient_cash",
+        )
+        self.assertAlmostEqual(
+            get_agent_balances(self.org_a, self.agent_id)["USD"],
+            80.0,
+        )
+
+    def test_payout_requires_payment_method(self):
+        self._credit("40")
+        with self.assertRaises(AgentAccountError) as caught:
+            self._payout(payment_method="")
+        self.assertEqual(
+            caught.exception.message_key,
+            "agent_account_err_payment_method_required",
+        )
+        self.assertAlmostEqual(
+            get_agent_balances(self.org_a, self.agent_id)["USD"],
+            40.0,
+        )
 
     def test_migration_v4_idempotent(self):
         connection = get_connection()

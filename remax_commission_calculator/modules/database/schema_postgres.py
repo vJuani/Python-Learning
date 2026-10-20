@@ -1176,6 +1176,8 @@ SCHEMA_STATEMENTS = (
         attachment_content_type TEXT,
         attachment_original_name TEXT,
         treasury_account_id BIGINT,
+        linked_operation_id BIGINT,
+        linked_party_role TEXT,
 
         FOREIGN KEY (organization_id)
             REFERENCES organizations(id)
@@ -2114,6 +2116,8 @@ def create_postgres_schema():
             ("attachment_content_type", "TEXT"),
             ("attachment_original_name", "TEXT"),
             ("treasury_account_id", "BIGINT"),
+            ("linked_operation_id", "BIGINT"),
+            ("linked_party_role", "TEXT"),
         ):
             cursor.execute(
                 f"""
@@ -2122,6 +2126,19 @@ def create_postgres_schema():
                 {column_name} {column_sql}
                 """
             )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_cash_movements_operation_side
+            ON cash_movements (
+                organization_id,
+                linked_operation_id,
+                linked_party_role,
+                status
+            )
+            """
+        )
 
         for column_name, column_sql in (
             ("exchange_rate", f"{_MONEY}"),
@@ -2151,6 +2168,11 @@ def create_postgres_schema():
             SET is_internal_reversal = 1
             WHERE reversed_movement_id IS NOT NULL
                 AND COALESCE(is_internal_reversal, 0) = 0
+                AND (
+                    description IS NULL
+                    OR BTRIM(description) = ''
+                    OR description LIKE '[internal]%'
+                )
             """
         )
 

@@ -1,8 +1,25 @@
 {% if can_manage_documents and operation is defined and document_categories %}
+{% set docs_ns = namespace(filled=0, total=0) %}
+{% for category in document_categories %}
+    {% for slot in category.slots %}
+        {% set docs_ns.total = docs_ns.total + 1 %}
+        {% if slot.document or slot.documents %}
+            {% set docs_ns.filled = docs_ns.filled + 1 %}
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+{% if operation_docs_collapsed %}
+<details class="panel op-docs">
+    <summary class="op-docs__summary">
+        <span>{{ t('docs_title') }} · {{ docs_ns.filled }}/{{ docs_ns.total }}</span>
+    </summary>
+    <div class="op-docs__body">
+{% else %}
 <section class="panel">
     <div class="panel-header">
         <h3>{{ t('docs_title') }}</h3>
     </div>
+{% endif %}
     <p class="field-help">{{ t('docs_help') }}</p>
 
     {% for category in document_categories %}
@@ -119,5 +136,10 @@
         {% endfor %}
     </div>
     {% endfor %}
+{% if operation_docs_collapsed %}
+    </div>
+</details>
+{% else %}
 </section>
+{% endif %}
 {% endif %}

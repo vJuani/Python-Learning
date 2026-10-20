@@ -123,9 +123,7 @@ def agent_list_status(balance_ars, balance_usd):
 def movement_is_internal_reversal(movement):
     if movement is None:
         return False
-    if movement.get("is_internal_reversal"):
-        return True
-    return movement.get("reversed_movement_id") is not None
+    return bool(movement.get("is_internal_reversal"))
 
 
 def movement_display_amount(movement, *, language="es"):
@@ -140,7 +138,7 @@ def movement_display_amount(movement, *, language="es"):
     else:
         amount = abs(float(movement.get("amount") or 0))
 
-    if movement_type == "adjustment":
+    if movement_type in ("adjustment", "payment"):
         delta = float(movement.get("balance_after") or 0) - float(
             movement.get("balance_before") or 0
         )
@@ -149,14 +147,16 @@ def movement_display_amount(movement, *, language="es"):
             prefix = "+"
         else:
             tone = "debit"
-            prefix = ""
+            prefix = "-"
         formatted = format_money(
             amount,
             currency=currency,
             language=language,
         )
-        if prefix:
+        if prefix == "+":
             formatted = f"+ {formatted}"
+        elif prefix == "-":
+            formatted = f"- {formatted}"
         return {
             "tone": tone,
             "prefix": prefix,
@@ -330,6 +330,22 @@ def build_movement_detail_display(
     if movement.get("notes"):
         add("agent_account_notes_optional", movement.get("notes"))
 
+    if movement.get("reversal_reason"):
+        add(
+            "agent_account_reversal_reason",
+            movement.get("reversal_reason"),
+        )
+    if movement.get("reversed_movement_id"):
+        add(
+            "agent_account_reversal_of",
+            str(movement.get("reversed_movement_id")),
+            label_override=translate(
+                "agent_account_reversal_of",
+                language=language,
+                id=movement.get("reversed_movement_id"),
+            ),
+        )
+
     if movement.get("recurring"):
         recurrence = movement.get("recurrence_type") or "one_time"
         add(
@@ -493,7 +509,6 @@ def enrich_movement_for_display(
     operation_detail_rows = []
     if (
         organization_id
-        and movement.get("movement_type") == "commission"
         and movement.get("source_type") == "operation"
         and movement.get("source_id")
     ):
@@ -511,7 +526,8 @@ def enrich_movement_for_display(
                 "display_id": operation["id"],
                 "property": operation.get("property"),
             }
-            operation_detail_rows = [
+            if movement.get("movement_type") == "commission":
+                operation_detail_rows = [
                     {
                         "label": translate(
                             "operation",

@@ -7,6 +7,16 @@
     padding: 0;
 }
 
+/*
+ * A closed <dialog> must leave the page. Any later rule that sets
+ * display on a dialog (centered modals use display:flex) would
+ * override the user-agent display:none and keep a fixed layer
+ * after close(), blocking clicks until a reload.
+ */
+dialog:not([open]) {
+    display: none !important;
+}
+
 html {
     scroll-behavior: smooth;
     overflow-x: clip;

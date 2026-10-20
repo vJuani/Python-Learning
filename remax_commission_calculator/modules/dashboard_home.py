@@ -108,6 +108,11 @@ def _stage_for_operation(operation, language):
     status = operation.get("status") or "approved"
     invoiced = (operation.get("was_invoiced") or "no") == "yes"
 
+    if status == "closed":
+        return {
+            "label": _t("operations_stage_close", language),
+            "tone": "closing",
+        }
     if status == "draft":
         return {
             "label": _t("dashboard_stage_proposal", language),
@@ -386,7 +391,21 @@ def _build_active_operations(organization_id, language, *, agent_id=None):
     return rows[:8]
 
 
+_COMMERCIAL_DASHBOARD_STATUS = {
+    "sold": ("commercial_status_sold", "closing"),
+    "rented": ("commercial_status_rented", "closing"),
+    "withdrawn": ("commercial_status_withdrawn", "closing"),
+    "reserved": ("commercial_status_reserved", "reservation"),
+}
+
+
 def _property_status_label(property_row, operation_map, language):
+    commercial = _COMMERCIAL_DASHBOARD_STATUS.get(
+        property_row.get("commercial_status")
+    )
+    if commercial is not None:
+        return _t(commercial[0], language)
+
     property_id = property_row.get("id")
     operation = operation_map.get(property_id)
 
@@ -398,6 +417,12 @@ def _property_status_label(property_row, operation_map, language):
 
 
 def _property_status_tone(property_row, operation_map, language):
+    commercial = _COMMERCIAL_DASHBOARD_STATUS.get(
+        property_row.get("commercial_status")
+    )
+    if commercial is not None:
+        return commercial[1]
+
     property_id = property_row.get("id")
     operation = operation_map.get(property_id)
 
@@ -437,6 +462,8 @@ def _build_active_properties(organization_id, language, *, agent_id=None):
 
     rows = []
     for item in properties:
+        if item.get("commercial_status") in ("sold", "rented", "withdrawn"):
+            continue
         title = item.get("address") or "—"
         rows.append(
             {

@@ -7,16 +7,20 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from modules.database.cash_treasury_repository import (
+    OPERATION_COLLECTION_CATEGORY,
+    collection_block_reason,
     create_cash_movement_atomic,
     create_internal_transfer_atomic,
-    get_cash_account,
     get_cash_movement,
+    get_operation_side_collection,
     list_cash_movements,
+    list_participating_operation_sides,
     reverse_cash_movement_atomic,
     sum_movements_by_type,
 )
 from modules.database.tenant import require_organization_id
 from modules.database.treasury_accounts_repository import (
+    get_default_treasury_account,
     get_treasury_account,
     list_treasury_accounts,
     suggest_treasury_account_for_payment,
@@ -52,11 +56,39 @@ PAYMENT_METHODS = (
 
 INCOME_CATEGORIES = (
     "agent_fee",
+    "commission_collection",
     "invoice_collection",
     "reimbursement",
     "operating_income",
     "other_income",
 )
+
+# Income categories that can carry a structured operation + side link.
+OPERATION_COLLECTION_CATEGORIES = (
+    OPERATION_COLLECTION_CATEGORY,
+)
+
+def _raise_operation_link_error(reason, state=None):
+    kwargs = {}
+    if reason == "operation_side_exceeded" and state:
+        kwargs["pending"] = state.get("remaining")
+        kwargs["currency"] = state.get("currency")
+    raise CashTreasuryError(
+        _OPERATION_LINK_ERRORS[reason],
+        **kwargs,
+    )
+
+
+_OPERATION_LINK_ERRORS = {
+    "invalid_operation": "cash_err_operation_invalid",
+    "invalid_operation_side": "cash_err_operation_side_invalid",
+    "operation_currency_mismatch": "cash_err_operation_currency",
+    "operation_commission_missing": (
+        "cash_err_operation_commission_missing"
+    ),
+    "operation_side_settled": "cash_err_operation_side_settled",
+    "operation_side_exceeded": "cash_err_operation_side_exceeds",
+}
 
 EXPENSE_CATEGORIES = (
     "office_supplies",
@@ -73,6 +105,7 @@ EXPENSE_CATEGORIES = (
     "meals",
     "bank_fees",
     "other_expense",
+    "agent_payout",
 )
 
 OPENING_CATEGORY = "opening_balance"
@@ -213,13 +246,6 @@ def build_cash_kpis(
             date_from=date_from,
             date_to=date_to,
             treasury_account_id=treasury_account_id,
-        ) + sum_movements_by_type(
-            organization_id,
-            currency=currency,
-            movement_type=TYPE_OPENING,
-            date_from=date_from,
-            date_to=date_to,
-            treasury_account_id=treasury_account_id,
         )
         expense[currency] = sum_movements_by_type(
             organization_id,
@@ -315,6 +341,40 @@ def validate_movement_payload(raw, *, require_type=True):
     else:
         values["treasury_account_id"] = None
 
+    operation_raw = str(
+        raw.get("linked_operation_id") or ""
+    ).strip()
+    role_raw = str(raw.get("linked_party_role") or "").strip()
+    values["linked_operation_id"] = None
+    values["linked_party_role"] = None
+    if operation_raw:
+        try:
+            values["linked_operation_id"] = int(operation_raw)
+        except ValueError:
+            errors.append("cash_err_operation_invalid")
+    if role_raw:
+        if role_raw not in ("buyer", "seller"):
+            errors.append("cash_err_operation_side_invalid")
+        else:
+            values["linked_party_role"] = role_raw
+    if (
+        values["linked_operation_id"]
+        and not values["linked_party_role"]
+    ) or (
+        values["linked_party_role"]
+        and not values["linked_operation_id"]
+    ):
+        errors.append("cash_err_operation_side_required")
+    if (
+        values["linked_operation_id"]
+        and (
+            movement_type != TYPE_INCOME
+            or values["category"]
+            not in OPERATION_COLLECTION_CATEGORIES
+        )
+    ):
+        errors.append("cash_err_operation_category")
+
     return errors, values
 
 
@@ -371,6 +431,22 @@ def preview_movement(organization_id, values):
             currency=currency,
         )
 
+    linked_operation_id = values.get("linked_operation_id")
+    linked_party_role = values.get("linked_party_role")
+    if linked_operation_id:
+        state = get_operation_side_collection(
+            organization_id,
+            linked_operation_id,
+            linked_party_role,
+        )
+        reason = collection_block_reason(
+            state,
+            amount,
+            currency,
+        )
+        if reason:
+            _raise_operation_link_error(reason, state)
+
     return {
         "movement_type": movement_type,
         "currency": currency,
@@ -385,6 +461,8 @@ def preview_movement(organization_id, values):
         "signed_delta": delta,
         "treasury_account_id": treasury_account_id,
         "treasury_account_name": treasury_account_name,
+        "linked_operation_id": linked_operation_id,
+        "linked_party_role": linked_party_role,
     }
 
 
@@ -431,6 +509,12 @@ def confirm_movement(
             treasury_account_id=preview.get(
                 "treasury_account_id"
             ),
+            linked_operation_id=preview.get(
+                "linked_operation_id"
+            ),
+            linked_party_role=preview.get(
+                "linked_party_role"
+            ),
         )
     except ValueError as error:
         if str(error) == "insufficient_balance":
@@ -447,8 +531,201 @@ def confirm_movement(
             raise CashTreasuryError(
                 "cash_err_treasury_account_invalid"
             ) from error
+        if str(error) in _OPERATION_LINK_ERRORS:
+            state = None
+            if str(error) == "operation_side_exceeded":
+                linked_id = preview.get("linked_operation_id")
+                if linked_id:
+                    state = get_operation_side_collection(
+                        organization_id,
+                        linked_id,
+                        preview.get("linked_party_role"),
+                    )
+            _raise_operation_link_error(str(error), state)
         raise
 
+    return get_cash_movement(movement_id, organization_id)
+
+
+def collection_settles_commission(expected, collected):
+    """True when confirmed collections cover the expected commission."""
+    summary = describe_side_collection(expected, collected)
+    return (
+        summary["expected"] > 0.009
+        and summary["pending"] <= 0.009
+        and summary["collected"] + 0.009 >= summary["expected"]
+    )
+
+
+def side_collection_ready_to_invoice(
+    organization_id,
+    operation_id,
+    party_role,
+):
+    """Billing readiness derived only from confirmed treasury collections.
+
+    Reversed movements drop out because they are no longer confirmed.
+    Another organization's movements are invisible to this query.
+    """
+    state = get_operation_side_collection(
+        organization_id,
+        operation_id,
+        party_role,
+    )
+    if state is None or not state.get("participating"):
+        return False
+    return collection_settles_commission(
+        state.get("expected"),
+        state.get("collected"),
+    )
+
+
+def describe_side_collection(expected, collected):
+    """Derive collection status from expected commission and confirmed cash."""
+    expected_amount = round(float(expected or 0), 2)
+    collected_amount = round(float(collected or 0), 2)
+    pending = round(max(0.0, expected_amount - collected_amount), 2)
+    surplus = round(max(0.0, collected_amount - expected_amount), 2)
+    if collected_amount <= 0.009:
+        status = "unpaid"
+    elif pending <= 0.009:
+        status = "collected"
+    else:
+        status = "partial"
+    return {
+        "expected": expected_amount,
+        "collected": collected_amount,
+        "pending": pending,
+        "surplus": surplus,
+        "status": status,
+    }
+
+
+def build_operation_collection_status(organization_id, operation_id):
+    """Collection progress for each participating side.
+
+    Reads confirmed treasury collections only. Nothing is stored on the operation.
+    """
+    organization_id = require_organization_id(organization_id)
+    sides = {}
+    currency = "USD"
+    for role in ("buyer", "seller"):
+        state = get_operation_side_collection(
+            organization_id,
+            operation_id,
+            role,
+        )
+        if state is None or not state.get("participating"):
+            sides[role] = None
+            continue
+        currency = state.get("currency") or currency
+        summary = describe_side_collection(
+            state.get("expected"),
+            state.get("collected"),
+        )
+        summary["count"] = int(state.get("count") or 0)
+        summary["currency"] = currency
+        summary["ready_to_invoice"] = collection_settles_commission(
+            summary["expected"],
+            summary["collected"],
+        )
+        sides[role] = summary
+
+    participating = [
+        side for side in sides.values() if side
+    ]
+    return {
+        "currency": currency,
+        "buyer": sides["buyer"],
+        "seller": sides["seller"],
+        "expected_total": round(
+            sum(side["expected"] for side in participating),
+            2,
+        ),
+        "collected_total": round(
+            sum(side["collected"] for side in participating),
+            2,
+        ),
+        "pending_total": round(
+            sum(side["pending"] for side in participating),
+            2,
+        ),
+        "surplus_total": round(
+            sum(side["surplus"] for side in participating),
+            2,
+        ),
+    }
+
+
+def list_operation_collection_options(organization_id):
+    return list_participating_operation_sides(
+        organization_id
+    )
+
+
+def opening_account_ids(organization_id):
+    movements = list_cash_movements(
+        organization_id,
+        movement_type=TYPE_OPENING,
+        status="confirmed",
+    )
+    return {
+        movement["treasury_account_id"]
+        for movement in movements
+        if movement.get("treasury_account_id")
+    }
+
+
+def set_account_opening_balance(
+    organization_id,
+    *,
+    treasury_account_id,
+    amount,
+    user_id,
+    movement_date=None,
+):
+    organization_id = require_organization_id(
+        organization_id
+    )
+    account = get_treasury_account(
+        treasury_account_id,
+        organization_id,
+    )
+    if account is None or not account["is_active"]:
+        raise CashTreasuryError(
+            "cash_err_treasury_account_invalid"
+        )
+
+    parsed_amount = parse_cash_amount(amount)
+    if parsed_amount is None or parsed_amount == 0:
+        raise CashTreasuryError("cash_err_opening_empty")
+    if parsed_amount < 0:
+        raise CashTreasuryError("cash_err_amount_invalid")
+
+    if account["id"] in opening_account_ids(organization_id):
+        raise CashTreasuryError(
+            "cash_err_opening_already_set",
+            currency=account["currency"],
+        )
+
+    if isinstance(movement_date, date):
+        movement_date = movement_date.isoformat()
+    else:
+        movement_date = movement_date or date.today().isoformat()
+
+    movement_id = create_cash_movement_atomic(
+        organization_id,
+        movement_type=TYPE_OPENING,
+        currency=account["currency"],
+        amount=parsed_amount,
+        category=OPENING_CATEGORY,
+        description="Opening balance",
+        payment_method="other",
+        movement_date=movement_date,
+        created_by_user_id=user_id,
+        signed_delta=parsed_amount,
+        treasury_account_id=account["id"],
+    )
     return get_cash_movement(movement_id, organization_id)
 
 
@@ -475,7 +752,7 @@ def set_opening_balances(
 
         amount = parse_cash_amount(raw_amount)
 
-        if amount is None:
+        if amount is None or amount == 0:
             continue
 
         if amount < 0:
@@ -483,50 +760,23 @@ def set_opening_balances(
                 "cash_err_amount_invalid"
             )
 
-        if amount == 0:
-            continue
-
-        account = get_cash_account(
+        account = get_default_treasury_account(
             organization_id,
             currency,
         )
-
-        if account is not None and abs(
-            float(account["cached_balance"])
-        ) > 1e-9:
+        if account is None:
             raise CashTreasuryError(
-                "cash_err_opening_already_set",
-                currency=currency,
+                "cash_err_treasury_account_invalid"
             )
 
-        existing_opening = list_cash_movements(
-            organization_id,
-            currency=currency,
-            movement_type=TYPE_OPENING,
-            status="confirmed",
-            limit=1,
-        )
-
-        if existing_opening:
-            raise CashTreasuryError(
-                "cash_err_opening_already_set",
-                currency=currency,
-            )
-
-        movement_id = create_cash_movement_atomic(
-            organization_id,
-            movement_type=TYPE_OPENING,
-            currency=currency,
-            amount=amount,
-            category=OPENING_CATEGORY,
-            description="Opening balance",
-            payment_method="other",
-            movement_date=movement_date,
-            created_by_user_id=user_id,
-            signed_delta=amount,
-        )
         created.append(
-            get_cash_movement(movement_id, organization_id)
+            set_account_opening_balance(
+                organization_id,
+                treasury_account_id=account["id"],
+                amount=amount,
+                user_id=user_id,
+                movement_date=movement_date,
+            )
         )
 
     if not created:

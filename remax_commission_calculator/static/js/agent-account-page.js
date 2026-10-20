@@ -148,11 +148,13 @@
             select.innerHTML = '';
             var auto = document.createElement('option');
             auto.value = '';
-            auto.textContent = 'Automática según medio';
+            auto.dataset.aaCurrency = currency || '';
+            auto.textContent = movementForm.dataset.aaTreasuryAuto || 'Automática según medio';
             select.appendChild(auto);
             payload.accounts.forEach(function (account) {
                 var option = document.createElement('option');
                 option.value = String(account.id);
+                option.dataset.aaCurrency = account.currency || '';
                 option.textContent = account.name + ' (' + account.currency + ')';
                 select.appendChild(option);
             });
@@ -209,12 +211,112 @@
         });
     }
 
-    function syncMovementForm(type) {
+    function enabledControl(selector) {
+        if (!movementForm) return null;
+        var nodes = movementForm.querySelectorAll(selector);
+        for (var i = 0; i < nodes.length; i += 1) {
+            if (!nodes[i].disabled) return nodes[i];
+        }
+        return nodes[0] || null;
+    }
+
+    function setControlGroup(selector, enabled) {
         if (!movementForm) return;
+        movementForm.querySelectorAll(selector).forEach(function (node) {
+            node.querySelectorAll('input, select, textarea').forEach(function (field) {
+                field.disabled = !enabled;
+            });
+        });
+    }
+
+    function paymentCurrency() {
+        var select = movementForm.querySelector('[data-aa-payment-only] [data-aa-currency-select]');
+        return select ? select.value : 'USD';
+    }
+
+    function paymentBalance(currency) {
+        var raw = currency === 'ARS'
+            ? movementForm.dataset.aaBalanceArs
+            : movementForm.dataset.aaBalanceUsd;
+        var value = parseFloat(raw);
+        return isNaN(value) ? 0 : value;
+    }
+
+    function balancePhrase(amount, currency) {
+        var formatted = formatMoney(Math.abs(amount), currency);
+        if (Math.abs(amount) < 0.005) return formatted;
+        if (amount > 0) {
+            return formatted + ' ' + (movementForm.dataset.aaFavorLabel || 'a favor');
+        }
+        return formatted + ' ' + (movementForm.dataset.aaPendingLabel || 'pendiente');
+    }
+
+    function syncPaymentApplyOptions(currency) {
+        var select = movementForm.querySelector('[data-aa-apply-payment]');
+        if (!select) return;
+        var selectedHidden = false;
+        Array.prototype.forEach.call(select.options, function (option) {
+            var optionCurrency = option.getAttribute('data-aa-currency');
+            var hide = optionCurrency && optionCurrency !== currency;
+            option.hidden = !!hide;
+            option.disabled = !!hide;
+            if (hide && option.selected) selectedHidden = true;
+        });
+        if (selectedHidden) select.value = 'general';
+    }
+
+    function syncPaymentReference(force) {
+        var reference = movementForm.querySelector('[data-aa-payment-reference]');
+        if (!reference) return;
+        if (force) reference.dataset.aaUserEdited = '';
+        if (reference.dataset.aaUserEdited === '1') return;
+        var apply = movementForm.querySelector('[data-aa-apply-payment]');
+        var selected = apply && apply.selectedOptions[0];
+        var suggestion = (selected && selected.dataset.aaPaymentRef)
+            || movementForm.dataset.aaPaymentRefDefault
+            || '';
+        var previous = reference.dataset.aaSuggested || '';
+        if (force || reference.value === previous || !reference.value.trim()) {
+            reference.value = suggestion;
+            reference.dataset.aaSuggested = suggestion;
+        }
+    }
+
+    function prefillPayoutAmount() {
+        var input = movementForm.querySelector('[data-aa-payment-only] [data-aa-amount-input]');
+        if (!input) return;
+        input.dataset.aaUserEdited = '';
+        var balance = paymentBalance(paymentCurrency());
+        input.value = balance > 0.004
+            ? balance.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : '';
+    }
+
+    function paymentBlockReason(amount, balance) {
+        if (balance <= 0.004) return movementForm.dataset.aaNoBalanceMessage || '';
+        if (amount - balance > 0.0001) return movementForm.dataset.aaExceedsMessage || '';
+        return '';
+    }
+
+    function syncMovementForm(type) {
+        if (!movementForm || !movementDialog) return;
+        var isPayment = type === 'payment';
         var typeInput = movementForm.querySelector('[data-aa-movement-type-input]');
         var titleEl = movementForm.querySelector('[data-aa-form-title]');
         if (typeInput) typeInput.value = type;
         if (titleEl) titleEl.textContent = titles[type] || titles.payment;
+
+        movementDialog.classList.toggle('aa-payment-modal', isPayment);
+        movementForm.querySelectorAll('[data-aa-payment-intro]').forEach(function (node) {
+            node.hidden = !isPayment;
+        });
+        var paymentOnly = movementForm.querySelector('[data-aa-payment-only]');
+        if (paymentOnly) paymentOnly.hidden = !isPayment;
+        setControlGroup('[data-aa-payment-only]', isPayment);
+        setControlGroup('[data-aa-shared]', !isPayment);
+        movementForm.querySelectorAll('[data-aa-shared]').forEach(function (node) {
+            node.hidden = isPayment;
+        });
 
         movementForm.querySelectorAll('[data-aa-section]').forEach(function (section) {
             var sectionType = section.getAttribute('data-aa-section');
@@ -226,65 +328,95 @@
             adjustmentSection.hidden = false;
         }
 
-        var descriptionField = movementForm.querySelector('[name="description"]');
-        if (descriptionField) {
-            descriptionField.required = type === 'adjustment';
-        }
+        movementForm.querySelectorAll('[name="description"]').forEach(function (field) {
+            if (field.disabled) return;
+            field.required = type === 'adjustment';
+        });
 
-        var fxBlock = movementForm.querySelector('[data-aa-fx-block]');
-        var currencySelect = movementForm.querySelector('[data-aa-currency-select]');
-        if (fxBlock && currencySelect) {
-            var showFx = currencySelect.value === 'USD' && ['payment', 'commission'].indexOf(type) >= 0;
-            fxBlock.hidden = !showFx;
-        }
+        var currencySelect = enabledControl('[data-aa-currency-select]');
+        var currency = currencySelect ? currencySelect.value : 'USD';
+        movementForm.querySelectorAll('[data-aa-currency-prefix]').forEach(function (prefix) {
+            prefix.textContent = currency;
+        });
 
-        if (type === 'payment') {
-            renderPendingChargesSelect(
-                currencySelect ? currencySelect.value : 'USD'
-            );
+        var sharedFx = movementForm.querySelector('[data-aa-fx-block]');
+        if (sharedFx) {
+            sharedFx.hidden = !(currency === 'USD' && type === 'commission');
+        }
+        syncPaymentFx();
+
+        var submit = movementForm.querySelector('[data-aa-payment-submit]');
+        if (submit) {
+            submit.textContent = isPayment
+                ? (movementForm.dataset.aaSubmitPayment || 'Registrar pago')
+                : (movementForm.dataset.aaSubmitDefault || 'Confirmar');
+            submit.disabled = false;
+        }
+        movementForm.dataset.aaSubmitting = '';
+
+        if (isPayment) {
+            syncPaymentApplyOptions(currency);
+            syncPaymentReference(false);
             var paymentMethod = movementForm.querySelector('[data-aa-payment-method]');
             renderTreasuryAccountsSelect(
-                currencySelect ? currencySelect.value : 'USD',
+                currency,
                 paymentMethod ? paymentMethod.value : ''
             );
-        }
-
-        var paymentConfirm = movementForm.querySelector('[data-aa-payment-confirm]');
-        if (paymentConfirm) {
-            paymentConfirm.hidden = type !== 'payment';
-        }
-        if (type === 'payment') {
             updatePaymentConfirm();
         }
     }
 
+    function treasuryOptionCurrency() {
+        var select = movementForm.querySelector('[data-aa-treasury-account]');
+        if (!select) return '';
+        var option = select.options[select.selectedIndex];
+        if (!option) return '';
+        return (option.dataset.aaCurrency || '').toUpperCase();
+    }
+
+    function syncPaymentFx() {
+        var paymentFx = movementForm.querySelector('[data-aa-payment-fx]');
+        if (!paymentFx) return;
+        var typeInput = movementForm.querySelector('[data-aa-movement-type-input]');
+        var isPayment = typeInput && typeInput.value === 'payment';
+        var paymentCur = paymentCurrency();
+        var sourceCur = treasuryOptionCurrency();
+        var needsFx = !!(isPayment && sourceCur && paymentCur && sourceCur !== paymentCur);
+        paymentFx.hidden = !needsFx;
+        paymentFx.querySelectorAll('input, select, textarea').forEach(function (field) {
+            field.disabled = !needsFx;
+        });
+    }
+
     function updatePaymentConfirm() {
         if (!movementForm) return;
+        syncPaymentFx();
         var confirmBlock = movementForm.querySelector('[data-aa-payment-confirm]');
-        if (!confirmBlock || confirmBlock.hidden) return;
+        if (!confirmBlock) return;
 
-        var currencySelect = movementForm.querySelector('[data-aa-currency-select]');
-        var amountInput = movementForm.querySelector('[data-aa-amount-input]');
-        var applySelect = movementForm.querySelector('[data-aa-apply-payment]');
+        var currency = paymentCurrency();
+        var amountInput = movementForm.querySelector('[data-aa-payment-only] [data-aa-amount-input]');
         var paymentMethod = movementForm.querySelector('[data-aa-payment-method]');
-        var currency = currencySelect ? currencySelect.value : 'USD';
         var amount = parseMoney(amountInput ? amountInput.value : '');
+        var balance = paymentBalance(currency);
+        var after = roundMoney(balance - (amount > 0 ? amount : 0));
+        var methodValue = paymentMethod ? paymentMethod.value : '';
 
+        var currentEl = confirmBlock.querySelector('[data-aa-confirm-current]');
         var paymentEl = confirmBlock.querySelector('[data-aa-confirm-payment]');
-        var appliedEl = confirmBlock.querySelector('[data-aa-confirm-applied]');
+        var afterEl = confirmBlock.querySelector('[data-aa-confirm-after]');
         var cashEl = confirmBlock.querySelector('[data-aa-confirm-cash]');
         var methodEl = confirmBlock.querySelector('[data-aa-confirm-method]');
+        var balanceLine = movementForm.querySelector('[data-aa-payment-balance-line]');
+        var errorEl = movementForm.querySelector('[data-aa-payment-error]');
+        var submit = movementForm.querySelector('[data-aa-payment-submit]');
+        var reason = paymentBlockReason(amount, balance, methodValue);
 
-        if (paymentEl) {
-            paymentEl.textContent = amount > 0 ? formatMoney(amount, currency) : '—';
-        }
-        if (cashEl) {
-            cashEl.textContent = amount > 0 ? formatMoney(amount, currency) : '—';
-        }
-        if (appliedEl && applySelect) {
-            var selected = applySelect.options[applySelect.selectedIndex];
-            appliedEl.textContent = selected ? selected.textContent : '—';
-        }
+        if (balanceLine) balanceLine.textContent = balancePhrase(balance, currency);
+        if (currentEl) currentEl.textContent = balancePhrase(balance, currency);
+        if (paymentEl) paymentEl.textContent = amount > 0 ? formatMoney(amount, currency) : '—';
+        if (afterEl) afterEl.textContent = amount > 0 ? balancePhrase(after, currency) : '—';
+        if (cashEl) cashEl.textContent = amount > 0 ? formatMoney(amount, currency) : '—';
         if (methodEl && paymentMethod) {
             var methodOption = paymentMethod.options[paymentMethod.selectedIndex];
             methodEl.textContent = methodOption && methodOption.value
@@ -295,17 +427,29 @@
         var treasurySelect = movementForm.querySelector('[data-aa-treasury-account]');
         if (treasuryEl && treasurySelect) {
             var treasuryOption = treasurySelect.options[treasurySelect.selectedIndex];
-            treasuryEl.textContent = treasuryOption && treasuryOption.value
+            treasuryEl.textContent = treasuryOption
                 ? treasuryOption.textContent
-                : 'Automática según medio';
+                : (movementForm.dataset.aaTreasuryAuto || '—');
+        }
+        if (errorEl) {
+            errorEl.hidden = !reason;
+            errorEl.textContent = reason;
+        }
+        if (submit && movementForm.querySelector('[data-aa-movement-type-input]').value === 'payment') {
+            submit.disabled = !!reason || !(amount > 0) || !methodValue || movementForm.dataset.aaSubmitting === '1';
         }
     }
 
     document.querySelectorAll('[data-aa-open-movement]').forEach(function (btn) {
         btn.addEventListener('click', function () {
             if (!movementDialog) return;
-            pendingChargesCache = {};
-            syncMovementForm(btn.getAttribute('data-aa-open-movement') || 'payment');
+            var type = btn.getAttribute('data-aa-open-movement') || 'payment';
+            if (movementDialog.parentElement !== document.body) {
+                document.body.appendChild(movementDialog);
+            }
+            if (type === 'payment') prefillPayoutAmount();
+            syncMovementForm(type);
+            if (type === 'payment') syncPaymentReference(true);
             movementDialog.showModal();
         });
     });
@@ -313,6 +457,9 @@
     document.querySelectorAll('[data-aa-open-charge]').forEach(function (btn) {
         btn.addEventListener('click', function () {
             if (!chargeDialog) return;
+            if (chargeDialog.parentElement !== document.body) {
+                document.body.appendChild(chargeDialog);
+            }
             syncChargeForm();
             chargeDialog.showModal();
         });
@@ -347,6 +494,16 @@
             section.hidden = !isJrh;
         });
 
+        var periodInput = chargeForm.querySelector('[data-aa-billing-period]');
+        var periodRequired = chargeForm.querySelector('[data-aa-period-required]');
+        var isFee = categoryValue === 'fee';
+        if (periodInput) {
+            periodInput.required = isFee;
+        }
+        if (periodRequired) {
+            periodRequired.hidden = !isFee;
+        }
+
         if (isJrh && recurrenceType) {
             recurrenceType.value = 'monthly';
         }
@@ -357,6 +514,28 @@
 
         syncRecurrenceVisibility();
         updateChargeVatSummary();
+        syncFeeReference();
+    }
+
+    function syncFeeReference() {
+        if (!chargeForm) return;
+        var reference = chargeForm.querySelector('[data-aa-charge-reference]');
+        var category = chargeForm.querySelector('[data-aa-charge-category]');
+        var periodInput = chargeForm.querySelector('[data-aa-billing-period]');
+        if (!reference || !category || !periodInput) return;
+        if (reference.dataset.aaUserEdited === '1') return;
+
+        var previous = reference.dataset.aaSuggested || '';
+        var period = periodInput.value.trim();
+        var prefix = chargeForm.dataset.aaFeeReferencePrefix || 'Fee mensual';
+        var suggestion = (
+            category.value === 'fee' && period
+        ) ? prefix + ' · ' + period : '';
+
+        if (reference.value === previous || !reference.value.trim()) {
+            reference.value = suggestion;
+            reference.dataset.aaSuggested = suggestion;
+        }
     }
 
     function updateChargeVatSummary() {
@@ -364,7 +543,6 @@
         var amountInput = chargeForm.querySelector('[data-aa-charge-amount]');
         var summary = chargeForm.querySelector('[data-aa-vat-summary]');
         var currencySelect = chargeForm.querySelector('[data-aa-charge-currency]');
-        var submitBtn = chargeForm.querySelector('[data-aa-charge-submit]');
         var amountLabel = chargeForm.querySelector('[data-aa-amount-label]');
         var vatMode = selectedVatMode(chargeForm);
         var currency = currencySelect ? currencySelect.value : 'USD';
@@ -392,34 +570,19 @@
         if (rateLabel) {
             rateLabel.textContent = 'IVA ' + Math.round(defaultVatRate * 100) + '%';
         }
-        if (submitBtn) {
-            submitBtn.textContent = amount > 0
-                ? titles.charge + ' ' + formatMoney(breakdown.gross, currency)
-                : titles.charge;
-        }
     }
 
     if (movementForm) {
-        var currencySelect = movementForm.querySelector('[data-aa-currency-select]');
-        var prefix = movementForm.querySelector('[data-aa-currency-prefix]');
-        if (currencySelect && prefix) {
-            currencySelect.addEventListener('change', function () {
-                prefix.textContent = currencySelect.value;
-                var type = movementForm.querySelector('[data-aa-movement-type-input]').value;
-                syncMovementForm(type);
-                if (type === 'payment') {
-                    pendingChargesCache = {};
-                    renderPendingChargesSelect(currencySelect.value);
-                }
-            });
-        }
-
-        var fxRate = movementForm.querySelector('[data-aa-fx-rate]');
-        var fxEquivalent = movementForm.querySelector('[data-aa-fx-equivalent]');
-        var amountInput = movementForm.querySelector('[data-aa-amount-input]');
-
         function updateFxEquivalent() {
-            if (!fxRate || !fxEquivalent || !amountInput) return;
+            var type = movementForm.querySelector('[data-aa-movement-type-input]').value;
+            var scope = type === 'payment'
+                ? movementForm.querySelector('[data-aa-payment-fx]')
+                : movementForm.querySelector('[data-aa-fx-block]');
+            if (!scope || scope.hidden) return;
+            var fxRate = scope.querySelector('[data-aa-fx-rate]');
+            var fxEquivalent = scope.querySelector('[data-aa-fx-equivalent]');
+            var amountInput = enabledControl('[data-aa-amount-input]');
+            if (!fxRate || !fxEquivalent || !amountInput || fxRate.disabled) return;
             var rate = parseMoney(fxRate.value);
             var amount = parseMoney(amountInput.value);
             if (!rate || !amount) {
@@ -431,29 +594,71 @@
             fxEquivalent.hidden = false;
         }
 
-        if (fxRate) fxRate.addEventListener('input', updateFxEquivalent);
-        if (amountInput) {
-            amountInput.addEventListener('input', function () {
+        movementForm.addEventListener('input', function (event) {
+            if (event.target.matches('[data-aa-amount-input]')) {
+                event.target.dataset.aaUserEdited = '1';
                 updateFxEquivalent();
                 updatePaymentConfirm();
-            });
-        }
+            }
+            if (event.target.matches('[data-aa-fx-rate]')) updateFxEquivalent();
+            if (event.target.matches('[data-aa-payment-reference]')) {
+                var suggested = event.target.dataset.aaSuggested || '';
+                event.target.dataset.aaUserEdited = event.target.value === suggested ? '' : '1';
+            }
+        });
 
-        var applySelect = movementForm.querySelector('[data-aa-apply-payment]');
-        if (applySelect) {
-            applySelect.addEventListener('change', updatePaymentConfirm);
-        }
-        var paymentMethod = movementForm.querySelector('[data-aa-payment-method]');
-        if (paymentMethod) {
-            paymentMethod.addEventListener('change', function () {
-                var currencySelect = movementForm.querySelector('[data-aa-currency-select]');
-                renderTreasuryAccountsSelect(
-                    currencySelect ? currencySelect.value : 'USD',
-                    paymentMethod.value
-                );
+        movementForm.addEventListener('change', function (event) {
+            if (event.target.matches('[data-aa-currency-select]')) {
+                var type = movementForm.querySelector('[data-aa-movement-type-input]').value;
+                if (type === 'payment') {
+                    var amountInput = movementForm.querySelector('[data-aa-payment-only] [data-aa-amount-input]');
+                    if (amountInput && amountInput.dataset.aaUserEdited !== '1') {
+                        prefillPayoutAmount();
+                    }
+                }
+                syncMovementForm(type);
+                updateFxEquivalent();
+            }
+            if (event.target.matches('[data-aa-apply-payment]')) {
+                syncPaymentReference(false);
                 updatePaymentConfirm();
-            });
-        }
+            }
+            if (event.target.matches('[data-aa-payment-method]')) {
+                renderTreasuryAccountsSelect(paymentCurrency(), event.target.value);
+                updatePaymentConfirm();
+            }
+            if (event.target.matches('[data-aa-treasury-account]')) updatePaymentConfirm();
+        });
+
+        movementForm.addEventListener('submit', function (event) {
+            if (movementForm.dataset.aaSubmitting === '1') {
+                event.preventDefault();
+                return;
+            }
+            var type = movementForm.querySelector('[data-aa-movement-type-input]').value;
+            if (type === 'payment') {
+                var amount = parseMoney(
+                    (movementForm.querySelector('[data-aa-payment-only] [data-aa-amount-input]') || {}).value
+                );
+                var method = movementForm.querySelector('[data-aa-payment-method]');
+                var reason = paymentBlockReason(amount, paymentBalance(paymentCurrency()));
+                if (reason || !(amount > 0) || !(method && method.value)) {
+                    event.preventDefault();
+                    updatePaymentConfirm();
+                    if (!reason && !(method && method.value)) {
+                        var errorEl = movementForm.querySelector('[data-aa-payment-error]');
+                        if (errorEl) {
+                            errorEl.hidden = false;
+                            errorEl.textContent = movementForm.dataset.aaMethodMessage || '';
+                        }
+                    }
+                    return;
+                }
+            }
+            movementForm.dataset.aaSubmitting = '1';
+            var submit = movementForm.querySelector('[data-aa-payment-submit]');
+            if (submit) submit.disabled = true;
+        });
 
         initOperationAutocomplete();
     }
@@ -608,6 +813,18 @@
             updateChargeFxEquivalent();
         });
         if (chargeFxRate) chargeFxRate.addEventListener('input', updateChargeFxEquivalent);
+        var chargePeriod = chargeForm.querySelector('[data-aa-billing-period]');
+        var chargeReference = chargeForm.querySelector('[data-aa-charge-reference]');
+        if (chargePeriod) chargePeriod.addEventListener('input', syncFeeReference);
+        if (chargeReference) {
+            chargeReference.addEventListener('input', function () {
+                if (chargeReference.value === (chargeReference.dataset.aaSuggested || '')) {
+                    delete chargeReference.dataset.aaUserEdited;
+                } else {
+                    chargeReference.dataset.aaUserEdited = '1';
+                }
+            });
+        }
 
         updateChargeFx();
         syncChargeForm();

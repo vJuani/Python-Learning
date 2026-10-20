@@ -1,17 +1,25 @@
 {% extends "base.html" %}
 
+{% block body_class %}is-cash-page {% endblock %}
 {% block title %}{{ t('cash_opening_title') }} | {{ t('app_title') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cash-page.css') }}?v=treasury7">
+{% endblock %}
+
 {% block content %}
-<section class="page-header">
-    <div class="page-header-text">
-        <h2>{{ t('cash_opening_title') }}</h2>
+{% set treasury_tab = 'accounts' %}
+<div class="treasury-page">
+<header class="treasury-page__header">
+    <div>
+        <h1>{{ t('cash_opening_title') }}</h1>
         <p>{{ t('cash_opening_help') }}</p>
     </div>
-    <div class="page-actions">
-        <a href="{{ url_for('cash_list') }}" class="btn btn-secondary btn-back"><span aria-hidden="true">←</span> {{ t('back') }}</a>
+    <div class="treasury-page__actions">
+        <a href="{{ url_for('cash_treasury_accounts') }}" class="cash-btn cash-btn--outline"><span aria-hidden="true">←</span> {{ t('back') }}</a>
     </div>
-</section>
+</header>
+{% include "cash/_module_nav.html" %}
 
 {% if errors %}
 <div class="flash-messages">
@@ -22,35 +30,103 @@
 {% endif %}
 
 <section class="panel">
-    <dl class="detail-grid">
-        <div>
-            <dt>{{ t('cash_balance_ars') }}</dt>
-            <dd class="money">{{ balances.ARS|money('ARS') }}</dd>
+    <form class="agent-form treasury-opening-form" method="post" action="{{ url_for('cash_opening_balance') }}">
+        <div class="form-group">
+            <label for="treasury_account_id">{{ t('cash_opening_account') }}</label>
+            <select id="treasury_account_id" name="treasury_account_id" class="form-input" required>
+                <option value="">{{ t('cash_opening_account_placeholder') }}</option>
+                {% for account in accounts %}
+                <option
+                    value="{{ account.id }}"
+                    data-name="{{ account.name }}"
+                    data-type="{{ t('treasury_type_' ~ account.account_type) }}"
+                    data-currency="{{ account.currency }}"
+                    data-balance="{{ account.cached_balance | money(account.currency) }}"
+                    data-opening="{{ '1' if account.id in accounts_with_opening else '0' }}"
+                    {% if form_values.treasury_account_id|string == account.id|string %}selected{% endif %}
+                >{{ account.name }}</option>
+                {% endfor %}
+            </select>
+            <p class="treasury-opening-meta" id="opening-account-meta">—</p>
         </div>
-        <div>
-            <dt>{{ t('cash_balance_usd') }}</dt>
-            <dd class="money">{{ balances.USD|money('USD') }}</dd>
+        <div class="treasury-opening-fields">
+            <div class="form-group">
+                <label for="amount">{{ t('cash_opening_amount') }}</label>
+                <input type="text" id="amount" name="amount" class="form-input" inputmode="decimal" value="{{ form_values.amount }}" required>
+            </div>
+            <div class="form-group">
+                <label for="movement_date">{{ t('cash_movement_date') }}</label>
+                <input type="date" id="movement_date" name="movement_date" class="form-input" value="{{ form_values.movement_date }}" required>
+            </div>
         </div>
-    </dl>
-</section>
 
-<section class="panel">
-    <form class="agent-form" method="post" action="{{ url_for('cash_opening_balance') }}">
-        <div class="form-group">
-            <label for="amount_ars">{{ t('cash_opening_ars') }}</label>
-            <input type="text" id="amount_ars" name="amount_ars" class="form-input" value="{{ form_values.amount_ars }}">
-        </div>
-        <div class="form-group">
-            <label for="amount_usd">{{ t('cash_opening_usd') }}</label>
-            <input type="text" id="amount_usd" name="amount_usd" class="form-input" value="{{ form_values.amount_usd }}">
-        </div>
-        <div class="form-group">
-            <label for="movement_date">{{ t('cash_movement_date') }}</label>
-            <input type="date" id="movement_date" name="movement_date" class="form-input" value="{{ form_values.movement_date }}" required>
-        </div>
+        <dl class="treasury-opening-summary" aria-label="{{ t('cash_opening_summary') }}">
+            <div>
+                <dt>{{ t('cash_opening_account') }}</dt>
+                <dd id="opening-summary-account">—</dd>
+            </div>
+            <div>
+                <dt>{{ t('treasury_account_type') }}</dt>
+                <dd id="opening-summary-type">—</dd>
+            </div>
+            <div>
+                <dt>{{ t('cash_currency') }}</dt>
+                <dd id="opening-summary-currency">—</dd>
+            </div>
+            <div>
+                <dt>{{ t('cash_opening_current') }}</dt>
+                <dd id="opening-summary-balance">—</dd>
+            </div>
+            <div>
+                <dt>{{ t('cash_opening_to_record') }}</dt>
+                <dd id="opening-summary-amount">—</dd>
+            </div>
+        </dl>
+        <p class="treasury-opening-already" id="opening-already" hidden>{{ t('cash_opening_already') }}</p>
+
         <div class="form-actions">
-            <button type="submit" class="btn btn-primary">{{ t('cash_save_opening') }}</button>
+            <button type="submit" class="cash-btn cash-btn--primary" data-opening-submit>{{ t('cash_save_opening') }}</button>
         </div>
     </form>
 </section>
+</div>
+<script>
+(function () {
+    var select = document.getElementById("treasury_account_id");
+    var amount = document.getElementById("amount");
+    var submit = document.querySelector("[data-opening-submit]");
+    if (!select) return;
+
+    function text(id, value) {
+        var node = document.getElementById(id);
+        if (node) node.textContent = value || "—";
+    }
+
+    function render() {
+        var option = select.options[select.selectedIndex];
+        var ready = option && option.value;
+        var meta = document.getElementById("opening-account-meta");
+        var already = document.getElementById("opening-already");
+        var blocked = ready && option.getAttribute("data-opening") === "1";
+        text("opening-summary-account", ready ? option.getAttribute("data-name") : "");
+        text("opening-summary-type", ready ? option.getAttribute("data-type") : "");
+        text("opening-summary-currency", ready ? option.getAttribute("data-currency") : "");
+        text("opening-summary-balance", ready ? option.getAttribute("data-balance") : "");
+        var typed = (amount && amount.value || "").trim();
+        var currency = ready ? option.getAttribute("data-currency") : "";
+        text("opening-summary-amount", typed ? (currency + " " + typed) : "");
+        if (meta) {
+            meta.textContent = ready
+                ? option.getAttribute("data-type") + " · " + option.getAttribute("data-currency")
+                : "—";
+        }
+        if (already) already.hidden = !blocked;
+        if (submit) submit.disabled = !ready || blocked;
+    }
+
+    select.addEventListener("change", render);
+    if (amount) amount.addEventListener("input", render);
+    render();
+})();
+</script>
 {% endblock %}

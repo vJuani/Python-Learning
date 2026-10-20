@@ -143,14 +143,39 @@ def _build_operation_map(organization_id, *, agent_id=None):
     return operation_map
 
 
+_COMMERCIAL_LIST_STATUS = {
+    "sold": ("commercial_status_sold", "closed", "closed"),
+    "rented": ("commercial_status_rented", "closed", "closed"),
+    "withdrawn": ("commercial_status_withdrawn", "closed", "closed"),
+    "reserved": ("commercial_status_reserved", "reserved", "reserved"),
+}
+
+
+def _publication_label(property_row, language):
+    status = property_row.get("status") or STATUS_APPROVED
+    return _t(f"property_status_{status}", language)
+
+
 def _resolve_display_status(property_row, operation_map, language):
     status = property_row.get("status") or STATUS_APPROVED
+    publication_label = _publication_label(property_row, language)
+    commercial = property_row.get("commercial_status")
+    commercial_display = _COMMERCIAL_LIST_STATUS.get(commercial)
+    if commercial_display is not None:
+        label_key, tone, bucket = commercial_display
+        return {
+            "label": _t(label_key, language),
+            "tone": tone,
+            "bucket": bucket,
+            "publication_label": publication_label,
+        }
 
     if status == "pending":
         return {
             "label": _t("properties_status_pending", language),
             "tone": "pending",
             "bucket": "pending",
+            "publication_label": publication_label,
         }
 
     if status == "rejected":
@@ -158,6 +183,7 @@ def _resolve_display_status(property_row, operation_map, language):
             "label": _t("properties_status_rejected", language),
             "tone": "rejected",
             "bucket": "rejected",
+            "publication_label": publication_label,
         }
 
     operation = operation_map.get(property_row["id"])
@@ -166,6 +192,7 @@ def _resolve_display_status(property_row, operation_map, language):
             "label": _t("properties_status_active", language),
             "tone": "active",
             "bucket": "active",
+            "publication_label": publication_label,
         }
 
     stage = _stage_for_operation(operation, language)
@@ -196,6 +223,7 @@ def _resolve_display_status(property_row, operation_map, language):
         "label": label,
         "tone": css_tone,
         "bucket": bucket,
+        "publication_label": publication_label,
     }
 
 

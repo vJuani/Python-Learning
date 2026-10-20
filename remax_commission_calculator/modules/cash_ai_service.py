@@ -237,6 +237,10 @@ def _normalize_extraction(raw):
         raw.get("receipt_number") or ""
     ).strip() or None
     notes = (raw.get("notes") or "").strip() or None
+    linked_operation_id = raw.get("linked_operation_id") or None
+    linked_party_role = (
+        raw.get("linked_party_role") or ""
+    ).strip() or None
 
     return {
         "movement_type": movement_type,
@@ -249,6 +253,8 @@ def _normalize_extraction(raw):
         "payment_method": payment_method,
         "receipt_number": receipt_number,
         "notes": notes or "",
+        "linked_operation_id": linked_operation_id,
+        "linked_party_role": linked_party_role,
         "confidence": _normalize_confidence(
             raw.get("confidence")
         ),
@@ -508,6 +514,14 @@ def update_draft_from_form(
             ).strip(),
         }
     )
+    if "linked_operation_id" in form_values:
+        payload["linked_operation_id"] = (
+            form_values.get("linked_operation_id") or None
+        )
+    if "linked_party_role" in form_values:
+        payload["linked_party_role"] = (
+            form_values.get("linked_party_role") or None
+        )
     normalized = _normalize_extraction(
         {
             **payload,
@@ -768,6 +782,16 @@ def confirm_ai_draft(
         "notes": payload.get("notes") or "",
         "treasury_account_id": payload.get(
             "treasury_account_id"
+        ),
+        "linked_operation_id": (
+            ""
+            if not payload.get("linked_operation_id")
+            else str(payload.get("linked_operation_id"))
+        ),
+        "linked_party_role": (
+            ""
+            if not payload.get("linked_party_role")
+            else str(payload.get("linked_party_role"))
         ),
     }
     errors, values = validate_movement_payload(form)

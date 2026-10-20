@@ -478,7 +478,6 @@ def _cash_flow_series(organization_id, date_from, date_to):
     from modules.cash_treasury import (
         TYPE_EXPENSE,
         TYPE_INCOME,
-        TYPE_OPENING,
     )
 
     start = _iso_to_date(date_from)
@@ -500,12 +499,6 @@ def _cash_flow_series(organization_id, date_from, date_to):
             organization_id,
             currency="ARS",
             movement_type=TYPE_INCOME,
-            date_from=iso,
-            date_to=iso,
-        ) + sum_movements_by_type(
-            organization_id,
-            currency="ARS",
-            movement_type=TYPE_OPENING,
             date_from=iso,
             date_to=iso,
         )

@@ -336,6 +336,9 @@
                                     <span class="properties-status properties-status--{{ row.display_status.tone }}">
                                         {{ row.display_status.label }}
                                     </span>
+                                    {% if row.display_status.publication_label and row.commercial_status in ('sold', 'rented', 'withdrawn', 'reserved') %}
+                                    <span class="properties-property-cell__facts">{{ t('properties_publication') }}: {{ row.display_status.publication_label }}</span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <div class="properties-actions">
@@ -375,6 +378,9 @@
                             <span class="property-mobile-card__badges">
                                 {% if row.purpose_label %}<span class="m-chip">{{ row.purpose_label }}</span>{% endif %}
                                 <span class="entity-card__badge entity-card__badge--{{ row.display_status.tone }}">{{ row.display_status.label }}</span>
+                                {% if row.display_status.publication_label and row.commercial_status in ('sold', 'rented', 'withdrawn', 'reserved') %}
+                                <span class="m-chip">{{ t('properties_publication') }}: {{ row.display_status.publication_label }}</span>
+                                {% endif %}
                             </span>
                         </span>
                     </a>

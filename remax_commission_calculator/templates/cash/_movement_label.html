@@ -1,0 +1,7 @@
+{% macro cash_movement_label(movement) -%}
+{%- if movement.movement_type == 'opening_balance' or movement.type == 'opening_balance' or (movement.description or '') == 'Opening balance' -%}
+{{ t('cash_type_opening_balance') }}
+{%- else -%}
+{{ movement.description }}
+{%- endif -%}
+{%- endmacro %}

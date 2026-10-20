@@ -1,17 +1,42 @@
 {% extends "base.html" %}
 
-{% block title %}{{ t('billing_missing_data_title') }} | {{ t('app_title') }}{% endblock %}
+{% block title %}{{ t('billing_missing_side_title_' ~ side) if ask_recipient else t('billing_missing_data_title') }} | {{ t('app_title') }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
     <div class="page-header-text">
-        <h2>{{ t('billing_missing_data_title') }}</h2>
-        <p>{{ operation.property }} · {{ t('billing_side_' ~ side) }}</p>
+        <h2>{{ t('billing_missing_side_title_' ~ side) if ask_recipient else t('billing_missing_data_title') }}</h2>
+        <p>{{ t('billing_side_' ~ side) }}</p>
     </div>
 </section>
 
 <section class="panel billing-missing-panel">
     <form method="post" action="{{ url_for('billing_set_client_field', operation_id=operation.db_id, side=side) }}" class="agent-form">
+        {% if ask_recipient %}
+        <input type="hidden" name="recipient_form" value="1">
+        <div class="form-group">
+            <label for="client_legal_name">{{ t('billing_missing_side_legal_name_' ~ side) }}</label>
+            <input type="text" id="client_legal_name" name="client_legal_name" class="form-input" required autofocus>
+        </div>
+        <div class="form-group">
+            <label for="client_tax_id">{{ t('billing_missing_side_tax_id_' ~ side) }}</label>
+            <input type="text" id="client_tax_id" name="client_tax_id" class="form-input" required>
+            <small class="field-help">{{ t('billing_cuit_lookup_future') }}</small>
+        </div>
+        <div class="form-group">
+            <label for="client_tax_condition">{{ t('billing_missing_side_tax_condition_' ~ side) }}</label>
+            <select id="client_tax_condition" name="client_tax_condition" class="form-input" required>
+                <option value=""></option>
+                {% for tc in tax_conditions %}
+                <option value="{{ tc }}">{{ t('billing_tax_' ~ tc) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="client_fiscal_address">{{ t('billing_missing_side_fiscal_address_' ~ side) }}</label>
+            <input type="text" id="client_fiscal_address" name="client_fiscal_address" class="form-input" required>
+        </div>
+        {% else %}
         <input type="hidden" name="field_name" value="{{ missing_field }}">
 
         {% if missing_field == 'client_tax_id' %}
@@ -32,7 +57,7 @@
         </div>
         {% elif missing_field == 'client_legal_name' %}
         <div class="form-group">
-            <label for="field_value">{{ t('billing_missing_client_legal_name_label') }}</label>
+            <label for="field_value">{{ t('billing_missing_side_legal_name_' ~ side) }}</label>
             <input type="text" id="field_value" name="field_value" class="form-input" value="{{ party.client_legal_name or '' }}" required>
         </div>
         {% else %}
@@ -41,9 +66,10 @@
             <input type="text" id="field_value" name="field_value" class="form-input" value="{{ party.client_fiscal_address or '' }}" required>
         </div>
         {% endif %}
+        {% endif %}
 
         <button type="submit" class="btn btn-primary">{{ t('billing_continue') }}</button>
-        <a href="{{ url_for('billing_list') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
+        <a href="{{ preclose_url or url_for('billing_list') }}" class="btn btn-ghost">{{ t('cancel') }}</a>
     </form>
 </section>
 {% endblock %}

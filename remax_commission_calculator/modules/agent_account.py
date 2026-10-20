@@ -115,9 +115,15 @@ def _build_reference_text(payload, validated):
 
     if movement_type == "fee" and period_label:
         return f"Fee mensual · {period_label}"
-    if movement_type == "payment" and payment_method:
-        label = payment_method.replace("_", " ")
-        return f"Pago {label} · {movement_date}"
+    if movement_type == "payment":
+        direction = (
+            payload.get("payment_direction") or ""
+        ).strip().lower()
+        if direction == "payout":
+            return "Pago a agente"
+        if payment_method:
+            label = payment_method.replace("_", " ")
+            return f"Pago {label} · {movement_date}"
     if movement_type == "commission":
         operation_ref = (
             payload.get("operation_reference") or ""
@@ -159,6 +165,11 @@ def validate_movement_payload(
     payment_method = (
         payload.get("payment_method") or ""
     ).strip().lower()
+    payment_direction = (
+        payload.get("payment_direction") or ""
+    ).strip().lower()
+    if payment_direction not in ("payout", "collection"):
+        payment_direction = "collection"
 
     if movement_type not in MOVEMENT_TYPES:
         raise AgentAccountError(
@@ -242,7 +253,11 @@ def validate_movement_payload(
         if movement_type == "fee" and period_label:
             description = f"Fee {period_label}"
         elif movement_type == "payment":
-            description = "Pago recibido"
+            description = (
+                "Pago a agente"
+                if payment_direction == "payout"
+                else "Pago recibido"
+            )
         elif movement_type == "commission":
             operation_ref = (
                 payload.get("operation_reference") or ""
@@ -391,6 +406,7 @@ def validate_movement_payload(
         "source_id": source_id,
         "charge_movement_id": charge_movement_id,
         "treasury_account_id": treasury_account_id,
+        "payment_direction": payment_direction,
         "commission_side": None,
         "commission_purpose": None,
         "commission_source_amount": None,
@@ -516,6 +532,7 @@ def create_movement(
                 agent_name=agent_name,
                 attachment=attachment,
                 receipt_number=receipt_number,
+                payout=validated.get("payment_direction") == "payout",
             )
             emit_agent_payment_confirmed(
                 organization_id,
@@ -545,10 +562,21 @@ def create_movement(
                     if key == "invalid_applied_charge"
                     else "agent_account_err_payment_method_required"
                 ) from error
+            if key == "payment_exceeds_balance":
+                raise AgentAccountError(
+                    "agent_account_err_payment_exceeds_balance"
+                ) from error
+            if key == "insufficient_balance":
+                raise AgentAccountError(
+                    "agent_account_err_insufficient_cash"
+                ) from error
+            if key == "treasury_account_missing":
+                raise AgentAccountError(
+                    "agent_account_err_treasury_account_required"
+                ) from error
             if key in (
                 "invalid_treasury_account",
                 "inactive_treasury_account",
-                "treasury_account_missing",
                 "treasury_currency_mismatch",
             ):
                 raise AgentAccountError(
@@ -665,6 +693,10 @@ def cancel_movement(
             movement_id,
             created_by_user_id=created_by_user_id,
             reversal_reason=reason,
+            ledger_compensation=(
+                movement is not None
+                and movement.get("movement_type") == "commission"
+            ),
         )
     except ValueError as error:
         key = str(error)

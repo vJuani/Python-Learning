@@ -105,11 +105,73 @@ from modules.invoicing import (
     list_billable_agent_charges,
     org_billing_ready,
     set_party_invoice_amount,
+    side_billing_position,
     update_draft_options,
     validate_cuit,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _preclose_back_url(organization_id, operation):
+    if not operation or (operation.get("status") or "") != "preclose":
+        return None
+    from modules.database.reservations_repository import get_reservation_by_operation
+
+    reservation = get_reservation_by_operation(
+        organization_id,
+        operation.get("db_id"),
+    )
+    if reservation is None or reservation.get("reservation_status") != "pre_close":
+        return None
+    return url_for(
+        "reservations_preclose",
+        reservation_id=reservation["id"],
+    )
+
+
+def _preclose_issue_cta(organization_id, user, invoice, operation):
+    """Issue action for a ready draft born from reservation pre-close.
+
+    Outside that context this returns None and the regular billing
+    screen stays unchanged.
+    """
+    if (invoice or {}).get("status") != "ready_to_issue":
+        return None
+    if _preclose_back_url(organization_id, operation) is None:
+        return None
+    from modules.arca.config import is_arca_fiscal_enabled
+    from modules.arca.connections import (
+        ArcaConnectionError,
+        require_user_connection,
+    )
+    from modules.arca.issuer_profile import resolve_invoice_issuer_profile
+    from modules.arca.validation import validate_fiscal_issue
+
+    linked = False
+    can_issue = False
+    if is_arca_fiscal_enabled():
+        profile = resolve_invoice_issuer_profile(organization_id, invoice)
+        connection = None
+        if profile is not None:
+            try:
+                connection = require_user_connection(
+                    organization_id,
+                    user.get("id"),
+                )
+            except ArcaConnectionError:
+                connection = None
+        linked = connection is not None
+        if linked:
+            can_issue = validate_fiscal_issue(
+                invoice,
+                profile,
+                connection=connection,
+            ).is_valid
+    return {
+        "can_issue": can_issue,
+        "needs_link": not linked,
+    }
 
 
 def register_billing_routes(app, *, helpers):
@@ -192,6 +254,52 @@ def register_billing_routes(app, *, helpers):
                 )
         return issuer_mode, issuer_profile_id
 
+    def _is_reservation_preclose(organization_id, operation):
+        if (operation or {}).get("status") != "preclose":
+            return False
+        from modules.database.reservations_repository import (
+            get_reservation_by_operation,
+        )
+
+        reservation = get_reservation_by_operation(
+            organization_id,
+            operation.get("db_id"),
+        )
+        return reservation is not None
+
+    def _voucher_amount_value(party, suggested):
+        current = (party or {}).get("invoice_amount")
+        if current not in (None, ""):
+            return current
+        if suggested not in (None, ""):
+            return suggested
+        return ""
+
+    def _render_missing_client(
+        organization_id,
+        operation,
+        side,
+        party,
+        missing_field,
+    ):
+        client_name = (
+            party.get("client_legal_name") or ""
+        ).strip()
+        return render_template(
+            "billing/missing_client.html",
+            operation=operation,
+            side=side,
+            party=party,
+            missing_field=missing_field,
+            tax_conditions=TAX_CONDITIONS,
+            client_name=client_name,
+            ask_recipient=not client_name,
+            preclose_url=_preclose_back_url(
+                organization_id,
+                operation,
+            ),
+        )
+
     def _prepare_side_view(
         operation_id,
         side,
@@ -217,6 +325,13 @@ def register_billing_routes(app, *, helpers):
             organization_id,
             operation_id,
         )
+        from modules.reservation_close import ensure_preclose_billing
+
+        ensure_preclose_billing(
+            organization_id,
+            operation_id,
+            actor_user_id=user.get("id"),
+        )
         party = get_operation_party(
             organization_id,
             operation_id,
@@ -241,17 +356,12 @@ def register_billing_routes(app, *, helpers):
                 operation_id,
                 side,
             )
-            return render_template(
-                "billing/missing_client.html",
-                operation=operation,
-                side=side,
-                party=party,
-                missing_field=missing_field,
-                tax_conditions=TAX_CONDITIONS,
-                client_name=(
-                    party.get("client_legal_name")
-                    or operation.get("property")
-                ),
+            return _render_missing_client(
+                organization_id,
+                operation,
+                side,
+                party,
+                missing_field,
             )
 
         try:
@@ -264,12 +374,32 @@ def register_billing_routes(app, *, helpers):
                 issuer_profile_id=issuer_profile_id,
             )
         except InvoicingError as error:
-            _flash_billing_error(
-                error,
-                operation_id=operation_id,
-                side=side,
-                user=user,
+            treasury_gate = error.message_key in (
+                "invoice_err_side_billing_disabled",
+                "invoice_err_amount_not_set",
             )
+            from_reservation_preclose = _is_reservation_preclose(
+                organization_id,
+                operation,
+            )
+            proposal = None
+            if error.message_key == "invoice_err_amount_not_set":
+                proposal = side_billing_position(
+                    organization_id,
+                    operation_id,
+                    party,
+                    operation_status=operation.get("status"),
+                ).get("proposal")
+            if not (
+                (treasury_gate and from_reservation_preclose)
+                or proposal not in (None, "")
+            ):
+                _flash_billing_error(
+                    error,
+                    operation_id=operation_id,
+                    side=side,
+                    user=user,
+                )
             if error.message_key == (
                 "invoice_err_billing_profile_incomplete"
             ):
@@ -290,18 +420,39 @@ def register_billing_routes(app, *, helpers):
                     party
                 )
                 if missing_field:
-                    return render_template(
-                        "billing/missing_client.html",
-                        operation=operation,
-                        side=side,
-                        party=party,
-                        missing_field=missing_field,
-                        tax_conditions=TAX_CONDITIONS,
-                        client_name=(
-                            party.get("client_legal_name")
-                            or operation.get("property")
-                        ),
+                    return _render_missing_client(
+                        organization_id,
+                        operation,
+                        side,
+                        party,
+                        missing_field,
                     )
+            if error.message_key in (
+                "invoice_err_side_billing_disabled",
+                "invoice_err_amount_not_set",
+            ):
+                if error.message_key == "invoice_err_amount_not_set":
+                    suggested = proposal
+                elif from_reservation_preclose:
+                    suggested = party.get("commission_amount")
+                else:
+                    suggested = None
+                if suggested not in (None, ""):
+                    suggested = f"{round(float(suggested), 2):.2f}"
+                return render_template(
+                    "billing/voucher_amount.html",
+                    operation=operation,
+                    side=side,
+                    party=party,
+                    voucher_amount_value=_voucher_amount_value(
+                        party,
+                        suggested,
+                    ),
+                    back_url=_preclose_back_url(
+                        organization_id,
+                        operation,
+                    ),
+                )
             return redirect(
                 url_for(
                     "billing_list",
@@ -323,6 +474,10 @@ def register_billing_routes(app, *, helpers):
             issuer_mode=issuer_mode,
             issuer_profile_id=issuer_profile_id,
             is_staff=is_admin(user),
+            preclose_url=_preclose_back_url(
+                organization_id,
+                operation,
+            ),
         )
 
     def _append_billing_chat(role, text, *, text_key=None):
@@ -700,6 +855,43 @@ def register_billing_routes(app, *, helpers):
         if operation is None:
             abort(404)
         ensure_operation_scope(operation, organization_id)
+
+        if request.form.get("recipient_form") == "1":
+            legal_name = (
+                request.form.get("client_legal_name") or ""
+            ).strip()
+            tax_id = (
+                request.form.get("client_tax_id") or ""
+            ).strip()
+            tax_condition = (
+                request.form.get("client_tax_condition") or ""
+            ).strip()
+            fiscal_address = (
+                request.form.get("client_fiscal_address") or ""
+            ).strip()
+            if (
+                not legal_name
+                or not tax_id
+                or tax_condition not in TAX_CONDITIONS
+                or not fiscal_address
+            ):
+                abort(400)
+            set_operation_party_client_fields(
+                organization_id,
+                operation_id,
+                side,
+                client_legal_name=legal_name,
+                client_tax_id=tax_id,
+                client_tax_condition=tax_condition,
+                client_fiscal_address=fiscal_address,
+            )
+            return redirect(
+                url_for(
+                    "billing_prepare",
+                    operation_id=operation_id,
+                    side=side,
+                )
+            )
 
         field_name = request.form.get("field_name", "")
         field_value = request.form.get(
@@ -1119,6 +1311,10 @@ def register_billing_routes(app, *, helpers):
             arca_enabled=is_arca_fiscal_enabled(),
             is_staff=is_admin(user),
             can_change_issuer=True,
+            preclose_url=_preclose_back_url(
+                organization_id,
+                operation,
+            ),
         )
 
     @app.route("/billing/<int:invoice_id>")
@@ -1144,6 +1340,10 @@ def register_billing_routes(app, *, helpers):
                 invoice["agent_account_movement_id"],
                 user=user,
             )
+        preclose_url = _preclose_back_url(
+            organization_id,
+            operation,
+        )
         return render_template(
             "billing/detail.html",
             invoice=invoice,
@@ -1151,6 +1351,13 @@ def register_billing_routes(app, *, helpers):
             charge_context=charge_context,
             arca_enabled=is_arca_fiscal_enabled(),
             is_staff=is_admin(user),
+            preclose_url=preclose_url,
+            preclose_issue_cta=_preclose_issue_cta(
+                organization_id,
+                user,
+                invoice,
+                operation,
+            ),
         )
 
     @app.route(
@@ -1334,6 +1541,14 @@ def register_billing_routes(app, *, helpers):
                 operation_id=operation_id,
                 side=side,
                 user=user,
+            )
+        if request.form.get("next") == "prepare":
+            return redirect(
+                url_for(
+                    "billing_prepare",
+                    operation_id=operation_id,
+                    side=side,
+                )
             )
         return redirect(
             url_for(

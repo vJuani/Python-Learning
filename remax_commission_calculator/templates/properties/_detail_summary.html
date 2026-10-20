@@ -4,6 +4,9 @@
         {% if detail.status_label %}
         <span class="pd-badge">{{ detail.status_label }}</span>
         {% endif %}
+        {% if detail.publication_label %}
+        <span class="pd-badge">{{ t('properties_publication') }}: {{ detail.publication_label }}</span>
+        {% endif %}
         {% if property_data.is_synced %}
         <span class="pd-badge pd-badge--sync" title="{{ t('property_sync_tooltip') }}">{{ t('sync_badge_synced') }}</span>
         {% endif %}

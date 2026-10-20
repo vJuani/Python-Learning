@@ -531,6 +531,7 @@ def register_agent_account_routes(app, helpers):
                 "applied_to_movement_id",
                 "operation_id",
                 "treasury_account_id",
+                "payment_direction",
             )
         }
         idempotency_key = (

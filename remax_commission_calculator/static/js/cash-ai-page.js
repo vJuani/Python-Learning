@@ -17,11 +17,11 @@
     }
 
     var evolution = panel.evolution || {};
-    var chartHeight = 240;
+    var chartHeight = 150;
     var ctx = canvas.getContext("2d");
     var fillGradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
-    fillGradient.addColorStop(0, "rgba(13, 71, 255, 0.22)");
-    fillGradient.addColorStop(1, "rgba(13, 71, 255, 0)");
+    fillGradient.addColorStop(0, "rgba(21, 106, 74, 0.22)");
+    fillGradient.addColorStop(1, "rgba(21, 106, 74, 0)");
 
     function formatMoney(value) {
         var num = Number(value || 0);
@@ -41,13 +41,13 @@
             datasets: [{
                 label: "Saldo neto (ARS)",
                 data: evolution.values || [],
-                borderColor: "#0d47ff",
+                borderColor: "#156A4A",
                 backgroundColor: fillGradient,
                 fill: true,
                 tension: 0.35,
                 pointRadius: 4,
                 pointHoverRadius: 5,
-                pointBackgroundColor: "#0d47ff",
+                pointBackgroundColor: "#156A4A",
                 pointBorderColor: "#ffffff",
                 pointBorderWidth: 2,
             }],

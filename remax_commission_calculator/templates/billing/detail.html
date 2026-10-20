@@ -7,21 +7,40 @@
     <div class="page-header-text">
         <h2>{{ invoice.invoice_number_internal }}</h2>
         <p>
+            {% if preclose_issue_cta and preclose_issue_cta.needs_link %}
+            <span class="badge">{{ t('reservation_preclose_invoice_draft') }}</span>
+            <span class="badge">{{ t('billing_arca_link_missing') }}</span>
+            {% else %}
             <span class="badge">{{ t('billing_status_' ~ invoice.status) }}</span>
             {% if invoice.status == 'issued' and invoice.provider == 'arca' %}
             <span class="badge badge-soft">{{ t('billing_arca_homologation_badge') }}</span>
             {% elif invoice.status != 'issued' %}
             <span class="badge">{{ t('billing_non_fiscal_badge') }}</span>
             {% endif %}
+            {% endif %}
         </p>
     </div>
     <div class="page-actions">
         <a href="{{ url_for('billing_pdf', invoice_id=invoice.id) }}" class="btn btn-secondary">{{ t('billing_download_pdf') }}</a>
-        <a href="{{ url_for('billing_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
+        {% if preclose_url and invoice.status == 'issued' %}
+        <a href="{{ preclose_url }}" class="btn btn-primary">{{ t('reservation_preclose_back') }}</a>
+        {% endif %}
+        <a href="{{ preclose_url or url_for('billing_list') }}" class="btn btn-secondary">{{ t('back') }}</a>
     </div>
 </section>
 
-{% if arca_enabled and invoice.status == 'ready_to_issue' and (invoice.origin_type != 'agent_account_charge' or is_staff) %}
+{% if preclose_issue_cta %}
+<section class="panel billing-preclose-issue">
+    {% if preclose_issue_cta.can_issue %}
+    <form method="post" action="{{ url_for('billing_issue_arca', invoice_id=invoice.id) }}">
+        <button type="submit" class="btn btn-primary">{{ t('billing_issue_invoice') }}</button>
+    </form>
+    {% elif preclose_issue_cta.needs_link %}
+    <p>{{ t('billing_arca_link_missing') }}</p>
+    <a class="btn btn-primary" href="{{ url_for('settings_arca') }}">{{ t('arca_connect_cta') }}</a>
+    {% endif %}
+</section>
+{% elif arca_enabled and invoice.status == 'ready_to_issue' and (invoice.origin_type != 'agent_account_charge' or is_staff) %}
 <section class="panel billing-arca-banner">
     <p class="billing-arca-test-banner">{{ t('billing_arca_test_environment') }}</p>
     <form method="post" action="{{ url_for('billing_issue_arca', invoice_id=invoice.id) }}">

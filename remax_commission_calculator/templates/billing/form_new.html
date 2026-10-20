@@ -20,8 +20,12 @@
         <dd>{{ operation.property }} · {{ operation.id }}</dd>
         <dt>{{ t('billing_party_client') }}</dt>
         <dd>{{ preview.recipient_name }} · {{ preview.recipient_tax_id }}</dd>
-        <dt>{{ t('billing_amount') }}</dt>
-        <dd>{{ preview.currency }} {{ '%.2f'|format(preview.total_amount) }}</dd>
+        <dt>{{ t('billing_voucher_total') }}</dt>
+        <dd>{{ preview.total_amount | money(preview.currency) }}</dd>
+        <dt>{{ t('billing_voucher_currency') }}</dt>
+        <dd>{{ preview.currency }}</dd>
+        <dt>{{ t('billing_voucher_vat') }}</dt>
+        <dd>{{ preview.vat_amount | money(preview.currency) }}</dd>
         <dt>{{ t('billing_concept') }}</dt>
         <dd>{{ preview.description }}</dd>
         <dt>{{ t('billing_service') }}</dt>
